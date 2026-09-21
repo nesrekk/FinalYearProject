@@ -1,0 +1,85 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2868
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 HelveticaNeue;\f1\fnil\fcharset0 Menlo-Regular;\f2\fnil\fcharset0 HelveticaNeue-Italic;
+}
+{\colortbl;\red255\green255\blue255;\red10\green10\blue11;\red246\green249\blue251;\red218\green221\blue226;
+\red87\green96\blue106;}
+{\*\expandedcolortbl;;\cssrgb\c3529\c3529\c4314;\cssrgb\c97255\c98039\c98824;\cssrgb\c88235\c89412\c90980;
+\cssrgb\c41569\c45098\c49020;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs28 \cf2 \cb3 \expnd0\expndtw0\kerning0
+\uc0\u55357 \u57056  Tech Stack\cb1 \
+\pard\pardeftab720\partightenfactor0
+
+\f1\fs20\fsmilli10115 \cf2 \cb3 React + Vite\
+Tailwind CSS\
+shadcn/ui (component library)\
+Lucide React (icons)\
+Recharts (charts)\
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs28 \cf2 \cb4 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \uc0\u55356 \u57256  Design System\cb1 \
+\cb3 Fonts (Google Fonts)\cb1 \
+\pard\pardeftab720\partightenfactor0
+
+\f1\fs20\fsmilli10115 \cf2 \cb3 Space Grotesk \uc0\u8594  headings/titles\
+JetBrains Mono \uc0\u8594  all numbers & data labels\
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs28 \cf2 Color Palette\cb1 \
+\pard\pardeftab720\partightenfactor0
+
+\f1\fs20\fsmilli10115 \cf2 \cb3 Background:   #07090B  (Deep Carbon)\
+Surface/Cards: #14171A  (Slate Void)\
+Primary/CTA:  #FF4D00  (Synthetic Amber)\
+Secondary:    #00E5FF  (Telemetry Cyan)\
+Text Primary: #FFFFFF\
+Text Labels:  #8E9AAF  (Steel Mist)\
+Borders:      #1E2226\
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs28 \cf2 Key Design Rules\cb1 \
+\pard\pardeftab720\partightenfactor0
+
+\f1\fs20\fsmilli10115 \cf2 \cb3 - Dark background always\
+- Monospace font for ALL numbers (tabular-nums)\
+- 1px borders, very subtle (low opacity)\
+- Uppercase + wide letter-spacing for labels\
+- Glow effects: box-shadow with color at 20-30% opacity\
+- Hover states: border color shifts to primary/cyan\
+- Bar charts replace pie charts everywhere\
+- No rounded corners > 12px\
+- Spacing: tight (4-8px) for data, generous for section gaps\
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs28 \cf2 Tailwind Config Additions\cb1 \
+\pard\pardeftab720\partightenfactor0
+
+\f1\fs20\fsmilli10115 \cf2 \cb3 fontFamily: \{\
+  heading: ['Space Grotesk'],\
+  mono: ['JetBrains Mono'],\
+\}\
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs28 \cf2 Typical Card Pattern\cb1 \
+\pard\pardeftab720\partightenfactor0
+
+\f1\fs20\fsmilli10115 \cf2 \cb3 <div className="bg-[#14171A] border border-[#1E2226] rounded-xl \
+                hover:border-[#FF4D00]/30 transition-all">\
+  <p className="text-[9px] font-mono uppercase tracking-[0.2em] \
+                text-[#8E9AAF]">LABEL</p>\
+  <p className="font-mono text-2xl font-bold tabular-nums \
+                text-[#00E5FF]">42.1</p>\
+</div>\
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs28 \cf2 \cb4 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \uc0\u55357 \u56513  Prompt for Cursor\cb1 \
+\pard\pardeftab720\sa280\partightenfactor0
+
+\f2\i \cf5 \cb3 "Build a dark NBA analytics dashboard in React + Tailwind. Use Space Grotesk for headings, JetBrains Mono for data. Color scheme: background #07090B, cards #14171A, accent orange #FF4D00, cyan #00E5FF, muted text #8E9AAF. All stat labels uppercase with wide letter-spacing. All numbers in monospace tabular-nums. Subtle 1px borders that glow orange on hover."}

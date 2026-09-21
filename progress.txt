@@ -1,0 +1,820 @@
+================================================================================
+NBA ANALYTICS PROJECT — PROGRESS / HANDOFF DOCUMENT
+================================================================================
+Path: .../Desktop/main nba project build/   (folder name may include spaces)
+
+PURPOSE OF THIS FILE
+  Single source of truth for humans and AI assistants: architecture, ports,
+  dependencies, data locations, env vars, API routes, frontend wiring, and
+  significant project history. Keep the technical sections up to date when
+  behavior or structure changes in a meaningful way.
+
+MAINTENANCE RULE (IMPORTANT)
+  CHANGE LOG (section 11): Record MAJOR changes only — not copy tweaks, single
+  component wording, small CSS, or routine refactors.
+
+  Major (log these): new/removed API routes or services; port or URL changes;
+  new env vars; DB schema or migration; dependency upgrades that affect build;
+  caching/auth/CORS strategy; new data pipelines or model artifacts; fixes that
+  change how live vs fallback data works across the app.
+
+  Minor (do NOT log): text/placeholder edits, typos, one-off UI labels, comments,
+  formatting, screenshots, small bugfixes that don’t alter architecture.
+
+  When in doubt, update the descriptive sections (1–10) if the architecture
+  changed; skip the CHANGE LOG for tiny edits.
+
+================================================================================
+1) HIGH-LEVEL ARCHITECTURE
+================================================================================
+  - Frontend: React 19 + Vite 8, dark dashboard UI, Axios to three backends.
+  - Backend: Three separate FastAPI apps (microservices), each with CORS (*).
+  - Database: PostgreSQL database name "nba_analytics" (player_season_stats,
+    season_similarity, career_similarity, mvp-related tables per PROJECT_DETAILS.md).
+  - Live data: nba_api (Python), NBA CDN JSON, optional BallDontLie standings,
+    TheSportsDB (badges, player images), RSS + optional RapidAPI for news.
+  - ML: Logistic regression MVP (.pkl), similarity precomputed in DB, impact
+    scores stored in player_season_stats.
+
+  Service layout (MUST match frontend/src/services/api.js):
+    MVP API        → http://localhost:8000
+    Similarity API → http://localhost:8001
+    Impact API     → http://localhost:8002
+    Vite dev       → http://localhost:5173 or http://127.0.0.1:5173
+
+  NOTE: The `if __name__ == "__main__"` blocks inside mvp_api.py and
+  similarity_api.py use different default ports than above. Always start with
+  uvicorn and explicit --port 8000 / 8001 / 8002 to match the frontend.
+
+================================================================================
+2) HOW TO RUN (TYPICAL — 4 TERMINALS)
+================================================================================
+  Terminal 1 — Impact (news, scores, standings, meta, leaders, etc.):
+    cd "/path/to/main nba project build/api"
+    export BALLDONTLIE_API_KEY="..."   # optional; improves standings fallback
+    # Optional news premium:
+    # export RAPIDAPI_KEY="..." RAPIDAPI_NEWS_URL="..." RAPIDAPI_HOST="..."
+    uvicorn impact_api:app --host 0.0.0.0 --port 8002 --reload
+
+  Terminal 2 — MVP:
+    cd "/path/to/main nba project build/api"
+    uvicorn mvp_api:app --host 0.0.0.0 --port 8000 --reload
+
+  Terminal 3 — Similarity:
+    cd "/path/to/main nba project build/api"
+    uvicorn similarity_api:app --host 0.0.0.0 --port 8001 --reload
+
+  Terminal 4 — Frontend:
+    cd "/path/to/main nba project build/frontend"
+    npm install
+    npm run dev
+    # optional: npm run dev -- --host 127.0.0.1 --port 5173
+
+  PostgreSQL must be running locally for DB-backed features (MVP prediction,
+  similarity tables, impact scores from DB, meta DB fallback).
+
+================================================================================
+3) FRONTEND — DEPENDENCIES & ENTRYPOINTS
+================================================================================
+  File: frontend/package.json
+    Dependencies: react ^19.2.4, react-dom ^19.2.4, axios ^1.13.6
+    Dev: vite ^8, eslint, @vitejs/plugin-react, etc.
+    Scripts: npm run dev | build | preview | lint
+
+  Entry: frontend/src/main.jsx → renders App.jsx (StrictMode).
+
+  App.jsx:
+    - State: activePage (sidebar).
+    - On mount: prefetchCoreData() from services/api.js.
+    - Pages: dashboard, scores, news, standings, teams, players, shotcharts,
+      analytics, leaders.
+
+  API client: frontend/src/services/api.js
+    Bases: MVP_BASE 8000, SIMILARITY_BASE 8001, IMPACT_BASE 8002.
+    localStorage cache prefix: nbahub_cache_v2:
+    TTLs (approx): meta 90s, games 30s, news 120s, stat leaders 60s.
+
+  Date helper: frontend/src/utils/date.js
+    localDateIso() — calendar date in LOCAL timezone (not UTC). Used so "today"
+    matches user clock for games/news/dashboard; avoids UTC off-by-one bugs.
+
+  Key exported functions (api.js):
+    fetchSeasonSimilarity, fetchPlayerSuggestions (similarity 8001)
+    fetchLivePlayerSuggestions (impact 8002)
+    fetchMVPPrediction (mvp 8000)
+    fetchRawImpact, fetchStarImpact, fetchCurrentMeta, fetchPlayerImage,
+    fetchPlayerProfile, fetchGamesByDate, fetchCurrentNews, fetchGameBoxscore,
+    fetchStatLeaders, prefetchCoreData
+
+  Pages (frontend/src/components/pages/):
+    DashboardHome.jsx — meta, games, news, MVP favorite; uses localDateIso.
+    LiveScores.jsx — date picker, games, boxscore modal.
+    NewsSection.jsx — date + fetchCurrentNews; uses localDateIso.
+    StandingsSection.jsx — fetchCurrentMeta().standings.
+    TeamComparison.jsx — fetchCurrentMeta().team_stats.
+    PlayerStats.jsx — live search + profile + image (impact).
+    StatLeaders.jsx — fetchStatLeaders.
+    AnalyticsSection.jsx — tabs: SimilaritySection, MVPSection, ImpactSection.
+    ShotCharts.jsx — present in nav (verify implementation vs mock).
+
+  Legacy/simple components (frontend/src/components/):
+    SimilaritySection.jsx, MVPSection.jsx, ImpactSection.jsx, DataTable.jsx, Loader.jsx
+
+  Mock data: frontend/src/services/mockData.js — fallback when API fails.
+
+  Styles: frontend/src/styles/dashboard.css
+
+================================================================================
+4) BACKEND — PYTHON (NO requirements.txt IN REPO AS OF THIS WRITEUP)
+================================================================================
+  Inferred imports across api/*.py:
+    fastapi, uvicorn, pydantic (implicit), starlette CORSMiddleware
+    psycopg2 + psycopg2.pool
+    pandas, numpy (mvp_api)
+    pickle (mvp_api)
+    nba_api (impact_api — stats endpoints, optional import)
+    sklearn — used in scripts/ for training, not necessarily at runtime in api
+    standard library: urllib, json, xml.etree, re, html, datetime, etc.
+
+  Install example (developer machine):
+    pip install fastapi uvicorn[standard] psycopg2-binary pandas numpy nba-api scikit-learn
+
+================================================================================
+5) DATABASE CONNECTION (HARDCODED IN ALL THREE API FILES)
+================================================================================
+  Project uses SimpleConnectionPool to:
+    host localhost, port 5432, user postgres, dbname nba_analytics
+    password: set in mvp_api.py, similarity_api.py, impact_api.py (same string).
+  User preference: keep as-is for college project (do not refactor to env
+  unless requested).
+
+  Main table for stats: player_season_stats (columns include features for MVP,
+  impact_score_raw, impact_score_star, team_abbreviation, season, etc.).
+
+  Similarity tables (precomputed): season_similarity, career_similarity.
+
+================================================================================
+6) API A — mvp_api.py (PORT 8000 FOR FRONTEND)
+================================================================================
+  Loads: mvp_model.pkl + mvp_scaler.pkl from first existing path in:
+    api/, ../models/, ../scripts/ (see MODEL_CANDIDATES in file).
+
+  Features (9): pts, ts_pct, usg_pct, off_rating, def_rating, net_rating,
+    w_pct, min, age
+
+  Endpoints:
+    GET /              — service info
+    GET /mvp/predict/{season}?top_n=15 — ranked MVP probabilities
+
+  CORS: allow_origins ["*"]
+
+================================================================================
+7) API B — similarity_api.py (PORT 8001 FOR FRONTEND)
+================================================================================
+  Endpoints:
+    GET /
+    GET /similarity/season/{player_name}/{season}?top_n=10
+    GET /similarity/career/{player_name}?top_n=10
+    GET /players/search?q=&limit=   — autocomplete (DB + accent normalization)
+
+  CORS: allow_origins ["*"]
+
+================================================================================
+8) API C — impact_api.py (PORT 8002) — LARGEST FILE
+================================================================================
+  Responsibilities:
+    - Impact rankings from DB (precomputed scores).
+    - Live/meta: standings (nba_api LeagueStandingsV3 → NBA CDN standings →
+      optional BallDontLie if BALLDONTLIE_API_KEY set), team stats, top scorer,
+      games by date, box scores, stat leaders, player profile/search, news.
+
+  Environment variables:
+    BALLDONTLIE_API_KEY — Authorization header to api.balldontlie.io standings.
+    RAPIDAPI_KEY, RAPIDAPI_NEWS_URL, RAPIDAPI_HOST — optional primary news source.
+    (ODDS_API_KEY appears in user shell history; NOT referenced in impact_api.py
+    grep as of last check — wire up if odds feature added.)
+
+  External URLs (non-exhaustive):
+    thesportsdb.com — team badges, player images (public JSON key "123" in code).
+    cdn.nba.com — live standings, scoreboard, boxscore JSON.
+    api.balldontlie.io — standings when key present.
+    RSS: ESPN, NBA.com, Google News, Yahoo NBA.
+
+  News logic: fetch_current_news() — RapidAPI if configured; else RSS.
+    Date filtering uses _pub_time_matches_target() — same calendar day or ±1 day
+    slack for UTC vs local date strings.
+
+  Endpoints (representative):
+    GET /
+    GET /impact/raw/{season}
+    GET /impact/star/{season}
+    GET /impact/player/{player_name}/{season}
+    GET /meta/current
+    GET /media/player-image/{player_name}
+    GET /players/search?q=&limit=
+    GET /players/profile/{player_name}?season=
+    GET /leaders/{stat_key}?season=&top_n=
+    GET /games/by-date?date=YYYY-MM-DD
+    GET /games/boxscore/{game_id}
+    GET /news/current?date=&limit=
+
+  Default date for games/news when omitted uses datetime.now() (server local).
+
+  CORS: allow_origins ["*"]
+
+================================================================================
+9) DATA & ARTIFACTS ON DISK
+================================================================================
+  models/
+    dpoy_model.pkl, dpoy_scaler.pkl, roy_model.pkl, roy_scaler.pkl
+    (+ CSVs like dpoy_seasons.csv, mvp_seasons.csv, training CSVs, season CSVs)
+
+  nba_data/
+    Many nba_YYYY_YY_season.csv and nba_YYYY_YY_advanced.csv files (season stats).
+
+  api/
+    mvp_api.py, similarity_api.py, impact_api.py only (no committed .pkl in api
+    on some clones — MVP artifacts may live under models/ or scripts/).
+
+  scripts/ (training & ETL — run manually, not auto-started):
+    train_mvp_model.py
+    fetch_dpoy_roy_stats.py, build_dpoy_roy_models.py
+    build_similarity_engine.py, build_league_adjusted_similarity.py
+    precompute_league_similarity.py, precompute_career_similarity.py
+    compute_impact_score.py, upgrade_impact_scores.py
+    fetch_2025_26_season_data.py
+
+  Docs in repo root:
+    PROJECT_DETAILS.md — models, tables, methodology.
+    walkthrough.md — older frontend path notes.
+    journals.rtf, ui design plan.rtf — misc.
+
+================================================================================
+10) KNOWN GOTCHAS / DEBUGGING
+================================================================================
+  - Ports: uvicorn defaults in __main__ blocks may disagree with frontend —
+    always use explicit ports 8000 / 8001 / 8002.
+  - MVP/Similarity need DB + pkl artifacts + populated player_season_stats.
+  - Impact live features need network + nba_api; failures fall back to CDN/DB.
+  - Browser localStorage cache: prefix nbahub_cache_v2 — bump version in api.js
+    if stale empty responses persist after logic fixes.
+  - Timezone: frontend uses localDateIso for "today" (see utils/date.js).
+
+================================================================================
+11) CHANGE LOG — MAJOR CHANGES ONLY (NEWEST FIRST)
+================================================================================
+  2026-04-11 — Added this handoff document (progress.txt) for project continuity.
+
+  2026-04-11 — Date/timezone & reliability (frontend + impact API):
+    - frontend/src/utils/date.js — localDateIso().
+    - frontend/src/services/api.js — localDateIso for prefetch and games;
+      CACHE_PREFIX nbahub_cache_v2; fetchGamesByDate always sends date param.
+    - frontend/src/components/pages/DashboardHome.jsx, NewsSection.jsx —
+      use localDateIso instead of toISOString().slice(0,10).
+    - api/impact_api.py — news date matching slack; server “today” defaults for
+      games/news responses when date omitted.
+
+  2026-04-14 — Added career shot-data fetch script:
+    - scripts/fetch_career_shots_to_json.py — downloads career shotchartdetail
+      data for a fixed list of players and saves JSON files to shot_data/ using
+      the same key schema as shots_data/stephen_curry_shots.json.
+
+  2026-04-14 — Implemented Shot Charts (Stephen Curry only, local JSON):
+    - frontend/public/shot_data/stephen_curry_shots.json — copied from
+      shots_data/ to make it loadable by the browser.
+    - frontend/src/components/pages/ShotCharts.jsx — player search (Curry only)
+      + season selector + court plotting (makes/misses) + simple zone summary
+      table and a “hot zone” label. No backend/API changes required.
+
+  2026-09-21 — Rebuilt Shot Charts on a real backend (any player, not just
+    Curry), replacing the static-JSON, Curry-only version:
+    - api/shots_lib.py (NEW) — Postgres-cached shot chart data. Tables
+      player_shots + player_shots_cache_status. Live fetches from nba_api are
+      rate-limited (5s between requests, 30s backoff + retry on 403/429) and
+      serialized process-wide via a single threading.Lock, so only one live
+      nba_api request is ever in flight no matter how many users search at
+      once. Once a player is fetched, they're cached in Postgres forever.
+      Env var ENABLE_LIVE_SHOT_FETCH=false disables live fetching entirely
+      (falls back to cache-only — use this for zero network dependency on
+      demo day).
+    - api/impact_api.py — new endpoints:
+        GET /shots/player/{player_name}/seasons
+        GET /shots/player/{player_name}?season=YYYY-YY
+      Both resolve the player via the existing find_player() (same lookup as
+      /players/profile), then ensure their career shots are cached (fetching
+      live once on a cache miss).
+    - frontend/src/services/api.js — fetchShotSeasons(), fetchPlayerShots()
+      (6 min timeout — a cold cache miss for a long career can take a while).
+    - frontend/src/components/pages/ShotCharts.jsx — real player search
+      (debounced autocomplete via existing /players/search) instead of the
+      Curry-only hardcoded list; season dropdown now comes from the API.
+    - scripts/prewarm_shots.py (NEW, replaces fetch_career_shots_to_json.py
+      and fetch_jokic_shots.py — both deleted) — offline batch script to
+      pre-warm a curated player roster into Postgres before a demo, so nobody
+      ever triggers a live fetch in front of an audience. Edit PLAYERS list
+      to change the roster.
+    - Stephen Curry's existing shots_data/stephen_curry_shots.json (19,100
+      shots, 17 seasons) was imported directly into player_shots — no live
+      fetch needed for him.
+    - shots_data/stephen_curry_shots.json and frontend/public/shot_data/ are
+      no longer read by the app; left on disk, safe to delete later.
+
+  2026-09-21 — Leave-one-season-out backtesting for MVP/DPOY/ROY, fixed a
+    real candidate-pool bug in DPOY/ROY, and exposed results in the app:
+    - scripts/backtest_models.py (NEW) — for each of the 15 training seasons,
+      retrains on the other 14 and predicts the held-out one (honest
+      generalization test, unlike re-scoring a model on data it trained on).
+      Reuses FEATURES/WINNERS/DB_CONFIG from train_mvp_model.py and
+      build_dpoy_roy_models.py via import (no duplicated constants). Writes
+      per-season + summary results to new tables model_backtest_seasons /
+      model_backtest_summary (rank accuracy, MRR, ROC-AUC, confusion matrix,
+      feature importance). Run manually after retraining any award model.
+    - Found via backtesting: DPOY/ROY were trained against the ENTIRE
+      league every season (~400+ players) instead of a relevant candidate
+      pool, burying real winners hundreds of ranks down (e.g. Luka Dončić's
+      ROY season ranked ~#280) despite deceptively fine-looking ROC-AUC.
+      Fixed in scripts/build_dpoy_roy_models.py:
+        - add_candidate_pool_flags() — ROY restricted to each player's own
+          rookie season (first appearance in player_season_stats); DPOY
+          restricted to min>=24 & gp>=40 (comfortably below every historical
+          winner's actual minutes/games).
+        - ROY_TRAIN_SEASONS excludes the 2009-10 boundary season, where
+          "rookie season" can't be distinguished from "already a veteran
+          when our data starts."
+        - dpoy_model.pkl / roy_model.pkl regenerated with the fix.
+      Also fixed a rank-alignment bug in backtest_models.py's own scoring
+      (a boolean mask built from the pre-sort row order was applied
+      positionally to the post-sort ranking — corrected MVP's real top-1
+      accuracy from a suspicious-looking 100% down to a believable 46.7%).
+    - api/mvp_api.py — new endpoints GET /backtest (all 3 award summaries)
+      and GET /backtest/{award} (summary + full per-season detail), reading
+      the tables above.
+    - frontend/src/services/api.js — fetchBacktestOverview(), fetchBacktestDetail().
+    - frontend/src/components/ModelValidationSection.jsx (NEW) — added as a
+      4th tab ("Model Validation") in AnalyticsSection.jsx. Shows top-1/3/5
+      accuracy, MRR, ROC-AUC, confusion matrix, a per-season table (actual
+      winner vs. predicted rank vs. model's actual #1 pick when it missed),
+      and feature importance, per award.
+
+  2026-09-21 — Added Random Forest as a second model, compared head-to-head
+    with Logistic Regression via the same LOSO harness:
+    - scripts/backtest_models.py — MODEL_CONFIGS list (Logistic Regression,
+      Random Forest n_estimators=200 class_weight="balanced"); run_loso() now
+      takes a model_factory so both are scored identically. Feature
+      importance unified across model types: extract_feature_importance()
+      returns signed coefficients for linear models, unsigned
+      feature_importances_ for tree models, tagged with a "signed" flag so
+      the API/frontend can render either without branching per model.
+    - model_backtest_seasons / model_backtest_summary — added model_type +
+      model_label columns, composite key (award, model_type). Schema is
+      dropped and recreated on every run (this table only ever holds
+      reproducible, regenerable results, not source data).
+    - Result: Random Forest wins for MVP (86.7% vs 73.3% top-5), Logistic
+      Regression wins for DPOY (80.0% vs 66.7%) and ROY (100% vs 100% top-5
+      but 64.3% vs 42.9% top-1) — no single model wins every award, which is
+      the honest finding, not a reason to pick one universally.
+    - api/mvp_api.py — /backtest now returns one row per (award, model_type);
+      /backtest/{award} takes ?model=logreg|random_forest (default logreg);
+      new GET /backtest/{award}/compare returns every model's summary for
+      one award side by side (no per-season detail).
+    - frontend/src/components/ModelValidationSection.jsx — added a
+      comparison table (click a row to switch the detail view below to that
+      model) with a 🏅 marking the best top-5 accuracy per award; feature
+      importance table adapts its header/sign display to whichever model
+      is selected.
+
+  2026-09-21 — Player Archetype clustering (K-Means, unsupervised — first
+    feature in the project that isn't predicting a known label):
+    - scripts/cluster_players.py (NEW) — candidate pool: min>=15mpg, gp>=20
+      (5,070 player-seasons). 11 style features (scoring/playmaking/
+      rebounding/defense/efficiency rates), StandardScaler, K-Means K=6
+      (silhouette-checked against K=4..8, final silhouette 0.187). Cluster
+      names ("Rim Protector", "Playmaker", "3-and-D Wing", "Primary Scorer",
+      "Elite Two-Way Big", "Bench Role Player") are assigned by matching
+      each discovered centroid to hand-authored profiles via cosine
+      similarity + Hungarian algorithm (scipy.optimize.linear_sum_assignment)
+      — the grouping itself is 100% data-driven, only the label uses
+      basketball knowledge. Also stores a 2D PCA projection (66.2% variance
+      explained) per player for scatter-plot visualization only (separate
+      from the 11-D clustering). Writes player_clusters (one row per
+      player-season) and cluster_archetypes (one row per archetype: size,
+      centroid, representative players, silhouette score) to Postgres,
+      dropped/recreated fresh each run like the backtest tables.
+    - api/similarity_api.py — new endpoints GET /clusters/archetypes,
+      GET /clusters/season/{season}, GET /clusters/player/{player_name}
+      (career archetype history — e.g. Jokić: 3-and-D Wing (rookie) ->
+      Elite Two-Way Big -> Primary Scorer every season since 2017-18).
+    - Fixed a real accent-normalization bug while testing this: api/
+      impact_api.py's fetch_nba_api_player_search() (the "live" search
+      backing PlayerStats.jsx, ShotCharts.jsx, and the new archetype career
+      lookup) did plain substring matching with no accent stripping, so
+      "Jokic" matched nothing against "Nikola Jokić". Added
+      _normalize_search_text() (NFKD decompose + strip combining marks,
+      same approach similarity_api.py already used) — affects every
+      feature that uses live player search, not just this one.
+    - frontend/src/components/PlayerArchetypesSection.jsx (NEW) — added as
+      a 5th Analytics tab ("Player Archetypes"). Archetype legend (hover to
+      isolate that color in the scatter plot), an SVG scatter plot of the
+      2D PCA projection colored by archetype, a season roster table, and a
+      player search for career archetype history.
+
+  2026-09-21 — Trade Analyzer (new top-level page, not an Analytics tab —
+    sidebar was getting crowded and this is a standalone tool):
+    - api/impact_api.py — new endpoints GET /trade/teams/{season},
+      GET /trade/roster/{team_abbr}/{season}, GET /trade/simulate
+      (?season=&team_a=&player_a_id=&team_b=&player_b_id=). Simulates a
+      straight 1-for-1 trade: removes the outgoing player from each roster,
+      adds the incoming one, recomputes minutes-weighted net/off/def rating
+      and TS%, plus total roster impact_score_raw, before vs. after for both
+      teams. Also surfaces a "stylistic fit" note — checks the incoming
+      player's precomputed season_similarity matches against who's already
+      on the new roster. CAVEAT (returned in the response AND shown in the
+      UI, not hidden): this uses each player's own historical stats as their
+      contribution to the new team; it cannot simulate role/usage/minutes
+      changing in a new context, so it's a roster production balance
+      estimate, not an on-court projection.
+    - frontend/src/components/pages/TradeAnalyzer.jsx (NEW), wired into
+      App.jsx + Sidebar.jsx + PageHeader.jsx as its own page ('trade').
+      Season + two team + two player pickers, then side-by-side before/after
+      panels per team (color-coded deltas, green=improved/red=worse per
+      metric's actual direction — e.g. defensive rating improving means it
+      went down, handled via a `higherIsBetter` flag per row).
+    - Fixed a real bug found while building this: the team-metric table
+      wasn't wrapped in the app's standard `.table-wrapper` (every other
+      table in the codebase is) so it hard-clipped instead of scrolling
+      horizontally on narrow viewports. Wrapped it, matching convention.
+
+  2026-09-21 — Team win% prediction, wired directly into Trade Analyzer:
+    - scripts/train_win_model.py (NEW) — one row per (team, season), built
+      from player_season_stats (no standings table exists in this DB; team
+      win% is DERIVED from the per-player w_pct column, minutes-weighted
+      across the roster — verified against a known real record first,
+      Denver 2023-24: actual .695, reconstructed .696, before trusting it
+      as the training target). Features: minutes-weighted net_rating +
+      ts_pct only. Caught and fixed a multicollinearity issue before
+      shipping: off_rating/def_rating alongside net_rating (which IS
+      off_rating-def_rating) gave off_rating a nonsensical negative
+      coefficient; dropped both since net_rating alone already hit
+      R2=0.9223 in LOSO backtesting and they added no real signal (0.002 R2,
+      noise). Also tested and dropped total_impact_raw for the same reason.
+      Final Linear Regression (beat Random Forest again — the relationship
+      is close to linear): LOSO R2=0.922, MAE=0.031 (~2.5 wins over an
+      82-game season), both coefficients correctly signed. Saves
+      models/win_model.pkl + win_scaler.pkl; backtest detail in the new
+      win_model_backtest table.
+    - api/impact_api.py — loads win_model.pkl/win_scaler.pkl at startup
+      (same MODEL_CANDIDATES path pattern as mvp_api.py). _team_summary()
+      (used by /trade/simulate) now includes predicted_win_pct; returns
+      None gracefully if the model artifacts aren't present rather than
+      erroring. Response includes a predicted_win_pct_note stating the
+      model's validated R2/MAE inline, not just a bare number.
+    - frontend/src/components/pages/TradeAnalyzer.jsx — added a "Predicted
+      Win%" stat card per team (before → after, delta-colored) above the
+      roster metric table, with the R²/error inline in the label.
+
+  2026-09-21 — SHAP explainability for the Random Forest award models:
+    - scripts/build_shap_explanations.py (NEW) — Random Forest only, not
+      Logistic Regression: its coefficients (already shown in Model
+      Validation's feature importance) ARE the per-prediction explanation
+      for a linear model; Random Forest votes across 200 trees with no
+      simple formula, which is the actual gap SHAP fills. Trains the same
+      RF config already validated in backtest_models.py's LOSO comparison
+      (not a new/different model — an explanation of the one already
+      tested), computes shap.TreeExplainer values for the top 30 candidates
+      of the current prediction season (2025) per award. Binary classifier
+      SHAP output is (n_samples, n_features, 2); took the class-1 (winner)
+      slice. Writes one row per (player, feature) to a new
+      shap_explanations table.
+    - api/mvp_api.py — new endpoints GET /explain/{award} (candidate list +
+      base rate) and GET /explain/{award}/{player_name} (full per-feature
+      breakdown, sorted by |contribution|).
+    - frontend/src/components/ModelValidationSection.jsx — new "Explain a
+      Prediction (SHAP)" block, shown only when Random Forest is the
+      selected model. Player picker (defaults to the top candidate) + a
+      horizontal diverging bar per feature (green pushes probability up,
+      red pushes down, width proportional to magnitude in percentage
+      points) between the model's base rate and the final prediction.
+      Real result worth noting: for Jokić, `age (30)` is the single biggest
+      negative contributor (-32.3pp) — directly explains why the LOSO
+      backtest (see Model Validation) ranked him only #6 in his own
+      MVP-winning seasons despite dominant per-game stats.
+    - Fixed a real layout bug caught while testing: ShapBar originally used
+      a 3-column CSS grid with two fixed-pixel columns (140px + 90px) that
+      exceeded the panel's actual width on narrower viewports, collapsing
+      the flexible middle column (the bar itself) to 0 width — the labels
+      and pp values rendered but the bar disappeared entirely. Confirmed via
+      getBoundingClientRect() before fixing, not just by eyeballing a
+      screenshot. Rewrote as two stacked rows (label+value, then a
+      full-width bar row) so the bar can never be squeezed out.
+
+  2026-09-21 — Radar Chart Comparison (new Analytics tab):
+    - api/impact_api.py — new GET /radar/{player_name}?season= returns
+      percentile rank (0-100), not raw value, for PTS/REB/AST/STL/BLK/TS%/
+      USG% among that season's qualified pool (min>=15mpg, gp>=20 — same
+      convention as clustering/win-model). Percentile-based deliberately: a
+      raw-value radar would be visually dominated by whichever stat has the
+      largest numbers (points vs. a percentage), and percentile is the
+      standard, explainable way real analytics sites do this.
+    - Fixed a second instance of the accent-normalization bug (same root
+      cause as the one fixed earlier for live search): impact_api.py's
+      find_player() — used by /players/profile, /shots/player, and this new
+      /radar endpoint (5 call sites total) — did LOWER()-only SQL matching
+      with no accent stripping, so "Nikola Jokic" (no accent) couldn't
+      resolve to "Nikola Jokić". Added the same NFKD-normalize fallback
+      already used elsewhere, benefiting every endpoint that calls it, not
+      just this one.
+    - frontend/src/components/RadarCompareSection.jsx (NEW) — up to 3
+      players, hand-rolled SVG spider chart (7 axes, percentile-scaled,
+      semi-transparent overlaid polygons per player) plus a raw value +
+      percentile table underneath.
+    - Caught and fixed a real race condition while testing, not just a
+      cosmetic bug: the player-search dropdown fired one fetch per keystroke
+      with no debounce or cancellation guard, so an in-flight response for
+      an earlier partial query could resolve AFTER a later, more-complete
+      one and overwrite it with stale results — typing "Nikola Jokic" showed
+      no dropdown at all despite the API returning a correct match.
+      Rewrote as a proper debounced-effect-with-cancellation hook
+      (useSlotSuggestions, matching the pattern already used in
+      ShotCharts/PlayerArchetypes), and added the same "skip re-searching a
+      name already picked for this slot" guard that fixed the analogous
+      stray-dropdown bug in those two features.
+
+  2026-09-21 — Visual ROC curve for Model Validation (previously only a
+    bare AUC number):
+    - scripts/backtest_models.py — run_loso() already computed the
+      out-of-fold probabilities/labels needed for a real curve (previously
+      only used to get roc_auc_score, then discarded); added
+      sklearn.metrics.roc_curve() on that same data plus downsample_curve()
+      (evenly samples down to 60 points, always keeping the exact (0,0) and
+      (1,1) endpoints — sklearn returns one point per distinct threshold,
+      which can be hundreds for thousands of predictions). Added
+      roc_curve JSONB column to model_backtest_summary.
+    - api/mvp_api.py — added "roc_curve" to SUMMARY_COLS; propagates through
+      /backtest, /backtest/{award}, and /backtest/{award}/compare
+      automatically since all three build their response generically from
+      that column list.
+    - frontend/src/components/ModelValidationSection.jsx — RocCurveChart:
+      hand-rolled SVG line+area chart, gridlines, axis labels, dashed
+      random-baseline diagonal, AUC annotation. Shown under the per-season
+      table for whichever model is selected (Logistic Regression or Random
+      Forest), so it updates live when switching models.
+    - Hit a red herring while testing: the ROC section first rendered as a
+      totally blank page with an "Uncaught ReferenceError: useEffect is not
+      defined" console error, reproducible even after a hard reload and a
+      node_modules/.vite cache clear. Root-caused it to the browser tab's
+      own ESM module cache — that one tab had lived through dozens of dev
+      server restarts over the course of this session and accumulated a
+      stale/mismatched module graph. Verified by opening a genuinely fresh
+      tab, which rendered correctly immediately — not a code bug, but worth
+      recording since it looked exactly like one.
+
+  2026-09-21 — Interactive zone-density heatmap for Shot Charts (frontend-
+    only, no backend changes — the raw shot data was already fully loaded
+    client-side for the selected player/season):
+    - frontend/src/components/pages/ShotCharts.jsx — "Shot Dots" / "Heat
+      Map" toggle. binShotsIntoGrid() bins shots into a 2.5ft square grid
+      (in the same raw court units as the existing court-drawing transform,
+      so cells line up exactly with the arc/paint/hoop already drawn) and
+      computes attempts/makes/FG% per cell; cells with <3 attempts are
+      dropped so one lucky/unlucky shot can't paint a cell as 100%/0% hot
+      or cold. Color = FG% (blue = cold, gray ≈ league-average, red = hot,
+      via a 3-stop gradient interpolation), opacity = shot volume relative
+      to that player-season's busiest cell — the standard two-channel
+      encoding real shot-chart heatmaps use, not a single flat color scale.
+      Native SVG <title> per cell gives a hover tooltip (attempts/makes/
+      FG%) — verified via the DOM, not just eyeballed.
+    - Verified against a real, checkable number: Curry's 2015-16 (unanimous
+      MVP season) hottest cell is directly under the rim — 145 attempts,
+      103 makes, 71.0% FG — exactly where his real efficiency peaked that
+      year, and matches the visual deep-red cell in the rendered chart.
+    - Learned from the ROC curve session earlier: verified this one in a
+      fresh browser tab from the start rather than reusing the long-lived
+      one, avoiding a repeat of that stale-module-cache false alarm.
+
+  2026-09-21 — Trend Analysis (6th Analytics tab — Player + Team career/
+    franchise trajectories):
+    - api/impact_api.py — new GET /players/history/{player_name} (every
+      season on record, UNFILTERED — no qualified-pool minimum like
+      clustering/radar use, since a trend should show the real trajectory,
+      injury-shortened and rookie seasons included, not just the "clean"
+      ones) and GET /teams/history/{team_abbr} (minutes-weighted net/off/
+      def rating, TS%, and win% per season, computed directly in SQL via
+      SUM(min*stat)/SUM(min) GROUP BY season — one query, not N+1 — reusing
+      the exact aggregation Trade Analyzer and the win% model already use,
+      so a team's trend line is consistent with what those two features
+      show for any single season).
+    - frontend/src/components/TrendAnalysisSection.jsx (NEW) — Player/Team
+      mode toggle, stat picker (9 player stats, 5 team stats), hand-rolled
+      SVG line chart with gridlines, season-axis labels, hover tooltips per
+      point, and a gold dot marking the peak season.
+    - Verified two results against real basketball history rather than just
+      eyeballing the shapes: LeBron's points-per-season peak lands on
+      2022-23 (30.3 ppg, his actual career-high scoring season); Denver's
+      win% trend shows 2012-13 and the 2023-24 championship season as
+      nearly tied for the franchise's best — which is correct, not a
+      rendering bug, because both teams actually finished 57-25 in real
+      life, so the derived win% (minutes-weighted from box scores, no
+      standings table in this DB — see the win-model entry above) lands at
+      .698 and .696 respectively, a difference small enough to look like a
+      near-tie on the chart because it genuinely was one.
+
+  2026-09-21 — New data pipeline: raw shooting/rebounding counts added to
+    player_season_stats (purely additive — ADD COLUMN only, no existing
+    column or row touched), enabling CraftedNBA-style Shooting Proficiency
+    and Spacing (Radar Compare) plus a real Four Factors breakdown (Trend
+    Analysis team stats):
+    - scripts/add_shooting_efficiency_stats.py (NEW) — no new network fetch
+      needed: the raw counts (FGA, FG3A, FTA, OREB, EFG%, OREB%, TOV%, POSS)
+      were already sitting on disk in nba_data/*.csv, the exact files this
+      table was originally built from — just never loaded. Backed up the
+      full table to scratchpad_backups/ as CSV before running (no pg_dump
+      available in this sandbox). Migration: ALTER TABLE ADD COLUMN IF NOT
+      EXISTS (12 new nullable columns) + UPDATE by (player_id, season) —
+      100% coverage (6,697/6,697 rows), spot-checked against the raw CSV
+      before trusting it. Verified zero regressions by smoke-testing all 9
+      major endpoints across all three services post-migration (all 200 OK)
+      before building anything on top of the new columns.
+    - api/impact_api.py — /radar/{player} gained two new axes:
+      shooting_proficiency = (2/(1+e^-3PAper100) - 1) * 3FG% and
+      spacing = (3PA * (3P% * 1.5)) - EFG% (both formulas as disclosed by
+      CraftedNBA — not guessed). /teams/history/{team} gained Four Factors
+      (eFG%/OREB%/TOV%/FTr) via the same minutes-weighted-roster
+      methodology as net_rating/win_pct there — explicitly caveated in the
+      API response and the UI tooltip as a roster-composition proxy, not an
+      official team box score stat (this DB has no team-level game log).
+      Deliberately did NOT attempt Box Creation, Passer Rating, Portability,
+      Shooting Quality, Total Points Gained/Saved, or CraftedOPM/DPM — see
+      the ranking discussion: those need either pass-tracking data this
+      project has no access to, or formulas CraftedNBA never discloses
+      (implementing them would mean guessing a formula and mislabeling it
+      with their name).
+    - frontend/src/components/RadarCompareSection.jsx — 2 new radar axes
+      (auto-extends the existing N-axis polar chart math). frontend/src/
+      components/TrendAnalysisSection.jsx — 4 new team stat options.
+    - Two real bugs caught while verifying, both fixed: (1) forgot to
+      restart impact_api after adding a rounding fix to the radar endpoint,
+      so it kept serving raw unrounded floats (0.4539997964020246) until
+      caught by re-reading the live response, not just the code diff.
+      (2) RadarCompareSection had no effect watching `season` — changing
+      the season input after a player was already picked silently did
+      nothing, because handlePick only fires on selection and captures
+      season in its closure at that moment. Fixed with a proper useEffect
+      that re-fetches every already-picked slot on season change. Also hit
+      the same live-nba_api-search hang documented earlier this session
+      (stats.nba.com unreachable from this sandbox, ~45s timeout before DB
+      fallback) — confirmed via direct curl timing (46.2s) that this was
+      the pre-existing live-search behavior, not a new regression, before
+      concluding the actual fix (season refetch) was correct.
+
+  2026-09-21 — Defensive tracking metrics (DFG%, FGDiff%, RAD/g — 2 new
+    Radar Compare axes; 3rd CraftedNBA-ranked item, Versatility Index
+    deliberately skipped):
+    - scripts/build_defense_tracking_stats.py (NEW) — league-wide batch
+      fetcher via nba_api's leaguedashptdefend endpoint (SportVU/Second
+      Spectrum camera-tracked contest data, not box-score counting stats —
+      only exists from 2013-14 onward, unlike everything else in this DB,
+      so there's no way to backfill 2009-13). Column names verified
+      directly from the installed library's source rather than guessed:
+      CLOSE_DEF_PERSON_ID (=player_id), D_FG_PCT, NORMAL_FG_PCT,
+      PCT_PLUSMINUS (=FGDiff%), D_FGA/G (for RAD/g). Two requests per
+      season (defense_category "Overall" for DFG%/FGDiff%, "Less Than 6Ft"
+      for RAD/g), same rate-limit discipline as shots_lib.py (5s between
+      requests, 30s backoff + retry on 403/429, max 3 retries). Creates
+      defense_tracking_stats (player_id, player_name, season, dfg_pct,
+      league_avg_fg_pct, fg_diff_pct, overall_freq, rim_fga_total,
+      rim_games, rad_per_game; PRIMARY KEY (player_id, season)).
+    - api/impact_api.py — /radar/{player_name} gained a LEFT JOIN to
+      defense_tracking_stats and 2 new percentile-ranked axes:
+      rad_per_game (as-is) and defensive_impact = -fg_diff_pct (sign
+      flipped so higher percentile = better defense on this radar, since
+      NBA convention has fg_diff_pct negative for good defense — every
+      other axis on this chart is "higher is better").
+    - Deliberately did NOT implement Versatility Index — CraftedNBA never
+      discloses its formula, consistent with this session's rule of not
+      guessing/faking a proprietary formula and mislabeling it with their
+      name (same reasoning as skipping Box Creation, Passer Rating, etc.
+      in the prior entry).
+    - CANNOT be tested end-to-end from this sandbox: stats.nba.com is
+      unreachable here (confirmed by curl timeout, same as every other
+      live nba_api call this session). defense_tracking_stats is currently
+      an empty table — the user needs to run this on their own machine:
+        cd scripts && python3 build_defense_tracking_stats.py
+      (fetches season 2014 through 2025, ~2 requests/season with 5s
+      sleeps — expect several minutes to run for real, uninterrupted).
+    - Real bug found and fixed while verifying graceful empty-state
+      handling: frontend/src/components/RadarCompareSection.jsx defaulted
+      a null percentile to 0 in the polygon math (byStat[axis]?.percentile
+      ?? 0), which — with defense_tracking_stats empty — would have shown
+      every player at a misleading "0th percentile defense" on all 11
+      axes. Fixed by computing visibleAxes (only axes where at least one
+      currently-compared player has real data) and parameterizing
+      axisAngle/axisPoint/ringPolygonPoints to take a dynamic axis count
+      instead of the module-level AXES.length, so the polygon only draws
+      axes with real data. The results table below still shows the full
+      axis list with honest "—" placeholders for missing stats — nothing
+      hidden, just not falsely plotted. Verified end-to-end in a fresh
+      browser tab: Stephen Curry 2015-16 radar renders exactly 9 axes (not
+      11 distorted ones), table correctly shows "Defensive Impact —(—)"
+      and "Rim Attempts Defended/g —(—)" until real data is loaded.
+
+  2026-09-21 — DPOY/ROY Awards Race prediction (closes a feature-parity gap:
+    MVP already had a live "predict this season's candidates" leaderboard,
+    DPOY/ROY only had historical backtest/SHAP evaluation, no way to ask
+    "who's the front-runner for season X"):
+    - api/mvp_api.py — new GET /dpoy/predict/{season} and GET /roy/predict/
+      {season}, mirroring the existing predict_mvp() pattern exactly: same
+      logistic-regression + StandardScaler pipeline (loaded from models/
+      dpoy_model.pkl / roy_model.pkl, already trained by
+      build_dpoy_roy_models.py earlier this session), same response shape.
+      Both apply the identical candidate-pool restriction the models were
+      actually trained under — DPOY: min>=24 & gp>=40 at query time; ROY:
+      only rows where the season equals that player's MIN(season) across
+      the whole table (their rookie year) — reusing DPOY_MIN_MINUTES/
+      DPOY_MIN_GAMES/DPOY_FEATURES/ROY_FEATURES verbatim from the training
+      script so predictions can't silently diverge from what was trained.
+      ROY additionally rejects the dataset's first season outright (2010)
+      with an explanatory 400, matching ROY_TRAIN_SEASONS' exclusion logic
+      from the training script (rookies that year are indistinguishable
+      from already-established veterans).
+    - frontend/src/components/AwardsRaceSection.jsx (NEW, replaces the old
+      MVPSection.jsx) — MVP/DPOY/ROY sub-tab switcher inside the Analytics
+      "Awards Race" tab (renamed from "MVP Prediction"), one config object
+      per award (feature columns, probability key, methodology blurb)
+      driving a shared DataTable, instead of three near-duplicate
+      components. frontend/src/services/api.js gained fetchDPOYPrediction/
+      fetchROYPrediction alongside the existing fetchMVPPrediction.
+    - Fully testable in this sandbox (unlike the live nba_api pulls) since
+      player_season_stats already holds real historical data locally — no
+      user handoff needed here. Verified against real basketball history,
+      not just that the code ran: DPOY 2023-24 predict correctly ranks
+      Rudy Gobert #1 (the actual winner) at 81.6% probability, ahead of
+      Jokić/Wembanyama/SGA; ROY 2023-24 predicts Chet Holmgren #1 (99.66%)
+      narrowly over Victor Wembanyama #2 (99.22%) — Wembanyama was the real
+      winner, so this is a genuine near-miss rather than a bug, consistent
+      with the model's already-documented 64% top-1 / 100% top-5 backtest
+      accuracy (14 seasons) — reported honestly rather than cherry-picking
+      a season where the model happens to get #1 right. Confirmed the MVP
+      tab still works unchanged after the refactor into AwardsRaceSection
+      (same model, same known ~47% top-1 accuracy — this season it prefers
+      Embiid over the real winner Jokić, a pre-existing, undisturbed model
+      characteristic, not a regression from this change).
+
+  2026-09-21 — All-NBA Team prediction (4th Awards Race tab; new labeled
+    dataset + new model shape, not a reuse of the DPOY/ROY pattern):
+    - Feasibility check first, following this session's established
+      discipline: player_season_stats has no position column and no
+      award-label table existed for All-NBA (unlike mvp_seasons/
+      dpoy_seasons/roy_seasons). Position turned out to be unnecessary —
+      All-NBA is 15 winners/season across 3 tiers, not a positional-slot
+      allocation problem, so a labeled "did this player make any All-NBA
+      team" dataset is sufficient. Sourced 240 real historical selections
+      (2009-10 through 2024-25, First/Second/Third Team, 5 each) from
+      landofbasketball.com via WebFetch — an external, checkable source,
+      not typed from memory — same "verify, don't guess" rule applied to
+      the DPOY_WINNERS/ROY_WINNERS static lists earlier this session.
+    - scripts/fetch_all_nba_teams.py (NEW) — builds the all_nba_seasons
+      table from that static list, using the same exact-match-then-
+      last-name-fallback matching as fetch_dpoy_roy_stats.py. First run
+      surfaced 13/240 unmatched (Jokić/Dončić need diacritics not present
+      in "Jokic"/"Doncic"; "Jimmy Butler" the search string collided with
+      DB's "Jimmy Butler III") — fixed by correcting the source strings to
+      match actual DB spelling, confirmed 240/240 on rerun rather than
+      silently accepting partial coverage.
+    - scripts/build_all_nba_model.py (NEW) — logistic regression, same
+      pipeline as DPOY/ROY, but a genuinely different backtest shape:
+      MVP/DPOY/ROY are single-winner-per-season, so backtest_models.py's
+      rank-of-the-one-true-winner metric applies directly; All-NBA has 15
+      winners/season, so "rank of the winner" doesn't mean anything here.
+      Wrote a dedicated LOSO precision@15 metric instead (of the 15 players
+      predicted, how many were actually selected that season) rather than
+      forcing this into the existing single-winner machinery — result:
+      77.9% mean precision@15 (11.7/15 correct on average) across 16
+      seasons, ROC-AUC 0.982, saved to a new all_nba_backtest_summary
+      table (kept separate from model_backtest_summary since the column
+      shapes are genuinely different, not just reusing one for two
+      purposes). The real, held-out 2024-25 season (never in training):
+      10/15 correct — reported as the honest number, not cherry-picked.
+      Noted but did not chase: pts' coefficient came out slightly negative
+      (-0.29) once usg_pct/min/ts_pct/net_rating are controlled for — a
+      plausible multicollinearity artifact (same family of issue as the
+      win model's off_rating/net_rating collinearity caught earlier this
+      session), not something breaking the model's actual accuracy.
+    - api/mvp_api.py — new GET /allnba/predict/{season}, same candidate-
+      pool-restricted pattern as DPOY/ROY (min>=24, gp>=40), returning the
+      top 15 by probability with "First/Second/Third Team" reconstructed
+      by rank cutoff (1-5/6-10/11-15) — explicitly labeled in the response
+      as an approximation, not a model of actual per-tier voting.
+    - frontend/src/components/AwardsRaceSection.jsx gained a 4th sub-tab
+      (config-driven, no new component needed); frontend/src/services/
+      api.js gained fetchAllNBAPrediction.
+    - Verified end-to-end in a fresh browser tab against the real 2024-25
+      season: predicted First Team (Jokić, SGA, Giannis, Dončić, Tatum) —
+      5/5 matched the actual First Team exactly; overall 10/15 across all
+      three tiers, consistent with the offline backtest number reported
+      above. Fully testable in this sandbox (static label list + existing
+      local player_season_stats data) — no live nba_api fetch involved, so
+      no user handoff needed for this one.
+
+================================================================================
+END OF progress.txt
+================================================================================
