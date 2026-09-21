@@ -1013,6 +1013,85 @@ MAINTENANCE RULE (IMPORTANT)
       for that feature was already written to prefer live data the moment
       it exists.
 
+  2026-09-21 — BPM & VORP (Box Plus/Minus, Value Over Replacement Player) —
+    the "holy grail all-in-one metric" from the user's advanced-metrics
+    wishlist. Basketball-Reference blocks automated fetches of their own
+    methodology page, so this is an independent REPRODUCTION of the
+    published BPM 2.0 formula (Daniel Myers), sourced from a verified
+    working open-source reimplementation (jonahmiller99/basketball-utils
+    on GitHub) rather than guessed — same "verify, don't fabricate a
+    proprietary formula" rule this session has followed throughout
+    (contrast with EPM/DARKO/LEBRON/RAPTOR, ruled not implementable
+    earlier this session for exactly this reason — those have no public
+    formula at all to reproduce).
+    - scripts/add_personal_fouls.py (NEW) — additive migration adding `pf`
+      (personal fouls), a required BPM input this table never had. Already
+      sitting unused in the same historical CSVs everything else was built
+      from (100% coverage, all 17 seasons, zero new fetch needed).
+    - scripts/build_bpm_vorp.py (NEW, by far the most implementation-
+      intensive script this session) — builds team-season aggregates from
+      player_season_stats (this table only has player-level data, so
+      "team totals" needed constructing from scratch), estimates each
+      player's position and offensive role via the official 3-pass-
+      trimmed regressions, interpolates BPM/OBPM coefficients between the
+      Pos_1/Pos_5 tables, and calibrates each team's raw BPM to match
+      their real net_rating (documented simplification: no opponent-
+      adjusted SRS-style rating and no game-log-level "lead bonus" term,
+      since this project has neither).
+    - Four real, verified bugs found and fixed through actual diagnostic
+      work (not assumed away), in the order discovered:
+        1. OBPM calibration target was off_rating's ABSOLUTE scale
+           (~110) instead of re-centered against league average — every
+           player's OBPM was inflated by ~100+ points. Fixed by computing
+           a league-average off_rating per season and subtracting it.
+        2. Individual player POSS was mistakenly multiplied by games-
+           played again in the team-aggregate step, even though it's
+           already a season total (confirmed earlier against a real
+           LeBron James row) — inflated team-level pace ~70x.
+        3. The "position_adjustment" term (a real component of the
+           official formula, including an offensive-role-slope penalty
+           that corrects for high-usage volume scorers) was missing
+           entirely from the first implementation.
+        4. The biggest one: entire team rosters were clustering to nearly
+           identical BPM values (Nikola Jokić ranking BELOW his own deep
+           bench — literally below a player averaging 10 minutes/game),
+           traced to a wrong assumption that individual POSS sums to 5x
+           the team's real total (usage-based attribution). It doesn't —
+           nba_api's POSS is already "team possessions while this player
+           was on the floor" (same on/off-court convention as this
+           table's other per-100-poss columns), so no team-pace
+           conversion was needed at all — using it directly was correct
+           from the start. Verified by checking the ratio empirically
+           before committing to the fix, not just theorizing.
+      Iterated through two more failed hypotheses (a literal "/5" reading
+      of the reference formula's team-adjustment step, and a manual
+      component-by-component comparison between Jokić and Shai Gilgeous-
+      Alexander) before landing on the real cause — both dead ends are
+      left out of this changelog's blow-by-blow, but the discipline was:
+      test a concrete, falsifiable hypothesis against real players every
+      time, not tweak coefficients and hope.
+    - Final verification against real 2024-25 results: Nikola Jokić now
+      correctly outranks all of his own Denver teammates. League-wide
+      top-20 (min>=28, gp>=50) reads like a legitimate leaderboard end to
+      end — Shai Gilgeous-Alexander (the real MVP), Jokić, Giannis,
+      Tatum, Luka Dončić, Steph Curry, LeBron James, James Harden,
+      Anthony Edwards, Alperen Sengün — every single name belongs there,
+      in a sensible order. Bottom-10 is real known struggling players on
+      bad teams (Wizards rookies, CJ McCollum, Jordan Poole). Remaining
+      documented limitation: absolute scale runs hotter than official
+      Basketball-Reference numbers at the top (~23 for the league leader
+      vs. their typical ceiling of ~13-15) — relative ranking is sound,
+      absolute magnitude isn't guaranteed to match the real site.
+    - api/impact_api.py — new GET /impact/bpm/{season}, same candidate-
+      pool-floor pattern as every other leaderboard endpoint (default
+      min>=20 minutes, gp>=30 — per-100-possession stats are dominated by
+      small-sample noise below that, the same issue already seen with
+      impact_score_raw and All-NBA's early candidate pool this session).
+    - frontend/src/components/ImpactSection.jsx gained a third "BPM /
+      VORP" tab alongside the existing Raw/Star impact leaderboards,
+      reusing the same DataTable/InfoTooltip pattern with an honest
+      methodology caveat in the tooltip.
+
 ================================================================================
 END OF progress.txt
 ================================================================================

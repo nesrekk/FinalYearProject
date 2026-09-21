@@ -213,6 +213,11 @@ export async function fetchStarImpact(season) {
     return response.data;
 }
 
+export async function fetchBpmLeaderboard(season) {
+    const response = await axios.get(`${IMPACT_BASE}/impact/bpm/${season}`);
+    return response.data;
+}
+
 export async function fetchCurrentMeta() {
     return getWithCache('meta_current', 90 * 1000, async () => {
         const response = await axios.get(`${IMPACT_BASE}/meta/current`);
