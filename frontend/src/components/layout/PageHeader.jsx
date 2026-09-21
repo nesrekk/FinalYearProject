@@ -11,6 +11,8 @@ const pageTitles = {
     shotcharts: 'Shot Charts',
     analytics: 'Analytics & Predictions',
     trade: 'Trade Analyzer',
+    draft: 'Draft Value Guide',
+    rookies: 'Rookie Class Tracker',
 };
 
 const pageDescriptions = {
@@ -24,6 +26,8 @@ const pageDescriptions = {
     shotcharts: 'Court-level shooting visualizations',
     analytics: 'Season similarity, MVP prediction, impact rankings',
     trade: 'Simulate a 1-for-1 trade and see the roster impact',
+    draft: 'Career value by draft slot, best-value picks, and draft class browsing',
+    rookies: 'This season\'s rookie class, ranked by ROY probability, with historical comps',
 };
 
 export default function PageHeader({ activePage }) {

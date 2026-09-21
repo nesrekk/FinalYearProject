@@ -893,6 +893,126 @@ MAINTENANCE RULE (IMPORTANT)
       matches the printed coefficients exactly (usg_pct +2.026 down to
       pts -0.286).
 
+  2026-09-21 — Draft Value Analysis (new "Draft Value Guide" page — item #1
+    of the two "draft class guide" ideas discussed; a TRUE pre-draft 2026/
+    2027 prospect guide was explicitly ruled out first — this project has
+    zero college/international basketball data anywhere, a completely
+    different source than anything nba_api provides, and mock draft boards
+    have no stable ground truth to verify against the way historical
+    awards rosters did. This feature is retrospective: career outcomes by
+    draft slot, not prospect scouting):
+    - scripts/fetch_draft_history.py (NEW) — one-shot pull via nba_api's
+      DraftHistory endpoint (column names verified from the installed
+      library's source: PERSON_ID/PLAYER_NAME/SEASON/ROUND_NUMBER/
+      ROUND_PICK/OVERALL_PICK/DRAFT_TYPE/TEAM_ABBREVIATION/ORGANIZATION/
+      ORGANIZATION_TYPE). Unlike shot charts or defense tracking, this
+      endpoint returns the ENTIRE draft history back to 1947 in a single
+      request when no season filter is passed — no per-season loop needed.
+      Documented the season-convention off-by-one carefully: the draft
+      happens the summer BEFORE a rookie season, so rookie_season_int =
+      draft_year + 1 is stored directly on each row to avoid recomputing
+      that everywhere. Same live-fetch sandbox limitation as every other
+      nba_api pull this session — needs the user to run it for real.
+    - api/impact_api.py — three new endpoints reusing impact_score_raw (the
+      same 'total roster impact' currency Trade Analyzer already sums per
+      roster) as the career-value metric, rather than inventing a new
+      formula: GET /draft/{draft_year} (one class's picks + career value),
+      GET /draft/value-curve (avg career value by pick-range bucket —
+      1-5/6-14/15-30/31-45/46-60 — a real-outcomes 'draft value chart'),
+      GET /draft/best-value?worst=bool (biggest positive/negative
+      deviation from the pick-bucket average — steals vs. underperformed
+      slots). Both aggregate endpoints restrict to draft_year <= 2020 (a
+      documented DRAFT_MATURITY_CUTOFF) so a class only counts once it's
+      had several seasons to actually accumulate value — otherwise recent
+      draft classes would misleadingly look like busts just for being new.
+      Hit the same route-ordering bug caught earlier this session with
+      /backtest/allnba: /draft/{draft_year} being registered before the
+      literal /draft/value-curve and /draft/best-value paths swallowed
+      those requests (a path param matches any string positionally) —
+      moved the parameterized route to be registered last.
+    - frontend/src/components/pages/DraftValueGuide.jsx (NEW) — hand-rolled
+      SVG bar chart for the value curve, a Best-Value/Underperformed
+      toggle leaderboard, and a draft-year browser table. Wired into
+      Sidebar.jsx, App.jsx, and PageHeader.jsx as a new standalone page
+      (same pattern as Trade Analyzer) rather than an Analytics sub-tab.
+    - Verified end-to-end by temporarily inserting synthetic rows using
+      REAL, factually-correct historical picks (Draymond Green 2012 #35,
+      Anthony Davis 2012 #1, Damian Lillard 2012 #6, Giannis 2013 #15,
+      Jokić 2014 #41) against the real player_id/impact_score_raw data
+      already in the DB, confirming the plumbing end-to-end before
+      deleting them again so the table is genuinely empty for the user's
+      real fetch. This surfaced two real bugs, both fixed: (1) the API's
+      /draft/{draft_year} route swallowing the two literal-path routes
+      registered after it (above); (2) the frontend displayed the draft
+      YEAR using the season-range format meant for actual seasons (showed
+      "2011-12" for the 2012 draft instead of "2012" — a draft night isn't
+      a season span). The synthetic test also produced a genuinely
+      correct real-world result worth noting: Draymond Green (pick 35)
+      ranked #1 in Best Value, ahead of picks 1 and 6 from the same class —
+      matching his well-known reputation as one of the biggest draft
+      steals in modern NBA history, a good sign the metric captures
+      something real rather than noise.
+    - Pending: item #2 (Current Rookie Class Tracker) was discussed but not
+      started — it's blocked on the 2025-26 season data fetch, which
+      hasn't been run yet (this DB's max season is still 2024-25).
+
+  2026-09-21 — 2025-26 season data loaded live + Rookie Class Tracker (item
+    #2 of the draft-class-guide ideas). Unblocked mid-task: the 2025-26
+    season CSVs (nba_data/nba_2025_26_season.csv / _advanced.csv) turned
+    out to already be sitting on disk from an earlier fetch — real data,
+    579 players — so this could be loaded and fully verified with real
+    data in this sandbox, unlike every other live-fetch feature this
+    session that needed a user handoff:
+    - scripts/load_2025_26_into_db.py (NEW) — loads those CSVs into
+      player_season_stats as season=2026 (this project's "2025-26" ->
+      season_int 2026 convention). Purely additive (only inserts season
+      2026 rows). Column mapping verified by cross-checking LeBron James'
+      real 2024-25 DB row against the raw CSV for that season, field by
+      field — confirmed every base-CSV column maps straight across at
+      PerGame values and every advanced-CSV column maps straight across,
+      with one real discrepancy caught: this table's tov_pct is a fraction
+      (0.116) but the CSV's TM_TOV_PCT is a percentage (11.6) — divided by
+      100 to match. Backs up any existing season=2026 rows to
+      scratchpad_backups/ before replacing them (expected to be re-run
+      later in the season as fresher CSVs get fetched).
+    - Reran compute_impact_score.py and upgrade_impact_scores.py so the
+      new season's impact scores are computed consistently with every
+      other season (they recompute per-season z-scores across the whole
+      table, so a new season just needed to exist in the table first).
+      Star-impact leaderboard for 2026 sanity-checked as real and sensible
+      (SGA, Wembanyama, Jokić, Dončić, Cade Cunningham — legitimate
+      current stars), confirming the load was correct.
+    - Reran precompute_league_similarity.py (season_similarity table is
+      fully regenerable from local data — no live fetch involved, ~9s for
+      72,760 rows) so the existing Season Similarity feature and the new
+      Rookie Class Tracker's comp lookups include 2025-26. Sanity check:
+      Shai Gilgeous-Alexander's 2025-26 season came back as the single
+      closest match (99.3%) to Stephen Curry's unanimous-MVP 2015-16
+      season — a genuinely plausible real basketball comp, not noise.
+    - api/mvp_api.py needed ZERO new code — /roy/predict/{season} already
+      defines "rookie" as a player's first season on record (no draft
+      data dependency), so it returned the real 2025-26 rookie class
+      immediately once the season existed. Only added an optional top_n
+      passthrough in frontend/src/services/api.js's fetchROYPrediction so
+      the tracker could request the full class (100+) instead of the
+      default top 15.
+    - frontend/src/components/pages/RookieClassTracker.jsx (NEW) — full
+      rookie class table (153 real 2025-26 rookies) ranked by ROY
+      probability, click-through to that rookie's closest historical
+      season comp via the now-current season_similarity engine. Wired
+      into Sidebar.jsx/App.jsx/PageHeader.jsx as a standalone page.
+    - Verified end-to-end with real players, not synthetic data: the
+      actual 2025 lottery picks (Cooper Flagg, VJ Edgecombe, Kon Knueppel,
+      Dylan Harper) show up correctly ranked; Cooper Flagg's rookie season
+      comps to Paolo Banchero's actual ROY-winning 2022-23 rookie season
+      at 97.1% similarity — a real, checkable, meaningful result, not a
+      coincidence. Also confirmed a nice side effect: Dashboard Home's
+      Awards Race snapshot (built earlier this session) automatically
+      started showing real 2025-26 predictions instead of falling back to
+      2024-25, with zero code changes — the season-resolution helper built
+      for that feature was already written to prefer live data the moment
+      it exists.
+
 ================================================================================
 END OF progress.txt
 ================================================================================

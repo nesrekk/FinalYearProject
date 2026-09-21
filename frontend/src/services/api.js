@@ -102,13 +102,31 @@ export async function fetchDPOYPrediction(season) {
     return response.data;
 }
 
-export async function fetchROYPrediction(season) {
-    const response = await axios.get(`${MVP_BASE}/roy/predict/${season}`);
+export async function fetchROYPrediction(season, topN) {
+    const response = await axios.get(`${MVP_BASE}/roy/predict/${season}`, {
+        params: topN ? { top_n: topN } : {},
+    });
     return response.data;
 }
 
 export async function fetchAllNBAPrediction(season) {
     const response = await axios.get(`${MVP_BASE}/allnba/predict/${season}`);
+    return response.data;
+}
+
+// ─── Draft Value Analysis ──────────────────────────────────────
+export async function fetchDraftClass(draftYear) {
+    const response = await axios.get(`${IMPACT_BASE}/draft/${draftYear}`);
+    return response.data;
+}
+
+export async function fetchDraftValueCurve() {
+    const response = await axios.get(`${IMPACT_BASE}/draft/value-curve`);
+    return response.data;
+}
+
+export async function fetchDraftBestValue(limit = 15, worst = false) {
+    const response = await axios.get(`${IMPACT_BASE}/draft/best-value`, { params: { limit, worst } });
     return response.data;
 }
 

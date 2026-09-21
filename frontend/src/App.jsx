@@ -18,6 +18,8 @@ import ShotCharts from './components/pages/ShotCharts';
 import AnalyticsSection from './components/pages/AnalyticsSection';
 import StatLeaders from './components/pages/StatLeaders';
 import TradeAnalyzer from './components/pages/TradeAnalyzer';
+import DraftValueGuide from './components/pages/DraftValueGuide';
+import RookieClassTracker from './components/pages/RookieClassTracker';
 import { prefetchCoreData } from './services/api';
 import './styles/dashboard.css';
 
@@ -40,6 +42,8 @@ export default function App() {
       case 'analytics': return <AnalyticsSection />;
       case 'leaders': return <StatLeaders />;
       case 'trade': return <TradeAnalyzer />;
+      case 'draft': return <DraftValueGuide />;
+      case 'rookies': return <RookieClassTracker />;
       default: return <DashboardHome onNavigate={setActivePage} />;
     }
   };
