@@ -815,6 +815,84 @@ MAINTENANCE RULE (IMPORTANT)
       local player_season_stats data) — no live nba_api fetch involved, so
       no user handoff needed for this one.
 
+  2026-09-21 — Dashboard Home: real Awards Race snapshot (polish pass on
+    an existing feature, user-requested — "give it the Claude touch"):
+    - Root-caused why the homepage's "MVP Favorite" stat card was showing
+      a hardcoded fallback ({name: 'Jokic', line: '26.4 / 12.4 / 9.0'} in
+      the old DashboardHome.jsx) instead of live data: /meta/current picks
+      season = max(db_latest_season, current_live_season); as of today
+      (Sept 2026, before October) current_live_season computes to 2026,
+      which has zero rows in player_season_stats (this project's local
+      data pipeline is a season behind live) — so the dashboard's MVP
+      predict call 404'd on every load and silently fell back to the
+      stale hardcode. Confirmed by checking get_current_nba_season()'s
+      actual logic and the DB's real season range (2010-2025), not just
+      assuming.
+    - frontend/src/components/pages/DashboardHome.jsx — added
+      resolveSeasonWithData(), which walks backward from the reported
+      season (up to 3 years) until MVP predictions actually return data,
+      instead of hardcoding a season number that would silently go stale
+      again next year. Replaced the single broken MVP card's data source
+      with a real Promise.allSettled across all four Awards Race endpoints
+      (MVP/DPOY/ROY/All-NBA built earlier this session), and added a new
+      "Awards Race" section (4 cards, same visual language as the
+      existing quick-links grid) so the homepage actually showcases the
+      prediction engine instead of hiding it three clicks deep in
+      Analytics. Each card links to the Analytics tab on click.
+    - Verified end-to-end in a fresh browser tab: resolved season
+      correctly fell back to 2024-25 (season 2025), and every card shows
+      real, live values — MVP: Shai Gilgeous-Alexander (100.0%), DPOY:
+      Victor Wembanyama (97.7%), ROY: Jared McCain (69.7%), All-NBA:
+      Nikola Jokić (First Team, 100.0%) — not the old hardcode, and not
+      fabricated: pulled live from the same endpoints already backtested
+      earlier this session.
+
+  2026-09-21 — Surface the All-NBA backtest in Model Validation (closing
+    the loose end flagged in the last entry — the honest 78% precision@15
+    number existed only in the DB and console output, invisible in the UI):
+    - scripts/build_all_nba_model.py — loso_backtest() now also collects
+      per-season detail (hits, precision@15, the predicted top 15 with
+      which ones were real selections) and a pooled ROC curve from the
+      out-of-fold probabilities, instead of only the two aggregate numbers
+      computed before. train_final_model() now also returns the trained
+      model's feature coefficients and the full 2024-25 holdout detail
+      (previously only printed to console, now persisted). Reran it —
+      identical headline numbers (deterministic model), now with full
+      detail saved to two new tables: all_nba_backtest_summary (extended
+      with roc_curve/feature_importance/holdout_season JSONB columns,
+      added via ALTER TABLE ADD COLUMN IF NOT EXISTS — additive, matching
+      this project's schema-migration convention) and
+      all_nba_backtest_seasons (one row per LOSO season).
+    - api/mvp_api.py — new GET /backtest/allnba, registered before the
+      generic GET /backtest/{award} route (route-order matters here: a
+      path param would otherwise swallow the literal /allnba path first).
+      Deliberately a separate endpoint rather than folding "allnba" into
+      VALID_AWARDS/model_backtest_summary — that schema is shaped around
+      a single winner per season (rank, confusion matrix, top1/3/5,
+      predicted_rank), which doesn't apply to a 15-winner award; forcing
+      it in would mean fabricating meaningless fields.
+    - frontend/src/components/ModelValidationSection.jsx — added an
+      "All-NBA" tab with its own render branch: precision@15/ROC-AUC/
+      seasons-evaluated/2024-25-holdout stat cards, the reused
+      RocCurveChart component (now fed real pooled LOSO data), a
+      click-to-select per-season table, a top-15-for-that-season detail
+      table (✓ marks real selections), and the reused feature-importance
+      table format — all sharing the existing MVP/DPOY/ROY visual
+      components rather than duplicating them, while keeping the
+      underlying data fetch (fetchAllNBABacktest) and state completely
+      separate from the single-winner-award effects so switching to this
+      tab doesn't fire pointless 400s against endpoints built for a
+      different award shape.
+    - Verified end-to-end in a fresh browser tab: stat cards show 77.9%
+      precision@15, 0.982 ROC-AUC, 16 seasons, 10/15 on the 2024-25
+      holdout; ROC curve renders correctly bowed toward the top-left; the
+      per-season table defaults to showing 2024-25 (marked "real holdout —
+      never trained on"), and its top-15 table correctly lists Evan
+      Mobley/Kevin Durant/Anthony Edwards at ranks 13-15, matching the
+      training script's console output exactly; feature importance table
+      matches the printed coefficients exactly (usg_pct +2.026 down to
+      pts -0.286).
+
 ================================================================================
 END OF progress.txt
 ================================================================================

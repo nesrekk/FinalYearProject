@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchBacktestDetail, fetchBacktestComparison, fetchShapCandidates, fetchShapBreakdown } from '../services/api';
+import { fetchBacktestDetail, fetchBacktestComparison, fetchShapCandidates, fetchShapBreakdown, fetchAllNBABacktest } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 
@@ -75,10 +75,15 @@ const AWARDS = [
     { id: 'mvp', label: 'MVP' },
     { id: 'dpoy', label: 'DPOY' },
     { id: 'roy', label: 'ROY' },
+    { id: 'allnba', label: 'All-NBA' },
 ];
 
 function pct(v) {
     return v == null ? '—' : `${(v * 100).toFixed(1)}%`;
+}
+
+function _season_label_client(season) {
+    return season ? `${season - 1}-${String(season).slice(-2)}` : '';
 }
 
 export default function ModelValidationSection() {
@@ -94,18 +99,26 @@ export default function ModelValidationSection() {
     const [shapDetail, setShapDetail] = useState(null);
     const [shapError, setShapError] = useState('');
 
+    const [allNbaDetail, setAllNbaDetail] = useState(null);
+    const [allNbaSeason, setAllNbaSeason] = useState(null);
+
+    const isAllNba = award === 'allnba';
+
     // Comparison table (all models for the current award) — also drives
-    // which model types are available to pick from.
+    // which model types are available to pick from. All-NBA has only one
+    // model (logreg) and its own dedicated fetch below, so skip this.
     useEffect(() => {
+        if (isAllNba) { setComparison(null); return; }
         let active = true;
         fetchBacktestComparison(award)
             .then((data) => { if (active) setComparison(data); })
             .catch(() => { if (active) setComparison(null); });
         return () => { active = false; };
-    }, [award]);
+    }, [award, isAllNba]);
 
     // Detail (per-season table + feature importance) for the selected model.
     useEffect(() => {
+        if (isAllNba) { setDetail(null); setLoading(false); return; }
         let active = true;
         const timer = setTimeout(async () => {
             setLoading(true);
@@ -125,7 +138,30 @@ export default function ModelValidationSection() {
             active = false;
             clearTimeout(timer);
         };
-    }, [award, model]);
+    }, [award, model, isAllNba]);
+
+    // All-NBA's own backtest fetch — different shape (precision@15 across
+    // 16 seasons, not rank-of-single-winner), so it doesn't share the
+    // detail/comparison effects above.
+    useEffect(() => {
+        if (!isAllNba) { setAllNbaDetail(null); return; }
+        let active = true;
+        setLoading(true);
+        setError('');
+        fetchAllNBABacktest()
+            .then((data) => {
+                if (!active) return;
+                setAllNbaDetail(data);
+                setAllNbaSeason(data.summary?.holdout_season?.season ?? null);
+            })
+            .catch((e) => {
+                if (!active) return;
+                setAllNbaDetail(null);
+                setError(e?.response?.data?.detail || 'No All-NBA backtest results found. Run scripts/build_all_nba_model.py first.');
+            })
+            .finally(() => { if (active) setLoading(false); });
+        return () => { active = false; };
+    }, [isAllNba]);
 
     // SHAP candidate list for the current award (Random Forest only —
     // Logistic Regression's coefficients already explain every prediction).
@@ -256,14 +292,138 @@ export default function ModelValidationSection() {
                     </table>
                 </div>
             )}
-            <p className="page-subtitle" style={{ marginTop: '-0.75rem', marginBottom: '1rem' }}>
-                Click a row to see that model's per-season detail below. 🏅 marks the best top-5 accuracy for {award.toUpperCase()}.
-            </p>
+            {!isAllNba && (
+                <p className="page-subtitle" style={{ marginTop: '-0.75rem', marginBottom: '1rem' }}>
+                    Click a row to see that model's per-season detail below. 🏅 marks the best top-5 accuracy for {award.toUpperCase()}.
+                </p>
+            )}
 
             {loading && <Loader />}
             {error && <p className="error-message">{error}</p>}
 
-            {!loading && detail && (
+            {!loading && isAllNba && allNbaDetail && (
+                <>
+                    <p className="page-subtitle" style={{ marginBottom: '1rem' }}>
+                        All-NBA is a 15-winner-per-season award (First/Second/Third Team, 5 each), so
+                        "rank of the one true winner" doesn't apply the way it does for MVP/DPOY/ROY — the
+                        honest metric here is precision@15: of the 15 players predicted for a held-out
+                        season, how many were actually selected that season.
+                    </p>
+                    <div className="stat-cards-row">
+                        <div className="stat-card">
+                            <div className="stat-card-label">Mean Precision@15</div>
+                            <div className="stat-card-value">{pct(allNbaDetail.summary.mean_precision_at_15)}</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-card-label">ROC-AUC</div>
+                            <div className="stat-card-value">{allNbaDetail.summary.roc_auc?.toFixed(3) ?? '—'}</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-card-label">Seasons Evaluated</div>
+                            <div className="stat-card-value">{allNbaDetail.summary.n_seasons_evaluated}</div>
+                        </div>
+                        {allNbaDetail.summary.holdout_season && (
+                            <div className="stat-card">
+                                <div className="stat-card-label">2024-25 Holdout (real, unseen)</div>
+                                <div className="stat-card-value">{allNbaDetail.summary.holdout_season.hits}/15</div>
+                            </div>
+                        )}
+                    </div>
+
+                    {allNbaDetail.summary.roc_curve && (
+                        <>
+                            <h3 className="section-heading" style={{ marginTop: '1rem' }}>ROC Curve</h3>
+                            <p className="page-subtitle" style={{ marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
+                                Pooled across every held-out season's out-of-fold predictions — the dashed
+                                diagonal is what random guessing would trace.
+                            </p>
+                            <RocCurveChart points={allNbaDetail.summary.roc_curve} auc={allNbaDetail.summary.roc_auc} color="#facc15" />
+                        </>
+                    )}
+
+                    <h3 className="section-heading" style={{ marginTop: '1.5rem' }}>Per-Season Detail</h3>
+                    <p className="page-subtitle" style={{ marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
+                        Click a season to see its predicted top 15 below. ✓ marks a player who was actually selected that season.
+                    </p>
+                    <div className="table-wrapper" style={{ marginBottom: '1rem' }}>
+                        <table className="data-table">
+                            <thead>
+                                <tr><th>Season</th><th>Hits</th><th>Precision@15</th></tr>
+                            </thead>
+                            <tbody>
+                                {allNbaDetail.seasons.map((s) => (
+                                    <tr
+                                        key={s.season}
+                                        onClick={() => setAllNbaSeason(s.season)}
+                                        style={{ cursor: 'pointer' }}
+                                        className={s.season === allNbaSeason ? 'text-accent' : ''}
+                                    >
+                                        <td>{s.season === allNbaSeason ? '▶ ' : ''}{s.season_label}</td>
+                                        <td>{s.hits}/15</td>
+                                        <td>{pct(s.precision_at_15)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {(() => {
+                        const selected = allNbaDetail.summary.holdout_season?.season === allNbaSeason
+                            ? allNbaDetail.summary.holdout_season
+                            : allNbaDetail.seasons.find((s) => s.season === allNbaSeason);
+                        if (!selected) return null;
+                        return (
+                            <>
+                                <h3 className="section-heading">
+                                    {_season_label_client(selected.season)} Predicted Top 15
+                                    {allNbaDetail.summary.holdout_season?.season === selected.season ? ' (real holdout — never trained on)' : ''}
+                                </h3>
+                                <div className="table-wrapper" style={{ marginBottom: '1rem' }}>
+                                    <table className="data-table">
+                                        <thead>
+                                            <tr><th>#</th><th>Player</th><th>Probability</th><th>Actual Selection?</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            {selected.top15.map((p, i) => (
+                                                <tr key={p.player_name}>
+                                                    <td>{i + 1}</td>
+                                                    <td>{p.player_name}</td>
+                                                    <td>{(p.probability * 100).toFixed(1)}%</td>
+                                                    <td className={p.actual_selection ? 'text-accent' : ''}>{p.actual_selection ? '✓' : '—'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
+                        );
+                    })()}
+
+                    <h3 className="section-heading" style={{ marginTop: '1.5rem' }}>Feature Importance</h3>
+                    <p className="page-subtitle" style={{ marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
+                        Standardized logistic regression coefficients from the full-data model — sign shows direction, magnitude shows influence.
+                    </p>
+                    <div className="table-wrapper">
+                        <table className="data-table">
+                            <thead>
+                                <tr><th>Feature</th><th>Coefficient</th></tr>
+                            </thead>
+                            <tbody>
+                                {allNbaDetail.summary.feature_importance.map((f) => (
+                                    <tr key={f.feature}>
+                                        <td>{f.feature}</td>
+                                        <td className={f.value >= 0 ? 'text-accent' : 'error-message'}>
+                                            {f.value >= 0 ? '+' : ''}{f.value.toFixed(3)}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            )}
+
+            {!loading && !isAllNba && detail && (
                 <>
                     <div className="stat-cards-row">
                         <div className="stat-card">

@@ -128,6 +128,11 @@ export async function fetchBacktestComparison(award) {
     return response.data;
 }
 
+export async function fetchAllNBABacktest() {
+    const response = await axios.get(`${MVP_BASE}/backtest/allnba`);
+    return response.data;
+}
+
 // ─── SHAP Explainability (Random Forest) ──────────────────────
 export async function fetchShapCandidates(award) {
     const response = await axios.get(`${MVP_BASE}/explain/${award}`);

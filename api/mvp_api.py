@@ -170,6 +170,17 @@ def root():
 VALID_AWARDS = {"mvp", "dpoy", "roy"}
 DEFAULT_MODEL_TYPE = "logreg"
 
+# All-NBA's backtest lives in its own tables (all_nba_backtest_summary /
+# all_nba_backtest_seasons) with a genuinely different shape — see
+# build_all_nba_model.py's docstring: it's a 15-winner-per-season award, so
+# "precision@15" replaces the rank-of-the-single-winner metrics the other
+# three awards use. Handled as a branch below rather than forced into
+# SUMMARY_COLS / model_backtest_seasons' single-winner schema.
+ALLNBA_SUMMARY_COLS = [
+    "award", "n_seasons_evaluated", "mean_precision_at_15", "roc_auc",
+    "roc_curve", "feature_importance", "holdout_season", "updated_at",
+]
+
 SUMMARY_COLS = [
     "award", "model_type", "model_label", "n_seasons_evaluated", "top1_accuracy", "top3_accuracy",
     "top5_accuracy", "mean_reciprocal_rank", "roc_auc", "roc_curve", "precision_at_0_5", "recall_at_0_5",
@@ -210,6 +221,44 @@ def get_backtest_overview():
             detail="No backtest results found. Run scripts/backtest_models.py first.",
         )
     return {"awards": summaries}
+
+
+@app.get("/backtest/allnba")
+def get_allnba_backtest():
+    """
+    All-NBA's LOSO backtest: mean precision@15 across 16 seasons (of the 15
+    players predicted each held-out season, how many were actually
+    selected), plus the pooled ROC curve, final-model feature coefficients,
+    and the real 2024-25 holdout sanity check (never seen in training).
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT {', '.join(ALLNBA_SUMMARY_COLS)} FROM all_nba_backtest_summary WHERE award = 'ALL_NBA';")
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail="No All-NBA backtest results found. Run scripts/build_all_nba_model.py first.",
+            )
+        summary = dict(zip(ALLNBA_SUMMARY_COLS, row))
+        summary["updated_at"] = summary["updated_at"].isoformat() if summary["updated_at"] else None
+
+        cursor.execute(
+            "SELECT season, hits, precision_at_15, top15 FROM all_nba_backtest_seasons "
+            "WHERE award = 'ALL_NBA' ORDER BY season ASC;"
+        )
+        seasons = [
+            {
+                "season": r[0],
+                "season_label": _season_label(r[0]),
+                "hits": r[1],
+                "precision_at_15": r[2],
+                "top15": r[3],
+            }
+            for r in cursor.fetchall()
+        ]
+
+    return {"award": "ALL_NBA", "summary": summary, "seasons": seasons}
 
 
 @app.get("/backtest/{award}")

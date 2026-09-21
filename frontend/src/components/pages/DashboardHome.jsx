@@ -6,14 +6,42 @@ import {
     fetchCurrentNews,
     fetchGamesByDate,
     fetchMVPPrediction,
+    fetchDPOYPrediction,
+    fetchROYPrediction,
+    fetchAllNBAPrediction,
 } from '../../services/api';
 import { localDateIso } from '../../utils/date';
+
+const AWARD_META = {
+    mvp: { icon: '🏆', label: 'MVP' },
+    dpoy: { icon: '🛡️', label: 'DPOY' },
+    roy: { icon: '🌱', label: 'ROY' },
+    allnba: { icon: '⭐', label: 'All-NBA' },
+};
+
+// /meta/current reports next-season-if-October-or-later, which usually has
+// no player_season_stats rows yet (this project's local data pipeline is a
+// season behind live) — so award predictions for that season 404. Walk
+// backwards to the most recent season the models can actually predict on,
+// instead of hardcoding a season number that goes stale every year.
+async function resolveSeasonWithData(startSeason) {
+    for (let season = startSeason; season >= startSeason - 3; season--) {
+        try {
+            const data = await fetchMVPPrediction(season);
+            if (data?.results?.length > 0) return season;
+        } catch {
+            // try the previous season
+        }
+    }
+    return null;
+}
 
 export default function DashboardHome({ onNavigate }) {
     const [games, setGames] = useState(mockLiveScores);
     const [news, setNews] = useState([]);
     const [meta, setMeta] = useState(null);
-    const [mvpFavorite, setMvpFavorite] = useState({ name: 'Jokic', line: '26.4 / 12.4 / 9.0' });
+    const [awardsRace, setAwardsRace] = useState({ season: null, mvp: null, dpoy: null, roy: null, allnba: null });
+    const [awardsLoading, setAwardsLoading] = useState(true);
 
     useEffect(() => {
         let active = true;
@@ -41,24 +69,29 @@ export default function DashboardHome({ onNavigate }) {
                 }
                 if (m) setMeta(m);
                 if (m?.season) {
-                    try {
-                        const mvpData = await fetchMVPPrediction(m.season);
-                        const rows = mvpData?.results || mvpData?.predictions || [];
-                        if (rows.length > 0) {
-                            const fav = rows[0];
-                            setMvpFavorite({
-                                name: fav.player_name || fav.player || 'MVP Favorite',
-                                line: fav.mvp_probability != null
-                                    ? `${(fav.mvp_probability * 100).toFixed(1)}% win prob`
-                                    : (fav.probability != null ? `${Number(fav.probability).toFixed(1)}% win prob` : 'Top model pick'),
+                    const resolvedSeason = await resolveSeasonWithData(m.season);
+                    if (active && resolvedSeason) {
+                        const [mvp, dpoy, roy, allnba] = await Promise.allSettled([
+                            fetchMVPPrediction(resolvedSeason),
+                            fetchDPOYPrediction(resolvedSeason),
+                            fetchROYPrediction(resolvedSeason),
+                            fetchAllNBAPrediction(resolvedSeason),
+                        ]);
+                        if (active) {
+                            setAwardsRace({
+                                season: resolvedSeason,
+                                mvp: mvp.status === 'fulfilled' ? mvp.value?.results?.[0] : null,
+                                dpoy: dpoy.status === 'fulfilled' ? dpoy.value?.results?.[0] : null,
+                                roy: roy.status === 'fulfilled' ? roy.value?.results?.[0] : null,
+                                allnba: allnba.status === 'fulfilled' ? allnba.value?.results?.[0] : null,
                             });
                         }
-                    } catch {
-                        // keep fallback favorite
                     }
                 }
             } catch {
                 // keep existing mock fallback values
+            } finally {
+                if (active) setAwardsLoading(false);
             }
         }
 
@@ -67,6 +100,20 @@ export default function DashboardHome({ onNavigate }) {
             active = false;
         };
     }, []);
+
+    function seasonLabel(season) {
+        return season ? `${season - 1}-${String(season).slice(-2)}` : '';
+    }
+
+    function awardCardLine(award, row) {
+        if (!row) return 'No prediction available';
+        if (award === 'allnba') {
+            return `${row.predicted_team} · ${(row.all_nba_probability * 100).toFixed(1)}%`;
+        }
+        const probKey = `${award}_probability`;
+        const prob = row[probKey];
+        return prob != null ? `${(prob * 100).toFixed(1)}% probability` : 'Top model pick';
+    }
 
     const liveGames = useMemo(() => games.filter((g) => g.status === 'LIVE').length, [games]);
     const finalGames = useMemo(() => games.filter((g) => g.status === 'FINAL').length, [games]);
@@ -121,7 +168,12 @@ export default function DashboardHome({ onNavigate }) {
                     value={topSeed ? topSeed.team.replace('Oklahoma City ', '') : 'Thunder'}
                     sub={topSeed ? `${topSeed.w}-${topSeed.l} (${topSeed.pct})` : '47-13 (.783)'}
                 />
-                <StatCard icon="📈" label="MVP Favorite" value={mvpFavorite.name} sub={mvpFavorite.line} />
+                <StatCard
+                    icon="📈"
+                    label="MVP Favorite"
+                    value={awardsRace.mvp?.player_name || (awardsLoading ? 'Loading…' : 'No prediction')}
+                    sub={awardsRace.mvp ? awardCardLine('mvp', awardsRace.mvp) : (awardsRace.season ? seasonLabel(awardsRace.season) : '')}
+                />
             </div>
 
             {/* Quick Links */}
@@ -145,6 +197,31 @@ export default function DashboardHome({ onNavigate }) {
                         <span className="quick-link-desc">{link.desc}</span>
                     </button>
                 ))}
+            </div>
+
+            {/* Awards Race Snapshot */}
+            <h3 className="section-heading">
+                Awards Race {awardsRace.season ? `· ${seasonLabel(awardsRace.season)}` : ''}
+            </h3>
+            <div className="quick-links-grid">
+                {['mvp', 'dpoy', 'roy', 'allnba'].map((award) => {
+                    const row = awardsRace[award];
+                    return (
+                        <button
+                            key={award}
+                            className="quick-link-card"
+                            onClick={() => onNavigate('analytics')}
+                        >
+                            <span className="quick-link-icon">{AWARD_META[award].icon}</span>
+                            <span className="quick-link-title">
+                                {awardsLoading ? 'Loading…' : (row?.player_name || 'No prediction')}
+                            </span>
+                            <span className="quick-link-desc">
+                                {AWARD_META[award].label} · {awardsLoading ? '' : awardCardLine(award, row)}
+                            </span>
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Latest Headlines */}
