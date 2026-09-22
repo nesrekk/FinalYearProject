@@ -4,6 +4,7 @@ import StatCard from '../common/StatCard';
 import TeamLogo from '../common/TeamLogo';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import Icon from '../common/Icon';
+import InfoTooltip from '../common/InfoTooltip';
 import { abbrFromTeamName } from '../../utils/teamAssets';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import { mockLiveScores } from '../../services/mockData';
@@ -120,6 +121,27 @@ export default function DashboardHome({ onNavigate }) {
 
     function seasonLabel(season) {
         return season ? `${season - 1}-${String(season).slice(-2)}` : '';
+    }
+
+    // Real, informational-only context for a predicted contender — never
+    // fed back into the model's probability, just shown alongside it since
+    // a human voter's actual ballot is also shaped by "have they already
+    // won this?" and "how good is their team's seed?" (the real dynamic
+    // behind cases like Rose over James in 2011). seed comes straight from
+    // this season's real standings (already fetched into `meta` above);
+    // win streak comes from the real award_winners history the backend
+    // now tracks (see get_recent_win_streak() in mvp_api.py).
+    function findTeamSeed(teamAbbr) {
+        if (!meta || !teamAbbr) return null;
+        for (const [confKey, confLabel] of [['eastern', 'East'], ['western', 'West']]) {
+            const list = meta?.standings?.[confKey] || [];
+            // Standings entries' `abbr` field is often blank in the real feed
+            // (same gap the Team Form Tracker table already works around) —
+            // fall back to deriving the abbreviation from the full team name.
+            const team = list.find((t) => (t.abbr || abbrFromTeamName(t.team)) === teamAbbr);
+            if (team) return { seed: team.rank, conference: confLabel };
+        }
+        return null;
     }
 
     function awardCardLine(award, row) {
@@ -244,6 +266,14 @@ export default function DashboardHome({ onNavigate }) {
             {/* Awards Race Snapshot */}
             <h3 className="section-heading">
                 Awards Race {awardsRace.season ? `· ${seasonLabel(awardsRace.season)}` : ''}
+                <InfoTooltip label="What are the seed/streak badges?" title="Real context, not a hidden score">
+                    The seed and "won it before" badges are real data (this season's actual standings, and this
+                    project's real award-winner history) shown for context — they're never applied to the
+                    probability above them. A real voter's ballot is shaped by things like team success and
+                    "haven't they already won this?" (see: Derrick Rose over LeBron James in 2011), but baking an
+                    invented penalty into the model's own number would misrepresent it as validated rather than
+                    a guess, so instead the raw signal is just shown alongside the model's real output.
+                </InfoTooltip>
             </h3>
             <motion.div
                 key={`awards-${isAdvanced}`}
@@ -291,6 +321,22 @@ export default function DashboardHome({ onNavigate }) {
                                         </div>
                                     )}
                                     <p className="award-card-desc">{awardCardLine(award, row)}</p>
+                                    <div className="award-card-badges">
+                                        {(() => {
+                                            const seed = findTeamSeed(row.team_abbreviation);
+                                            return seed && (
+                                                <span className="voter-badge">
+                                                    <Icon name="format_list_numbered" size="0.85em" /> #{seed.seed} {seed.conference}
+                                                </span>
+                                            );
+                                        })()}
+                                        {row.recent_win_streak > 0 && (
+                                            <span className="voter-badge voter-badge--streak">
+                                                <Icon name="history" size="0.85em" />
+                                                Won last {row.recent_win_streak === 1 ? 'year' : `${row.recent_win_streak} years`}
+                                            </span>
+                                        )}
+                                    </div>
                                 </>
                             ) : (
                                 <p className="award-card-name">No prediction available</p>

@@ -411,6 +411,33 @@ def get_shap_breakdown(award: str, player_name: str):
     }
 
 
+def get_recent_win_streak(cursor, award: str, player_id: int, season: int) -> int:
+    """
+    How many seasons immediately before `season` this player won `award`,
+    counting back from season-1 and stopping at the first season they
+    didn't win (so a real gap — e.g. Jokić winning 2021, 2022, sitting out
+    2023 to Embiid, then winning 2024 again — correctly resets the count,
+    rather than just tallying total career wins). Purely informational:
+    this is never applied to the model's actual predicted probability,
+    only shown alongside it as real context for why a human voter might
+    have "voter fatigue" toward a repeat winner. See VotersBadge in
+    DashboardHome.jsx / awardCardLine() for how it's displayed.
+    """
+    streak = 0
+    check_season = season - 1
+    while True:
+        cursor.execute(
+            "SELECT player_id FROM award_winners WHERE award = %s AND season = %s;",
+            (award.upper(), check_season),
+        )
+        row = cursor.fetchone()
+        if row is None or row[0] != player_id:
+            break
+        streak += 1
+        check_season -= 1
+    return streak
+
+
 @app.get("/mvp/predict/{season}")
 def predict_mvp(season: int, top_n: int = 15):
     """
@@ -453,6 +480,11 @@ def predict_mvp(season: int, top_n: int = 15):
         col_names = ["player_id", "player_name", "team_abbreviation"] + FEATURES
         df = pd.DataFrame(rows, columns=col_names)
 
+        win_streaks = {
+            int(pid): get_recent_win_streak(cursor, "MVP", int(pid), season)
+            for pid in df["player_id"].unique()
+        }
+
     # Drop rows with NULLs in features
     df = df.dropna(subset=FEATURES).reset_index(drop=True)
     if df.empty:
@@ -484,6 +516,7 @@ def predict_mvp(season: int, top_n: int = 15):
                 "ts_pct": round(float(row["ts_pct"]), 3),
                 "w_pct": round(float(row["w_pct"]), 3),
                 "net_rating": round(float(row["net_rating"]), 1),
+                "recent_win_streak": win_streaks.get(int(row["player_id"]), 0),
             }
             for i, (_, row) in enumerate(df.iterrows())
         ],
@@ -512,6 +545,10 @@ def predict_dpoy(season: int, top_n: int = 15):
             (season, DPOY_MIN_MINUTES, DPOY_MIN_GAMES),
         )
         rows = cursor.fetchall()
+        win_streaks = {
+            int(r[0]): get_recent_win_streak(cursor, "DPOY", int(r[0]), season)
+            for r in rows
+        }
 
     if not rows:
         available_range = (
@@ -555,6 +592,7 @@ def predict_dpoy(season: int, top_n: int = 15):
                 "stl": round(float(row["stl"]), 1),
                 "blk": round(float(row["blk"]), 1),
                 "reb_pct": round(float(row["reb_pct"]), 3),
+                "recent_win_streak": win_streaks.get(int(row["player_id"]), 0),
             }
             for i, (_, row) in enumerate(df.iterrows())
         ],

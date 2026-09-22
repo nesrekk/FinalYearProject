@@ -2052,6 +2052,30 @@ body {
   color: var(--text-muted);
 }
 
+.award-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.voter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-secondary);
+}
+
+.voter-badge--streak {
+  background: rgba(250, 204, 21, 0.12);
+  color: #facc15;
+}
+
 /* ── Player Stats "Hybrid" redesign (hb-*, scoped to this page) ───────
    Sidebar-filter rail + dense monospace table from the "Data-Dense Pro"
    direction, with a Fraunces display headline, one real-data hero/league-
