@@ -1,207 +1,301 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { mockPlayers } from '../../services/mockData';
-import { fetchLivePlayerSuggestions, fetchPlayerImage, fetchPlayerProfile } from '../../services/api';
+import { fetchPlayersTable } from '../../services/api';
+import Loader from '../Loader';
+import Icon from '../common/Icon';
+import TeamLogo from '../common/TeamLogo';
+import PlayerHeadshot from '../common/PlayerHeadshot';
+import InfoTooltip from '../common/InfoTooltip';
+import PlayerDetailModal from '../common/PlayerDetailModal';
+import { STAT_GLOSSARY } from '../../utils/statGlossary';
+
+const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'];
+
+const STAT_TABS = {
+    traditional: {
+        label: 'Traditional',
+        columns: [
+            { key: 'pts', label: 'PTS', group: 'traditional' },
+            { key: 'reb', label: 'REB', group: 'traditional' },
+            { key: 'ast', label: 'AST', group: 'traditional' },
+            { key: 'stl', label: 'STL', group: 'traditional' },
+            { key: 'blk', label: 'BLK', group: 'traditional' },
+            { key: 'tov', label: 'TOV', group: 'traditional' },
+            { key: 'fg_pct', label: 'FG%', group: 'traditional', digits: 3 },
+            { key: 'fg3_pct', label: '3P%', group: 'traditional', digits: 3 },
+            { key: 'ft_pct', label: 'FT%', group: 'traditional', digits: 3 },
+            { key: 'plus_minus', label: '+/-', group: 'traditional', signed: true },
+        ],
+    },
+    advanced: {
+        label: 'Advanced',
+        columns: [
+            { key: 'ts_pct', label: 'TS%', group: 'advanced', digits: 3 },
+            { key: 'efg_pct', label: 'eFG%', group: 'advanced', digits: 3 },
+            { key: 'usg_pct', label: 'USG%', group: 'advanced', digits: 3 },
+            { key: 'off_rating', label: 'ORtg', group: 'advanced' },
+            { key: 'def_rating', label: 'DRtg', group: 'advanced' },
+            { key: 'net_rating', label: 'Net Rtg', group: 'advanced', signed: true },
+            { key: 'ast_pct', label: 'AST%', group: 'advanced', digits: 3 },
+            { key: 'reb_pct', label: 'REB%', group: 'advanced', digits: 3 },
+            { key: 'tov_pct', label: 'TOV%', group: 'advanced', digits: 3 },
+        ],
+    },
+    plus_minus: {
+        label: 'Plus-Minus',
+        columns: [
+            { key: 'bpm', label: 'BPM', group: 'plus_minus', signed: true },
+            { key: 'obpm', label: 'OBPM', group: 'plus_minus', signed: true },
+            { key: 'dbpm', label: 'DBPM', group: 'plus_minus', signed: true },
+            { key: 'vorp', label: 'VORP', group: 'plus_minus', signed: true },
+        ],
+    },
+};
+
+function fmt(v, digits = 1, signed = false) {
+    if (v == null) return '—';
+    const s = Number(v).toFixed(digits);
+    return signed && v > 0 ? `+${s}` : s;
+}
 
 export default function PlayerStats() {
+    const [season, setSeason] = useState(2025);
+    const [minMinutes, setMinMinutes] = useState(10);
+    const [table, setTable] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const [statTab, setStatTab] = useState('traditional');
     const [search, setSearch] = useState('');
-    const [selected, setSelected] = useState(null);
-    const [selectedImage, setSelectedImage] = useState(null);
-    const [dbNames, setDbNames] = useState([]);
-    const [searchingDb, setSearchingDb] = useState(false);
-    const [loadingProfile, setLoadingProfile] = useState(false);
+    const [activePositions, setActivePositions] = useState(new Set(POSITIONS));
+    const [sortKey, setSortKey] = useState('min');
+    const [sortGroup, setSortGroup] = useState(null); // null = top-level (min/age/gp)
+    const [sortDir, setSortDir] = useState('desc');
+    const [selectedPlayer, setSelectedPlayer] = useState(null);
 
-    const filtered = mockPlayers.filter((p) =>
-        p.name.toLowerCase().includes(search.toLowerCase())
-    );
-
-    useEffect(() => {
-        const query = search.trim();
-        if (query.length < 2) return;
-
-        let active = true;
-        const timer = setTimeout(async () => {
-            setSearchingDb(true);
-            try {
-                const data = await fetchLivePlayerSuggestions(query, 30);
-                if (active) setDbNames(data?.results ?? []);
-            } catch {
-                if (active) setDbNames([]);
-            } finally {
-                if (active) setSearchingDb(false);
-            }
-        }, 180);
-
-        return () => {
-            active = false;
-            clearTimeout(timer);
-        };
-    }, [search]);
-
-    const displayPlayers = useMemo(() => {
-        const query = search.trim();
-        if (query.length < 2) return filtered.map((p) => ({ name: p.name, mock: p }));
-
-        return dbNames.map((name) => {
-            const mock = mockPlayers.find((p) => p.name.toLowerCase() === name.toLowerCase());
-            return { name, mock: mock || null };
-        });
-    }, [search, filtered, dbNames]);
-
-    function toProfileFromMock(player) {
-        return {
-            ...player,
-            season: null,
-        };
-    }
-
-    async function handleSelectPlayer(entry) {
-        setLoadingProfile(true);
+    async function load() {
+        setLoading(true);
+        setError('');
         try {
-            const data = await fetchPlayerProfile(entry.name);
-            setSelected({
-                name: data.player_name,
-                team: data.team_abbr || entry.mock?.team || 'Unknown Team',
-                position: entry.mock?.position || 'N/A',
-                number: entry.mock?.number ?? 'DB',
-                season: data.season,
-                stats: data.stats,
-            });
-        } catch {
-            if (entry.mock) {
-                setSelected(toProfileFromMock(entry.mock));
-            }
+            const data = await fetchPlayersTable(season, minMinutes);
+            setTable(data);
+        } catch (e) {
+            setTable(null);
+            setError(e?.response?.data?.detail || 'Failed to load player table.');
         } finally {
-            setLoadingProfile(false);
+            setLoading(false);
         }
     }
 
-    useEffect(() => {
-        let active = true;
-        async function loadImage() {
-            if (!selected?.name) {
-                setSelectedImage(null);
-                return;
-            }
-            try {
-                const data = await fetchPlayerImage(selected.name);
-                if (active) setSelectedImage(data?.image_url || null);
-            } catch {
-                if (active) setSelectedImage(null);
-            }
+    useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    function togglePosition(pos) {
+        setActivePositions((prev) => {
+            const next = new Set(prev);
+            if (next.has(pos)) next.delete(pos); else next.add(pos);
+            return next;
+        });
+    }
+
+    function handleSort(col) {
+        const key = col.key, group = col.group;
+        if (sortKey === key && sortGroup === group) {
+            setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'));
+        } else {
+            setSortKey(key);
+            setSortGroup(group);
+            setSortDir('desc');
         }
-        loadImage();
-        return () => {
-            active = false;
+    }
+
+    const rows = useMemo(() => {
+        if (!table) return [];
+        let list = table.results.filter((r) => activePositions.has(r.position));
+        if (search.trim()) {
+            const q = search.trim().toLowerCase();
+            list = list.filter((r) => r.player_name.toLowerCase().includes(q));
+        }
+        const getVal = (r) => {
+            if (sortGroup) return r[sortGroup]?.[sortKey];
+            return r[sortKey];
         };
-    }, [selected]);
+        list = list.slice().sort((a, b) => {
+            const av = getVal(a), bv = getVal(b);
+            if (av == null && bv == null) return 0;
+            if (av == null) return 1;
+            if (bv == null) return -1;
+            if (typeof av === 'string') {
+                return sortDir === 'desc' ? bv.localeCompare(av) : av.localeCompare(bv);
+            }
+            return sortDir === 'desc' ? bv - av : av - bv;
+        });
+        return list;
+    }, [table, activePositions, search, sortKey, sortGroup, sortDir]);
+
+    const columns = STAT_TABS[statTab].columns;
 
     return (
         <div className="page page-players fade-in">
-            {/* Search */}
-            <div className="player-search-bar">
-                <input
-                    type="text"
-                    className="input-field player-search-input"
-                    placeholder="Search players (e.g. LeBron, Jokic)…"
-                    value={search}
-                    onChange={(e) => {
-                        setSearch(e.target.value);
-                        setSelected(null);
-                    }}
-                />
-            </div>
+            <div className="dashboard-card">
+                <h2 className="card-title">
+                    <span className="card-icon"><Icon name="table_view" /></span>
+                    Player Stats
+                    <InfoTooltip label="How this works" title="Full league table, not a single lookup">
+                        Every player for the selected season, sortable and filterable — click any column
+                        header to sort by it. "Position" isn't an official roster field (this project has
+                        no position data anywhere in its pipeline) — it's estimated from the BPM model's
+                        own position-regression (see Impact Rankings → BPM/VORP), rounded to the nearest of
+                        5 buckets. Treat it as "plays like a ~PG," not a roster fact.
+                    </InfoTooltip>
+                </h2>
 
-            {/* Player List */}
-            {!selected && (
-                <div className="player-grid">
-                    {displayPlayers.map((entry) => (
+                <div className="input-row">
+                    <input
+                        type="number"
+                        className="input-field"
+                        value={season}
+                        onChange={(e) => setSeason(Number(e.target.value))}
+                        min={2010}
+                        max={2026}
+                        style={{ maxWidth: 110 }}
+                    />
+                    <input
+                        type="text"
+                        className="input-field"
+                        placeholder="Search player…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                    />
+                    <div className="input-row" style={{ gap: '0.5rem', margin: 0 }}>
+                        <span className="page-subtitle" style={{ whiteSpace: 'nowrap' }}>Min MPG</span>
+                        <input
+                            type="number"
+                            className="input-field"
+                            value={minMinutes}
+                            onChange={(e) => setMinMinutes(Number(e.target.value))}
+                            min={0}
+                            max={40}
+                            style={{ maxWidth: 80 }}
+                        />
+                    </div>
+                    <button type="button" className="action-btn" onClick={load} disabled={loading}>
+                        {loading ? 'Loading…' : 'Load'}
+                    </button>
+                </div>
+
+                <div className="tab-bar" style={{ marginTop: '0.75rem' }}>
+                    {Object.entries(STAT_TABS).map(([id, cfg]) => (
                         <button
-                            key={entry.name}
-                            className="player-card"
-                            onClick={() => handleSelectPlayer(entry)}
+                            key={id}
+                            type="button"
+                            className={`tab-btn ${statTab === id ? 'tab-btn--active' : ''}`}
+                            onClick={() => setStatTab(id)}
                         >
-                            <div className="player-avatar-circle" style={{ background: '#38bdf8' }}>
-                                <span className="player-avatar-number">
-                                    {entry.mock ? `#${entry.mock.number}` : 'DB'}
-                                </span>
-                            </div>
-                            <div className="player-card-info">
-                                <p className="player-card-name">{entry.name}</p>
-                                {entry.mock ? (
-                                    <>
-                                        <p className="player-card-meta">{entry.mock.team} · {entry.mock.position}</p>
-                                        <p className="player-card-stats">
-                                            {entry.mock.stats.ppg} PPG · {entry.mock.stats.rpg} RPG · {entry.mock.stats.apg} APG
-                                        </p>
-                                    </>
-                                ) : (
-                                    <>
-                                        <p className="player-card-meta">Found in project database</p>
-                                        <p className="player-card-stats">Click to open player profile stats</p>
-                                    </>
-                                )}
-                            </div>
+                            {cfg.label}
                         </button>
                     ))}
-                    {loadingProfile && (
-                        <p className="empty-message">Loading player profile...</p>
-                    )}
-                    {searchingDb && search.trim().length >= 2 && (
-                        <p className="empty-message">Searching live player data...</p>
-                    )}
-                    {!searchingDb && displayPlayers.length === 0 && (
-                        <p className="empty-message">No players found matching "{search}"</p>
-                    )}
                 </div>
-            )}
 
-            {/* Player Detail */}
-            {selected && (
-                <div className="player-detail fade-in">
-                    <button className="back-btn" onClick={() => setSelected(null)}>← Back to list</button>
-
-                    <div className="player-profile-card">
-                        <div className="player-profile-header">
-                            {selectedImage ? (
-                                <img
-                                    src={selectedImage}
-                                    alt={selected.name}
-                                    className="player-avatar-large"
-                                    style={{ objectFit: 'cover' }}
-                                />
-                            ) : (
-                                <div className="player-avatar-large" style={{ background: '#38bdf8' }}>
-                                    <span className="player-avatar-lg-number">#{selected.number}</span>
-                                </div>
-                            )}
-                            <div className="player-profile-info">
-                                <h2 className="player-profile-name">{selected.name}</h2>
-                                <p className="player-profile-meta">
-                                    {selected.team} · {selected.position}
-                                    {selected.season ? ` · Season ${selected.season}` : ''}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="player-stats-grid">
-                            {[
-                                { label: 'PPG', value: selected.stats.ppg },
-                                { label: 'RPG', value: selected.stats.rpg },
-                                { label: 'APG', value: selected.stats.apg },
-                                { label: 'SPG', value: selected.stats.spg },
-                                { label: 'BPG', value: selected.stats.bpg },
-                                { label: 'FG%', value: selected.stats.fgPct },
-                                { label: '3PT%', value: selected.stats.threePct },
-                                { label: 'FT%', value: selected.stats.ftPct },
-                            ].map((s) => (
-                                <div key={s.label} className="player-stat-box">
-                                    <span className="player-stat-val">{s.value}</span>
-                                    <span className="player-stat-label">{s.label}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                <div className="input-row" style={{ marginTop: '0.75rem', flexWrap: 'wrap' }}>
+                    {POSITIONS.map((pos) => (
+                        <label key={pos} className="pill-badge pill-badge--muted" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                            <input
+                                type="checkbox"
+                                checked={activePositions.has(pos)}
+                                onChange={() => togglePosition(pos)}
+                                style={{ marginRight: 4 }}
+                            />
+                            {pos}
+                        </label>
+                    ))}
                 </div>
+
+                {error && <p className="error-message" style={{ marginTop: '0.75rem' }}>{error}</p>}
+                {loading && <Loader />}
+
+                {table && !loading && (
+                    <>
+                        <p className="page-subtitle" style={{ marginTop: '0.75rem', marginBottom: '0.5rem' }}>
+                            Showing {rows.length} of {table.count} players (min ≥ {minMinutes} MPG), sorted by {sortGroup ? STAT_TABS[statTab].columns.find((c) => c.key === sortKey)?.label : sortKey.toUpperCase()}.
+                        </p>
+                        <div className="table-wrapper">
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        {[
+                                            { key: 'player_name', group: null, label: 'Player' },
+                                            { key: 'team_abbreviation', group: null, label: 'Team' },
+                                            { key: 'age', group: null, label: 'Age' },
+                                            { key: 'gp', group: null, label: 'GP' },
+                                            { key: 'min', group: null, label: 'MIN' },
+                                            ...columns,
+                                        ].map((col) => {
+                                            const def = STAT_GLOSSARY[col.key];
+                                            return (
+                                                <th
+                                                    key={`${col.group}.${col.key}`}
+                                                    onClick={() => handleSort(col)}
+                                                    className="sortable-th"
+                                                >
+                                                    {col.label}
+                                                    {sortKey === col.key && sortGroup === col.group && (
+                                                        <Icon name={sortDir === 'desc' ? 'arrow_drop_down' : 'arrow_drop_up'} size="1em" />
+                                                    )}
+                                                    {def && (
+                                                        <InfoTooltip label={`What is ${def.title}?`} title={def.title}>
+                                                            {def.formula && <><code className="stat-formula">{def.formula}</code><br /></>}
+                                                            {def.body}
+                                                        </InfoTooltip>
+                                                    )}
+                                                </th>
+                                            );
+                                        })}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rows.map((r, i) => (
+                                        <tr
+                                            key={r.player_id}
+                                            className="clickable-row"
+                                            onClick={() => setSelectedPlayer(r)}
+                                        >
+                                            <td>{i + 1}</td>
+                                            <td>
+                                                <span className="entity-row">
+                                                    <PlayerHeadshot playerId={r.player_id} playerName={r.player_name} size={28} />
+                                                    <span className="entity-row-text">
+                                                        <span className="entity-row-name">{r.player_name}</span>
+                                                        <span className="entity-row-sub">{r.position}</span>
+                                                    </span>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span className="entity-row">
+                                                    <TeamLogo abbreviation={r.team_abbreviation} size={20} />
+                                                    {r.team_abbreviation}
+                                                </span>
+                                            </td>
+                                            <td>{r.age ?? '—'}</td>
+                                            <td>{r.gp ?? '—'}</td>
+                                            <td>{fmt(r.min, 1)}</td>
+                                            {columns.map((col) => (
+                                                <td key={col.key}>
+                                                    {fmt(r[col.group]?.[col.key], col.digits ?? 1, col.signed)}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                    {rows.length === 0 && (
+                                        <tr><td colSpan={7 + columns.length} className="empty-message">No players match these filters.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
+                )}
+            </div>
+            {selectedPlayer && (
+                <PlayerDetailModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />
             )}
         </div>
     );

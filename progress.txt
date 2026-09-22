@@ -1092,6 +1092,188 @@ MAINTENANCE RULE (IMPORTANT)
       reusing the same DataTable/InfoTooltip pattern with an honest
       methodology caveat in the tooltip.
 
+  2026-09-21/22 — UI revamp, phase 1 (visual only — no data/logic changes,
+    per explicit "don't break project" instruction): real team logos and
+    player headshots app-wide, a new color scheme, a proper icon system
+    replacing emoji, and smoother motion. Scoped as a foundation pass
+    (Dashboard Home fully done end-to-end; the pattern is now established
+    for the remaining ~11 pages).
+    - frontend/src/utils/teamAssets.js (NEW) — official NBA team IDs
+      (sourced from nba_api's bundled static teams list, not a live fetch)
+      to build NBA's own public CDN URLs directly: team logos
+      (cdn.nba.com/logos/nba/{id}/global/L/logo.svg) and player headshots
+      (cdn.nba.com/headshots/nba/latest/1040x760/{player_id}.png) — both
+      verified live (200 OK) before use. No new data pipeline: team_id and
+      player_id were already in the DB/API responses.
+    - frontend/src/components/common/TeamLogo.jsx / PlayerHeadshot.jsx
+      (NEW) — render the real image with a graceful fallback (text badge /
+      initials avatar) on load failure, since not every player has a CDN
+      photo and that's an expected gap, not an error.
+    - api/mvp_api.py — added team_abbreviation to all 4 Awards Race
+      predict endpoints (MVP/DPOY/ROY/All-NBA); it was missing entirely,
+      which would've silently blocked team logos on those cards.
+    - Real bug found and fixed while wiring up the Dashboard standings
+      table: /meta/current's live standings fetch returns each team's
+      full name reliably but an empty abbreviation/logo field (a
+      pre-existing gap in that upstream source, confirmed via direct curl
+      — not something introduced here, and not visible before since the
+      old fallback silently rendered nothing useful either). Added
+      TEAM_NAME_TO_ABBR to teamAssets.js to recover the abbreviation from
+      the full name so logos still resolve.
+    - Color scheme: replaced the orange/cyan accent pair with violet/teal
+      (--accent #7c5cff, --accent-2 #2dd4bf) in dashboard.css's :root
+      tokens — updates everywhere instantly since the whole stylesheet
+      already used CSS custom properties. Also caught and fixed several
+      hardcoded literal rgba() values left over from the old palette that
+      wouldn't have picked up the variable change (sed-swept across the
+      file, verified zero old-color literals remain).
+    - Icon system: added Material Symbols Outlined (Google Fonts import)
+      and a small Icon.jsx wrapper component, then swept every .jsx file
+      in the app (16 files) replacing pictorial emoji (🏆🛡️🌱📊🧪🧬🕸️⚡📈
+      etc.) with proper line-art icons — sidebar nav, card headers, tab
+      bars, award badges, the "best model" table marker. Left plain
+      typographic glyphs alone (✓, →, ▶) since those are standard UI
+      convention, not the "AI-ish" decorative emoji the request was about.
+      Verified zero pictorial emoji remain anywhere in frontend/src via a
+      full-tree regex sweep.
+    - Motion: --transition upgraded from flat "ease" to a proper
+      cubic-bezier(0.4,0,0.2,1) curve (Material "standard" easing) —
+      every existing hover/transition in the app inherits this
+      automatically since they all reference the CSS variable. Added a
+      prefers-reduced-motion override for accessibility. Smoothed the
+      page-level fade-in animation (added a subtle scale, longer duration,
+      same easing curve).
+    - dashboard.card previously had NO visible box styling on standalone
+      pages (only worked when nested inside the old .analytics-content
+      wrapper) — gave it real box chrome (background/border/radius/
+      shadow) plus a subtle ambient corner glow, and simplified
+      .analytics-content to a plain layout wrapper so Analytics tabs
+      don't get double-boxed now that .dashboard-card supplies its own.
+    - Dashboard Home fully verified end-to-end in a fresh browser tab:
+      every team logo (10/10 in standings) and player headshot (4/4 in
+      Awards Race) confirmed as real loaded images via naturalWidth
+      checks, not just visual inspection; zero console errors; new pill
+      badges/probability bars/violet-teal palette all rendering correctly.
+    - Not yet done: the same treatment (real images, new palette, icon
+      swap — icons/colors already apply automatically via the shared CSS/
+      Icon component, but images haven't been wired in) for Player Stats,
+      Standings, Team Comparison, Shot Charts, Radar Compare, and the
+      rest of the Analytics sub-tabs (Stat Leaders and Trade Analyzer are
+      now done too — see the entries below).
+
+  2026-09-21/22 — Fixed a real stacking-context regression from the UI
+    revamp: the earlier ".dashboard-card > * { z-index: 1 }" rule (added
+    for the ambient glow effect) trapped nested absolutely-positioned
+    elements — like the player-search autocomplete dropdown on Shot
+    Charts — inside a sibling-level stacking context, letting later
+    siblings (e.g. the results subtitle text) render on top of them by
+    DOM order instead of their own z-index. Fixed by giving the glow
+    pseudo-element z-index:-1 against the card's own stacking context
+    instead, so children never need forced z-index at all. User-reported
+    with a screenshot; root-caused to the exact CSS rule that caused it
+    before fixing, not just patched by trial and error.
+
+  2026-09-21/22 — Player Stats rebuilt as a full sortable/filterable
+    league table (was a single-player lookup mixing real DB search with
+    fake mockPlayers data — replaced entirely with 100% real data,
+    inspired by a CraftedNBA-style reference the user shared):
+    - api/impact_api.py — new GET /players/table/{season}, returning every
+      qualified player with traditional + advanced + plus-minus (BPM/VORP)
+      stats in one row. Includes an "estimated position" (PG/SG/SF/PF/C)
+      derived from the BPM model's own position-regression (bpm_position,
+      built earlier this session) — explicitly disclosed as an estimate,
+      not a roster fact, since this project has no real position data
+      anywhere in its pipeline (checked: not in the raw nba_api CSVs
+      either). Verified against real data: Tyrese Maxey's row (26.3 PPG,
+      37.7 MPG) matches his actual injury-shortened 2024-25 Sixers season,
+      and his estimated position (SG) is correct.
+    - frontend/src/components/pages/PlayerStats.jsx — fully rewritten:
+      Traditional/Advanced/Plus-Minus stat-type tabs, position checkbox
+      filters, min-minutes floor, name search, click-any-column-to-sort,
+      real team logos and player headshots per row via the components
+      built earlier this session. Dropped the mockPlayers dependency
+      entirely — this page is now 100% real data.
+    - Syntax-verified via esbuild (both new/changed files parse cleanly)
+      and the backend endpoint verified directly via curl with real,
+      checkable output, but COULD NOT get a final visual browser
+      confirmation this round — the Browser pane tool was unresponsive for
+      the whole turn (unrelated to this code). Flagged honestly to the
+      user rather than claiming a visual check that didn't happen; asked
+      them to verify directly since their own dev server has hot-reload.
+
+  2026-09-22 — Player detail modal: clicking a row in Player Stats opens a
+    "fluidic floating window" (the user's phrasing) with name, team,
+    estimated position, archetype, and a scrollable year-by-year stats
+    table.
+    - frontend/src/components/common/PlayerDetailModal.jsx (NEW) — reuses
+      existing endpoints only (/players/history for year-by-year stats,
+      /clusters/player for archetype); no new backend work needed.
+    - DOB, college, and draft year/pick are shown as explicit "Not
+      available" rather than guessed or omitted silently — DOB doesn't
+      exist anywhere in this project's data pipeline (confirmed: absent
+      from the raw nba_api CSVs), and draft_history is a real table with
+      a real fetch script (scripts/fetch_draft_history.py) that's simply
+      never been run yet (sandbox can't reach stats.nba.com; the user
+      needs to run it locally).
+    - Mounted via React's createPortal to document.body rather than
+      inline in the page tree. Reason: .fade-in's keyframe animation ends
+      on "transform: translateY(0) scale(1)" (not "none") with
+      animation-fill-mode:both, so it permanently leaves a transform on
+      the page wrapper — a transformed ancestor becomes the containing
+      block for any position:fixed descendant, which would have silently
+      broken the modal's full-viewport backdrop if it were nested inside
+      that wrapper instead of portaled out of it.
+    - Smooth open/close: initially only had an entrance animation (CSS
+      unmounted instantly on close). Added a "closing" state that delays
+      the actual unmount by 240ms so a reverse pop-out/fade plays on
+      backdrop click, the X button, and Escape — guarded with a ref (not
+      just state) so rapid double-closes can't double-fire the onClose
+      callback.
+
+  2026-09-22 — Stat glossary tooltips: every stat column across Player
+    Stats, Stat Leaders, and Trade Analyzer now has an "i" icon with the
+    real formula and a plain-English explanation.
+    - frontend/src/utils/statGlossary.js (NEW) — official NBA
+      advanced-stat columns (TS%, eFG%, USG%, ORtg/DRtg/Net Rtg, AST%/
+      REB%/TOV%) are labeled as NBA's own methodology; BPM/OBPM/DBPM/VORP
+      are explicitly labeled as this project's own independent
+      reproduction (same "runs hotter than basketball-reference.com"
+      caveat used in Impact Rankings), not confused with the official
+      site's numbers. VORP's formula in the tooltip was checked against
+      the actual line in scripts/build_bpm_vorp.py rather than assumed
+      from the textbook definition.
+    - Two real bugs found and fixed in frontend/src/components/common/
+      InfoTooltip.jsx (a shared component used on 10+ pages, not just
+      the new ones) while building this:
+      1. The popover was an absolutely-positioned child of its trigger.
+         Inside Player Stats' horizontally-scrollable table, edge columns
+         (e.g. VORP, the last column) got their tooltip text clipped by
+         the table wrapper's overflow — same class of stacking/clipping
+         bug as the earlier Shot Charts dropdown fix, caught the same
+         way (reproduced live in the browser, not guessed). Fixed by
+         portaling the popover to document.body with position:fixed and
+         viewport-clamped coordinates computed from the trigger's
+         getBoundingClientRect(), so it can never be clipped by a
+         scrolling ancestor.
+      2. A latent click/hover race that predates this session's changes:
+         hovering onto the "i" button opened the tooltip via
+         onMouseEnter, and the click that immediately followed toggled
+         it right back closed — so clicking a never-hovered tooltip icon
+         would flash and vanish. Click now guarantees "open" instead of
+         toggling; closing happens via mouseleave (150ms grace period),
+         outside click/tap, or Escape.
+    - api/impact_api.py — /leaders/{stat_key} never returned player_id
+      (in either the live nba_api path or the DB-fallback path), so Stat
+      Leaders had no way to fetch headshots. Added player_id to both
+      paths' SELECT/response and restarted the service; verified via
+      curl that it now comes through correctly.
+    - frontend/src/components/pages/StatLeaders.jsx and TradeAnalyzer.jsx
+      — wired in real PlayerHeadshot/TeamLogo components (previously
+      plain text) alongside the new tooltips.
+    - Verified live in the browser pane throughout: tooltip clipping at
+      the table's right edge, the click-open fix, Escape-to-close, and
+      real headshots/logos rendering on both pages. No console errors.
+
 ================================================================================
 END OF progress.txt
 ================================================================================

@@ -2,6 +2,24 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchTradeTeams, fetchTradeRoster, simulateTrade } from '../../services/api';
 import Loader from '../Loader';
 import InfoTooltip from '../common/InfoTooltip';
+import Icon from '../common/Icon';
+import TeamLogo from '../common/TeamLogo';
+import PlayerHeadshot from '../common/PlayerHeadshot';
+import { STAT_GLOSSARY } from '../../utils/statGlossary';
+
+function StatLabel({ statKey, children }) {
+    const def = STAT_GLOSSARY[statKey];
+    if (!def) return children;
+    return (
+        <>
+            {children}
+            <InfoTooltip label={`What is ${def.title}?`} title={def.title}>
+                {def.formula && <><code className="stat-formula">{def.formula}</code><br /></>}
+                {def.body}
+            </InfoTooltip>
+        </>
+    );
+}
 
 function fmt(v, digits = 1) {
     return v == null ? '—' : Number(v).toFixed(digits);
@@ -26,11 +44,16 @@ function PlayerCard({ label, player }) {
     if (!player) return null;
     return (
         <div style={{ background: '#1a2332', border: '1px solid #334155', borderRadius: 8, padding: '0.75rem 1rem' }}>
-            <div className="page-subtitle" style={{ marginBottom: 4 }}>{label}</div>
-            <div style={{ fontWeight: 700 }}>{player.player_name}</div>
-            <div className="page-subtitle" style={{ marginTop: 2 }}>
-                {player.archetype || 'Unclustered'} · {fmt(player.pts)} pts · {fmt(player.reb)} reb · {fmt(player.ast)} ast · {fmt(player.min)} mpg
-            </div>
+            <div className="page-subtitle" style={{ marginBottom: 6 }}>{label}</div>
+            <span className="entity-row">
+                <PlayerHeadshot playerId={player.player_id} playerName={player.player_name} size={36} />
+                <span className="entity-row-text">
+                    <span className="entity-row-name">{player.player_name}</span>
+                    <span className="entity-row-sub">
+                        {player.archetype || 'Unclustered'} · {fmt(player.pts)} pts · {fmt(player.reb)} reb · {fmt(player.ast)} ast · {fmt(player.min)} mpg
+                    </span>
+                </span>
+            </span>
         </div>
     );
 }
@@ -41,7 +64,10 @@ function TeamPanel({ side }) {
     const { before, after } = side.summary;
     return (
         <div className="dashboard-card" style={{ flex: 1, minWidth: 320 }}>
-            <h3 className="section-heading" style={{ marginTop: 0 }}>{side.trade.team}</h3>
+            <h3 className="section-heading" style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <TeamLogo abbreviation={side.trade.team} size={24} />
+                {side.trade.team}
+            </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
                 <PlayerCard label="Trading Away" player={sends} />
                 <PlayerCard label="Acquiring" player={receives} />
@@ -70,11 +96,11 @@ function TeamPanel({ side }) {
                         <tr><th>Roster Metric (min-weighted)</th><th>Before → After</th></tr>
                     </thead>
                     <tbody>
-                        <tr><td>Net Rating</td><td><DeltaValue before={before.net_rating} after={after.net_rating} /></td></tr>
-                        <tr><td>Off. Rating</td><td><DeltaValue before={before.off_rating} after={after.off_rating} /></td></tr>
-                        <tr><td>Def. Rating</td><td><DeltaValue before={before.def_rating} after={after.def_rating} higherIsBetter={false} /></td></tr>
-                        <tr><td>TS%</td><td><DeltaValue before={before.ts_pct} after={after.ts_pct} digits={3} /></td></tr>
-                        <tr><td>Total Impact Score (roster sum)</td><td><DeltaValue before={before.total_impact_raw} after={after.total_impact_raw} digits={2} /></td></tr>
+                        <tr><td><StatLabel statKey="net_rating">Net Rating</StatLabel></td><td><DeltaValue before={before.net_rating} after={after.net_rating} /></td></tr>
+                        <tr><td><StatLabel statKey="off_rating">Off. Rating</StatLabel></td><td><DeltaValue before={before.off_rating} after={after.off_rating} /></td></tr>
+                        <tr><td><StatLabel statKey="def_rating">Def. Rating</StatLabel></td><td><DeltaValue before={before.def_rating} after={after.def_rating} higherIsBetter={false} /></td></tr>
+                        <tr><td><StatLabel statKey="ts_pct">TS%</StatLabel></td><td><DeltaValue before={before.ts_pct} after={after.ts_pct} digits={3} /></td></tr>
+                        <tr><td><StatLabel statKey="impact_score">Total Impact Score (roster sum)</StatLabel></td><td><DeltaValue before={before.total_impact_raw} after={after.total_impact_raw} digits={2} /></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -155,7 +181,7 @@ export default function TradeAnalyzer() {
         <div className="page page-trade fade-in">
             <div className="dashboard-card">
                 <h2 className="card-title">
-                    <span className="card-icon">🔄</span>
+                    <span className="card-icon"><Icon name="swap_horiz" /></span>
                     Trade Analyzer
                     <InfoTooltip label="How this works" title="What this simulates">
                         Swaps two players and recomputes each roster's minute-weighted net/offensive/defensive

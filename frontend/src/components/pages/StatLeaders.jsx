@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchStatLeaders } from '../../services/api';
+import PlayerHeadshot from '../common/PlayerHeadshot';
+import TeamLogo from '../common/TeamLogo';
+import InfoTooltip from '../common/InfoTooltip';
+import { STAT_GLOSSARY } from '../../utils/statGlossary';
 
 const STAT_OPTIONS = [
   { key: 'pts', label: 'Points (PTS)' },
@@ -28,6 +32,7 @@ export default function StatLeaders() {
     () => STAT_OPTIONS.find((s) => s.key === statKey)?.label || statKey.toUpperCase(),
     [statKey]
   );
+  const statDef = STAT_GLOSSARY[statKey];
 
   useEffect(() => {
     let mounted = true;
@@ -106,7 +111,15 @@ export default function StatLeaders() {
               <th>#</th>
               <th>Player</th>
               <th>Team</th>
-              <th>{selectedStatLabel}</th>
+              <th>
+                {selectedStatLabel}
+                {statDef && (
+                  <InfoTooltip label={`What is ${statDef.title}?`} title={statDef.title}>
+                    {statDef.formula && <><code className="stat-formula">{statDef.formula}</code><br /></>}
+                    {statDef.body}
+                  </InfoTooltip>
+                )}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -130,9 +143,17 @@ export default function StatLeaders() {
                       row.rank
                     )}
                   </td>
-                  <td className="sl-player-name">{row.player_name}</td>
+                  <td className="sl-player-name">
+                    <span className="entity-row">
+                      <PlayerHeadshot playerId={row.player_id} playerName={row.player_name} size={28} />
+                      {row.player_name}
+                    </span>
+                  </td>
                   <td>
-                    <span className="team-abbr-badge">{row.team_abbr || '-'}</span>
+                    <span className="entity-row">
+                      <TeamLogo abbreviation={row.team_abbr} size={20} />
+                      {row.team_abbr || '-'}
+                    </span>
                   </td>
                   <td className="sl-value-cell">{row.value}</td>
                 </tr>
