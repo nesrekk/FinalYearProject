@@ -79,20 +79,27 @@ def load_data():
 # ─── Step 2: League adjustment ──────────────────────────────────────────────
 
 def apply_league_adjustment(df):
-    """Subtract per-season league averages from selected stats."""
+    """
+    Z-score each stat within its own season (subtract that season's mean,
+    divide by that season's std) instead of only mean-centering. Mean-only
+    adjustment still leaves era-wide differences in SPREAD uncorrected — if
+    a stat is much more spread out league-wide in one era than another
+    (e.g. 3PA volume), a mean-centered-only value overstates or understates
+    how unusual a player actually was relative to their own season. Full
+    z-scoring makes "how many standard deviations from average" comparable
+    across seasons, which is what cross-era cosine similarity needs.
+    """
     print("\n" + "=" * 60)
-    print("Step 2: Computing league-adjusted stats")
+    print("Step 2: Computing league-adjusted (z-scored) stats")
     print("=" * 60)
 
-    season_means = df.groupby("season")[ADJUST_COLS].mean()
+    season_mean = df.groupby("season")[ADJUST_COLS].transform("mean")
+    season_std = df.groupby("season")[ADJUST_COLS].transform("std").replace(0, 1)
 
     for col in ADJUST_COLS:
-        df[f"adj_{col}"] = df.apply(
-            lambda row: row[col] - season_means.loc[row["season"], col],
-            axis=1,
-        )
+        df[f"adj_{col}"] = (df[col] - season_mean[col]) / season_std[col]
 
-    print(f"  ✅ Created {len(ADJUST_COLS)} adjusted columns")
+    print(f"  ✅ Created {len(ADJUST_COLS)} era-normalized (z-scored) columns")
     return df
 
 

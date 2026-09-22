@@ -22,9 +22,12 @@ play good defense, and don't have the ball much emerges from the stats).
 Method:
   1. Filter to a meaningful-sample candidate pool (min>=15 mpg, gp>=20) so
      small-sample noise doesn't distort a player's rate stats.
-  2. Standardize 11 style-describing features (NOT raw scoring volume alone
-     — a mix of scoring, playmaking, rebounding, defense, and efficiency
-     rates) so no single stat dominates just because of its raw scale.
+  2. Era-normalize 11 style-describing features (NOT raw scoring volume
+     alone — a mix of scoring, playmaking, rebounding, defense, and
+     efficiency rates): z-score each one within its OWN season, not pooled
+     globally, so no single stat dominates just because of its raw scale
+     AND league-wide shifts over 2010-2026 (3PA volume, pace, etc.) don't
+     get mistaken for player differences (see era_normalize()).
   3. K-Means with K=6, chosen to match a conventional number of basketball
      archetypes and checked against silhouette scores for K=4..8.
   4. Each of the 6 discovered clusters gets a human-readable name by
@@ -54,7 +57,6 @@ from scipy.optimize import linear_sum_assignment
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
-from sklearn.preprocessing import StandardScaler
 
 DB_CONFIG = {
     "host": "localhost",
@@ -99,6 +101,24 @@ def load_data():
         conn.close()
     df = df.dropna(subset=FEATURES).reset_index(drop=True)
     return df
+
+
+def era_normalize(df, features):
+    """
+    Z-score each feature within its OWN season (mean 0, std 1 per season)
+    instead of pooling raw stats across 2010-2026 and standardizing once
+    globally. The league has changed a lot over that window (3PA volume,
+    pace, etc.) — without this, a player gets grouped by how their raw
+    numbers compare to every other season combined, so era-wide shifts get
+    misread as player differences. A 2011 stretch-4 and a 2025 stretch-4
+    with equivalent ROLES can end up with very different raw fg3_pct/usg
+    just because the league as a whole shot fewer 3s in 2011; z-scoring
+    within each season fixes that by asking "how unusual is this player
+    relative to their own year" instead of relative to the whole dataset.
+    """
+    season_mean = df.groupby("season")[features].transform("mean")
+    season_std = df.groupby("season")[features].transform("std").replace(0, 1)
+    return ((df[features] - season_mean) / season_std).values
 
 
 def choose_k(X, k_range=range(4, 9)):
@@ -148,8 +168,7 @@ def main():
     df = load_data()
     print(f"\nCandidate pool: {len(df):,} player-seasons (min>={MIN_MINUTES}, gp>={MIN_GAMES})")
 
-    scaler = StandardScaler()
-    X = scaler.fit_transform(df[FEATURES].values)
+    X = era_normalize(df, FEATURES)
 
     print()
     choose_k(X)
