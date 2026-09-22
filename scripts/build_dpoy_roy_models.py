@@ -84,6 +84,7 @@ DPOY_WINNERS = {
     2022: "Marcus Smart",
     2023: "Jaren Jackson Jr.",
     2024: "Rudy Gobert",
+    2025: "Evan Mobley",
 }
 
 ROY_WINNERS = {
@@ -101,7 +102,9 @@ ROY_WINNERS = {
     2021: "LaMelo Ball",
     2022: "Scottie Barnes",
     2023: "Paolo Banchero",
-    2024: "Chet Holmgren",
+    2024: "Victor Wembanyama",  # unanimous winner (99/99 first-place votes); was
+                                # incorrectly Chet Holmgren (a finalist, not the winner)
+    2025: "Stephon Castle",
 }
 
 
