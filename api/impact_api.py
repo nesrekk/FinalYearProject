@@ -839,6 +839,210 @@ def get_playoff_comparison(player_name: str, season: int):
     }
 
 
+# ─── Draft Prospect Comp Finder ──────────────────────────────────────────────
+#
+# Real D1 college stats (CollegeBasketballData.com, ~105k player-seasons,
+# 2014-2025, fetched once into college_player_season_stats — see
+# scripts/fetch_college_stats.py) matched by real name to this project's own
+# NBA rookie seasons wherever a match exists (~55% of NBA rookies 2015-2026 —
+# international players and G-League/draft-and-stash players never appear in
+# US college data, which is a real gap, not a bug). For a given prospect,
+# finds their closest real college-season comps (z-scored within that
+# season's own real pool, same era-normalization approach used everywhere
+# else in this project) among players whose own real NBA rookie outcome is
+# known, and shows what those comps actually did — a similarity-weighted
+# average of real outcomes, never a trained or invented projection.
+#
+# College-side metrics (CBBD's own usage/netRating/etc.) are a DIFFERENT
+# methodology than this project's own NBA-side metrics of the same name —
+# they're used only to compare college seasons to other college seasons,
+# never mixed into the same z-score space as an NBA stat.
+
+COLLEGE_COMP_FEATURES = ["ppg", "apg", "rpg", "usage", "ts_pct", "net_rating", "porpag"]
+COLLEGE_MIN_GAMES = 10
+BRIDGE_MIN_GAMES = 15
+
+
+def _college_features(games, points, assists, rebounds_total, usage, ts_pct, net_rating, porpag):
+    if not games:
+        return None
+    return {
+        "ppg": points / games if points is not None else None,
+        "apg": assists / games if assists is not None else None,
+        "rpg": rebounds_total / games if rebounds_total is not None else None,
+        "usage": usage, "ts_pct": ts_pct, "net_rating": net_rating, "porpag": porpag,
+    }
+
+
+@app.get("/prospects/comp/{player_name}")
+def get_draft_prospect_comp(player_name: str, season: Optional[int] = None, top_n_comps: int = 5):
+    """Real college-season comps + their real NBA rookie outcomes for one prospect."""
+    top_n_comps = max(1, min(top_n_comps, 10))
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        if season is not None:
+            cursor.execute(
+                """SELECT season, athlete_id, name, team, games, points, assists, rebounds_total,
+                          usage, ts_pct, net_rating, porpag
+                   FROM college_player_season_stats
+                   WHERE LOWER(name) = LOWER(%s) AND season = %s LIMIT 1;""",
+                (player_name, season),
+            )
+        else:
+            cursor.execute(
+                """SELECT season, athlete_id, name, team, games, points, assists, rebounds_total,
+                          usage, ts_pct, net_rating, porpag
+                   FROM college_player_season_stats
+                   WHERE LOWER(name) = LOWER(%s) ORDER BY season DESC LIMIT 1;""",
+                (player_name,),
+            )
+        prospect_row = cursor.fetchone()
+        if not prospect_row:
+            cursor.execute(
+                """SELECT season, athlete_id, name, team, games, points, assists, rebounds_total,
+                          usage, ts_pct, net_rating, porpag
+                   FROM college_player_season_stats
+                   WHERE LOWER(name) LIKE LOWER(%s) ORDER BY season DESC LIMIT 1;""",
+                (f"%{player_name}%",),
+            )
+            prospect_row = cursor.fetchone()
+
+        if not prospect_row:
+            raise HTTPException(status_code=404, detail=f"No real college season found for '{player_name}'.")
+
+        (p_season, p_athlete_id, p_name, p_team, p_games, p_pts, p_ast,
+         p_reb, p_usage, p_ts, p_net, p_porpag) = prospect_row
+
+        if not p_games or p_games < 5:
+            raise HTTPException(status_code=404, detail=f"{p_name}'s {p_season} college sample is too small (<5 games) for a real comparison.")
+
+        cursor.execute(
+            """SELECT athlete_id, name, team, games, points, assists, rebounds_total,
+                      usage, ts_pct, net_rating, porpag
+               FROM college_player_season_stats
+               WHERE season = %s AND games >= %s;""",
+            (p_season, COLLEGE_MIN_GAMES),
+        )
+        pool_rows = cursor.fetchall()
+
+        cursor.execute(
+            """
+            WITH rookies AS (
+                SELECT player_id, player_name, MIN(season) AS rookie_season
+                FROM player_season_stats GROUP BY player_id, player_name
+            )
+            SELECT c.athlete_id, c.name, c.season, c.team, c.games, c.points, c.assists,
+                   c.rebounds_total, c.usage, c.ts_pct, c.net_rating, c.porpag,
+                   r.player_id, r.rookie_season
+            FROM rookies r
+            JOIN college_player_season_stats c
+                ON LOWER(c.name) = LOWER(r.player_name) AND c.season = r.rookie_season - 1
+            WHERE c.games >= %s;
+            """,
+            (BRIDGE_MIN_GAMES,),
+        )
+        bridge_rows = cursor.fetchall()
+
+        bridge_player_ids = list({b[12] for b in bridge_rows}) or [-1]
+        cursor.execute(
+            """SELECT player_id, season, pts, ts_pct, ast_pct, reb_pct, net_rating
+               FROM player_season_stats WHERE player_id = ANY(%s);""",
+            (bridge_player_ids,),
+        )
+        nba_by_id_season = {
+            (pid, szn): {"pts": pts, "ts_pct": ts, "ast_pct": ast, "reb_pct": reb, "net_rating": net}
+            for pid, szn, pts, ts, ast, reb, net in cursor.fetchall()
+        }
+
+        # If this prospect has since been drafted and appears in the NBA
+        # data too, grab their real player_id for a real headshot — purely
+        # cosmetic, doesn't affect the comparison math at all.
+        cursor.execute(
+            "SELECT DISTINCT player_id FROM player_season_stats WHERE LOWER(player_name) = LOWER(%s) LIMIT 1;",
+            (p_name,),
+        )
+        prospect_nba_row = cursor.fetchone()
+        prospect_nba_player_id = prospect_nba_row[0] if prospect_nba_row else None
+
+    pool_features = []
+    for athlete_id, name, team, games, points, assists, reb, usage, ts, net, porpag in pool_rows:
+        f = _college_features(games, points, assists, reb, usage, ts, net, porpag)
+        if f and all(f.get(k) is not None for k in COLLEGE_COMP_FEATURES):
+            pool_features.append(f)
+
+    if len(pool_features) < 10:
+        raise HTTPException(status_code=404, detail=f"Not enough real college data for season {p_season} to build a comparison pool.")
+
+    means, stds = {}, {}
+    for k in COLLEGE_COMP_FEATURES:
+        vals = [f[k] for f in pool_features]
+        m = sum(vals) / len(vals)
+        sd = (sum((v - m) ** 2 for v in vals) / len(vals)) ** 0.5 or 1.0
+        means[k], stds[k] = m, sd
+
+    def zvec(f):
+        return [(f[k] - means[k]) / stds[k] for k in COLLEGE_COMP_FEATURES]
+
+    prospect_features = _college_features(p_games, p_pts, p_ast, p_reb, p_usage, p_ts, p_net, p_porpag)
+    if not prospect_features or any(prospect_features.get(k) is None for k in COLLEGE_COMP_FEATURES):
+        raise HTTPException(status_code=404, detail=f"{p_name}'s {p_season} season is missing real stats needed for comparison.")
+    prospect_vec = zvec(prospect_features)
+
+    scored = []
+    for (athlete_id, name, c_season, team, games, points, assists, reb,
+         usage, ts, net, porpag, nba_pid, rookie_season) in bridge_rows:
+        if athlete_id == p_athlete_id and c_season == p_season:
+            continue
+        f = _college_features(games, points, assists, reb, usage, ts, net, porpag)
+        if not f or any(f.get(k) is None for k in COLLEGE_COMP_FEATURES):
+            continue
+        nba_outcome = nba_by_id_season.get((nba_pid, rookie_season))
+        if not nba_outcome:
+            continue
+        dist = sum((a - b) ** 2 for a, b in zip(prospect_vec, zvec(f))) ** 0.5
+        scored.append({
+            "name": name, "college_season": c_season, "team": team, "nba_player_id": nba_pid,
+            "distance": dist, "nba_rookie_season": rookie_season, "nba_outcome": nba_outcome,
+        })
+
+    scored.sort(key=lambda x: x["distance"])
+    bridge_pool_size = len(scored)
+    top_comps = scored[:top_n_comps]
+
+    if not top_comps:
+        raise HTTPException(status_code=404, detail="No real comps with known NBA rookie outcomes were found for this prospect.")
+
+    weights = [1 / (1 + c["distance"]) for c in top_comps]
+    projected = {}
+    for stat in ["pts", "ts_pct", "ast_pct", "reb_pct", "net_rating"]:
+        pairs = [(c["nba_outcome"].get(stat), w) for c, w in zip(top_comps, weights) if c["nba_outcome"].get(stat) is not None]
+        projected[stat] = round(sum(v * w for v, w in pairs) / sum(w for _, w in pairs), 3) if pairs else None
+
+    return {
+        "prospect": {
+            "name": p_name, "college_season": p_season, "team": p_team, "games": p_games,
+            "nba_player_id": prospect_nba_player_id,
+            "ppg": round(prospect_features["ppg"], 1), "apg": round(prospect_features["apg"], 1),
+            "rpg": round(prospect_features["rpg"], 1), "usage": prospect_features["usage"],
+            "ts_pct": prospect_features["ts_pct"], "net_rating": prospect_features["net_rating"],
+        },
+        "comps": [
+            {
+                "name": c["name"], "college_season": c["college_season"], "team": c["team"],
+                "nba_player_id": c["nba_player_id"],
+                "similarity": round(1 / (1 + c["distance"]), 4),
+                "nba_rookie_season": c["nba_rookie_season"],
+                "nba_rookie_outcome": {k: (round(v, 3) if v is not None else None) for k, v in c["nba_outcome"].items()},
+            }
+            for c in top_comps
+        ],
+        "projected_nba_rookie_outcome": projected,
+        "bridge_pool_size": bridge_pool_size,
+    }
+
+
 def fetch_nba_games_by_date(date_str: str):
     """
     Fetch NBA games for a specific date (YYYY-MM-DD) using nba_api scoreboard.

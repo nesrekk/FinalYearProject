@@ -273,6 +273,15 @@ export async function fetchPlayoffComparison(player, season) {
     return response.data;
 }
 
+// ─── Draft Prospect Comp Finder ──────────────────────────────────
+export async function fetchDraftProspectComp(player, season, topNComps = 5) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/prospects/comp/${encodeURIComponent(player)}`,
+        { params: season ? { season, top_n_comps: topNComps } : { top_n_comps: topNComps } }
+    );
+    return response.data;
+}
+
 // ─── Vegas vs. Machine: Championship Odds Scanner ───────────────
 export async function fetchChampionshipOdds() {
     const response = await axios.get(`${IMPACT_BASE}/odds/championship`);
