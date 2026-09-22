@@ -20,6 +20,7 @@ import math
 import os
 import pickle
 import re
+import ssl
 import time
 import unicodedata
 import xml.etree.ElementTree as ET
@@ -28,11 +29,19 @@ from email.utils import parsedate_to_datetime
 from typing import Optional
 from urllib.parse import quote
 from urllib.request import Request, urlopen
-from fastapi import FastAPI, HTTPException
+import certifi
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2 import pool
 
 import shots_lib
+
+# This Python.framework install doesn't ship a populated default CA trust
+# store, so plain urlopen() against some HTTPS hosts (e.g. cdn.nba.com) fails
+# with CERTIFICATE_VERIFY_FAILED even though curl/requests on the same
+# machine work fine — pass certifi's bundle explicitly everywhere we open a
+# raw urllib HTTPS connection.
+_SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
 # ─── App Setup ──────────────────────────────────────────────────────────────
 
@@ -201,13 +210,13 @@ def column_exists(cursor, table_name: str, column_name: str) -> bool:
 
 def fetch_json(url: str, headers=None, timeout: int = 20):
     req = Request(url, headers=headers or {})
-    with urlopen(req, timeout=timeout) as resp:
+    with urlopen(req, timeout=timeout, context=_SSL_CONTEXT) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
 def fetch_text(url: str, headers=None, timeout: int = 20):
     req = Request(url, headers=headers or {})
-    with urlopen(req, timeout=timeout) as resp:
+    with urlopen(req, timeout=timeout, context=_SSL_CONTEXT) as resp:
         return resp.read().decode("utf-8", errors="ignore")
 
 
@@ -1806,6 +1815,92 @@ def get_higher_lower_pool():
         "pool_size": len(players),
         "players": players,
     }
+
+
+# ─── Games: Blurred Player ──────────────────────────────────────────────────
+#
+# Same daily-puzzle mechanics as Guess the Player (deterministic pool-index
+# hash, nothing stored server-side) but with a real headshot photo,
+# progressively un-blurred client-side as guesses run out, instead of
+# stat-based clues. Uses a different hash salt than Guess the Player so the
+# two games don't share the same daily answer.
+#
+# The image is proxied through this backend rather than handing the
+# frontend a raw cdn.nba.com/.../{player_id}.png URL — that URL *is* the
+# answer (the filename is the player_id), so shipping it directly would let
+# anyone check devtools and skip the game.
+
+BLURRED_PLAYER_MAX_GUESSES = 8
+
+
+def _blurred_player_mystery(pool_rows, season: int, puzzle_date: date):
+    seed = f"blurred-player-{puzzle_date.isoformat()}-{season}"
+    digest = hashlib.sha256(seed.encode()).hexdigest()
+    index = int(digest, 16) % len(pool_rows)
+    return pool_rows[index]
+
+
+def _blurred_player_resolve(season: Optional[int], puzzle_date: Optional[str]):
+    resolved_date = _parse_puzzle_date(puzzle_date)
+    with get_db() as conn:
+        cursor = conn.cursor()
+        resolved_season = season or _guess_game_default_season(cursor)
+        check_season_exists(cursor, resolved_season)
+        pool_rows = _guess_game_pool(cursor, resolved_season)
+    if not pool_rows:
+        raise HTTPException(status_code=404, detail=f"No qualified player pool for season {resolved_season}.")
+    mystery = _blurred_player_mystery(pool_rows, resolved_season, resolved_date)
+    return resolved_season, resolved_date, pool_rows, mystery
+
+
+@app.get("/games/blurred-player/daily")
+def get_blurred_player_daily(season: Optional[int] = None):
+    resolved_season, _, pool_rows, _ = _blurred_player_resolve(season, None)
+    return {
+        "date": date.today().isoformat(),
+        "season": resolved_season,
+        "max_guesses": BLURRED_PLAYER_MAX_GUESSES,
+        "pool_size": len(pool_rows),
+        "pool": [
+            {"player_id": r["player_id"], "player_name": r["player_name"], "team_abbreviation": r["team_abbreviation"]}
+            for r in pool_rows
+        ],
+    }
+
+
+@app.get("/games/blurred-player/image")
+def get_blurred_player_image(season: Optional[int] = None, puzzle_date: Optional[str] = None):
+    _, _, _, mystery = _blurred_player_resolve(season, puzzle_date)
+    image_url = f"https://cdn.nba.com/headshots/nba/latest/1040x760/{mystery['player_id']}.png"
+    try:
+        req = Request(image_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=10, context=_SSL_CONTEXT) as resp:
+            data = resp.read()
+    except Exception:
+        raise HTTPException(status_code=502, detail="Could not load today's player image.")
+    return Response(content=data, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/games/blurred-player/guess")
+def guess_blurred_player(guess_player_name: str, season: Optional[int] = None, puzzle_date: Optional[str] = None):
+    _, _, pool_rows, mystery = _blurred_player_resolve(season, puzzle_date)
+
+    pool_by_name = {r["player_name"].lower(): r for r in pool_rows}
+    guess = pool_by_name.get(guess_player_name.strip().lower())
+    if guess is None:
+        raise HTTPException(status_code=404, detail=f"{guess_player_name} isn't in today's guessable pool.")
+
+    correct = guess["player_id"] == mystery["player_id"]
+    result = {"correct": correct, "guess_player_name": guess["player_name"]}
+    if correct:
+        result["mystery_player"] = _guess_game_public(mystery)
+    return result
+
+
+@app.get("/games/blurred-player/reveal")
+def reveal_blurred_player(season: Optional[int] = None, puzzle_date: Optional[str] = None):
+    _, _, _, mystery = _blurred_player_resolve(season, puzzle_date)
+    return _guess_game_public(mystery)
 
 
 # ─── Trend Analysis (player career trajectory / team trajectory) ───────────

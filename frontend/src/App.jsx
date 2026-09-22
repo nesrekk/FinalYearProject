@@ -21,8 +21,7 @@ import StatLeaders from './components/pages/StatLeaders';
 import TradeAnalyzer from './components/pages/TradeAnalyzer';
 import DraftValueGuide from './components/pages/DraftValueGuide';
 import RookieClassTracker from './components/pages/RookieClassTracker';
-import GuessThePlayer from './components/pages/GuessThePlayer';
-import HigherOrLower from './components/pages/HigherOrLower';
+import GamesHub from './components/pages/GamesHub';
 import { prefetchCoreData } from './services/api';
 import './styles/dashboard.css';
 
@@ -48,8 +47,7 @@ export default function App() {
       case 'trade': return <TradeAnalyzer />;
       case 'draft': return <DraftValueGuide />;
       case 'rookies': return <RookieClassTracker />;
-      case 'guess': return <GuessThePlayer />;
-      case 'higherlower': return <HigherOrLower />;
+      case 'games': return <GamesHub />;
       default: return <DashboardHome onNavigate={setActivePage} />;
     }
   };

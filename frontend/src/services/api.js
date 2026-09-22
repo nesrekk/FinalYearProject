@@ -226,6 +226,36 @@ export async function fetchGuessReveal(season, puzzleDate) {
     return response.data;
 }
 
+// ─── Games: Blurred Player ──────────────────────────────────────
+export async function fetchBlurredDaily(season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/games/blurred-player/daily`,
+        { params: season ? { season } : {} }
+    );
+    return response.data;
+}
+
+export function getBlurredPlayerImageUrl(season, puzzleDate) {
+    const params = new URLSearchParams({ season, puzzle_date: puzzleDate });
+    return `${IMPACT_BASE}/games/blurred-player/image?${params.toString()}`;
+}
+
+export async function submitBlurredPlayerGuess(guessPlayerName, season, puzzleDate) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/games/blurred-player/guess`,
+        { params: { guess_player_name: guessPlayerName, season, puzzle_date: puzzleDate } }
+    );
+    return response.data;
+}
+
+export async function fetchBlurredReveal(season, puzzleDate) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/games/blurred-player/reveal`,
+        { params: { season, puzzle_date: puzzleDate } }
+    );
+    return response.data;
+}
+
 // ─── Games: Higher or Lower ─────────────────────────────────────
 export async function fetchHigherLowerPool() {
     return getWithCache('higher_lower_pool', 10 * 60 * 1000, async () => {
