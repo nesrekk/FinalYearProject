@@ -3310,9 +3310,13 @@ def _fetch_championship_odds_live():
 
     # Devig each bookmaker's own full outcome set independently (each book
     # has its own overround), then average the devigged probability per
-    # team across books for a more robust market consensus.
+    # team across books for a more robust market consensus. Every
+    # individual (book, odds, devigged probability) triple is kept too —
+    # not just the average — so real book-to-book disagreement is visible
+    # rather than smoothed away.
     per_team_probs = {}
     per_team_raw_odds = {}
+    per_team_books = {}
     books_used = []
     z_values = []
 
@@ -3323,17 +3327,27 @@ def _fetch_championship_odds_live():
         outcomes = markets[0].get("outcomes", [])
         if len(outcomes) < 2:
             continue
+        book_title = book.get("title", book.get("key"))
         names = [o["name"] for o in outcomes]
         odds = [o["price"] for o in outcomes]
         probs, z = shin_probabilities(odds)
-        books_used.append(book.get("title", book.get("key")))
+        books_used.append(book_title)
         z_values.append(z)
         for name, odd, prob in zip(names, odds, probs):
             per_team_probs.setdefault(name, []).append(prob)
             per_team_raw_odds.setdefault(name, []).append(odd)
+            per_team_books.setdefault(name, []).append({
+                "book": book_title, "odds": odd, "probability": round(prob, 4),
+            })
 
     if not per_team_probs:
         raise HTTPException(status_code=404, detail="Live odds response had no usable outcomes.")
+
+    def _stdev(values):
+        if len(values) < 2:
+            return 0.0
+        mean = sum(values) / len(values)
+        return math.sqrt(sum((v - mean) ** 2 for v in values) / len(values))
 
     return {
         "last_update": events[0]["bookmakers"][0].get("last_update"),
@@ -3342,9 +3356,16 @@ def _fetch_championship_odds_live():
         "team_market_probability": {
             name: round(sum(probs) / len(probs), 4) for name, probs in per_team_probs.items()
         },
+        "team_probability_spread": {
+            name: round(_stdev(probs), 4) for name, probs in per_team_probs.items()
+        },
         "team_best_odds": {
             name: round(max(odds), 2) for name, odds in per_team_raw_odds.items()
         },
+        "team_worst_odds": {
+            name: round(min(odds), 2) for name, odds in per_team_raw_odds.items()
+        },
+        "team_books": per_team_books,
     }
 
 
@@ -3407,11 +3428,15 @@ def get_championship_odds_scanner():
     for team_name, market_prob in odds_data["team_market_probability"].items():
         abbr = TEAM_NAME_TO_ABBR.get(team_name)
         proxy_prob = proxy_prob_by_abbr.get(abbr) if abbr else None
+        spread = odds_data["team_probability_spread"].get(team_name)
         rows.append({
             "team_name": team_name,
             "team_abbreviation": abbr,
             "market_probability": market_prob,
+            "probability_spread": spread,
             "best_odds": odds_data["team_best_odds"].get(team_name),
+            "worst_odds": odds_data["team_worst_odds"].get(team_name),
+            "books": odds_data["team_books"].get(team_name, []),
             "proxy_probability": round(proxy_prob, 4) if proxy_prob is not None else None,
             "value": round(market_prob - proxy_prob, 4) if proxy_prob is not None else None,
             "win_pct": round(win_pct_by_abbr.get(abbr), 3) if abbr in win_pct_by_abbr else None,
