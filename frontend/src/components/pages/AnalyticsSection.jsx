@@ -8,6 +8,7 @@ import PlayerArchetypesSection from '../PlayerArchetypesSection';
 import RadarCompareSection from '../RadarCompareSection';
 import TrendAnalysisSection from '../TrendAnalysisSection';
 import TrajectoryForecasterSection from '../TrajectoryForecasterSection';
+import VegasScannerSection from '../VegasScannerSection';
 
 const tabs = [
     { id: 'similarity', label: 'Season Similarity', icon: 'bar_chart' },
@@ -18,6 +19,7 @@ const tabs = [
     { id: 'radar', label: 'Radar Compare', icon: 'radar' },
     { id: 'trends', label: 'Trend Analysis', icon: 'trending_up' },
     { id: 'trajectory', label: 'Career Trajectory', icon: 'timeline' },
+    { id: 'vegas', label: 'Vegas Scanner', icon: 'currency_exchange' },
 ];
 
 export default function AnalyticsSection() {
@@ -48,6 +50,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'radar' && <RadarCompareSection />}
                 {activeTab === 'trends' && <TrendAnalysisSection />}
                 {activeTab === 'trajectory' && <TrajectoryForecasterSection />}
+                {activeTab === 'vegas' && <VegasScannerSection />}
             </div>
         </div>
     );

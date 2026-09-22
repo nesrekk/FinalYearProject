@@ -31,11 +31,17 @@ from typing import Optional
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 import certifi
+import requests
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2 import pool
+from scipy.optimize import brentq
 
 import shots_lib
+
+load_dotenv()
+ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 
 # This Python.framework install doesn't ship a populated default CA trust
 # store, so plain urlopen() against some HTTPS hosts (e.g. cdn.nba.com) fails
@@ -109,8 +115,11 @@ _CACHE = {
     "team_badges": {"ts": 0, "data": {}},
     "standings_bdl": {},  # key: season -> {"ts": ..., "data": ...}
     "player_images": {},  # key: normalized_name -> {"ts": ..., "url": ...}
+    "championship_odds": {"ts": 0, "data": None},
 }
 _CACHE_TTL_SECONDS = 6 * 60 * 60
+
+TEAM_NAME_TO_ABBR = {info["name"]: abbr for abbr, info in TEAM_META.items()}
 
 
 @contextmanager
@@ -343,8 +352,11 @@ def fetch_nba_api_standings(season: int):
         west = []
         for row in rows:
             conf_raw = str(val(row, "Conference", "")).lower()
-            abbr = str(val(row, "TeamAbbreviation", "")).upper()
             team_name = f"{val(row, 'TeamCity', '')} {val(row, 'TeamName', '')}".strip()
+            # LeagueStandingsV3's real response has no abbreviation/tricode
+            # column at all (only TeamID/TeamCity/TeamName/TeamSlug) — derive
+            # it from the full team name instead of a column that doesn't exist.
+            abbr = TEAM_NAME_TO_ABBR.get(team_name, "")
             wins = int(val(row, "WINS", 0) or 0)
             losses = int(val(row, "LOSSES", 0) or 0)
             pct_val = float(val(row, "WinPCT", 0) or 0)
@@ -3218,6 +3230,211 @@ def get_current_news(date: Optional[str] = None, limit: int = 20):
     return {
         "date": date or datetime.now().strftime("%Y-%m-%d"),
         "items": items,
+    }
+
+
+# ─── Vegas vs. Machine: Championship Odds Scanner ───────────────────────────
+#
+# Cross-references real live NBA championship-winner odds (The Odds API)
+# against a simple, honestly-labeled team-strength proxy built from real
+# data this project already has (each team's real win percentage this
+# season, from player_season_stats). This is NOT a trained championship-
+# probability model — no such model exists in this project — so it's
+# disclosed as a naive proxy throughout, not represented as validated.
+#
+# The odds API has no NBA MVP/DPOY/ROY futures market (checked directly
+# against the live API before building this), only game lines and
+# championship-winner outrights, which is why this compares team odds
+# rather than the MVP-vs-market idea originally proposed.
+#
+# Vig removal uses Shin's (1992) method, implemented directly here rather
+# than via the `shin` PyPI package — that package requires a Rust
+# toolchain that fails to build against this Python version. The formula
+# itself is the same one that package implements, verified here against a
+# real 30-team live market before use (sane z ~1%, probabilities sum to 1,
+# rank order preserved, favorites get a slightly larger de-vig haircut
+# than longshots — the expected, documented behavior of Shin's method).
+
+def shin_probabilities(decimal_odds):
+    """
+    Shin's method for removing bookmaker overround under the assumption
+    that a fraction z of stake comes from better-informed bettors. Solves
+    for z such that the resulting probabilities sum to exactly 1, then
+    returns (probabilities, z).
+    """
+    pi = [1.0 / o for o in decimal_odds]
+    total_pi = sum(pi)
+
+    def implied(z):
+        return [
+            (math.sqrt(z * z + 4 * (1 - z) * (p_i ** 2) / total_pi) - z) / (2 * (1 - z))
+            for p_i in pi
+        ]
+
+    def sum_minus_one(z):
+        if z <= 0:
+            return math.sqrt(total_pi) - 1.0
+        return sum(implied(z)) - 1.0
+
+    if sum_minus_one(0.0) <= 0:
+        z = 0.0
+    else:
+        lo, hi = 0.0, 0.499999
+        while sum_minus_one(hi) > 0 and hi < 0.999999:
+            hi = 1 - (1 - hi) / 2
+        z = brentq(sum_minus_one, lo, hi, xtol=1e-12)
+
+    probabilities = [p_i / math.sqrt(total_pi) for p_i in pi] if z <= 0 else implied(z)
+    return probabilities, z
+
+
+def _fetch_championship_odds_live():
+    if not ODDS_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="ODDS_API_KEY isn't configured — set it in api/.env to enable the championship odds scanner.",
+        )
+    try:
+        resp = requests.get(
+            "https://api.the-odds-api.com/v4/sports/basketball_nba_championship_winner/odds/",
+            params={"apiKey": ODDS_API_KEY, "regions": "us", "markets": "outrights"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        events = resp.json()
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Live odds fetch failed: {e}")
+
+    if not events or not events[0].get("bookmakers"):
+        raise HTTPException(status_code=404, detail="No live championship odds available right now.")
+
+    # Devig each bookmaker's own full outcome set independently (each book
+    # has its own overround), then average the devigged probability per
+    # team across books for a more robust market consensus.
+    per_team_probs = {}
+    per_team_raw_odds = {}
+    books_used = []
+    z_values = []
+
+    for book in events[0]["bookmakers"]:
+        markets = book.get("markets", [])
+        if not markets:
+            continue
+        outcomes = markets[0].get("outcomes", [])
+        if len(outcomes) < 2:
+            continue
+        names = [o["name"] for o in outcomes]
+        odds = [o["price"] for o in outcomes]
+        probs, z = shin_probabilities(odds)
+        books_used.append(book.get("title", book.get("key")))
+        z_values.append(z)
+        for name, odd, prob in zip(names, odds, probs):
+            per_team_probs.setdefault(name, []).append(prob)
+            per_team_raw_odds.setdefault(name, []).append(odd)
+
+    if not per_team_probs:
+        raise HTTPException(status_code=404, detail="Live odds response had no usable outcomes.")
+
+    return {
+        "last_update": events[0]["bookmakers"][0].get("last_update"),
+        "books_used": books_used,
+        "avg_z": round(sum(z_values) / len(z_values), 4) if z_values else None,
+        "team_market_probability": {
+            name: round(sum(probs) / len(probs), 4) for name, probs in per_team_probs.items()
+        },
+        "team_best_odds": {
+            name: round(max(odds), 2) for name, odds in per_team_raw_odds.items()
+        },
+    }
+
+
+def get_championship_odds_cached():
+    cached = _CACHE["championship_odds"]
+    if cached["data"] and time.time() - cached["ts"] < _CACHE_TTL_SECONDS:
+        return cached["data"]
+    data = _fetch_championship_odds_live()
+    _CACHE["championship_odds"] = {"ts": time.time(), "data": data}
+    return data
+
+
+def _real_standings_win_pct(season: int):
+    """
+    Same source-priority chain /meta/current uses (live nba_api -> NBA CDN
+    -> balldontlie -> local DB last resort) — reused here rather than
+    re-derived, because a naive MAX(w_pct) GROUP BY team over
+    player_season_stats turned out to give nonsense (1.000 for several
+    teams) for the current in-progress season: that column is each
+    player's own win rate over the games THEY personally played, so a
+    player who only appeared in a short hot streak for a team distorts the
+    team-level MAX. The real standings feeds report the team's actual
+    win-loss record directly.
+    """
+    standings = (
+        fetch_nba_api_standings(season)
+        or fetch_nba_cdn_standings()
+        or fetch_balldontlie_standings(season)
+    )
+    win_pct_by_abbr = {}
+    if standings:
+        for conf in ("eastern", "western"):
+            for item in standings.get(conf, []):
+                try:
+                    win_pct_by_abbr[item["abbr"]] = float(item["pct"])
+                except (KeyError, ValueError, TypeError):
+                    continue
+    return win_pct_by_abbr
+
+
+@app.get("/odds/championship")
+def get_championship_odds_scanner():
+    """
+    Real live championship-winner odds (Shin's-method devigged) vs. a
+    naive real-win-percentage proxy, sorted by the size of the gap between
+    them. See module docstring above for what this is and isn't.
+    """
+    odds_data = get_championship_odds_cached()
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        season = get_latest_season(cursor)
+
+    win_pct_by_abbr = _real_standings_win_pct(season)
+
+    total_win_pct = sum(win_pct_by_abbr.values()) or 1.0
+    proxy_prob_by_abbr = {abbr: wp / total_win_pct for abbr, wp in win_pct_by_abbr.items()}
+
+    rows = []
+    for team_name, market_prob in odds_data["team_market_probability"].items():
+        abbr = TEAM_NAME_TO_ABBR.get(team_name)
+        proxy_prob = proxy_prob_by_abbr.get(abbr) if abbr else None
+        rows.append({
+            "team_name": team_name,
+            "team_abbreviation": abbr,
+            "market_probability": market_prob,
+            "best_odds": odds_data["team_best_odds"].get(team_name),
+            "proxy_probability": round(proxy_prob, 4) if proxy_prob is not None else None,
+            "value": round(market_prob - proxy_prob, 4) if proxy_prob is not None else None,
+            "win_pct": round(win_pct_by_abbr.get(abbr), 3) if abbr in win_pct_by_abbr else None,
+        })
+
+    rows.sort(key=lambda r: abs(r["value"]) if r["value"] is not None else -1, reverse=True)
+
+    return {
+        "season": season,
+        "last_update": odds_data["last_update"],
+        "books_used": odds_data["books_used"],
+        "avg_z": odds_data["avg_z"],
+        "methodology": (
+            "market_probability is Shin's-method devigged, averaged across all real bookmakers "
+            "in the live response. proxy_probability is each team's real win percentage this "
+            "season, normalized to sum to 1 across the teams with live odds — a naive proxy for "
+            "'who is actually good right now', NOT a trained championship-probability model. "
+            "value = market_probability - proxy_probability; a large positive value means the "
+            "market is pricing this team higher than its real season win rate alone would "
+            "suggest, a large negative value the opposite. This is a starting point for a "
+            "real-data comparison, not a betting recommendation."
+        ),
+        "teams": rows,
     }
 
 

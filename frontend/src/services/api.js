@@ -264,6 +264,12 @@ export async function fetchBlurredReveal(season, puzzleDate) {
     return response.data;
 }
 
+// ─── Vegas vs. Machine: Championship Odds Scanner ───────────────
+export async function fetchChampionshipOdds() {
+    const response = await axios.get(`${IMPACT_BASE}/odds/championship`);
+    return response.data;
+}
+
 // ─── Games: Trivia ───────────────────────────────────────────────
 export async function fetchTriviaDaily(season) {
     const response = await axios.get(
