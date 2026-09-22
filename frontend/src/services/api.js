@@ -264,6 +264,15 @@ export async function fetchBlurredReveal(season, puzzleDate) {
     return response.data;
 }
 
+// ─── Playoff Drop-off Forecaster ─────────────────────────────────
+export async function fetchPlayoffComparison(player, season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/players/playoff-comparison/${encodeURIComponent(player)}`,
+        { params: { season } }
+    );
+    return response.data;
+}
+
 // ─── Vegas vs. Machine: Championship Odds Scanner ───────────────
 export async function fetchChampionshipOdds() {
     const response = await axios.get(`${IMPACT_BASE}/odds/championship`);

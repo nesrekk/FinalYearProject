@@ -116,6 +116,7 @@ _CACHE = {
     "standings_bdl": {},  # key: season -> {"ts": ..., "data": ...}
     "player_images": {},  # key: normalized_name -> {"ts": ..., "url": ...}
     "championship_odds": {"ts": 0, "data": None},
+    "playoff_stats": {},  # key: season -> {"ts": ..., "data": {name_lower: row_dict}}
 }
 _CACHE_TTL_SECONDS = 6 * 60 * 60
 
@@ -705,6 +706,137 @@ def fetch_nba_api_player_profile(player_name: str, season: int):
         }
     except Exception:
         return None
+
+
+# ─── Playoff Drop-off Forecaster ─────────────────────────────────────────────
+#
+# Compares a player's real regular-season advanced stats (already in
+# player_season_stats) against their real playoff advanced stats for the
+# same season (live-fetched from nba_api, season_type_all_star="Playoffs").
+# One real, well-known effect: playoff defenses scheme specifically for a
+# team's few best options, minutes get more concentrated onto fewer
+# players, and possessions slow down — some players' efficiency holds up
+# under that and some collapses. This surfaces the real before/after
+# numbers rather than predicting anything: no regression, no invented
+# "playoff tax" formula, just what actually happened, with the real
+# playoff sample size (often well under 20 games) shown prominently since
+# small samples are genuinely noisy.
+
+PLAYOFF_COMPARISON_STATS = [
+    ("ts_pct", "TS%"), ("usg_pct", "USG%"), ("net_rating", "Net Rtg"),
+    ("ast_pct", "AST%"), ("reb_pct", "REB%"),
+]
+
+
+def _fetch_playoff_stats_season(season: int):
+    """Live-fetch ALL players' real playoff advanced stats for one season in
+    a single request (fast, ~0.5s for the whole league), cached by season."""
+    cached = _CACHE["playoff_stats"].get(season)
+    if cached and time.time() - cached["ts"] < _CACHE_TTL_SECONDS:
+        return cached["data"]
+
+    try:
+        from nba_api.stats.endpoints import leaguedashplayerstats
+
+        season_label = f"{season - 1}-{str(season)[-2:]}"
+        endpoint = leaguedashplayerstats.LeagueDashPlayerStats(
+            season=season_label,
+            season_type_all_star="Playoffs",
+            per_mode_detailed="PerGame",
+            measure_type_detailed_defense="Advanced",
+            timeout=45,
+        )
+        data = endpoint.get_dict()
+        result_sets = data.get("resultSets", []) or []
+        rows = result_sets[0].get("rowSet", []) if result_sets else []
+        headers = result_sets[0].get("headers", []) if result_sets else []
+        idx = {name: i for i, name in enumerate(headers)}
+
+        def val(row, key, default=None):
+            i = idx.get(key)
+            return row[i] if i is not None and i < len(row) else default
+
+        by_name = {}
+        for row in rows:
+            name = str(val(row, "PLAYER_NAME", "") or "").strip()
+            if not name:
+                continue
+            by_name[name.lower()] = {
+                "player_id": int(val(row, "PLAYER_ID", 0) or 0),
+                "player_name": name,
+                "team_abbreviation": str(val(row, "TEAM_ABBREVIATION", "") or ""),
+                "gp": int(val(row, "GP", 0) or 0),
+                "min": float(val(row, "MIN", 0) or 0),
+                "ts_pct": float(val(row, "TS_PCT", 0) or 0),
+                "usg_pct": float(val(row, "USG_PCT", 0) or 0),
+                "net_rating": float(val(row, "NET_RATING", 0) or 0),
+                "ast_pct": float(val(row, "AST_PCT", 0) or 0),
+                "reb_pct": float(val(row, "REB_PCT", 0) or 0),
+            }
+    except Exception:
+        by_name = {}
+
+    _CACHE["playoff_stats"][season] = {"ts": time.time(), "data": by_name}
+    return by_name
+
+
+@app.get("/players/playoff-comparison/{player_name}")
+def get_playoff_comparison(player_name: str, season: int):
+    """Real regular-season vs. real playoff advanced stats for one player-
+    season, side by side. 404s honestly if the player's team didn't make
+    the playoffs that season, or the player didn't appear — that's real
+    information too, not something to paper over."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        player_id, resolved_name = find_player(cursor, player_name)
+
+        cursor.execute(
+            """
+            SELECT team_abbreviation, gp, min, pts, ts_pct, usg_pct, net_rating, ast_pct, reb_pct
+            FROM player_season_stats
+            WHERE player_id = %s AND season = %s;
+            """,
+            (player_id, season),
+        )
+        row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail=f"No regular-season data for {resolved_name} in season {season}.")
+
+    regular = {
+        "team_abbreviation": row[0], "gp": row[1], "min": round(row[2], 1) if row[2] is not None else None,
+        "pts": round(row[3], 1) if row[3] is not None else None,
+        "ts_pct": row[4], "usg_pct": row[5], "net_rating": row[6], "ast_pct": row[7], "reb_pct": row[8],
+    }
+
+    playoff_by_name = _fetch_playoff_stats_season(season)
+    playoff = playoff_by_name.get(resolved_name.lower())
+
+    if not playoff:
+        return {
+            "player_id": player_id,
+            "player_name": resolved_name,
+            "season": season,
+            "regular_season": regular,
+            "playoffs": None,
+            "note": f"{resolved_name}'s team did not make the playoffs in season {season}, "
+                    f"or they did not appear in a playoff game — no real playoff data exists for this comparison.",
+        }
+
+    deltas = {}
+    for key, _ in PLAYOFF_COMPARISON_STATS:
+        r_val, p_val = regular.get(key), playoff.get(key)
+        deltas[key] = round(p_val - r_val, 4) if r_val is not None and p_val is not None else None
+
+    return {
+        "player_id": player_id,
+        "player_name": resolved_name,
+        "season": season,
+        "regular_season": regular,
+        "playoffs": playoff,
+        "deltas": deltas,
+        "small_sample_warning": playoff["gp"] < 10,
+    }
 
 
 def fetch_nba_games_by_date(date_str: str):
