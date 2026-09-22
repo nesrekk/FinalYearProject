@@ -15,6 +15,7 @@ const pageTitles = {
     draft: 'Draft Value Guide',
     rookies: 'Rookie Class Tracker',
     guess: 'Guess the Player',
+    higherlower: 'Higher or Lower',
 };
 
 const pageDescriptions = {
@@ -32,6 +33,7 @@ const pageDescriptions = {
     draft: 'Career value by draft slot, best-value picks, and draft class browsing',
     rookies: 'This season\'s rookie class, ranked by ROY probability, with historical comps',
     guess: 'Daily deduction game — guess today\'s mystery player from real stats',
+    higherlower: 'Chain higher-or-lower guesses on real career totals for as long as you can',
 };
 
 export default function PageHeader({ activePage }) {

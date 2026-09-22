@@ -2488,3 +2488,27 @@ body {
   font-size: 0.9rem;
 }
 
+.hb-hl-card {
+  width: 180px;
+  text-align: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-top: 3px solid;
+  border-radius: 12px;
+  padding: 1.25rem 1rem;
+}
+
+.hb-hl-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 1.6rem;
+  color: var(--accent-3);
+  margin-top: 0.6rem;
+}
+
+@media (max-width: 768px) {
+  .hb-hl-card {
+    width: 100%;
+  }
+}
+

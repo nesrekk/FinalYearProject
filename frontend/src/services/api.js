@@ -226,6 +226,14 @@ export async function fetchGuessReveal(season, puzzleDate) {
     return response.data;
 }
 
+// ─── Games: Higher or Lower ─────────────────────────────────────
+export async function fetchHigherLowerPool() {
+    return getWithCache('higher_lower_pool', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/games/higher-lower/pool`);
+        return response.data;
+    });
+}
+
 // A cache miss triggers the same rate-limited live fetch as Shot Charts —
 // give it the same generous timeout instead of the axios default.
 export async function fetchPlayerShotZones(playerName, season) {

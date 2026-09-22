@@ -1742,6 +1742,72 @@ def reveal_guess_the_player(season: Optional[int] = None, puzzle_date: Optional[
     return _guess_game_public(mystery)
 
 
+# ─── Games: Higher or Lower ─────────────────────────────────────────────────
+#
+# An arcade-style streak game: pick a career stat, chain guesses of whether
+# the next player's total is higher or lower than the current one's. Unlike
+# Guess the Player, this has no daily puzzle or hidden state to protect, so
+# the whole pool is sent once and the round-by-round logic runs client-side.
+#
+# "Career totals" here are estimated as SUM(season_ppg * season_gp) across
+# every season this project's DB actually has (2010-present) — not a real
+# full-career total the way basketball-reference would report one for an
+# older player. That's disclosed on the frontend rather than presented as
+# an official number.
+
+HIGHER_LOWER_MIN_CAREER_GAMES = 150
+
+
+@app.get("/games/higher-lower/pool")
+def get_higher_lower_pool():
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT p.player_id,
+                   MAX(p.player_name) AS player_name,
+                   (array_agg(p.team_abbreviation ORDER BY p.season DESC))[1] AS team_abbreviation,
+                   SUM(p.pts * p.gp) AS career_pts,
+                   SUM(p.reb * p.gp) AS career_reb,
+                   SUM(p.ast * p.gp) AS career_ast,
+                   SUM(p.gp) AS career_gp
+            FROM player_season_stats p
+            GROUP BY p.player_id
+            HAVING SUM(p.gp) >= %s;
+            """,
+            (HIGHER_LOWER_MIN_CAREER_GAMES,),
+        )
+        rows = cursor.fetchall()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="No qualified player pool.")
+
+    players = [
+        {
+            "player_id": player_id,
+            "player_name": player_name,
+            "team_abbreviation": team_abbreviation,
+            "career_pts": round(career_pts) if career_pts is not None else None,
+            "career_reb": round(career_reb) if career_reb is not None else None,
+            "career_ast": round(career_ast) if career_ast is not None else None,
+            "career_gp": int(career_gp) if career_gp is not None else None,
+        }
+        for player_id, player_name, team_abbreviation, career_pts, career_reb, career_ast, career_gp in rows
+    ]
+
+    return {
+        "min_career_games": HIGHER_LOWER_MIN_CAREER_GAMES,
+        "stat_options": [
+            {"key": "career_pts", "label": "Career Points"},
+            {"key": "career_reb", "label": "Career Rebounds"},
+            {"key": "career_ast", "label": "Career Assists"},
+            {"key": "career_gp", "label": "Career Games Played"},
+        ],
+        "pool_size": len(players),
+        "players": players,
+    }
+
+
 # ─── Trend Analysis (player career trajectory / team trajectory) ───────────
 
 TREND_PLAYER_STATS = ["pts", "reb", "ast", "stl", "blk", "ts_pct", "usg_pct", "net_rating", "min"]
