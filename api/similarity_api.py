@@ -300,6 +300,124 @@ def get_season_similarity(player_name: str, season: int, top_n: int = 10):
     }
 
 
+@app.get("/players/trajectory/{player_name}")
+def get_player_trajectory(player_name: str, season: int, top_n_comps: int = 5, project_years: int = 3):
+    """
+    CARMELO-style career trajectory: finds this player's closest real
+    statistical comps at this same age (the same era-normalized
+    season_similarity table /similarity/season uses, filtered to exclude
+    the player's own other seasons), then shows what those REAL comps
+    actually did at age+1, age+2, age+3 in their own real careers.
+    Nothing here is invented — every projected point is a real
+    similarity-weighted average of real historical outcomes, and the
+    comps themselves are always returned so the projection can be
+    audited rather than trusted blindly. If the target player already
+    has real data for a projected age (an older/established player), that
+    real outcome is returned alongside the projection as a sanity check.
+    """
+    project_years = max(1, min(project_years, 5))
+    top_n_comps = max(1, min(top_n_comps, 15))
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        player_id, resolved_name = find_player_id(cursor, player_name)
+
+        cursor.execute(
+            "SELECT age FROM player_season_stats WHERE player_id = %s AND season = %s;",
+            (player_id, season),
+        )
+        row = cursor.fetchone()
+        if not row or row[0] is None:
+            raise HTTPException(status_code=404, detail=f"No data for {resolved_name} in season {season}.")
+        current_age = row[0]
+
+        cursor.execute(
+            "SELECT season, age, pts FROM player_season_stats WHERE player_id = %s ORDER BY season;",
+            (player_id,),
+        )
+        career = [{"season": r[0], "age": r[1], "pts": r[2]} for r in cursor.fetchall()]
+
+        cursor.execute(
+            """
+            SELECT s.similar_player_id, p.player_name, s.similar_season, s.similarity_score, p.age
+            FROM season_similarity s
+            JOIN player_season_stats p
+                ON s.similar_player_id = p.player_id AND s.similar_season = p.season
+            WHERE s.source_player_id = %s AND s.source_season = %s
+              AND s.similar_player_id != %s
+            ORDER BY s.similarity_score DESC
+            LIMIT %s;
+            """,
+            (player_id, season, player_id, top_n_comps),
+        )
+        comps = [
+            {"player_id": r[0], "player_name": r[1], "season": r[2], "similarity": round(r[3], 4), "age": r[4]}
+            for r in cursor.fetchall()
+        ]
+
+        if not comps:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No comparable player-seasons found for {resolved_name} in {season}.",
+            )
+
+        comp_ids = list({c["player_id"] for c in comps})
+        cursor.execute(
+            "SELECT player_id, age, season, pts FROM player_season_stats WHERE player_id = ANY(%s);",
+            (comp_ids,),
+        )
+        comp_stats_by_id = {}
+        for pid, age, comp_season, pts in cursor.fetchall():
+            if age is None or pts is None:
+                continue
+            comp_stats_by_id.setdefault(pid, {})[age] = {"season": comp_season, "pts": pts}
+
+    own_by_age = {c["age"]: c for c in career if c["age"] is not None}
+
+    projection = []
+    for offset in range(1, project_years + 1):
+        target_age = current_age + offset
+        contributing = []
+        for c in comps:
+            future = comp_stats_by_id.get(c["player_id"], {}).get(c["age"] + offset)
+            if future:
+                contributing.append({
+                    "player_name": c["player_name"],
+                    "similarity": c["similarity"],
+                    "pts": future["pts"],
+                })
+
+        if contributing:
+            total_weight = sum(x["similarity"] for x in contributing)
+            weighted_pts = sum(x["pts"] * x["similarity"] for x in contributing) / total_weight
+            ceiling_pts = max(x["pts"] for x in contributing)
+            floor_pts = min(x["pts"] for x in contributing)
+        else:
+            weighted_pts = ceiling_pts = floor_pts = None
+
+        actual = own_by_age.get(target_age)
+        projection.append({
+            "age": target_age,
+            "projected_pts": round(weighted_pts, 1) if weighted_pts is not None else None,
+            "ceiling_pts": round(ceiling_pts, 1) if ceiling_pts is not None else None,
+            "floor_pts": round(floor_pts, 1) if floor_pts is not None else None,
+            "n_comps_with_data": len(contributing),
+            "contributing_comps": contributing,
+            "actual_pts": round(actual["pts"], 1) if actual and actual["pts"] is not None else None,
+            "actual_season": actual["season"] if actual else None,
+        })
+
+    return {
+        "player_id": player_id,
+        "player_name": resolved_name,
+        "season": season,
+        "current_age": current_age,
+        "career": career,
+        "comps": comps,
+        "projection": projection,
+    }
+
+
 @app.get("/similarity/career/{player_name}")
 def get_career_similarity(player_name: str, top_n: int = 10):
     """

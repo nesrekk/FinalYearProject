@@ -7,6 +7,7 @@ import ModelValidationSection from '../ModelValidationSection';
 import PlayerArchetypesSection from '../PlayerArchetypesSection';
 import RadarCompareSection from '../RadarCompareSection';
 import TrendAnalysisSection from '../TrendAnalysisSection';
+import TrajectoryForecasterSection from '../TrajectoryForecasterSection';
 
 const tabs = [
     { id: 'similarity', label: 'Season Similarity', icon: 'bar_chart' },
@@ -16,6 +17,7 @@ const tabs = [
     { id: 'archetypes', label: 'Player Archetypes', icon: 'biotech' },
     { id: 'radar', label: 'Radar Compare', icon: 'radar' },
     { id: 'trends', label: 'Trend Analysis', icon: 'trending_up' },
+    { id: 'trajectory', label: 'Career Trajectory', icon: 'timeline' },
 ];
 
 export default function AnalyticsSection() {
@@ -45,6 +47,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'archetypes' && <PlayerArchetypesSection />}
                 {activeTab === 'radar' && <RadarCompareSection />}
                 {activeTab === 'trends' && <TrendAnalysisSection />}
+                {activeTab === 'trajectory' && <TrajectoryForecasterSection />}
             </div>
         </div>
     );

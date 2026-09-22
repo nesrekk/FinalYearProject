@@ -56,6 +56,14 @@ export async function fetchSeasonSimilarity(player, season) {
     return response.data;
 }
 
+export async function fetchPlayerTrajectory(player, season, topNComps = 5, projectYears = 3) {
+    const response = await axios.get(
+        `${SIMILARITY_BASE}/players/trajectory/${encodeURIComponent(player)}`,
+        { params: { season, top_n_comps: topNComps, project_years: projectYears } }
+    );
+    return response.data;
+}
+
 export async function fetchPlayerSuggestions(query, limit = 8) {
     const response = await axios.get(
         `${SIMILARITY_BASE}/players/search`,
