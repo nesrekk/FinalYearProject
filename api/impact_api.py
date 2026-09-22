@@ -19,6 +19,7 @@ import json
 import math
 import os
 import pickle
+import random
 import re
 import ssl
 import time
@@ -1901,6 +1902,148 @@ def guess_blurred_player(guess_player_name: str, season: Optional[int] = None, p
 def reveal_blurred_player(season: Optional[int] = None, puzzle_date: Optional[str] = None):
     _, _, _, mystery = _blurred_player_resolve(season, puzzle_date)
     return _guess_game_public(mystery)
+
+
+# ─── Games: Trivia ───────────────────────────────────────────────────────────
+#
+# Five real-data multiple-choice questions a day, built from the same
+# qualified season pool the other games use. The correct answer is always
+# today's actual real value (this season's real top scorer, etc.) — only
+# which real players show up as decoys, and the shuffle order, rotate daily
+# via the same date-hash technique as the other games. Nothing is invented:
+# a decoy is always some other real player from the same pool, never a
+# fabricated stat.
+
+TRIVIA_ARCHETYPES = [
+    "Bench Role Player", "Elite Two-Way Big", "Primary Scorer",
+    "3-and-D Wing", "Rim Protector", "Playmaker",
+]
+
+
+def _trivia_rng(season: int, puzzle_date: date, question_id: str) -> random.Random:
+    seed = f"trivia-{question_id}-{puzzle_date.isoformat()}-{season}"
+    return random.Random(seed)
+
+
+def _trivia_player_question(question_id, prompt, pool_rows, stat_key, season, puzzle_date):
+    ranked = sorted(
+        (r for r in pool_rows if r.get(stat_key) is not None),
+        key=lambda r: r[stat_key], reverse=True,
+    )
+    if not ranked:
+        return None
+    correct = ranked[0]
+    band = ranked[1:9]  # plausible near-leaders, not random scrubs
+    rng = _trivia_rng(season, puzzle_date, question_id)
+    decoys = rng.sample(band, min(3, len(band)))
+    options = [correct] + decoys
+    rng.shuffle(options)
+    question = {
+        "id": question_id,
+        "question": prompt,
+        "options": [{"id": str(o["player_id"]), "label": o["player_name"]} for o in options],
+    }
+    return question, str(correct["player_id"])
+
+
+def _trivia_youngest_question(pool_rows, season, puzzle_date):
+    ranked_by_pts = sorted(
+        (r for r in pool_rows if r.get("pts") is not None),
+        key=lambda r: r["pts"], reverse=True,
+    )
+    top10 = [r for r in ranked_by_pts[:10] if r.get("age") is not None]
+    if len(top10) < 4:
+        return None
+    correct = min(top10, key=lambda r: r["age"])
+    band = [r for r in top10 if r["player_id"] != correct["player_id"]]
+    rng = _trivia_rng(season, puzzle_date, "youngest_top10")
+    decoys = rng.sample(band, min(3, len(band)))
+    options = [correct] + decoys
+    rng.shuffle(options)
+    question = {
+        "id": "youngest_top10",
+        "question": "Who is the youngest player among this season's top 10 scorers?",
+        "options": [{"id": str(o["player_id"]), "label": o["player_name"]} for o in options],
+    }
+    return question, str(correct["player_id"])
+
+
+def _trivia_archetype_question(pool_rows, season, puzzle_date):
+    counts = {}
+    for r in pool_rows:
+        a = r.get("archetype")
+        if a:
+            counts[a] = counts.get(a, 0) + 1
+    if not counts:
+        return None
+    correct_label = max(counts, key=counts.get)
+    wrong_labels = [a for a in TRIVIA_ARCHETYPES if a != correct_label]
+    rng = _trivia_rng(season, puzzle_date, "top_archetype")
+    decoys = rng.sample(wrong_labels, min(3, len(wrong_labels)))
+    options = [correct_label] + decoys
+    rng.shuffle(options)
+    question = {
+        "id": "top_archetype",
+        "question": "Which statistical archetype has the most players this season?",
+        "options": [{"id": a, "label": a} for a in options],
+    }
+    return question, correct_label
+
+
+def _trivia_build_all(pool_rows, season: int, puzzle_date: date):
+    specs = [
+        ("top_scorer", "Who leads the league in points per game this season?", "pts"),
+        ("top_rebounder", "Who leads the league in rebounds per game this season?", "reb"),
+        ("top_assister", "Who leads the league in assists per game this season?", "ast"),
+    ]
+    results = []
+    for question_id, prompt, stat_key in specs:
+        result = _trivia_player_question(question_id, prompt, pool_rows, stat_key, season, puzzle_date)
+        if result:
+            results.append(result)
+    youngest = _trivia_youngest_question(pool_rows, season, puzzle_date)
+    if youngest:
+        results.append(youngest)
+    archetype = _trivia_archetype_question(pool_rows, season, puzzle_date)
+    if archetype:
+        results.append(archetype)
+    return results
+
+
+def _trivia_resolve_pool(season: Optional[int]):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        resolved_season = season or _guess_game_default_season(cursor)
+        check_season_exists(cursor, resolved_season)
+        pool_rows = _guess_game_pool(cursor, resolved_season)
+    if not pool_rows:
+        raise HTTPException(status_code=404, detail=f"No qualified player pool for season {resolved_season}.")
+    return resolved_season, pool_rows
+
+
+@app.get("/games/trivia/daily")
+def get_trivia_daily(season: Optional[int] = None):
+    resolved_season, pool_rows = _trivia_resolve_pool(season)
+    resolved_date = date.today()
+    results = _trivia_build_all(pool_rows, resolved_season, resolved_date)
+    if not results:
+        raise HTTPException(status_code=404, detail="Could not build today's trivia questions.")
+    return {
+        "date": resolved_date.isoformat(),
+        "season": resolved_season,
+        "questions": [q for q, _ in results],
+    }
+
+
+@app.get("/games/trivia/guess")
+def guess_trivia(question_id: str, option_id: str, season: Optional[int] = None, puzzle_date: Optional[str] = None):
+    resolved_date = _parse_puzzle_date(puzzle_date)
+    resolved_season, pool_rows = _trivia_resolve_pool(season)
+    results = _trivia_build_all(pool_rows, resolved_season, resolved_date)
+    match = next((correct_id for q, correct_id in results if q["id"] == question_id), None)
+    if match is None:
+        raise HTTPException(status_code=404, detail=f"Unknown question {question_id}.")
+    return {"correct": option_id == match, "correct_option_id": match}
 
 
 # ─── Trend Analysis (player career trajectory / team trajectory) ───────────

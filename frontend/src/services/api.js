@@ -256,6 +256,23 @@ export async function fetchBlurredReveal(season, puzzleDate) {
     return response.data;
 }
 
+// ─── Games: Trivia ───────────────────────────────────────────────
+export async function fetchTriviaDaily(season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/games/trivia/daily`,
+        { params: season ? { season } : {} }
+    );
+    return response.data;
+}
+
+export async function submitTriviaGuess(questionId, optionId, season, puzzleDate) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/games/trivia/guess`,
+        { params: { question_id: questionId, option_id: optionId, season, puzzle_date: puzzleDate } }
+    );
+    return response.data;
+}
+
 // ─── Games: Higher or Lower ─────────────────────────────────────
 export async function fetchHigherLowerPool() {
     return getWithCache('higher_lower_pool', 10 * 60 * 1000, async () => {
