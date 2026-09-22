@@ -8,6 +8,7 @@ const navItems = [
     { id: 'standings', label: 'Standings', icon: 'emoji_events' },
     { id: 'teams', label: 'Teams', icon: 'swords' },
     { id: 'players', label: 'Players', icon: 'person' },
+    { id: 'compare', label: 'Player Comparison', icon: 'compare_arrows' },
     { id: 'leaders', label: 'Stat Leaders', icon: 'leaderboard' },
     { id: 'shotcharts', label: 'Shot Charts', icon: 'adjust' },
     { id: 'analytics', label: 'Analytics', icon: 'insights' },

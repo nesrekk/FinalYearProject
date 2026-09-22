@@ -192,6 +192,33 @@ export async function fetchRadarProfile(playerName, season) {
     return response.data;
 }
 
+// ─── Player Comparison ─────────────────────────────────────────
+export async function fetchCompareProfile(playerName, season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/players/compare-profile/${encodeURIComponent(playerName)}`,
+        { params: { season } }
+    );
+    return response.data;
+}
+
+// A cache miss triggers the same rate-limited live fetch as Shot Charts —
+// give it the same generous timeout instead of the axios default.
+export async function fetchPlayerShotZones(playerName, season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/shots/player/${encodeURIComponent(playerName)}/zones`,
+        { params: { season }, timeout: 6 * 60 * 1000 }
+    );
+    return response.data;
+}
+
+export async function fetchLeagueShotZones(season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/shots/league-zones/${season}`,
+        { timeout: 90 * 1000 }
+    );
+    return response.data;
+}
+
 // ─── Trade Analyzer ────────────────────────────────────────────
 export async function fetchTradeTeams(season) {
     const response = await axios.get(`${IMPACT_BASE}/trade/teams/${season}`);

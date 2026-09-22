@@ -1654,6 +1654,23 @@ body {
     border-bottom: 1px solid var(--border);
   }
 
+  .hb-compare-bio {
+    width: 100%;
+  }
+
+  .hb-tape-row {
+    grid-template-columns: 56px 1fr 56px;
+    gap: 0.4rem;
+  }
+
+  .hb-tape-value {
+    font-size: 0.72rem;
+  }
+
+  .hb-tape-label {
+    font-size: 0.58rem;
+  }
+
   .page-header {
     padding: 1rem;
     flex-direction: column;
@@ -2333,5 +2350,141 @@ body {
 .hb-delta {
   font-family: 'JetBrains Mono', monospace;
   font-variant-numeric: tabular-nums;
+}
+
+/* ── Player Comparison page ─────────────────────────────────────────── */
+.hb-compare-bio {
+  width: 200px;
+  text-align: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-top: 3px solid;
+  border-radius: 12px;
+  padding: 1.25rem 1rem;
+}
+
+.hb-compare-bio-name {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text-primary);
+  margin: 0.5rem 0 0.15rem;
+}
+
+.hb-compare-bio-archetype {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.6rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--accent-dim);
+  color: var(--accent-3);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.hb-tape-row {
+  display: grid;
+  grid-template-columns: 74px 1fr 74px;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.hb-tape-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.hb-tape-bars {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hb-tape-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+  display: flex;
+}
+
+.hb-tape-bar--left {
+  justify-content: flex-end;
+}
+
+.hb-tape-bar--right {
+  justify-content: flex-start;
+}
+
+.hb-tape-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.hb-tape-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.hb-compare-legend {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.hb-legend-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+}
+
+.hb-percentile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+}
+
+.hb-percentile-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  text-align: center;
+}
+
+.hb-percentile-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.hb-percentile-row {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 0.9rem;
 }
 

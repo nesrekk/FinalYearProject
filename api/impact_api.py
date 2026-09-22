@@ -1404,6 +1404,165 @@ def get_radar_profile(player_name: str, season: int):
     }
 
 
+# ─── Player Comparison page ─────────────────────────────────────────────────
+# Same qualified-pool convention as /radar (min>=15mpg, gp>=20) so a
+# percentile means the same thing whichever feature computed it.
+
+COMPOSITE_SKILL_AXES = [
+    ("scoring", "Scoring", "pts"),
+    ("efficiency", "Efficiency", "ts_pct"),
+    ("playmaking", "Playmaking", "ast"),
+    ("rebounding", "Rebounding", "reb"),
+    ("defense", "Defense", "dbpm"),
+    ("impact", "Impact", "bpm"),
+]
+
+COMPARE_DETAIL_STATS = [
+    ("ts_pct", "TS%"), ("efg_pct", "eFG%"), ("usg_pct", "USG%"),
+    ("ast_pct", "AST%"), ("reb_pct", "REB%"), ("tov_pct", "TOV%"),
+    ("oreb_pct", "OREB%"), ("net_rating", "Net Rtg"),
+    ("ftr", "FTr"), ("tpar", "3PAr"),
+]
+
+
+def _percentile_rank(value, pool_values):
+    if value is None or not pool_values:
+        return None
+    n = len(pool_values)
+    below_or_equal = sum(1 for v in pool_values if v <= value)
+    return round(100 * below_or_equal / n, 1)
+
+
+@app.get("/players/compare-profile/{player_name}")
+def get_compare_profile(player_name: str, season: int):
+    """
+    Everything the Player Comparison page needs for one player: bio, "Tale
+    of the Tape" raw stats (mapping the reference's Offensive/Defensive/
+    Overall Impact rows onto this project's own OBPM/DBPM/BPM), 6 composite
+    Skill Profile percentiles, and a granular percentile stat table.
+    "Archetype" (statistical clustering) is used in place of a scouted
+    offensive/defensive role — this project has no real role or physical
+    (wingspan/height/weight) data, which is disclosed on the frontend
+    rather than invented here.
+    """
+    cols = [
+        "pts", "reb", "ast", "ts_pct", "efg_pct", "usg_pct",
+        "ast_pct", "reb_pct", "tov_pct", "oreb_pct", "net_rating",
+        "fta", "fga", "fg3a", "bpm", "obpm", "dbpm", "vorp", "bpm_position",
+        "age", "gp", "min", "team_abbreviation",
+    ]
+    with get_db() as conn:
+        cursor = conn.cursor()
+        player_id, resolved_name = find_player(cursor, player_name)
+
+        cursor.execute(
+            f"""
+            SELECT p.player_id, {', '.join(f'p.{c}' for c in cols)}, c.archetype
+            FROM player_season_stats p
+            LEFT JOIN player_clusters c
+                ON c.player_id = p.player_id AND c.season = p.season
+            WHERE p.season = %s AND p.min >= %s AND p.gp >= %s;
+            """,
+            (season, RADAR_MIN_MINUTES, RADAR_MIN_GAMES),
+        )
+        pool = cursor.fetchall()
+
+    if not pool:
+        raise HTTPException(status_code=404, detail=f"No qualified player data for season {season}.")
+
+    row_cols = ["player_id"] + cols + ["archetype"]
+    pool_by_id = {row[0]: dict(zip(row_cols, row)) for row in pool}
+    if player_id not in pool_by_id:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{resolved_name} doesn't meet the qualified-pool minimum "
+                   f"(min>={RADAR_MIN_MINUTES}mpg, gp>={RADAR_MIN_GAMES}) for season {season}.",
+        )
+
+    # FTr / 3PAr aren't stored columns — derive for the whole pool (needed
+    # to rank this player's percentile against them), same pattern as the
+    # derived radar metrics above.
+    for v in pool_by_id.values():
+        v["ftr"] = (v["fta"] / v["fga"]) if v.get("fga") else None
+        v["tpar"] = (v["fg3a"] / v["fga"]) if v.get("fga") else None
+
+    player = pool_by_id[player_id]
+    n = len(pool_by_id)
+
+    def pct_entry(stat, label):
+        this_value = player.get(stat)
+        pool_values = [v[stat] for v in pool_by_id.values() if v.get(stat) is not None]
+        return {
+            "key": stat,
+            "label": label,
+            "value": round(float(this_value), 3) if this_value is not None else None,
+            "percentile": _percentile_rank(this_value, pool_values),
+        }
+
+    return {
+        "player_id": player_id,
+        "player_name": resolved_name,
+        "season": season,
+        "pool_size": n,
+        "bio": {
+            "team_abbreviation": player.get("team_abbreviation"),
+            "age": player.get("age"),
+            "gp": player.get("gp"),
+            "min": round(player["min"], 1) if player.get("min") is not None else None,
+            "position": _position_label(player["bpm_position"]) if player.get("bpm_position") is not None else None,
+            "archetype": player.get("archetype"),
+        },
+        "tale_of_the_tape": {
+            "pts": player.get("pts"), "reb": player.get("reb"), "ast": player.get("ast"),
+            "ts_pct": player.get("ts_pct"), "usg_pct": player.get("usg_pct"),
+            "obpm": player.get("obpm"), "dbpm": player.get("dbpm"), "bpm": player.get("bpm"),
+        },
+        "skill_profile": [pct_entry(stat, label) for _, label, stat in COMPOSITE_SKILL_AXES],
+        "detail_stats": [pct_entry(stat, label) for stat, label in COMPARE_DETAIL_STATS],
+    }
+
+
+@app.get("/shots/player/{player_name}/zones")
+def get_player_shot_zones(player_name: str, season: int):
+    """A player's own FG% by the 5 real NBA shot zones (Restricted Area,
+    Paint, Mid-Range, Corner 3, Above the Break 3), for the comparison
+    page's shot-chart section. Fetches (and caches forever) just the ONE
+    requested season — one live request instead of the ~N+1 a full-career
+    fetch needs, so this is both much faster and has far fewer places to
+    hit a transient network failure. If a full-career fetch already ran
+    for this player (e.g. from the single-player Shot Charts page), this
+    season is already cached and returns instantly either way."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        player_id, resolved_name = find_player(cursor, player_name)
+
+    season_label = f"{season - 1}-{str(season)[-2:]}"
+    try:
+        shots_lib.ensure_season_shots_cached(int(player_id), resolved_name, season_label)
+    except shots_lib.ShotsUnavailable as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except shots_lib.ShotsFetchFailed as e:
+        raise HTTPException(status_code=502, detail=f"Live shot fetch failed: {e}")
+
+    shots = shots_lib.get_shots_for_season(int(player_id), season_label)
+    if not shots:
+        raise HTTPException(status_code=404, detail=f"No shot data for {resolved_name} in {season_label}.")
+    zones = shots_lib.compute_zone_stats(shots)
+    return {"player_id": player_id, "player_name": resolved_name, "season": season_label, "zones": zones}
+
+
+@app.get("/shots/league-zones/{season}")
+def get_league_shot_zones(season: int):
+    """League-wide FG% by the same 5 zones, one cheap aggregate call per
+    season (not per player), cached forever after the first fetch."""
+    season_label = f"{season - 1}-{str(season)[-2:]}"
+    try:
+        zones = shots_lib.get_league_zone_stats(season_label)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Live league shot fetch failed: {e}")
+    return {"season": season_label, "zones": zones}
+
+
 # ─── Trend Analysis (player career trajectory / team trajectory) ───────────
 
 TREND_PLAYER_STATS = ["pts", "reb", "ast", "stl", "blk", "ts_pct", "usg_pct", "net_rating", "min"]

@@ -14,6 +14,7 @@ import NewsSection from './components/pages/NewsSection';
 import StandingsSection from './components/pages/StandingsSection';
 import TeamComparison from './components/pages/TeamComparison';
 import PlayerStats from './components/pages/PlayerStats';
+import PlayerComparison from './components/pages/PlayerComparison';
 import ShotCharts from './components/pages/ShotCharts';
 import AnalyticsSection from './components/pages/AnalyticsSection';
 import StatLeaders from './components/pages/StatLeaders';
@@ -38,6 +39,7 @@ export default function App() {
       case 'standings': return <StandingsSection />;
       case 'teams': return <TeamComparison />;
       case 'players': return <PlayerStats />;
+      case 'compare': return <PlayerComparison />;
       case 'shotcharts': return <ShotCharts />;
       case 'analytics': return <AnalyticsSection />;
       case 'leaders': return <StatLeaders />;
