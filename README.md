@@ -4,6 +4,8 @@ A full-stack NBA analytics platform built as a final-year project: real historic
 
 The project's guiding rule, followed throughout: **never fabricate data**. Where a real number exists, it's used and its source is traceable to a real endpoint or a real database column. Where the project doesn't have real data for something (player height/wingspan, a trained championship-probability model, MVP betting odds), that gap is disclosed in the UI rather than invented — several features below explicitly say what they *aren't* for exactly this reason.
 
+![Dashboard](docs/screenshots/dashboard.png)
+
 ## What's in it
 
 **Core stats & browsing**
@@ -15,17 +17,26 @@ The project's guiding rule, followed throughout: **never fabricate data**. Where
 - Head-to-head statistical profiles with percentile ranks against a real qualified-player pool
 - Fit Analysis: usage/spacing/role-overlap flags computed from real percentile thresholds — explicitly labeled as a simplified heuristic, not a trained synergy model, since no real lineup/play-by-play data exists to validate one
 
+![Player Comparison](docs/screenshots/player_comparison.png)
+
 **Analytics** (multi-tab)
 - Season Similarity & Player Archetypes — cosine-similarity and K-Means clustering, both **era-normalized**: every feature is z-scored within its own season before comparison, so a 2011 stat line and a 2025 stat line are judged relative to their own era instead of the raw numbers (which drift a lot over 16 seasons of pace/3PT-volume change)
 - Awards Race, Impact Rankings, Model Validation (ROC curves, SHAP feature breakdowns, leave-one-season-out backtests against real historical winners)
 - Career Trajectory Forecaster — CARMELO-style projection: finds a player's closest real statistical comps at the same age, plots what those comps *actually* did in their following seasons, weighted by similarity. If the player already has real future data, it's overlaid so the projection can be checked against what really happened.
+
+![Career Trajectory Forecaster](docs/screenshots/trajectory.png)
+
 - Vegas vs. Machine — real live NBA championship-winner odds (multiple real sportsbooks), de-vigged with Shin's (1992) method, compared against each team's real win percentage. Explicitly disclosed as a naive proxy, not a trained model.
+
+![Vegas Scanner](docs/screenshots/vegas_scanner.png)
 
 **Games** (daily, stateless, all built on the same real qualified-player pool)
 - Guess the Player — Wordle-style deduction with team/position/archetype/stat clues
 - Blurred Player — a real headshot that sharpens with each wrong guess (proxied through the backend so the image URL can't just be read off the page)
 - Higher or Lower — chain guesses on real career totals
 - Trivia — 5 daily multiple-choice questions; the correct answer is always today's real value, decoys are always other real players
+
+![Games hub](docs/screenshots/games_hub.png)
 
 **Dashboard**
 - Awards Race cards show real seed and "won it before" streak badges next to each prediction — informational context pulled from real standings and real award history, never folded into the model's own probability number
