@@ -3,6 +3,7 @@ import { fetchPlayerSuggestions, fetchSeasonSimilarity } from '../services/api';
 import DataTable from './DataTable';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import Icon from './common/Icon';
 
 export default function SimilaritySection() {
     const [player, setPlayer] = useState('');
@@ -55,7 +56,7 @@ export default function SimilaritySection() {
     return (
         <section className="dashboard-card">
             <h2 className="card-title">
-                <span className="card-icon">📊</span>
+                <span className="card-icon"><Icon name="bar_chart" /></span>
                 Season Similarity
                 <InfoTooltip
                     label="How Season Similarity works"

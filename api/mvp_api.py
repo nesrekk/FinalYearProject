@@ -444,13 +444,13 @@ def predict_mvp(season: int, top_n: int = 15):
             )
 
         # Pull season data
-        cols = ", ".join(["player_id", "player_name"] + FEATURES)
+        cols = ", ".join(["player_id", "player_name", "team_abbreviation"] + FEATURES)
         cursor.execute(
             f"SELECT {cols} FROM player_season_stats WHERE season = %s;",
             (season,),
         )
         rows = cursor.fetchall()
-        col_names = ["player_id", "player_name"] + FEATURES
+        col_names = ["player_id", "player_name", "team_abbreviation"] + FEATURES
         df = pd.DataFrame(rows, columns=col_names)
 
     # Drop rows with NULLs in features
@@ -478,6 +478,7 @@ def predict_mvp(season: int, top_n: int = 15):
                 "rank": i + 1,
                 "player_id": int(row["player_id"]),
                 "player_name": row["player_name"],
+                "team_abbreviation": row["team_abbreviation"],
                 "mvp_probability": round(float(row["mvp_probability"]), 4),
                 "pts": round(float(row["pts"]), 1),
                 "ts_pct": round(float(row["ts_pct"]), 3),
@@ -502,7 +503,7 @@ def predict_dpoy(season: int, top_n: int = 15):
         cursor.execute("SELECT MIN(season), MAX(season) FROM player_season_stats;")
         season_min, season_max = cursor.fetchone()
 
-        cols = ", ".join(["player_id", "player_name"] + DPOY_FEATURES + ["gp"])
+        cols = ", ".join(["player_id", "player_name", "team_abbreviation"] + DPOY_FEATURES + ["gp"])
         cursor.execute(
             f"""
             SELECT {cols} FROM player_season_stats
@@ -525,7 +526,7 @@ def predict_dpoy(season: int, top_n: int = 15):
                    f"Available range: {available_range}.",
         )
 
-    col_names = ["player_id", "player_name"] + DPOY_FEATURES + ["gp"]
+    col_names = ["player_id", "player_name", "team_abbreviation"] + DPOY_FEATURES + ["gp"]
     df = pd.DataFrame(rows, columns=col_names)
     df = df.dropna(subset=DPOY_FEATURES).reset_index(drop=True)
     if df.empty:
@@ -547,6 +548,7 @@ def predict_dpoy(season: int, top_n: int = 15):
                 "rank": i + 1,
                 "player_id": int(row["player_id"]),
                 "player_name": row["player_name"],
+                "team_abbreviation": row["team_abbreviation"],
                 "dpoy_probability": round(float(row["dpoy_probability"]), 4),
                 "def_rating": round(float(row["def_rating"]), 1),
                 "net_rating": round(float(row["net_rating"]), 1),
@@ -579,7 +581,7 @@ def predict_roy(season: int, top_n: int = 15):
                        f"already veterans before the data starts, so ROY isn't computed for it.",
             )
 
-        cols = ", ".join(["player_id", "player_name"] + ROY_FEATURES)
+        cols = ", ".join(["player_id", "player_name", "team_abbreviation"] + ROY_FEATURES)
         cursor.execute(
             f"""
             SELECT {cols} FROM player_season_stats p
@@ -605,7 +607,7 @@ def predict_roy(season: int, top_n: int = 15):
                    f"Available range: {available_range}.",
         )
 
-    col_names = ["player_id", "player_name"] + ROY_FEATURES
+    col_names = ["player_id", "player_name", "team_abbreviation"] + ROY_FEATURES
     df = pd.DataFrame(rows, columns=col_names)
     df = df.dropna(subset=ROY_FEATURES).reset_index(drop=True)
     if df.empty:
@@ -627,6 +629,7 @@ def predict_roy(season: int, top_n: int = 15):
                 "rank": i + 1,
                 "player_id": int(row["player_id"]),
                 "player_name": row["player_name"],
+                "team_abbreviation": row["team_abbreviation"],
                 "roy_probability": round(float(row["roy_probability"]), 4),
                 "pts": round(float(row["pts"]), 1),
                 "ts_pct": round(float(row["ts_pct"]), 3),
@@ -653,7 +656,7 @@ def predict_all_nba(season: int):
         cursor.execute("SELECT MIN(season), MAX(season) FROM player_season_stats;")
         season_min, season_max = cursor.fetchone()
 
-        cols = ", ".join(["player_id", "player_name"] + ALLNBA_FEATURES)
+        cols = ", ".join(["player_id", "player_name", "team_abbreviation"] + ALLNBA_FEATURES)
         cursor.execute(
             f"""
             SELECT {cols} FROM player_season_stats
@@ -676,7 +679,7 @@ def predict_all_nba(season: int):
                    f"Available range: {available_range}.",
         )
 
-    col_names = ["player_id", "player_name"] + ALLNBA_FEATURES
+    col_names = ["player_id", "player_name", "team_abbreviation"] + ALLNBA_FEATURES
     df = pd.DataFrame(rows, columns=col_names)
     df = df.dropna(subset=ALLNBA_FEATURES).reset_index(drop=True)
     if df.empty:
@@ -707,6 +710,7 @@ def predict_all_nba(season: int):
                 "predicted_team": tier_for_rank(i + 1),
                 "player_id": int(row["player_id"]),
                 "player_name": row["player_name"],
+                "team_abbreviation": row["team_abbreviation"],
                 "all_nba_probability": round(float(row["all_nba_probability"]), 4),
                 "pts": round(float(row["pts"]), 1),
                 "reb": round(float(row["reb"]), 1),

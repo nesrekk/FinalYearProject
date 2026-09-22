@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchArchetypes, fetchSeasonClusters, fetchPlayerClusterHistory, fetchLivePlayerSuggestions } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import Icon from './common/Icon';
 
 const PALETTE = ['#38bdf8', '#f87171', '#facc15', '#a78bfa', '#34d399', '#fb923c'];
 
@@ -108,7 +109,7 @@ export default function PlayerArchetypesSection() {
     return (
         <section className="dashboard-card">
             <h2 className="card-title">
-                <span className="card-icon">🧬</span>
+                <span className="card-icon"><Icon name="biotech" /></span>
                 Player Archetypes
                 <InfoTooltip label="How this clustering works" title="Unsupervised K-Means clustering">
                     Unlike MVP/DPOY/ROY (trained to predict a known label) this has no "correct answer" fed

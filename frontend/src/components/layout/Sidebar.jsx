@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
+import Icon from '../common/Icon';
 
 const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
-    { id: 'scores', label: 'Live Scores', icon: '🏀' },
-    { id: 'news', label: 'News', icon: '📰' },
-    { id: 'standings', label: 'Standings', icon: '🏆' },
-    { id: 'teams', label: 'Teams', icon: '⚔️' },
-    { id: 'players', label: 'Players', icon: '👤' },
-    { id: 'leaders', label: 'Stat Leaders', icon: '📈' },
-    { id: 'shotcharts', label: 'Shot Charts', icon: '🎯' },
-    { id: 'analytics', label: 'Analytics', icon: '📊' },
-    { id: 'trade', label: 'Trade Analyzer', icon: '🔄' },
-    { id: 'draft', label: 'Draft Value Guide', icon: '🎓' },
-    { id: 'rookies', label: 'Rookie Class Tracker', icon: '🌱' },
+    { id: 'dashboard', label: 'Dashboard', icon: 'space_dashboard' },
+    { id: 'scores', label: 'Live Scores', icon: 'sports_basketball' },
+    { id: 'news', label: 'News', icon: 'newspaper' },
+    { id: 'standings', label: 'Standings', icon: 'emoji_events' },
+    { id: 'teams', label: 'Teams', icon: 'swords' },
+    { id: 'players', label: 'Players', icon: 'person' },
+    { id: 'leaders', label: 'Stat Leaders', icon: 'leaderboard' },
+    { id: 'shotcharts', label: 'Shot Charts', icon: 'adjust' },
+    { id: 'analytics', label: 'Analytics', icon: 'insights' },
+    { id: 'trade', label: 'Trade Analyzer', icon: 'swap_horiz' },
+    { id: 'draft', label: 'Draft Value Guide', icon: 'school' },
+    { id: 'rookies', label: 'Rookie Class Tracker', icon: 'eco' },
 ];
 
 export default function Sidebar({ activePage, onNavigate }) {
@@ -26,12 +27,12 @@ export default function Sidebar({ activePage, onNavigate }) {
                 onClick={() => setCollapsed((c) => !c)}
                 aria-label="Toggle navigation"
             >
-                {collapsed ? '☰' : '✕'}
+                <Icon name={collapsed ? 'menu' : 'close'} />
             </button>
 
             <aside className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}>
                 <div className="sidebar-brand">
-                    <span className="sidebar-logo">🏀</span>
+                    <span className="sidebar-logo"><Icon name="sports_basketball" /></span>
                     {!collapsed && <span className="sidebar-title">NBA Hub</span>}
                 </div>
 
@@ -47,7 +48,7 @@ export default function Sidebar({ activePage, onNavigate }) {
                             }}
                             title={item.label}
                         >
-                            <span className="sidebar-link-icon">{item.icon}</span>
+                            <span className="sidebar-link-icon"><Icon name={item.icon} /></span>
                             {!collapsed && <span className="sidebar-link-label">{item.label}</span>}
                         </button>
                     ))}

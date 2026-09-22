@@ -90,6 +90,14 @@ export async function fetchLivePlayerSuggestions(query, limit = 20) {
     return response.data;
 }
 
+export async function fetchPlayersTable(season, minMinutes = 0) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/players/table/${season}`,
+        { params: { min_minutes: minMinutes } }
+    );
+    return response.data;
+}
+
 // ─── MVP Prediction ────────────────────────────────────────────
 export async function fetchMVPPrediction(season) {
     const response = await axios.get(`${MVP_BASE}/mvp/predict/${season}`);

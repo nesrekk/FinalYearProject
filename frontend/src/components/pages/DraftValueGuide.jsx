@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchDraftClass, fetchDraftValueCurve, fetchDraftBestValue } from '../../services/api';
 import Loader from '../Loader';
 import InfoTooltip from '../common/InfoTooltip';
+import Icon from '../common/Icon';
 
 const CHART_W = 640, CHART_H = 260, PAD_L = 56, PAD_R = 16, PAD_T = 16, PAD_B = 40;
 
@@ -107,7 +108,7 @@ export default function DraftValueGuide() {
         <div className="page page-draft fade-in">
             <div className="dashboard-card">
                 <h2 className="card-title">
-                    <span className="card-icon">🎓</span>
+                    <span className="card-icon"><Icon name="school" /></span>
                     Draft Value Analysis
                     <InfoTooltip label="How this works" title="Career value, not scouting">
                         "Value" here is impact_score_raw — the same efficiency-weighted composite
@@ -135,7 +136,7 @@ export default function DraftValueGuide() {
 
             <div className="dashboard-card" style={{ marginTop: '1rem' }}>
                 <h2 className="card-title">
-                    <span className="card-icon">💎</span>
+                    <span className="card-icon"><Icon name="diamond" /></span>
                     Best Value / Most Underperformed
                 </h2>
                 <div className="tab-bar" style={{ marginBottom: '1rem' }}>
@@ -174,7 +175,7 @@ export default function DraftValueGuide() {
 
             <div className="dashboard-card" style={{ marginTop: '1rem' }}>
                 <h2 className="card-title">
-                    <span className="card-icon">📋</span>
+                    <span className="card-icon"><Icon name="list_alt" /></span>
                     Browse a Draft Class
                 </h2>
                 <div className="input-row">

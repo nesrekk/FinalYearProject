@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchBacktestDetail, fetchBacktestComparison, fetchShapCandidates, fetchShapBreakdown, fetchAllNBABacktest } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import Icon from './common/Icon';
 
 const ROC_SIZE = 320;
 const ROC_PAD = 36;
@@ -234,7 +235,7 @@ export default function ModelValidationSection() {
     return (
         <section className="dashboard-card">
             <h2 className="card-title">
-                <span className="card-icon">🧪</span>
+                <span className="card-icon"><Icon name="science" /></span>
                 Model Validation
                 <InfoTooltip label="How this backtest works" title="Leave-one-season-out validation">
                     For each historical season, every model is retrained on the other seasons only and
@@ -279,7 +280,7 @@ export default function ModelValidationSection() {
                                 >
                                     <td>
                                         {m.model_type === model ? '▶ ' : ''}{m.model_label}
-                                        {m.model_type === bestModelType ? ' 🏅' : ''}
+                                        {m.model_type === bestModelType ? <Icon name="military_tech" size="0.9em" style={{ marginLeft: 4 }} /> : ''}
                                     </td>
                                     <td>{pct(m.top1_accuracy)}</td>
                                     <td>{pct(m.top3_accuracy)}</td>
@@ -294,7 +295,7 @@ export default function ModelValidationSection() {
             )}
             {!isAllNba && (
                 <p className="page-subtitle" style={{ marginTop: '-0.75rem', marginBottom: '1rem' }}>
-                    Click a row to see that model's per-season detail below. 🏅 marks the best top-5 accuracy for {award.toUpperCase()}.
+                    Click a row to see that model's per-season detail below. The <Icon name="military_tech" size="0.9em" /> badge marks the best top-5 accuracy for {award.toUpperCase()}.
                 </p>
             )}
 

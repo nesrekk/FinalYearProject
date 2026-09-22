@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import StatCard from '../common/StatCard';
+import TeamLogo from '../common/TeamLogo';
+import PlayerHeadshot from '../common/PlayerHeadshot';
+import Icon from '../common/Icon';
+import { abbrFromTeamName } from '../../utils/teamAssets';
 import { mockLiveScores } from '../../services/mockData';
 import {
     fetchCurrentMeta,
@@ -13,10 +17,10 @@ import {
 import { localDateIso } from '../../utils/date';
 
 const AWARD_META = {
-    mvp: { icon: '🏆', label: 'MVP' },
-    dpoy: { icon: '🛡️', label: 'DPOY' },
-    roy: { icon: '🌱', label: 'ROY' },
-    allnba: { icon: '⭐', label: 'All-NBA' },
+    mvp: { icon: 'emoji_events', label: 'MVP' },
+    dpoy: { icon: 'shield', label: 'DPOY' },
+    roy: { icon: 'eco', label: 'ROY' },
+    allnba: { icon: 'star', label: 'All-NBA' },
 };
 
 // /meta/current reports next-season-if-October-or-later, which usually has
@@ -151,25 +155,25 @@ export default function DashboardHome({ onNavigate }) {
             {/* Quick Stats */}
             <div className="stat-cards-row">
                 <StatCard
-                    icon="🏀"
+                    icon={<Icon name="sports_basketball" />}
                     label="Games Today"
                     value={games.length}
                     sub={`${liveGames} live · ${finalGames} final · ${scheduledGames} scheduled`}
                 />
                 <StatCard
-                    icon="🔥"
+                    icon={<Icon name="local_fire_department" />}
                     label="Top Scorer"
                     value={meta?.top_scorer?.player_name || 'Scoring Leader'}
                     sub={meta?.top_scorer?.ppg != null ? `${meta.top_scorer.ppg} PPG` : 'Current season'}
                 />
                 <StatCard
-                    icon="🏆"
+                    icon={<Icon name="emoji_events" />}
                     label="#1 Seed"
                     value={topSeed ? topSeed.team.replace('Oklahoma City ', '') : 'Thunder'}
                     sub={topSeed ? `${topSeed.w}-${topSeed.l} (${topSeed.pct})` : '47-13 (.783)'}
                 />
                 <StatCard
-                    icon="📈"
+                    icon={<Icon name="trending_up" />}
                     label="MVP Favorite"
                     value={awardsRace.mvp?.player_name || (awardsLoading ? 'Loading…' : 'No prediction')}
                     sub={awardsRace.mvp ? awardCardLine('mvp', awardsRace.mvp) : (awardsRace.season ? seasonLabel(awardsRace.season) : '')}
@@ -180,19 +184,19 @@ export default function DashboardHome({ onNavigate }) {
             <h3 className="section-heading">Explore</h3>
             <div className="quick-links-grid">
                 {[
-                    { id: 'scores', icon: '🏀', title: 'Live Scores', desc: 'Real-time game updates' },
-                    { id: 'standings', icon: '🏆', title: 'Standings', desc: 'Conference rankings' },
-                    { id: 'teams', icon: '⚔️', title: 'Team Comparison', desc: 'Head-to-head stats' },
-                    { id: 'players', icon: '👤', title: 'Player Stats', desc: 'Browse player data' },
-                    { id: 'shotcharts', icon: '🎯', title: 'Shot Charts', desc: 'Shooting visualizations' },
-                    { id: 'analytics', icon: '📊', title: 'Analytics', desc: 'Similarity & predictions' },
+                    { id: 'scores', icon: 'sports_basketball', title: 'Live Scores', desc: 'Real-time game updates' },
+                    { id: 'standings', icon: 'emoji_events', title: 'Standings', desc: 'Conference rankings' },
+                    { id: 'teams', icon: 'swords', title: 'Team Comparison', desc: 'Head-to-head stats' },
+                    { id: 'players', icon: 'person', title: 'Player Stats', desc: 'Browse player data' },
+                    { id: 'shotcharts', icon: 'adjust', title: 'Shot Charts', desc: 'Shooting visualizations' },
+                    { id: 'analytics', icon: 'insights', title: 'Analytics', desc: 'Similarity & predictions' },
                 ].map((link) => (
                     <button
                         key={link.id}
                         className="quick-link-card"
                         onClick={() => onNavigate(link.id)}
                     >
-                        <span className="quick-link-icon">{link.icon}</span>
+                        <span className="quick-link-icon"><Icon name={link.icon} /></span>
                         <span className="quick-link-title">{link.title}</span>
                         <span className="quick-link-desc">{link.desc}</span>
                     </button>
@@ -203,22 +207,46 @@ export default function DashboardHome({ onNavigate }) {
             <h3 className="section-heading">
                 Awards Race {awardsRace.season ? `· ${seasonLabel(awardsRace.season)}` : ''}
             </h3>
-            <div className="quick-links-grid">
+            <div className="award-cards-grid">
                 {['mvp', 'dpoy', 'roy', 'allnba'].map((award) => {
                     const row = awardsRace[award];
+                    const prob = row
+                        ? (award === 'allnba' ? row.all_nba_probability : row[`${award}_probability`])
+                        : null;
                     return (
                         <button
                             key={award}
-                            className="quick-link-card"
+                            className="award-card"
                             onClick={() => onNavigate('analytics')}
                         >
-                            <span className="quick-link-icon">{AWARD_META[award].icon}</span>
-                            <span className="quick-link-title">
-                                {awardsLoading ? 'Loading…' : (row?.player_name || 'No prediction')}
-                            </span>
-                            <span className="quick-link-desc">
-                                {AWARD_META[award].label} · {awardsLoading ? '' : awardCardLine(award, row)}
-                            </span>
+                            <div className="award-card-top">
+                                <span className="pill-badge"><Icon name={AWARD_META[award].icon} size="0.9em" /> {AWARD_META[award].label}</span>
+                                {prob != null && <span className="award-card-prob">{(prob * 100).toFixed(1)}%</span>}
+                            </div>
+                            {awardsLoading ? (
+                                <p className="award-card-name">Loading…</p>
+                            ) : row ? (
+                                <>
+                                    <div className="entity-row" style={{ margin: '0.6rem 0' }}>
+                                        <PlayerHeadshot playerId={row.player_id} playerName={row.player_name} size={44} />
+                                        <div className="entity-row-text">
+                                            <span className="entity-row-name">{row.player_name}</span>
+                                            <span className="entity-row-sub">
+                                                <TeamLogo abbreviation={row.team_abbreviation} size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                                                {row.team_abbreviation}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {prob != null && (
+                                        <div className="probability-bar">
+                                            <div className="probability-bar-fill" style={{ width: `${Math.min(100, prob * 100)}%` }} />
+                                        </div>
+                                    )}
+                                    <p className="award-card-desc">{awardCardLine(award, row)}</p>
+                                </>
+                            ) : (
+                                <p className="award-card-name">No prediction available</p>
+                            )}
                         </button>
                     );
                 })}
@@ -257,16 +285,10 @@ export default function DashboardHome({ onNavigate }) {
                             <tr key={`${team.abbr}-${idx}`}>
                                 <td className="rank-cell">{idx + 1}</td>
                                 <td className="team-cell">
-                                    {team.logo ? (
-                                        <img
-                                            src={team.logo}
-                                            alt={team.abbr}
-                                            style={{ width: '24px', height: '24px', objectFit: 'contain' }}
-                                        />
-                                    ) : (
-                                        <span className="team-abbr-badge">{team.abbr}</span>
-                                    )}
-                                    {team.team}
+                                    <span className="entity-row">
+                                        <TeamLogo abbreviation={team.abbr || abbrFromTeamName(team.team)} size={24} />
+                                        {team.team}
+                                    </span>
                                 </td>
                                 <td>{team.w}-{team.l}</td>
                                 <td className="text-accent">{team.pct}</td>

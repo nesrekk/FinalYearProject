@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchRadarProfile, fetchLivePlayerSuggestions } from '../services/api';
 import InfoTooltip from './common/InfoTooltip';
+import Icon from './common/Icon';
 
 // Debounced suggestion fetch for one search slot, with a cancellation guard
 // so an earlier keystroke's response can't resolve after a later one and
@@ -189,7 +190,7 @@ export default function RadarCompareSection() {
     return (
         <section className="dashboard-card">
             <h2 className="card-title">
-                <span className="card-icon">🕸️</span>
+                <span className="card-icon"><Icon name="radar" /></span>
                 Radar Comparison
                 <InfoTooltip label="How this works" title="Percentile-based radar chart">
                     Each axis is the player's percentile rank (0-100) on that stat among all qualified players

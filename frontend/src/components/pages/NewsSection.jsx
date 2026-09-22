@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchCurrentNews } from '../../services/api';
 import { localDateIso } from '../../utils/date';
+import Icon from '../common/Icon';
 
 const categoryColors = {
     'Game Recap': '#38bdf8',
@@ -107,7 +108,7 @@ export default function NewsSection() {
                             style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}
                         >
                             <div className="news-card-image">
-                                <span className="news-card-placeholder-icon">📰</span>
+                                <span className="news-card-placeholder-icon"><Icon name="newspaper" /></span>
                             </div>
                             <div className="news-card-body">
                                 <span

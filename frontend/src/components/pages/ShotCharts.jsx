@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchLivePlayerSuggestions, fetchPlayerShots } from '../../services/api';
+import Icon from '../common/Icon';
 
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
@@ -262,7 +263,7 @@ export default function ShotCharts() {
     <div className="page page-shotcharts fade-in">
       <div className="dashboard-card" style={{ marginBottom: '1rem' }}>
         <h2 className="card-title">
-          <span className="card-icon">🎯</span>
+          <span className="card-icon"><Icon name="adjust" /></span>
           Shot Chart
         </h2>
 

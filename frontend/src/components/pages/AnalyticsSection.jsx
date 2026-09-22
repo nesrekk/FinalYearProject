@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Icon from '../common/Icon';
 import SimilaritySection from '../SimilaritySection';
 import AwardsRaceSection from '../AwardsRaceSection';
 import ImpactSection from '../ImpactSection';
@@ -8,13 +9,13 @@ import RadarCompareSection from '../RadarCompareSection';
 import TrendAnalysisSection from '../TrendAnalysisSection';
 
 const tabs = [
-    { id: 'similarity', label: 'Season Similarity', icon: '📊' },
-    { id: 'mvp', label: 'Awards Race', icon: '🏆' },
-    { id: 'impact', label: 'Impact Rankings', icon: '⚡' },
-    { id: 'validation', label: 'Model Validation', icon: '🧪' },
-    { id: 'archetypes', label: 'Player Archetypes', icon: '🧬' },
-    { id: 'radar', label: 'Radar Compare', icon: '🕸️' },
-    { id: 'trends', label: 'Trend Analysis', icon: '📈' },
+    { id: 'similarity', label: 'Season Similarity', icon: 'bar_chart' },
+    { id: 'mvp', label: 'Awards Race', icon: 'emoji_events' },
+    { id: 'impact', label: 'Impact Rankings', icon: 'bolt' },
+    { id: 'validation', label: 'Model Validation', icon: 'science' },
+    { id: 'archetypes', label: 'Player Archetypes', icon: 'biotech' },
+    { id: 'radar', label: 'Radar Compare', icon: 'radar' },
+    { id: 'trends', label: 'Trend Analysis', icon: 'trending_up' },
 ];
 
 export default function AnalyticsSection() {
@@ -30,7 +31,7 @@ export default function AnalyticsSection() {
                         className={`tab-btn ${activeTab === tab.id ? 'tab-btn--active' : ''}`}
                         onClick={() => setActiveTab(tab.id)}
                     >
-                        <span className="tab-icon">{tab.icon}</span> {tab.label}
+                        <span className="tab-icon"><Icon name={tab.icon} /></span> {tab.label}
                     </button>
                 ))}
             </div>

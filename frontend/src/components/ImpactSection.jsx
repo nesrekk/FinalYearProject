@@ -3,6 +3,7 @@ import { fetchRawImpact, fetchStarImpact, fetchBpmLeaderboard } from '../service
 import DataTable from './DataTable';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import Icon from './common/Icon';
 
 export default function ImpactSection() {
     const [season, setSeason] = useState('2026');
@@ -53,7 +54,7 @@ export default function ImpactSection() {
     return (
         <section className="dashboard-card">
             <h2 className="card-title">
-                <span className="card-icon">⚡</span>
+                <span className="card-icon"><Icon name="bolt" /></span>
                 Impact Rankings
                 <InfoTooltip
                     label="How Impact Rankings work"

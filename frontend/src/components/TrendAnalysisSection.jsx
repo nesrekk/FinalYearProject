@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchPlayerHistory, fetchTeamHistory, fetchTradeTeams, fetchLivePlayerSuggestions } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import Icon from './common/Icon';
 
 const PLAYER_STATS = [
     { key: 'pts', label: 'Points', digits: 1 },
@@ -177,7 +178,7 @@ export default function TrendAnalysisSection() {
     return (
         <section className="dashboard-card">
             <h2 className="card-title">
-                <span className="card-icon">📈</span>
+                <span className="card-icon"><Icon name="trending_up" /></span>
                 Trend Analysis
                 <InfoTooltip label="How this works" title="Career / franchise trajectory">
                     Player trends use every season on record for that player, unfiltered — injury-shortened

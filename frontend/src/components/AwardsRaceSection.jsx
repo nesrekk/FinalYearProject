@@ -3,11 +3,12 @@ import { fetchMVPPrediction, fetchDPOYPrediction, fetchROYPrediction, fetchAllNB
 import DataTable from './DataTable';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import Icon from './common/Icon';
 
 const AWARDS = {
     mvp: {
         label: 'MVP',
-        icon: '🏆',
+        icon: 'emoji_events',
         fetch: fetchMVPPrediction,
         probKey: 'mvp_probability',
         columns: ['Rank', 'Player', 'Probability %', 'PTS', 'TS%', 'Net Rtg'],
@@ -19,7 +20,7 @@ const AWARDS = {
     },
     dpoy: {
         label: 'DPOY',
-        icon: '🛡️',
+        icon: 'shield',
         fetch: fetchDPOYPrediction,
         probKey: 'dpoy_probability',
         columns: ['Rank', 'Player', 'Probability %', 'Def Rtg', 'Net Rtg', 'STL', 'BLK', 'REB%'],
@@ -31,7 +32,7 @@ const AWARDS = {
     },
     roy: {
         label: 'ROY',
-        icon: '🌱',
+        icon: 'eco',
         fetch: fetchROYPrediction,
         probKey: 'roy_probability',
         columns: ['Rank', 'Player', 'Probability %', 'PTS', 'TS%', 'USG%', 'Net Rtg', 'MIN'],
@@ -43,7 +44,7 @@ const AWARDS = {
     },
     allnba: {
         label: 'All-NBA',
-        icon: '⭐',
+        icon: 'star',
         fetch: fetchAllNBAPrediction,
         probKey: 'all_nba_probability',
         columns: ['Rank', 'Team', 'Player', 'Probability %', 'PTS', 'REB', 'AST', 'Net Rtg'],
@@ -104,7 +105,7 @@ export default function AwardsRaceSection() {
     return (
         <section className="dashboard-card">
             <h2 className="card-title">
-                <span className="card-icon">{cfg.icon}</span>
+                <span className="card-icon"><Icon name={cfg.icon} /></span>
                 Awards Race
                 <InfoTooltip label={`How ${cfg.label} Prediction works`} title="Under the hood">
                     {cfg.blurb}
@@ -119,7 +120,7 @@ export default function AwardsRaceSection() {
                         className={`tab-btn ${award === id ? 'tab-btn--active' : ''}`}
                         onClick={() => switchAward(id)}
                     >
-                        <span className="tab-icon">{a.icon}</span> {a.label}
+                        <span className="tab-icon"><Icon name={a.icon} /></span> {a.label}
                     </button>
                 ))}
             </div>

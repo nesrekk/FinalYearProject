@@ -474,6 +474,7 @@ def fetch_nba_api_player_leaders(stat_key: str, season: int, top_n: int = 10):
 
         cleaned = []
         for row in rows:
+            player_id = get_val(row, "PLAYER_ID", None)
             player_name = str(get_val(row, "PLAYER_NAME", "") or "")
             team_abbr = str(get_val(row, "TEAM_ABBREVIATION", "") or "")
             stat_val = get_val(row, stat_col, None)
@@ -482,9 +483,9 @@ def fetch_nba_api_player_leaders(stat_key: str, season: int, top_n: int = 10):
             value = float(stat_val)
             if is_pct and value <= 1:
                 value *= 100
-            cleaned.append((player_name, team_abbr, round(value, 2)))
+            cleaned.append((player_id, player_name, team_abbr, round(value, 2)))
 
-        cleaned.sort(key=lambda x: x[2], reverse=True)
+        cleaned.sort(key=lambda x: x[3], reverse=True)
         top_rows = cleaned[:max(1, min(int(top_n), 50))]
         return {
             "season": int(season),
@@ -493,9 +494,10 @@ def fetch_nba_api_player_leaders(stat_key: str, season: int, top_n: int = 10):
             "results": [
                 {
                     "rank": i + 1,
-                    "player_name": r[0],
-                    "team_abbr": r[1],
-                    "value": r[2],
+                    "player_id": r[0],
+                    "player_name": r[1],
+                    "team_abbr": r[2],
+                    "value": r[3],
                 }
                 for i, r in enumerate(top_rows)
             ],
@@ -1679,6 +1681,89 @@ def simulate_trade(season: int, team_a: str, player_a_id: int, team_b: str, play
     }
 
 
+ESTIMATED_POSITION_LABELS = {1: "PG", 2: "SG", 3: "SF", 4: "PF", 5: "C"}
+
+
+def _position_label(bpm_position):
+    if bpm_position is None:
+        return None
+    return ESTIMATED_POSITION_LABELS[max(1, min(5, round(bpm_position)))]
+
+
+@app.get("/players/table/{season}")
+def get_players_table(season: int, min_minutes: float = 0.0):
+    """
+    Every player for a season with traditional, advanced, and plus-minus
+    stats in one row — powers a full sortable/filterable player table
+    (like Basketball-Reference/CraftedNBA's stat tables), not just a
+    single-player lookup.
+
+    "position" here is NOT an official roster position — this project has
+    no position data anywhere in its pipeline (confirmed: not in the raw
+    nba_api CSVs, not fetchable without a new data source). It's derived
+    from BPM's own position-estimation regression (scripts/build_bpm_vorp.py),
+    rounded to the nearest of 5 buckets — a real, disclosed estimate, not a
+    guess dressed up as fact. Treat it as "plays like a ~PG", not a roster fact.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        check_season_exists(cursor, season)
+
+        cursor.execute(
+            """
+            SELECT player_id, player_name, team_abbreviation, age, gp, min,
+                   pts, reb, ast, stl, blk, tov, fg_pct, fg3_pct, ft_pct,
+                   fgm, fga, fg3m, fg3a, ftm, fta, w_pct, plus_minus,
+                   ts_pct, usg_pct, off_rating, def_rating, net_rating,
+                   ast_pct, reb_pct, efg_pct, oreb_pct, tov_pct,
+                   bpm, obpm, dbpm, vorp, bpm_position
+            FROM player_season_stats
+            WHERE season = %s AND min >= %s
+            ORDER BY min DESC;
+            """,
+            (season, min_minutes),
+        )
+        rows = cursor.fetchall()
+
+    def r3(v):
+        return round(float(v), 3) if v is not None else None
+
+    def r1(v):
+        return round(float(v), 1) if v is not None else None
+
+    results = []
+    for row in rows:
+        (player_id, player_name, team_abbreviation, age, gp, minutes,
+         pts, reb, ast, stl, blk, tov, fg_pct, fg3_pct, ft_pct,
+         fgm, fga, fg3m, fg3a, ftm, fta, w_pct, plus_minus,
+         ts_pct, usg_pct, off_rating, def_rating, net_rating,
+         ast_pct, reb_pct, efg_pct, oreb_pct, tov_pct,
+         bpm, obpm, dbpm, vorp, bpm_position) = row
+        results.append({
+            "player_id": int(player_id), "player_name": player_name,
+            "team_abbreviation": team_abbreviation, "age": age, "gp": gp,
+            "min": r1(minutes), "position": _position_label(bpm_position),
+            "traditional": {
+                "pts": r1(pts), "reb": r1(reb), "ast": r1(ast), "stl": r1(stl),
+                "blk": r1(blk), "tov": r1(tov), "fgm": r1(fgm), "fga": r1(fga),
+                "fg_pct": r3(fg_pct), "fg3m": r1(fg3m), "fg3a": r1(fg3a),
+                "fg3_pct": r3(fg3_pct), "ftm": r1(ftm), "fta": r1(fta),
+                "ft_pct": r3(ft_pct), "w_pct": r3(w_pct), "plus_minus": r1(plus_minus),
+            },
+            "advanced": {
+                "ts_pct": r3(ts_pct), "efg_pct": r3(efg_pct), "usg_pct": r3(usg_pct),
+                "off_rating": r1(off_rating), "def_rating": r1(def_rating),
+                "net_rating": r1(net_rating), "ast_pct": r3(ast_pct),
+                "reb_pct": r3(reb_pct), "oreb_pct": r3(oreb_pct), "tov_pct": r3(tov_pct),
+            },
+            "plus_minus": {
+                "bpm": r3(bpm), "obpm": r3(obpm), "dbpm": r3(dbpm), "vorp": r3(vorp),
+            },
+        })
+
+    return {"season": season, "min_minutes": min_minutes, "count": len(results), "results": results}
+
+
 @app.get("/impact/bpm/{season}")
 def get_bpm_leaderboard(season: int, top_n: int = 20, min_minutes: float = 20.0, min_games: int = 30):
     """
@@ -2418,7 +2503,7 @@ def get_stat_leaders(stat_key: str, season: Optional[int] = None, top_n: int = 1
 
         cursor.execute(
             f"""
-            SELECT player_name, team_abbreviation, {selected_col}
+            SELECT player_id, player_name, team_abbreviation, {selected_col}
             FROM player_season_stats
             WHERE season = %s
               AND {selected_col} IS NOT NULL
@@ -2446,9 +2531,10 @@ def get_stat_leaders(stat_key: str, season: Optional[int] = None, top_n: int = 1
         "results": [
             {
                 "rank": i + 1,
-                "player_name": row[0],
-                "team_abbr": row[1],
-                "value": to_display_value(row[2]),
+                "player_id": row[0],
+                "player_name": row[1],
+                "team_abbr": row[2],
+                "value": to_display_value(row[3]),
             }
             for i, row in enumerate(rows)
         ],

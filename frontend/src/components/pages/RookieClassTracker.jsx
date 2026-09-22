@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchROYPrediction, fetchSeasonSimilarity } from '../../services/api';
 import Loader from '../Loader';
 import InfoTooltip from '../common/InfoTooltip';
+import Icon from '../common/Icon';
 
 function fmt(v, digits = 1) {
     return v == null ? '—' : Number(v).toFixed(digits);
@@ -55,7 +56,7 @@ export default function RookieClassTracker() {
         <div className="page page-rookies fade-in">
             <div className="dashboard-card">
                 <h2 className="card-title">
-                    <span className="card-icon">🌱</span>
+                    <span className="card-icon"><Icon name="eco" /></span>
                     Rookie Class Tracker
                     <InfoTooltip label="How this works" title="Every rookie, tracked live">
                         "Rookie" here means the player's first season anywhere in this database — the
