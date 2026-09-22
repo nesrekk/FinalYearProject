@@ -30,6 +30,11 @@ The project's guiding rule, followed throughout: **never fabricate data**. Where
 
 ![Vegas Scanner](docs/screenshots/vegas_scanner.png)
 
+- Playoff Drop-off Forecaster — real regular-season advanced stats vs. real playoff advanced stats for the same player-season (live-fetched from the NBA's own stats, one request per season covers the whole league). No predicted "playoff tax" — just what actually happened, with a small-sample warning under 10 real playoff games.
+- Draft Prospect Comp Finder — ~105,000 real D1 college player-seasons (CollegeBasketballData.com), era-normalized the same way the NBA side is, matched by name to real NBA rookie outcomes wherever a real match exists (~55% of NBA rookies since 2015 — international and G-League/draft-and-stash players never appear in US college data). Shows what a prospect's closest real college comps actually did as NBA rookies.
+
+![Draft Prospect Comp Finder](docs/screenshots/draft_prospects.png)
+
 **Games** (daily, stateless, all built on the same real qualified-player pool)
 - Guess the Player — Wordle-style deduction with team/position/archetype/stat clues
 - Blurred Player — a real headshot that sharpens with each wrong guess (proxied through the backend so the image URL can't just be read off the page)
@@ -94,11 +99,16 @@ cd api
 /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m uvicorn impact_api:app     --port 8002 --reload
 ```
 
-### Optional: live championship odds
-The Vegas Scanner needs a free [The Odds API](https://the-odds-api.com/) key (free tier: ~500 requests/month). Without it, every other feature still works — that one tab just reports the key is missing.
+### Optional: live championship odds and college data
+Two Analytics tabs need their own free API keys. Without them, every other feature still works — those two tabs just report the key is missing.
 ```bash
-echo "ODDS_API_KEY=your_key_here" > api/.env
+cat >> api/.env << 'EOF'
+ODDS_API_KEY=your_odds_api_key_here
+CBBD_API_KEY=your_cbbd_api_key_here
+EOF
 ```
+- **ODDS_API_KEY** (Vegas Scanner) — [The Odds API](https://the-odds-api.com/), free tier ~500 requests/month.
+- **CBBD_API_KEY** (Draft Prospects) — [CollegeBasketballData.com](https://collegebasketballdata.com/key), free, one-field email signup. Only needed to re-run `scripts/fetch_college_stats.py`; the Draft Prospects tab itself just reads from Postgres once that script has run.
 
 ### Start the frontend
 ```bash
