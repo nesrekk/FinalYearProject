@@ -13,6 +13,7 @@ Usage:
 """
 
 from contextlib import contextmanager
+import hashlib
 import html
 import json
 import math
@@ -1561,6 +1562,184 @@ def get_league_shot_zones(season: int):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Live league shot fetch failed: {e}")
     return {"season": season_label, "zones": zones}
+
+
+# ─── Games: Guess the Player ────────────────────────────────────────────────
+#
+# A Wordle-style daily deduction game: one mystery player from the season's
+# qualified pool (same min≥15mpg, gp≥20 pool used by Radar/Compare), guesses
+# get per-field feedback (team/position/archetype match, age/pts/reb/ast
+# higher-or-lower). Entirely built from real player_season_stats /
+# player_clusters data already in the DB — nothing invented.
+#
+# Deliberately stateless: the mystery player is derived by hashing
+# puzzle_date+season into an index in the pool, so nothing is stored
+# server-side and a restart never loses "today's" puzzle. The frontend
+# passes its own local calendar date as puzzle_date so the puzzle matches
+# what the player actually sees as "today" (see frontend/src/utils/date.js).
+
+GUESS_GAME_MAX_GUESSES = 8
+
+
+def _guess_game_pool(cursor, season: int):
+    cursor.execute(
+        """
+        SELECT p.player_id, p.player_name, p.team_abbreviation, p.age,
+               p.pts, p.reb, p.ast, p.bpm_position, c.archetype
+        FROM player_season_stats p
+        LEFT JOIN player_clusters c
+            ON c.player_id = p.player_id AND c.season = p.season
+        WHERE p.season = %s AND p.min >= %s AND p.gp >= %s
+        ORDER BY p.player_id ASC;
+        """,
+        (season, RADAR_MIN_MINUTES, RADAR_MIN_GAMES),
+    )
+    rows = cursor.fetchall()
+    cols = ["player_id", "player_name", "team_abbreviation", "age",
+            "pts", "reb", "ast", "bpm_position", "archetype"]
+    return [dict(zip(cols, row)) for row in rows]
+
+
+def _guess_game_default_season(cursor) -> int:
+    """Prefer the latest season that has real archetype clustering data —
+    the newest player_season_stats season is often not clustered yet (the
+    clustering job is a separate offline batch), which would make every
+    "archetype" clue trivially null-vs-null. Falls back to the latest
+    stats season if clustering hasn't run for anything (shouldn't happen)."""
+    cursor.execute("SELECT MAX(season) FROM player_clusters;")
+    clustered = cursor.fetchone()[0]
+    return int(clustered) if clustered is not None else get_latest_season(cursor)
+
+
+def _guess_game_mystery(pool_rows, season: int, puzzle_date: date):
+    seed = f"{puzzle_date.isoformat()}-{season}"
+    digest = hashlib.sha256(seed.encode()).hexdigest()
+    index = int(digest, 16) % len(pool_rows)
+    return pool_rows[index]
+
+
+def _parse_puzzle_date(puzzle_date: Optional[str]) -> date:
+    if not puzzle_date:
+        return date.today()
+    try:
+        return date.fromisoformat(puzzle_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="puzzle_date must be YYYY-MM-DD.")
+
+
+def _guess_game_fields_match(guess_value, mystery_value):
+    """Equality that never counts two missing values as a "match" — a
+    null-vs-null archetype/position shouldn't read as a meaningful clue."""
+    if guess_value is None or mystery_value is None:
+        return False
+    return guess_value == mystery_value
+
+
+def _direction(mystery_value, guess_value):
+    if mystery_value is None or guess_value is None:
+        return None
+    if mystery_value == guess_value:
+        return "same"
+    return "higher" if mystery_value > guess_value else "lower"
+
+
+def _guess_game_public(row):
+    return {
+        "player_id": row["player_id"],
+        "player_name": row["player_name"],
+        "team_abbreviation": row["team_abbreviation"],
+        "position": _position_label(row["bpm_position"]),
+        "archetype": row["archetype"],
+        "age": row["age"],
+        "pts": row["pts"],
+        "reb": row["reb"],
+        "ast": row["ast"],
+    }
+
+
+@app.get("/games/guess-the-player/daily")
+def get_guess_the_player_daily(season: Optional[int] = None):
+    """Today's puzzle setup: which season's qualified pool is in play and
+    the full guessable list (name/team only — never bio/stat fields, so
+    the answer can't be read off this response)."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        resolved_season = season or _guess_game_default_season(cursor)
+        check_season_exists(cursor, resolved_season)
+        pool_rows = _guess_game_pool(cursor, resolved_season)
+
+    if not pool_rows:
+        raise HTTPException(status_code=404, detail=f"No qualified player pool for season {resolved_season}.")
+
+    return {
+        "date": date.today().isoformat(),
+        "season": resolved_season,
+        "max_guesses": GUESS_GAME_MAX_GUESSES,
+        "pool_size": len(pool_rows),
+        "pool": [
+            {"player_id": r["player_id"], "player_name": r["player_name"], "team_abbreviation": r["team_abbreviation"]}
+            for r in pool_rows
+        ],
+    }
+
+
+@app.get("/games/guess-the-player/guess")
+def guess_the_player(guess_player_name: str, season: Optional[int] = None, puzzle_date: Optional[str] = None):
+    """Compares one guess against today's mystery player and returns
+    per-field feedback, Wordle-style."""
+    resolved_date = _parse_puzzle_date(puzzle_date)
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        resolved_season = season or _guess_game_default_season(cursor)
+        check_season_exists(cursor, resolved_season)
+        pool_rows = _guess_game_pool(cursor, resolved_season)
+
+    if not pool_rows:
+        raise HTTPException(status_code=404, detail=f"No qualified player pool for season {resolved_season}.")
+
+    mystery = _guess_game_mystery(pool_rows, resolved_season, resolved_date)
+
+    pool_by_name = {r["player_name"].lower(): r for r in pool_rows}
+    guess = pool_by_name.get(guess_player_name.strip().lower())
+    if guess is None:
+        raise HTTPException(status_code=404, detail=f"{guess_player_name} isn't in today's guessable pool.")
+
+    correct = guess["player_id"] == mystery["player_id"]
+    result = {
+        "correct": correct,
+        "guess": _guess_game_public(guess),
+        "feedback": {
+            "team": "match" if guess["team_abbreviation"] == mystery["team_abbreviation"] else "no_match",
+            "position": "match" if _guess_game_fields_match(_position_label(guess["bpm_position"]), _position_label(mystery["bpm_position"])) else "no_match",
+            "archetype": "match" if _guess_game_fields_match(guess["archetype"], mystery["archetype"]) else "no_match",
+            "age": _direction(mystery["age"], guess["age"]),
+            "pts": _direction(mystery["pts"], guess["pts"]),
+            "reb": _direction(mystery["reb"], guess["reb"]),
+            "ast": _direction(mystery["ast"], guess["ast"]),
+        },
+    }
+    if correct:
+        result["mystery_player"] = result["guess"]
+    return result
+
+
+@app.get("/games/guess-the-player/reveal")
+def reveal_guess_the_player(season: Optional[int] = None, puzzle_date: Optional[str] = None):
+    """Reveals the mystery player once a player is out of guesses."""
+    resolved_date = _parse_puzzle_date(puzzle_date)
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        resolved_season = season or _guess_game_default_season(cursor)
+        check_season_exists(cursor, resolved_season)
+        pool_rows = _guess_game_pool(cursor, resolved_season)
+
+    if not pool_rows:
+        raise HTTPException(status_code=404, detail=f"No qualified player pool for season {resolved_season}.")
+
+    mystery = _guess_game_mystery(pool_rows, resolved_season, resolved_date)
+    return _guess_game_public(mystery)
 
 
 # ─── Trend Analysis (player career trajectory / team trajectory) ───────────

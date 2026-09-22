@@ -201,6 +201,31 @@ export async function fetchCompareProfile(playerName, season) {
     return response.data;
 }
 
+// ─── Games: Guess the Player ───────────────────────────────────
+export async function fetchGuessDaily(season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/games/guess-the-player/daily`,
+        { params: season ? { season } : {} }
+    );
+    return response.data;
+}
+
+export async function submitGuessThePlayer(guessPlayerName, season, puzzleDate) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/games/guess-the-player/guess`,
+        { params: { guess_player_name: guessPlayerName, season, puzzle_date: puzzleDate } }
+    );
+    return response.data;
+}
+
+export async function fetchGuessReveal(season, puzzleDate) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/games/guess-the-player/reveal`,
+        { params: { season, puzzle_date: puzzleDate } }
+    );
+    return response.data;
+}
+
 // A cache miss triggers the same rate-limited live fetch as Shot Charts —
 // give it the same generous timeout instead of the axios default.
 export async function fetchPlayerShotZones(playerName, season) {

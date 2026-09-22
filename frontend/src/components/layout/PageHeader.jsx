@@ -14,6 +14,7 @@ const pageTitles = {
     trade: 'Trade Analyzer',
     draft: 'Draft Value Guide',
     rookies: 'Rookie Class Tracker',
+    guess: 'Guess the Player',
 };
 
 const pageDescriptions = {
@@ -30,6 +31,7 @@ const pageDescriptions = {
     trade: 'Simulate a 1-for-1 trade and see the roster impact',
     draft: 'Career value by draft slot, best-value picks, and draft class browsing',
     rookies: 'This season\'s rookie class, ranked by ROY probability, with historical comps',
+    guess: 'Daily deduction game — guess today\'s mystery player from real stats',
 };
 
 export default function PageHeader({ activePage }) {

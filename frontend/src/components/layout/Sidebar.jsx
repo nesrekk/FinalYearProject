@@ -15,6 +15,7 @@ const navItems = [
     { id: 'trade', label: 'Trade Analyzer', icon: 'swap_horiz' },
     { id: 'draft', label: 'Draft Value Guide', icon: 'school' },
     { id: 'rookies', label: 'Rookie Class Tracker', icon: 'eco' },
+    { id: 'guess', label: 'Guess the Player', icon: 'sports_esports' },
 ];
 
 export default function Sidebar({ activePage, onNavigate }) {
