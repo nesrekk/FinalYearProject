@@ -45,6 +45,61 @@ function tierColor(percentile) {
     return '#34d399';
 }
 
+function findDetailStat(profile, key) {
+    return profile?.detail_stats?.find((s) => s.key === key) ?? null;
+}
+
+// Simplified, openly-labeled heuristic — NOT a fitted or validated synergy
+// model. Real on-court chemistry depends on lineup context, defensive
+// schemes, and shot-clock situations this project has no play-by-play or
+// lineup data to measure. What IS real: each flag below is a plain
+// percentile-threshold comparison within the same qualified pool used
+// everywhere else on this page (min>=15 mpg, gp>=20 that season) — the
+// thresholds themselves (75th/70th/50th/25th) are round, disclosed cutoffs
+// chosen for readability, not numbers fit to any outcome data.
+function computeFitFlags(profileA, profileB) {
+    const usgA = findDetailStat(profileA, 'usg_pct')?.percentile;
+    const usgB = findDetailStat(profileB, 'usg_pct')?.percentile;
+    const tparA = findDetailStat(profileA, 'tpar')?.percentile;
+    const tparB = findDetailStat(profileB, 'tpar')?.percentile;
+    const astA = findDetailStat(profileA, 'ast_pct')?.percentile;
+    const astB = findDetailStat(profileB, 'ast_pct')?.percentile;
+
+    const flags = [];
+
+    if (usgA != null && usgB != null && usgA >= 75 && usgB >= 75) {
+        flags.push({
+            kind: 'overlap',
+            label: 'Ball-Dominance Overlap',
+            detail: `Both players rank in the top quartile for usage rate (${profileA.player_name} ${usgA}th, ${profileB.player_name} ${usgB}th) among this season's qualified pool. Two high-usage players sharing the same touches is a real, commonly-cited source of on-court friction — this project can't measure the actual effect on efficiency, only that the raw usage overlap is real.`,
+        });
+    }
+
+    if (tparA != null && tparB != null && tparA <= 25 && tparB <= 25) {
+        flags.push({
+            kind: 'overlap',
+            label: 'Spacing Overlap',
+            detail: `Both players rank in the bottom quartile for 3-point attempt rate (${profileA.player_name} ${tparA}th, ${profileB.player_name} ${tparB}th). Two low-volume shooters occupying the same driving/post lanes is a common real roster-construction concern, though this project has no shot-location or lineup data to confirm actual floor spacing.`,
+        });
+    }
+
+    const aIsScorer = usgA != null && astA != null && usgA >= 70 && astA < 50;
+    const bIsFacilitator = astB != null && usgB != null && astB >= 70 && usgB < 50;
+    const bIsScorer = usgB != null && astB != null && usgB >= 70 && astB < 50;
+    const aIsFacilitator = astA != null && usgA != null && astA >= 70 && usgA < 50;
+    if ((aIsScorer && bIsFacilitator) || (bIsScorer && aIsFacilitator)) {
+        const scorer = aIsScorer ? profileA.player_name : profileB.player_name;
+        const facilitator = aIsScorer ? profileB.player_name : profileA.player_name;
+        flags.push({
+            kind: 'complement',
+            label: 'Scorer + Facilitator Split',
+            detail: `${scorer} profiles as a high-usage, low-assist scorer while ${facilitator} profiles as a high-assist, lower-usage facilitator — a clean statistical role split rather than an overlap.`,
+        });
+    }
+
+    return flags;
+}
+
 function radarAngle(i, total) {
     return -Math.PI / 2 + (i * 2 * Math.PI) / total;
 }
@@ -361,6 +416,51 @@ export default function PlayerComparison() {
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+
+                    <div className="dashboard-card" style={{ marginTop: '1rem' }}>
+                        <h3 className="section-heading" style={{ marginTop: 0 }}>
+                            Fit Analysis
+                            <InfoTooltip label="How this works" title="A simplified heuristic, not a validated model">
+                                These flags are plain percentile-threshold comparisons (usage rate, 3-point attempt
+                                rate, assist rate) within the same qualified pool used everywhere else on this
+                                page — not a fitted or trained synergy model. Real on-court chemistry depends on
+                                lineup context, defensive schemes, and shot-clock situations this project has no
+                                play-by-play or lineup data to measure, so treat this as a real-data starting point
+                                for a basketball conversation, not a prediction.
+                            </InfoTooltip>
+                        </h3>
+                        {(() => {
+                            const flags = computeFitFlags(profileA, profileB);
+                            if (flags.length === 0) {
+                                return (
+                                    <p className="page-subtitle" style={{ margin: 0 }}>
+                                        No major usage/spacing overlap or clean role split detected between these two profiles.
+                                    </p>
+                                );
+                            }
+                            return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                    {flags.map((f) => (
+                                        <div
+                                            key={f.label}
+                                            style={{
+                                                padding: '0.75rem 1rem',
+                                                borderRadius: 8,
+                                                background: f.kind === 'overlap' ? 'rgba(248,113,113,0.08)' : 'rgba(52,211,153,0.08)',
+                                                borderLeft: `3px solid ${f.kind === 'overlap' ? '#f87171' : '#34d399'}`,
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, marginBottom: 4 }}>
+                                                <Icon name={f.kind === 'overlap' ? 'warning' : 'check_circle'} size="1em" style={{ color: f.kind === 'overlap' ? '#f87171' : '#34d399' }} />
+                                                {f.label}
+                                            </div>
+                                            <p className="page-subtitle" style={{ margin: 0 }}>{f.detail}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })()}
                     </div>
                 </motion.div>
             )}
