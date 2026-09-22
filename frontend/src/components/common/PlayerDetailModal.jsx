@@ -1,32 +1,25 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { motion } from 'framer-motion';
 import { fetchPlayerHistory, fetchPlayerClusterHistory } from '../../services/api';
 import Loader from '../Loader';
 import Icon from './Icon';
 import TeamLogo from './TeamLogo';
 import PlayerHeadshot from './PlayerHeadshot';
+import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 
 function fmt(v, digits = 1) {
     if (v == null) return '—';
     return Number(v).toFixed(digits);
 }
 
-const CLOSE_DURATION = 240;
-
 export default function PlayerDetailModal({ player, onClose }) {
+    const { isAdvanced } = useMotionMode();
+    const { spring: SPRING } = motionPreset(isAdvanced);
     const [history, setHistory] = useState(null);
     const [clusters, setClusters] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [closing, setClosing] = useState(false);
-    const closingRef = useRef(false);
-
-    function handleClose() {
-        if (closingRef.current) return;
-        closingRef.current = true;
-        setClosing(true);
-        setTimeout(onClose, CLOSE_DURATION);
-    }
 
     useEffect(() => {
         let cancelled = false;
@@ -52,11 +45,11 @@ export default function PlayerDetailModal({ player, onClose }) {
 
     useEffect(() => {
         function onKeyDown(e) {
-            if (e.key === 'Escape') handleClose();
+            if (e.key === 'Escape') onClose();
         }
         document.addEventListener('keydown', onKeyDown);
         return () => document.removeEventListener('keydown', onKeyDown);
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [onClose]);
 
     const seasons = history?.seasons ? [...history.seasons].reverse() : [];
     const latestArchetype = clusters?.seasons?.length
@@ -64,25 +57,41 @@ export default function PlayerDetailModal({ player, onClose }) {
         : null;
 
     return createPortal(
-        <div
-            className={`modal-overlay${closing ? ' modal-overlay--closing' : ''}`}
-            onClick={handleClose}
+        <motion.div
+            className="modal-overlay"
+            onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
         >
-            <div
-                className={`player-modal${closing ? ' player-modal--closing' : ''}`}
+            <motion.div
+                className="player-modal"
                 onClick={(e) => e.stopPropagation()}
+                initial={isAdvanced ? { opacity: 0, y: 20, scale: 0.96 } : { opacity: 0 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={isAdvanced ? { opacity: 0, y: 14, scale: 0.97 } : { opacity: 0 }}
+                transition={SPRING}
             >
                 <div className="player-modal-header">
-                    <PlayerHeadshot playerId={player.player_id} playerName={player.player_name} size={56} />
+                    <motion.span layoutId={isAdvanced ? `player-avatar-${player.player_id}` : undefined} transition={SPRING}>
+                        <PlayerHeadshot playerId={player.player_id} playerName={player.player_name} size={56} />
+                    </motion.span>
                     <div className="player-modal-header-text">
-                        <div className="player-modal-name">{player.player_name}</div>
+                        <motion.div
+                            layoutId={isAdvanced ? `player-name-${player.player_id}` : undefined}
+                            transition={SPRING}
+                            className="player-modal-name"
+                        >
+                            {player.player_name}
+                        </motion.div>
                         <div className="player-modal-subline">
                             <TeamLogo abbreviation={player.team_abbreviation} size={18} />
                             {player.team_abbreviation}
                             {player.position && <>&nbsp;·&nbsp;Est. {player.position}</>}
                         </div>
                     </div>
-                    <button type="button" className="player-modal-close" onClick={handleClose} aria-label="Close">
+                    <button type="button" className="player-modal-close" onClick={onClose} aria-label="Close">
                         <Icon name="close" />
                     </button>
                 </div>
@@ -172,8 +181,8 @@ export default function PlayerDetailModal({ player, onClose }) {
                         )}
                     </div>
                 </div>
-            </div>
-        </div>,
+            </motion.div>
+        </motion.div>,
         document.body
     );
 }

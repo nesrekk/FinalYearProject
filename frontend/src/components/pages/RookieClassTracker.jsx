@@ -55,7 +55,7 @@ export default function RookieClassTracker() {
     return (
         <div className="page page-rookies fade-in">
             <div className="dashboard-card">
-                <h2 className="card-title">
+                <h2 className="card-title hb-page-title">
                     <span className="card-icon"><Icon name="eco" /></span>
                     Rookie Class Tracker
                     <InfoTooltip label="How this works" title="Every rookie, tracked live">

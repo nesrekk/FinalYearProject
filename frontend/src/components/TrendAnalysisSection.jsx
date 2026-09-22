@@ -177,7 +177,7 @@ export default function TrendAnalysisSection() {
 
     return (
         <section className="dashboard-card">
-            <h2 className="card-title">
+            <h2 className="card-title hb-page-title">
                 <span className="card-icon"><Icon name="trending_up" /></span>
                 Trend Analysis
                 <InfoTooltip label="How this works" title="Career / franchise trajectory">

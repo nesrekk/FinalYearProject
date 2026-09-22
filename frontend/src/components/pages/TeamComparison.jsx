@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { mockTeamStats, allTeams } from '../../services/mockData';
 import { fetchCurrentMeta } from '../../services/api';
+import TeamLogo from '../common/TeamLogo';
+import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 
 const statLabels = [
     { key: 'ppg', label: 'Points Per Game', max: 130 },
@@ -19,6 +22,9 @@ export default function TeamComparison() {
     const [teamA, setTeamA] = useState('LAL');
     const [teamB, setTeamB] = useState('BOS');
     const [loading, setLoading] = useState(false);
+
+    const { isAdvanced } = useMotionMode();
+    const preset = motionPreset(isAdvanced);
 
     useEffect(() => {
         let active = true;
@@ -49,6 +55,7 @@ export default function TeamComparison() {
     const statsA = teamStats[teamA];
     const statsB = teamStats[teamB];
     const canRender = useMemo(() => Boolean(statsA && statsB), [statsA, statsB]);
+    const matchupKey = `${teamA}-${teamB}-${isAdvanced}`;
 
     return (
         <div className="page page-teams fade-in">
@@ -85,25 +92,26 @@ export default function TeamComparison() {
             {canRender && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {statsA.logo && <img src={statsA.logo} alt={statsA.abbr} style={{ width: '28px', height: '28px', objectFit: 'contain' }} />}
+                        <TeamLogo abbreviation={statsA.abbr} size={28} />
                         <span className="page-subtitle" style={{ margin: 0 }}>{statsA.name}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <span className="page-subtitle" style={{ margin: 0 }}>{statsB.name}</span>
-                        {statsB.logo && <img src={statsB.logo} alt={statsB.abbr} style={{ width: '28px', height: '28px', objectFit: 'contain' }} />}
+                        <TeamLogo abbreviation={statsB.abbr} size={28} />
                     </div>
                 </div>
             )}
 
             {/* Comparison Bars */}
             {canRender && (
-                <div className="comparison-bars">
-                    {statLabels.map(({ key, label, max }) => {
+                <div className="comparison-bars" key={matchupKey}>
+                    {statLabels.map(({ key, label, max }, i) => {
                         const valA = statsA[key];
                         const valB = statsB[key];
                         const pctA = (valA / max) * 100;
                         const pctB = (valB / max) * 100;
                         const winner = valA > valB ? 'A' : valB > valA ? 'B' : null;
+                        const delay = isAdvanced ? i * 0.04 : 0;
 
                         return (
                             <div key={key} className="comparison-row">
@@ -112,11 +120,21 @@ export default function TeamComparison() {
                                 </span>
                                 <div className="comp-bar-group">
                                     <div className="comp-bar comp-bar--left">
-                                        <div className="comp-bar-fill comp-bar-fill--a" style={{ width: `${pctA}%` }}></div>
+                                        <motion.div
+                                            className="comp-bar-fill comp-bar-fill--a"
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${pctA}%` }}
+                                            transition={{ ...preset.tableTransition, delay }}
+                                        />
                                     </div>
                                     <span className="comp-label">{label}</span>
                                     <div className="comp-bar comp-bar--right">
-                                        <div className="comp-bar-fill comp-bar-fill--b" style={{ width: `${pctB}%` }}></div>
+                                        <motion.div
+                                            className="comp-bar-fill comp-bar-fill--b"
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${pctB}%` }}
+                                            transition={{ ...preset.tableTransition, delay }}
+                                        />
                                     </div>
                                 </div>
                                 <span className={`comp-value comp-value--right ${winner === 'B' ? 'comp-value--winner' : ''}`}>

@@ -189,7 +189,7 @@ export default function RadarCompareSection() {
 
     return (
         <section className="dashboard-card">
-            <h2 className="card-title">
+            <h2 className="card-title hb-page-title">
                 <span className="card-icon"><Icon name="radar" /></span>
                 Radar Comparison
                 <InfoTooltip label="How this works" title="Percentile-based radar chart">

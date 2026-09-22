@@ -108,7 +108,7 @@ export default function PlayerArchetypesSection() {
 
     return (
         <section className="dashboard-card">
-            <h2 className="card-title">
+            <h2 className="card-title hb-page-title">
                 <span className="card-icon"><Icon name="biotech" /></span>
                 Player Archetypes
                 <InfoTooltip label="How this clustering works" title="Unsupervised K-Means clustering">

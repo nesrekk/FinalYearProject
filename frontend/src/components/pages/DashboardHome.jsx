@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import StatCard from '../common/StatCard';
 import TeamLogo from '../common/TeamLogo';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import Icon from '../common/Icon';
 import { abbrFromTeamName } from '../../utils/teamAssets';
+import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import { mockLiveScores } from '../../services/mockData';
 import {
     fetchCurrentMeta,
@@ -40,7 +42,18 @@ async function resolveSeasonWithData(startSeason) {
     return null;
 }
 
+const GRID_VARIANTS = {
+    hidden: {},
+    show: (stagger) => ({ transition: { staggerChildren: stagger } }),
+};
+const CARD_VARIANTS = {
+    hidden: { opacity: 0, y: 10 },
+    show: { opacity: 1, y: 0 },
+};
+
 export default function DashboardHome({ onNavigate }) {
+    const { isAdvanced } = useMotionMode();
+    const preset = motionPreset(isAdvanced);
     const [games, setGames] = useState(mockLiveScores);
     const [news, setNews] = useState([]);
     const [meta, setMeta] = useState(null);
@@ -146,43 +159,65 @@ export default function DashboardHome({ onNavigate }) {
             {/* Hero */}
             <div className="dashboard-hero">
                 <div className="dashboard-hero-content">
-                    <h2 className="hero-title">Welcome to <span className="text-accent">NBA Hub</span></h2>
+                    <h2 className="hero-title hb-page-title">Welcome to <span className="text-accent">NBA Hub</span></h2>
                     <p className="hero-subtitle">Your all-in-one NBA analytics command center. Track live games, explore player stats, compare teams, and predict awards.</p>
                 </div>
                 <div className="hero-glow"></div>
             </div>
 
             {/* Quick Stats */}
-            <div className="stat-cards-row">
-                <StatCard
-                    icon={<Icon name="sports_basketball" />}
-                    label="Games Today"
-                    value={games.length}
-                    sub={`${liveGames} live · ${finalGames} final · ${scheduledGames} scheduled`}
-                />
-                <StatCard
-                    icon={<Icon name="local_fire_department" />}
-                    label="Top Scorer"
-                    value={meta?.top_scorer?.player_name || 'Scoring Leader'}
-                    sub={meta?.top_scorer?.ppg != null ? `${meta.top_scorer.ppg} PPG` : 'Current season'}
-                />
-                <StatCard
-                    icon={<Icon name="emoji_events" />}
-                    label="#1 Seed"
-                    value={topSeed ? topSeed.team.replace('Oklahoma City ', '') : 'Thunder'}
-                    sub={topSeed ? `${topSeed.w}-${topSeed.l} (${topSeed.pct})` : '47-13 (.783)'}
-                />
-                <StatCard
-                    icon={<Icon name="trending_up" />}
-                    label="MVP Favorite"
-                    value={awardsRace.mvp?.player_name || (awardsLoading ? 'Loading…' : 'No prediction')}
-                    sub={awardsRace.mvp ? awardCardLine('mvp', awardsRace.mvp) : (awardsRace.season ? seasonLabel(awardsRace.season) : '')}
-                />
-            </div>
+            <motion.div
+                key={`stats-${isAdvanced}`}
+                className="stat-cards-row"
+                variants={GRID_VARIANTS}
+                custom={preset.stagger}
+                initial="hidden"
+                animate="show"
+            >
+                <motion.div variants={CARD_VARIANTS} transition={preset.fieldSpring}>
+                    <StatCard
+                        icon={<Icon name="sports_basketball" />}
+                        label="Games Today"
+                        value={games.length}
+                        sub={`${liveGames} live · ${finalGames} final · ${scheduledGames} scheduled`}
+                    />
+                </motion.div>
+                <motion.div variants={CARD_VARIANTS} transition={preset.fieldSpring}>
+                    <StatCard
+                        icon={<Icon name="local_fire_department" />}
+                        label="Top Scorer"
+                        value={meta?.top_scorer?.player_name || 'Scoring Leader'}
+                        sub={meta?.top_scorer?.ppg != null ? `${meta.top_scorer.ppg} PPG` : 'Current season'}
+                    />
+                </motion.div>
+                <motion.div variants={CARD_VARIANTS} transition={preset.fieldSpring}>
+                    <StatCard
+                        icon={<Icon name="emoji_events" />}
+                        label="#1 Seed"
+                        value={topSeed ? topSeed.team.replace('Oklahoma City ', '') : 'Thunder'}
+                        sub={topSeed ? `${topSeed.w}-${topSeed.l} (${topSeed.pct})` : '47-13 (.783)'}
+                    />
+                </motion.div>
+                <motion.div variants={CARD_VARIANTS} transition={preset.fieldSpring}>
+                    <StatCard
+                        icon={<Icon name="trending_up" />}
+                        label="MVP Favorite"
+                        value={awardsRace.mvp?.player_name || (awardsLoading ? 'Loading…' : 'No prediction')}
+                        sub={awardsRace.mvp ? awardCardLine('mvp', awardsRace.mvp) : (awardsRace.season ? seasonLabel(awardsRace.season) : '')}
+                    />
+                </motion.div>
+            </motion.div>
 
             {/* Quick Links */}
             <h3 className="section-heading">Explore</h3>
-            <div className="quick-links-grid">
+            <motion.div
+                key={`links-${isAdvanced}`}
+                className="quick-links-grid"
+                variants={GRID_VARIANTS}
+                custom={preset.stagger}
+                initial="hidden"
+                animate="show"
+            >
                 {[
                     { id: 'scores', icon: 'sports_basketball', title: 'Live Scores', desc: 'Real-time game updates' },
                     { id: 'standings', icon: 'emoji_events', title: 'Standings', desc: 'Conference rankings' },
@@ -191,33 +226,46 @@ export default function DashboardHome({ onNavigate }) {
                     { id: 'shotcharts', icon: 'adjust', title: 'Shot Charts', desc: 'Shooting visualizations' },
                     { id: 'analytics', icon: 'insights', title: 'Analytics', desc: 'Similarity & predictions' },
                 ].map((link) => (
-                    <button
+                    <motion.button
                         key={link.id}
                         className="quick-link-card"
                         onClick={() => onNavigate(link.id)}
+                        variants={CARD_VARIANTS}
+                        transition={preset.fieldSpring}
+                        whileHover={isAdvanced ? { y: -2 } : undefined}
                     >
                         <span className="quick-link-icon"><Icon name={link.icon} /></span>
                         <span className="quick-link-title">{link.title}</span>
                         <span className="quick-link-desc">{link.desc}</span>
-                    </button>
+                    </motion.button>
                 ))}
-            </div>
+            </motion.div>
 
             {/* Awards Race Snapshot */}
             <h3 className="section-heading">
                 Awards Race {awardsRace.season ? `· ${seasonLabel(awardsRace.season)}` : ''}
             </h3>
-            <div className="award-cards-grid">
+            <motion.div
+                key={`awards-${isAdvanced}`}
+                className="award-cards-grid"
+                variants={GRID_VARIANTS}
+                custom={preset.stagger}
+                initial="hidden"
+                animate="show"
+            >
                 {['mvp', 'dpoy', 'roy', 'allnba'].map((award) => {
                     const row = awardsRace[award];
                     const prob = row
                         ? (award === 'allnba' ? row.all_nba_probability : row[`${award}_probability`])
                         : null;
                     return (
-                        <button
+                        <motion.button
                             key={award}
                             className="award-card"
                             onClick={() => onNavigate('analytics')}
+                            variants={CARD_VARIANTS}
+                            transition={preset.fieldSpring}
+                            whileHover={isAdvanced ? { y: -2 } : undefined}
                         >
                             <div className="award-card-top">
                                 <span className="pill-badge"><Icon name={AWARD_META[award].icon} size="0.9em" /> {AWARD_META[award].label}</span>
@@ -247,10 +295,10 @@ export default function DashboardHome({ onNavigate }) {
                             ) : (
                                 <p className="award-card-name">No prediction available</p>
                             )}
-                        </button>
+                        </motion.button>
                     );
                 })}
-            </div>
+            </motion.div>
 
             {/* Latest Headlines */}
             <h3 className="section-heading">Latest Headlines</h3>

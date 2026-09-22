@@ -55,7 +55,7 @@ export default function SimilaritySection() {
 
     return (
         <section className="dashboard-card">
-            <h2 className="card-title">
+            <h2 className="card-title hb-page-title">
                 <span className="card-icon"><Icon name="bar_chart" /></span>
                 Season Similarity
                 <InfoTooltip

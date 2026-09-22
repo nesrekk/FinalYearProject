@@ -262,7 +262,7 @@ export default function ShotCharts() {
   return (
     <div className="page page-shotcharts fade-in">
       <div className="dashboard-card" style={{ marginBottom: '1rem' }}>
-        <h2 className="card-title">
+        <h2 className="card-title hb-page-title">
           <span className="card-icon"><Icon name="adjust" /></span>
           Shot Chart
         </h2>

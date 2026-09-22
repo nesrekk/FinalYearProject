@@ -104,7 +104,7 @@ export default function AwardsRaceSection() {
 
     return (
         <section className="dashboard-card">
-            <h2 className="card-title">
+            <h2 className="card-title hb-page-title">
                 <span className="card-icon"><Icon name={cfg.icon} /></span>
                 Awards Race
                 <InfoTooltip label={`How ${cfg.label} Prediction works`} title="Under the hood">

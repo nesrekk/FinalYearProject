@@ -234,7 +234,7 @@ export default function ModelValidationSection() {
 
     return (
         <section className="dashboard-card">
-            <h2 className="card-title">
+            <h2 className="card-title hb-page-title">
                 <span className="card-icon"><Icon name="science" /></span>
                 Model Validation
                 <InfoTooltip label="How this backtest works" title="Leave-one-season-out validation">

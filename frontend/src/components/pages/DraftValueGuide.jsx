@@ -107,7 +107,7 @@ export default function DraftValueGuide() {
     return (
         <div className="page page-draft fade-in">
             <div className="dashboard-card">
-                <h2 className="card-title">
+                <h2 className="card-title hb-page-title">
                     <span className="card-icon"><Icon name="school" /></span>
                     Draft Value Analysis
                     <InfoTooltip label="How this works" title="Career value, not scouting">

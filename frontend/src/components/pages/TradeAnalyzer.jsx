@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { fetchTradeTeams, fetchTradeRoster, simulateTrade } from '../../services/api';
 import Loader from '../Loader';
 import InfoTooltip from '../common/InfoTooltip';
@@ -6,6 +7,7 @@ import Icon from '../common/Icon';
 import TeamLogo from '../common/TeamLogo';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
+import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 
 function StatLabel({ statKey, children }) {
     const def = STAT_GLOSSARY[statKey];
@@ -33,7 +35,7 @@ function DeltaValue({ before, after, digits = 1, higherIsBetter = true }) {
     const color = flat ? '#94a3b8' : (improved ? '#34d399' : '#f87171');
     const sign = delta >= 0 ? '+' : '';
     return (
-        <span>
+        <span className="hb-delta">
             {fmt(after, digits)}{' '}
             <span style={{ color, fontSize: '0.85em' }}>({sign}{fmt(delta, digits)})</span>
         </span>
@@ -43,12 +45,12 @@ function DeltaValue({ before, after, digits = 1, higherIsBetter = true }) {
 function PlayerCard({ label, player }) {
     if (!player) return null;
     return (
-        <div style={{ background: '#1a2332', border: '1px solid #334155', borderRadius: 8, padding: '0.75rem 1rem' }}>
+        <div className="hb-trade-card">
             <div className="page-subtitle" style={{ marginBottom: 6 }}>{label}</div>
             <span className="entity-row">
                 <PlayerHeadshot playerId={player.player_id} playerName={player.player_name} size={36} />
                 <span className="entity-row-text">
-                    <span className="entity-row-name">{player.player_name}</span>
+                    <span className="hb-trade-name">{player.player_name}</span>
                     <span className="entity-row-sub">
                         {player.archetype || 'Unclustered'} · {fmt(player.pts)} pts · {fmt(player.reb)} reb · {fmt(player.ast)} ast · {fmt(player.min)} mpg
                     </span>
@@ -58,13 +60,19 @@ function PlayerCard({ label, player }) {
     );
 }
 
-function TeamPanel({ side }) {
+function TeamPanel({ side, isAdvanced, preset }) {
     if (!side) return null;
     const { sends, receives, fit_note: fitNote } = side.trade;
     const { before, after } = side.summary;
     return (
-        <div className="dashboard-card" style={{ flex: 1, minWidth: 320 }}>
-            <h3 className="section-heading" style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <motion.div
+            className="dashboard-card"
+            style={{ flex: 1, minWidth: 320 }}
+            initial={isAdvanced ? { opacity: 0, y: 12 } : false}
+            animate={{ opacity: 1, y: 0 }}
+            transition={preset.spring}
+        >
+            <h3 className="hb-trade-heading">
                 <TeamLogo abbreviation={side.trade.team} size={24} />
                 {side.trade.team}
             </h3>
@@ -79,18 +87,22 @@ function TeamPanel({ side }) {
                 </p>
             )}
             {before.predicted_win_pct != null && (
-                <div className="stat-card" style={{ marginBottom: '1rem' }}>
-                    <div>
-                        <div className="stat-card-label">
-                            Predicted Win% — was {(before.predicted_win_pct * 100).toFixed(1)}% (model R²=0.92, avg. error ~2.5 wins)
+                <div className="hb-hero" style={{ marginBottom: '1rem' }}>
+                    <span className="hb-row-avatar">
+                        <TeamLogo abbreviation={side.trade.team} size={40} />
+                    </span>
+                    <div className="hb-hero-text">
+                        <div className="hb-hero-label">Predicted Win% — was {(before.predicted_win_pct * 100).toFixed(1)}%</div>
+                        <div className="hb-hero-name" style={{ whiteSpace: 'normal', fontSize: '0.78rem', fontFamily: 'inherit', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                            model R²=0.92, avg. error ~2.5 wins over 82 games
                         </div>
-                        <div className="stat-card-value">
-                            <DeltaValue before={before.predicted_win_pct * 100} after={after.predicted_win_pct * 100} digits={1} />%
-                        </div>
+                    </div>
+                    <div className="hb-hero-value" style={{ fontSize: '1.4rem' }}>
+                        <DeltaValue before={before.predicted_win_pct * 100} after={after.predicted_win_pct * 100} digits={1} />%
                     </div>
                 </div>
             )}
-            <div className="table-wrapper">
+            <div className="hb-table-wrapper table-wrapper">
                 <table className="data-table">
                     <thead>
                         <tr><th>Roster Metric (min-weighted)</th><th>Before → After</th></tr>
@@ -104,7 +116,7 @@ function TeamPanel({ side }) {
                     </tbody>
                 </table>
             </div>
-        </div>
+        </motion.div>
     );
 }
 
@@ -122,6 +134,9 @@ export default function TradeAnalyzer() {
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    const { isAdvanced } = useMotionMode();
+    const preset = motionPreset(isAdvanced);
 
     useEffect(() => {
         let active = true;
@@ -180,7 +195,7 @@ export default function TradeAnalyzer() {
     return (
         <div className="page page-trade fade-in">
             <div className="dashboard-card">
-                <h2 className="card-title">
+                <h2 className="card-title hb-page-title">
                     <span className="card-icon"><Icon name="swap_horiz" /></span>
                     Trade Analyzer
                     <InfoTooltip label="How this works" title="What this simulates">
@@ -258,8 +273,8 @@ export default function TradeAnalyzer() {
             {panels && (
                 <>
                     <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-                        <TeamPanel side={panels.a} />
-                        <TeamPanel side={panels.b} />
+                        <TeamPanel side={panels.a} isAdvanced={isAdvanced} preset={preset} />
+                        <TeamPanel side={panels.b} isAdvanced={isAdvanced} preset={preset} />
                     </div>
                     <p className="page-subtitle" style={{ marginTop: '1rem' }}>{result.caveat}</p>
                 </>

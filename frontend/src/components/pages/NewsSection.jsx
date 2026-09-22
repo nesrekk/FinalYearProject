@@ -1,7 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { fetchCurrentNews } from '../../services/api';
 import { localDateIso } from '../../utils/date';
 import Icon from '../common/Icon';
+import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
+
+const GRID_VARIANTS = {
+    hidden: {},
+    show: (stagger) => ({ transition: { staggerChildren: stagger } }),
+};
+const CARD_VARIANTS = {
+    hidden: { opacity: 0, y: 10 },
+    show: { opacity: 1, y: 0 },
+};
 
 const categoryColors = {
     'Game Recap': '#38bdf8',
@@ -40,6 +51,8 @@ function getArticleUrl(article) {
 }
 
 export default function NewsSection() {
+    const { isAdvanced } = useMotionMode();
+    const preset = motionPreset(isAdvanced);
     const today = localDateIso();
     const [selectedDate, setSelectedDate] = useState(today);
     const [liveNews, setLiveNews] = useState([]);
@@ -98,9 +111,16 @@ export default function NewsSection() {
             {!loading && sourceNews.length === 0 && (
                 <p className="empty-message">No live headlines found for this date yet. Try Today or another date.</p>
             )}
-            <div className="news-grid">
+            <motion.div
+                className="news-grid"
+                key={`${selectedDate}-${isAdvanced}`}
+                variants={GRID_VARIANTS}
+                custom={preset.stagger}
+                initial="hidden"
+                animate="show"
+            >
                 {visibleArticles.map((article) => (
-                    <article key={article.id} className="news-card">
+                    <motion.article key={article.id} className="news-card" variants={CARD_VARIANTS} transition={preset.fieldSpring}>
                         <a
                             href={getArticleUrl(article)}
                             target="_blank"
@@ -128,9 +148,9 @@ export default function NewsSection() {
                                 </div>
                             </div>
                         </a>
-                    </article>
+                    </motion.article>
                 ))}
-            </div>
+            </motion.div>
             {visibleCount < sourceNews.length && (
                 <div style={{ marginTop: '1rem' }}>
                     <button className="action-btn" onClick={() => setVisibleCount((c) => c + 6)}>
