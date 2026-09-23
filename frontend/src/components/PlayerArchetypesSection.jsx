@@ -3,6 +3,7 @@ import { fetchArchetypes, fetchSeasonClusters, fetchPlayerClusterHistory, fetchL
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
+import OffensiveStyleSection from './OffensiveStyleSection';
 
 const PALETTE = ['#38bdf8', '#f87171', '#facc15', '#a78bfa', '#34d399', '#fb923c'];
 
@@ -195,6 +196,7 @@ export default function PlayerArchetypesSection() {
     }, [players]);
 
     return (
+        <>
         <section className="dashboard-card">
             <h2 className="card-title hb-page-title">
                 <span className="card-icon"><Icon name="biotech" /></span>
@@ -425,5 +427,7 @@ export default function PlayerArchetypesSection() {
                 </>
             )}
         </section>
+        <OffensiveStyleSection />
+        </>
     );
 }

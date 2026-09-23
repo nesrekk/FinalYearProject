@@ -232,6 +232,54 @@ def get_player_cluster_history(player_name: str):
     }
 
 
+# ─── Offensive Style Clusters ────────────────────────────────────────────────
+#
+# Reads results written by scripts/cluster_playtypes.py — the same real
+# K-Means approach as the stat archetypes above, applied to real play-type
+# frequency mix instead of box-score rate stats. Answers "how does this
+# player's offense actually get generated" rather than "what does their
+# production look like."
+
+@app.get("/clusters/playtype-archetypes")
+def get_playtype_archetypes():
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT cluster_id, style, n_player_seasons, silhouette_score, centroid, representative_players
+               FROM playtype_cluster_archetypes ORDER BY n_player_seasons DESC;"""
+        )
+        rows = cursor.fetchall()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="No offensive-style cluster results found. Run scripts/cluster_playtypes.py first.")
+
+    return {
+        "styles": [
+            {"cluster_id": r[0], "style": r[1], "n_player_seasons": r[2], "silhouette_score": r[3],
+             "centroid": r[4], "representative_players": r[5]}
+            for r in rows
+        ]
+    }
+
+
+@app.get("/clusters/playtype-season/{season}")
+def get_playtype_season_clusters(season: int):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT player_id, player_name, team_abbreviation, style, pca_x, pca_y
+               FROM playtype_clusters WHERE season = %s ORDER BY player_name ASC;""",
+            (season,),
+        )
+        rows = cursor.fetchall()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"No offensive-style cluster results for season {season}. Run scripts/cluster_playtypes.py first.")
+
+    cols = ["player_id", "player_name", "team_abbreviation", "style", "pca_x", "pca_y"]
+    return {"season": season, "players": [dict(zip(cols, row)) for row in rows]}
+
+
 # ─── League Evolution ────────────────────────────────────────────────────────
 #
 # How the real league has changed: each real statistical archetype's real

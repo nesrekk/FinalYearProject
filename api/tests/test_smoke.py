@@ -291,3 +291,47 @@ def test_impact_guess_the_game_flow():
     )
     assert resp2.status_code == 200
     assert resp2.json()["correct"] is True
+
+
+def test_impact_hustle_leaders():
+    from impact_api import app
+    resp = TestClient(app).get("/hustle/leaders", params={"stat": "deflections", "top_n": 5})
+    assert resp.status_code in (200, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        assert data["stat"] == "deflections"
+        assert len(data["results"]) <= 5
+        assert all("player_name" in r and "value" in r for r in data["results"])
+
+
+def test_impact_playtype_profile():
+    from impact_api import app
+    resp = TestClient(app).get("/players/playtype-profile/Nikola Jokic")
+    assert resp.status_code in (200, 404, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        assert data["play_types"]
+        assert all("freq" in pt and "ppp" in pt for pt in data["play_types"])
+
+
+# ─── similarity_api: Offensive Style Clusters ───────────────────────────────
+
+def test_similarity_playtype_archetypes():
+    from similarity_api import app
+    resp = TestClient(app).get("/clusters/playtype-archetypes")
+    assert resp.status_code in (200, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        assert data["styles"]
+        assert all("style" in s and "n_player_seasons" in s for s in data["styles"])
+
+
+def test_similarity_playtype_season_clusters():
+    from similarity_api import app
+    resp = TestClient(app).get("/clusters/playtype-season/2025")
+    assert resp.status_code in (200, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        assert data["season"] == 2025
+        assert data["players"]
+        assert all("pca_x" in p and "style" in p for p in data["players"])

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
-import { fetchPlayerHistory, fetchPlayerClusterHistory } from '../../services/api';
+import { fetchPlayerHistory, fetchPlayerClusterHistory, fetchPlaytypeProfile } from '../../services/api';
 import Loader from '../Loader';
 import Icon from './Icon';
 import TeamLogo from './TeamLogo';
@@ -18,6 +18,7 @@ export default function PlayerDetailModal({ player, onClose }) {
     const { spring: SPRING } = motionPreset(isAdvanced);
     const [history, setHistory] = useState(null);
     const [clusters, setClusters] = useState(null);
+    const [playtypes, setPlaytypes] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
@@ -28,7 +29,8 @@ export default function PlayerDetailModal({ player, onClose }) {
         Promise.allSettled([
             fetchPlayerHistory(player.player_name),
             fetchPlayerClusterHistory(player.player_name),
-        ]).then(([historyResult, clusterResult]) => {
+            fetchPlaytypeProfile(player.player_name),
+        ]).then(([historyResult, clusterResult, playtypeResult]) => {
             if (cancelled) return;
             if (historyResult.status === 'fulfilled') {
                 setHistory(historyResult.value);
@@ -37,6 +39,9 @@ export default function PlayerDetailModal({ player, onClose }) {
             }
             if (clusterResult.status === 'fulfilled') {
                 setClusters(clusterResult.value);
+            }
+            if (playtypeResult.status === 'fulfilled') {
+                setPlaytypes(playtypeResult.value);
             }
             setLoading(false);
         });
@@ -135,6 +140,29 @@ export default function PlayerDetailModal({ player, onClose }) {
                             </p>
                         )}
                     </div>
+
+                    {playtypes && playtypes.play_types.length > 0 && (
+                        <div>
+                            <div className="player-modal-section-title">Real Play-Type Profile ({playtypes.season})</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {playtypes.play_types.map((pt) => (
+                                    <div key={pt.play_type} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ width: 110, fontSize: '0.78rem', color: 'var(--text-secondary)', flexShrink: 0 }}>{pt.play_type}</span>
+                                        <div style={{ flex: 1, height: 8, background: 'rgba(100,116,139,0.15)', borderRadius: 4, position: 'relative' }}>
+                                            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(100, pt.freq * 100 * 3)}%`, background: '#38bdf8', borderRadius: 4 }} />
+                                        </div>
+                                        <span style={{ width: 40, fontSize: '0.75rem', textAlign: 'right', color: 'var(--text-secondary)' }}>{(pt.freq * 100).toFixed(0)}%</span>
+                                        <span style={{ width: 48, fontSize: '0.75rem', textAlign: 'right', color: pt.percentile >= 0.6 ? '#34d399' : pt.percentile <= 0.4 ? '#f87171' : 'var(--text-muted)' }}>
+                                            {pt.ppp.toFixed(2)} PPP
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="player-modal-empty" style={{ marginTop: 6 }}>
+                                Real share of offensive possessions by real play type (NBA Synergy tracking), with real points-per-possession for each.
+                            </p>
+                        </div>
+                    )}
 
                     <div>
                         <div className="player-modal-section-title">Year-by-Year Stats</div>

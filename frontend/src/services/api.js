@@ -479,6 +479,33 @@ export async function fetchScheduleDifficulty(season) {
     return response.data;
 }
 
+// ─── Play-Type Profiles & Hustle Stats ──────────────────────────
+export async function fetchHustleLeaders(stat = 'deflections', season, topN = 15) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/hustle/leaders`,
+        { params: { stat, top_n: topN, ...(season ? { season } : {}) } }
+    );
+    return response.data;
+}
+
+export async function fetchPlaytypeProfile(playerName, season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/players/playtype-profile/${encodeURIComponent(playerName)}`,
+        { params: season ? { season } : {} }
+    );
+    return response.data;
+}
+
+export async function fetchPlaytypeArchetypes() {
+    const response = await axios.get(`${SIMILARITY_BASE}/clusters/playtype-archetypes`);
+    return response.data;
+}
+
+export async function fetchPlaytypeSeasonClusters(season) {
+    const response = await axios.get(`${SIMILARITY_BASE}/clusters/playtype-season/${season}`);
+    return response.data;
+}
+
 export async function simulateTrade({ season, teamA, playerAId, teamB, playerBId }) {
     const response = await axios.get(`${IMPACT_BASE}/trade/simulate`, {
         params: { season, team_a: teamA, player_a_id: playerAId, team_b: teamB, player_b_id: playerBId },

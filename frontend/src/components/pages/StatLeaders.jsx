@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { fetchStatLeaders } from '../../services/api';
+import { fetchStatLeaders, fetchHustleLeaders } from '../../services/api';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import TeamLogo from '../common/TeamLogo';
 import InfoTooltip from '../common/InfoTooltip';
@@ -25,6 +25,16 @@ const STAT_OPTIONS = [
   { key: 'plus_minus', label: 'Plus/Minus' },
 ];
 
+const HUSTLE_STAT_OPTIONS = [
+  { key: 'deflections', label: 'Deflections' },
+  { key: 'contested_shots', label: 'Contested Shots' },
+  { key: 'screen_assists', label: 'Screen Assists' },
+  { key: 'loose_balls_recovered', label: 'Loose Balls' },
+  { key: 'charges_drawn', label: 'Charges Drawn' },
+  { key: 'box_outs', label: 'Box Outs' },
+];
+const HUSTLE_KEYS = new Set(HUSTLE_STAT_OPTIONS.map((s) => s.key));
+
 export default function StatLeaders() {
   const [statKey, setStatKey] = useState('pts');
   const [leaders, setLeaders] = useState([]);
@@ -37,7 +47,7 @@ export default function StatLeaders() {
   const preset = motionPreset(isAdvanced);
 
   const selectedStatLabel = useMemo(
-    () => STAT_OPTIONS.find((s) => s.key === statKey)?.label || statKey.toUpperCase(),
+    () => [...STAT_OPTIONS, ...HUSTLE_STAT_OPTIONS].find((s) => s.key === statKey)?.label || statKey.toUpperCase(),
     [statKey]
   );
   const statDef = STAT_GLOSSARY[statKey];
@@ -48,9 +58,15 @@ export default function StatLeaders() {
       setLoading(true);
       setError('');
       try {
-        const data = await fetchStatLeaders(statKey, undefined, 10);
+        const data = HUSTLE_KEYS.has(statKey)
+          ? await fetchHustleLeaders(statKey, undefined, 10)
+          : await fetchStatLeaders(statKey, undefined, 10);
         if (!mounted) return;
-        setLeaders(Array.isArray(data?.results) ? data.results : []);
+        const normalized = (Array.isArray(data?.results) ? data.results : []).map((r) => ({
+          ...r,
+          team_abbr: r.team_abbr || r.team_abbreviation,
+        }));
+        setLeaders(normalized);
         setSeason(data?.season || null);
       } catch (err) {
         if (!mounted) return;
@@ -84,6 +100,22 @@ export default function StatLeaders() {
             <span className="hb-rail-label">Stat</span>
             <div className="hb-rail-list">
               {STAT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  className={`hb-rail-item ${opt.key === statKey ? 'hb-rail-item--active' : ''}`}
+                  onClick={() => setStatKey(opt.key)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="hb-rail-group">
+            <span className="hb-rail-label">Hustle (real effort stats)</span>
+            <div className="hb-rail-list">
+              {HUSTLE_STAT_OPTIONS.map((opt) => (
                 <button
                   key={opt.key}
                   type="button"
