@@ -4,6 +4,7 @@ import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
+import LengthMattersCard from './LengthMattersCard';
 
 function fmt(v, digits = 1) {
     return v == null ? '—' : v.toFixed(digits);
@@ -13,10 +14,18 @@ function fmtPct(v) {
     return v == null ? '—' : `${(v * 100).toFixed(1)}%`;
 }
 
+function fmtInches(v) {
+    if (v == null) return '—';
+    const feet = Math.floor(v / 12);
+    const inches = (v % 12).toFixed(1);
+    return `${feet}'${inches}" (${v.toFixed(1)}")`;
+}
+
 export default function DraftProspectSection() {
     const [searchInput, setSearchInput] = useState('Zion Williamson');
     const [suggestions, setSuggestions] = useState([]);
     const [playerName, setPlayerName] = useState('Zion Williamson');
+    const [includeMeasurements, setIncludeMeasurements] = useState(false);
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -46,7 +55,7 @@ export default function DraftProspectSection() {
         setError('');
         (async () => {
             try {
-                const res = await fetchDraftProspectComp(playerName, null, 5);
+                const res = await fetchDraftProspectComp(playerName, null, 5, includeMeasurements);
                 if (active) setData(res);
             } catch (e) {
                 if (active) {
@@ -58,7 +67,7 @@ export default function DraftProspectSection() {
             }
         })();
         return () => { active = false; };
-    }, [playerName]);
+    }, [playerName, includeMeasurements]);
 
     function pick(name) {
         setSearchInput(name);
@@ -116,6 +125,16 @@ export default function DraftProspectSection() {
                         </ul>
                     )}
                 </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: '0.75rem', cursor: 'pointer' }}>
+                    <input
+                        type="checkbox"
+                        checked={includeMeasurements}
+                        onChange={(e) => setIncludeMeasurements(e.target.checked)}
+                    />
+                    <span className="page-subtitle" style={{ margin: 0 }}>
+                        Also match on real NBA Draft Combine measurements (wingspan, standing reach)
+                    </span>
+                </label>
                 {error && <p className="error-message" style={{ marginTop: '0.5rem' }}>{error}</p>}
             </div>
 
@@ -141,6 +160,18 @@ export default function DraftProspectSection() {
                             <span className="page-subtitle">TS% <strong style={{ color: 'var(--text-primary)' }}>{fmtPct(data.prospect.ts_pct)}</strong></span>
                             <span className="page-subtitle">Net Rtg <strong style={{ color: 'var(--text-primary)' }}>{fmt(data.prospect.net_rating)}</strong></span>
                         </div>
+                        {data.prospect.combine_measurements ? (
+                            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid var(--border)' }}>
+                                <span className="page-subtitle">Height (no shoes) <strong style={{ color: 'var(--text-primary)' }}>{fmtInches(data.prospect.combine_measurements.height_wo_shoes)}</strong></span>
+                                <span className="page-subtitle">Wingspan <strong style={{ color: 'var(--text-primary)' }}>{fmtInches(data.prospect.combine_measurements.wingspan)}</strong></span>
+                                <span className="page-subtitle">Standing Reach <strong style={{ color: 'var(--text-primary)' }}>{fmtInches(data.prospect.combine_measurements.standing_reach)}</strong></span>
+                                <span className="page-subtitle">Weight <strong style={{ color: 'var(--text-primary)' }}>{data.prospect.combine_measurements.weight != null ? `${data.prospect.combine_measurements.weight.toFixed(1)} lbs` : '—'}</strong></span>
+                            </div>
+                        ) : (
+                            <p className="page-subtitle" style={{ marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid var(--border)' }}>
+                                No real NBA Draft Combine measurements on file for this prospect (didn't attend, or this is before combine data was tracked here).
+                            </p>
+                        )}
                     </div>
 
                     <div className="dashboard-card" style={{ marginTop: '1rem' }}>
@@ -161,6 +192,7 @@ export default function DraftProspectSection() {
 
                     <div className="dashboard-card" style={{ marginTop: '1rem' }}>
                         <h3 className="section-heading" style={{ marginTop: 0 }}>Real College Comps</h3>
+                        <p className="page-subtitle" style={{ marginTop: '-0.5rem', marginBottom: '0.75rem' }}>{data.measurements_note}</p>
                         <div className="hb-table-wrapper table-wrapper">
                             <table className="data-table">
                                 <thead>
@@ -195,6 +227,8 @@ export default function DraftProspectSection() {
                     </div>
                 </>
             )}
+
+            <LengthMattersCard />
         </div>
     );
 }

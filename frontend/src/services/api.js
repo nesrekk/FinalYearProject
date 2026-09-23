@@ -292,11 +292,22 @@ export async function fetchPlayoffComparison(player, season) {
 }
 
 // ─── Draft Prospect Comp Finder ──────────────────────────────────
-export async function fetchDraftProspectComp(player, season, topNComps = 5) {
+export async function fetchDraftProspectComp(player, season, topNComps = 5, includeMeasurements = false) {
     const response = await axios.get(
         `${IMPACT_BASE}/prospects/comp/${encodeURIComponent(player)}`,
-        { params: season ? { season, top_n_comps: topNComps } : { top_n_comps: topNComps } }
+        {
+            params: {
+                ...(season ? { season } : {}),
+                top_n_comps: topNComps,
+                include_measurements: includeMeasurements,
+            },
+        }
     );
+    return response.data;
+}
+
+export async function fetchLengthStudy() {
+    const response = await axios.get(`${IMPACT_BASE}/draft/length-study`);
     return response.data;
 }
 

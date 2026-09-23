@@ -173,9 +173,18 @@ function SearchBox({ placeholder, value, onChange, suggestions, onPick, color })
     );
 }
 
+function fmtInches(v) {
+    if (v == null) return null;
+    const feet = Math.floor(v / 12);
+    const inches = (v % 12).toFixed(1);
+    return `${feet}'${inches}"`;
+}
+
 function BioCard({ profile, color }) {
     if (!profile) return null;
     const { bio } = profile;
+    const cm = bio.combine_measurements;
+    const hasMeasurements = cm && (cm.height_wo_shoes != null || cm.wingspan != null);
     return (
         <div className="hb-compare-bio" style={{ borderColor: color }}>
             <PlayerHeadshot playerId={profile.player_id} playerName={profile.player_name} size={72} />
@@ -189,6 +198,16 @@ function BioCard({ profile, color }) {
                 <Icon name="auto_awesome" size="0.85em" />
                 {bio.archetype || 'Unclustered'}
             </div>
+            {hasMeasurements && (
+                <div className="page-subtitle" style={{ marginTop: '0.4rem', fontSize: '0.75rem' }}>
+                    {fmtInches(cm.height_wo_shoes) && <>Ht {fmtInches(cm.height_wo_shoes)}</>}
+                    {fmtInches(cm.wingspan) && <> · Wing {fmtInches(cm.wingspan)}</>}
+                    {cm.weight != null && <> · {cm.weight.toFixed(0)} lbs</>}
+                    <InfoTooltip label="Real NBA Draft Combine measurement" title="Real combine measurement">
+                        From the real NBA Draft Combine (only available for players who were actually measured there).
+                    </InfoTooltip>
+                </div>
+            )}
         </div>
     );
 }

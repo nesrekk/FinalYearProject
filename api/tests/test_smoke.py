@@ -105,6 +105,33 @@ def test_impact_playoff_comparison_shape():
     assert resp.status_code in (200, 404)
 
 
+def test_impact_draft_prospect_comp_with_measurements():
+    from impact_api import app
+    client = TestClient(app)
+    resp = client.get("/prospects/comp/Zach Edey")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "combine_measurements" in data["prospect"]
+    assert data["measurements_included"] is False
+
+    resp2 = client.get("/prospects/comp/Zach Edey", params={"include_measurements": True})
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    assert data2["measurements_included"] is True
+    assert data2["bridge_pool_size"] <= data["bridge_pool_size"]
+
+
+def test_impact_length_study():
+    from impact_api import app
+    resp = TestClient(app).get("/draft/length-study")
+    assert resp.status_code == 200
+    data = resp.json()
+    ids = [p["player_id"] for p in data["points"]]
+    assert len(ids) == len(set(ids))  # no duplicate players
+    assert data["n"] == len(ids)
+    assert "wingspan_minus_height_vs_dbpm" in data["correlations"]
+
+
 def test_impact_heliocentricity():
     from impact_api import app
     resp = TestClient(app).get("/players/heliocentricity")
