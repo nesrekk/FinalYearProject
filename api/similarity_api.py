@@ -232,6 +232,95 @@ def get_player_cluster_history(player_name: str):
     }
 
 
+# ─── League Evolution ────────────────────────────────────────────────────────
+#
+# How the real league has changed: each real statistical archetype's real
+# share of the qualified-player pool per season (player_clusters, already
+# populated for every season 2009-10–present), plus three real league-average
+# trends per season computed straight from player_season_stats, each a
+# minutes-weighted average across every real player that season (so a
+# 10-minute bench role doesn't count as much as a 35-minute starter) —
+# nothing here is modeled or projected, just real historical aggregation.
+
+@app.get("/clusters/evolution")
+def get_league_evolution():
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT season, archetype, COUNT(*) AS n
+               FROM player_clusters
+               GROUP BY season, archetype
+               ORDER BY season, archetype;"""
+        )
+        archetype_rows = cursor.fetchall()
+
+        cursor.execute(
+            """SELECT season,
+                      SUM((fg3a::float / NULLIF(fga, 0)) * min * gp) / NULLIF(SUM(min * gp), 0) AS three_pt_rate,
+                      SUM(ts_pct * min * gp) / NULLIF(SUM(min * gp), 0) AS ts_pct,
+                      SUM(poss) / NULLIF(SUM(min * gp), 0) * 48 AS pace_proxy
+               FROM player_season_stats
+               WHERE gp > 0 AND min > 0
+               GROUP BY season
+               ORDER BY season;"""
+        )
+        trend_rows = cursor.fetchall()
+
+    if not archetype_rows:
+        raise HTTPException(
+            status_code=404,
+            detail="No cluster results found. Run scripts/cluster_players.py first.",
+        )
+
+    seasons = sorted({r[0] for r in archetype_rows})
+    archetypes = sorted({r[1] for r in archetype_rows})
+    season_totals = {}
+    for season, archetype, n in archetype_rows:
+        season_totals[season] = season_totals.get(season, 0) + n
+
+    archetype_shares = {a: [] for a in archetypes}
+    counts_by_season = {s: {} for s in seasons}
+    for season, archetype, n in archetype_rows:
+        counts_by_season[season][archetype] = n
+    for season in seasons:
+        total = season_totals[season]
+        for archetype in archetypes:
+            n = counts_by_season[season].get(archetype, 0)
+            archetype_shares[archetype].append({
+                "season": season,
+                "n": n,
+                "share": round(n / total, 4) if total else None,
+            })
+
+    trends = [
+        {
+            "season": r[0],
+            "three_pt_rate": round(r[1], 4) if r[1] is not None else None,
+            "ts_pct": round(r[2], 4) if r[2] is not None else None,
+            "pace_proxy": round(r[3], 2) if r[3] is not None else None,
+        }
+        for r in trend_rows
+    ]
+
+    return {
+        "seasons": seasons,
+        "archetypes": archetypes,
+        "archetype_shares": archetype_shares,
+        "trends": trends,
+        "methodology": (
+            "Archetype share = real count of qualified player-seasons in that archetype (K-Means clustering, "
+            "scripts/cluster_players.py) divided by the real total qualified pool that season. three_pt_rate is "
+            "a minutes-weighted league average of each real player's own 3PA/FGA that season (the share of shot "
+            "attempts taken from three, not raw makes or attempts per game, which pace changes would confound). "
+            "ts_pct is a minutes-weighted league average of real True Shooting %. pace_proxy is SUM(real season "
+            "possessions) / SUM(real season minutes) * 48 — a real, minutes-weighted approximation of league pace "
+            "built from player-level possession/minutes data (not the official team-level NBA pace stat, which "
+            "this project doesn't have a historical source for), disclosed as an approximation rather than "
+            "presented as the official number."
+        ),
+    }
+
+
 @app.get("/similarity/season/{player_name}/{season}")
 def get_season_similarity(player_name: str, season: int, top_n: int = 10):
     """

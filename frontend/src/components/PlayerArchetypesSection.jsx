@@ -1,10 +1,87 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchArchetypes, fetchSeasonClusters, fetchPlayerClusterHistory, fetchLivePlayerSuggestions } from '../services/api';
+import { fetchArchetypes, fetchSeasonClusters, fetchPlayerClusterHistory, fetchLivePlayerSuggestions, fetchLeagueEvolution } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
 
 const PALETTE = ['#38bdf8', '#f87171', '#facc15', '#a78bfa', '#34d399', '#fb923c'];
+
+const EVO_W = 640, EVO_H = 260, EVO_PAD_L = 42, EVO_PAD_R = 12, EVO_PAD_T = 10, EVO_PAD_B = 22;
+const EVO_PLOT_W = EVO_W - EVO_PAD_L - EVO_PAD_R;
+const EVO_PLOT_H = EVO_H - EVO_PAD_T - EVO_PAD_B;
+
+function seasonLabel(season) {
+    return `${season - 1}-${String(season).slice(-2)}`;
+}
+
+function StackedArchetypeChart({ evolution, colorByArchetype }) {
+    const seasons = evolution?.seasons || [];
+    const archetypes = evolution?.archetypes || [];
+    if (!seasons.length) return null;
+
+    const evoX = (i) => EVO_PAD_L + (i / (seasons.length - 1 || 1)) * EVO_PLOT_W;
+    const evoY = (cum) => EVO_PAD_T + (1 - cum) * EVO_PLOT_H;
+
+    let cumulative = seasons.map(() => 0);
+    const layers = archetypes.map((archetype) => {
+        const shares = evolution.archetype_shares[archetype] || [];
+        const top = shares.map((s, i) => cumulative[i] + (s.share || 0));
+        const bottomPath = cumulative.map((c, i) => `${i === 0 ? 'M' : 'L'} ${evoX(i).toFixed(1)} ${evoY(c).toFixed(1)}`).join(' ');
+        const topPath = top.map((c, i) => `L ${evoX(i).toFixed(1)} ${evoY(c).toFixed(1)}`).reverse().join(' ');
+        const layer = { archetype, path: `${bottomPath} ${topPath} Z` };
+        cumulative = top;
+        return layer;
+    });
+
+    const tickEvery = seasons.length > 10 ? 3 : 1;
+
+    return (
+        <svg viewBox={`0 0 ${EVO_W} ${EVO_H}`} style={{ width: '100%', display: 'block' }}>
+            <rect x="0" y="0" width={EVO_W} height={EVO_H} fill="#1a2332" rx="8" />
+            {[0, 0.25, 0.5, 0.75, 1].map((t) => (
+                <React.Fragment key={t}>
+                    <line x1={EVO_PAD_L} y1={evoY(t)} x2={EVO_W - EVO_PAD_R} y2={evoY(t)} stroke="#26344a" strokeWidth="1" />
+                    <text x={EVO_PAD_L - 6} y={evoY(t) + 3} fill="#64748b" fontSize="9" textAnchor="end">{Math.round(t * 100)}%</text>
+                </React.Fragment>
+            ))}
+            {layers.map((l) => (
+                <path key={l.archetype} d={l.path} fill={colorByArchetype[l.archetype] || '#94a3b8'} fillOpacity={0.85} stroke="#0f172a" strokeWidth="0.5" />
+            ))}
+            {seasons.map((s, i) => (
+                i % tickEvery === 0 && (
+                    <text key={s} x={evoX(i)} y={EVO_H - 6} fill="#64748b" fontSize="9" textAnchor="middle">{s}</text>
+                )
+            ))}
+        </svg>
+    );
+}
+
+function TrendMiniChart({ label, data, valueKey, format, color }) {
+    const values = data.map((d) => d[valueKey]).filter((v) => v != null);
+    if (!values.length) return null;
+    const vMin = Math.min(...values), vMax = Math.max(...values);
+    const w = 200, h = 110, padL = 4, padR = 4, padT = 8, padB = 16;
+    const plotW = w - padL - padR, plotH = h - padT - padB;
+    const x = (i) => padL + (i / (data.length - 1 || 1)) * plotW;
+    const y = (v) => padT + (1 - (v - vMin) / ((vMax - vMin) || 1)) * plotH;
+    const path = data
+        .map((d, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(d[valueKey]).toFixed(1)}`)
+        .join(' ');
+
+    return (
+        <div>
+            <div className="page-subtitle" style={{ marginBottom: 4, fontSize: '0.78rem' }}>{label}</div>
+            <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', display: 'block' }}>
+                <rect x="0" y="0" width={w} height={h} fill="#1a2332" rx="6" />
+                <path d={path} fill="none" stroke={color} strokeWidth="2" />
+                <text x={padL} y={h - 3} fill="#64748b" fontSize="8">{data[0].season}</text>
+                <text x={w - padR} y={h - 3} fill="#64748b" fontSize="8" textAnchor="end">{data[data.length - 1].season}</text>
+                <text x={padL} y={padT + 8} fill={color} fontSize="9" fontWeight="700">{format(vMax)}</text>
+                <text x={padL} y={h - padB + 4} fill={color} fontSize="9" fontWeight="700">{format(vMin)}</text>
+            </svg>
+        </div>
+    );
+}
 
 export default function PlayerArchetypesSection() {
     const [archetypes, setArchetypes] = useState([]);
@@ -19,11 +96,22 @@ export default function PlayerArchetypesSection() {
     const [history, setHistory] = useState(null);
     const [historyError, setHistoryError] = useState('');
 
+    const [evolution, setEvolution] = useState(null);
+    const [evolutionError, setEvolutionError] = useState('');
+
     useEffect(() => {
         let active = true;
         fetchArchetypes()
             .then((data) => { if (active) setArchetypes(data.archetypes || []); })
             .catch(() => { if (active) setArchetypes([]); });
+        return () => { active = false; };
+    }, []);
+
+    useEffect(() => {
+        let active = true;
+        fetchLeagueEvolution()
+            .then((data) => { if (active) setEvolution(data); })
+            .catch((e) => { if (active) setEvolutionError(e?.response?.data?.detail || 'Could not load league evolution.'); });
         return () => { active = false; };
     }, []);
 
@@ -281,6 +369,60 @@ export default function PlayerArchetypesSection() {
                         </tbody>
                     </table>
                 </div>
+            )}
+
+            <h3 className="section-heading" style={{ marginTop: '1.5rem' }}>
+                League Evolution
+                <InfoTooltip label="How this works" title="Real historical aggregation, not a model">
+                    Archetype share is the real fraction of each season's qualified player pool sorted into
+                    each statistical archetype by the same K-Means clustering above — nothing modeled or
+                    projected. The three trend charts are minutes-weighted league averages of real per-player
+                    stats each season: 3PA rate is 3PA/FGA (shot-selection share, not raw attempts, which pace
+                    would confound), TS% is real True Shooting%, and Pace is a real minutes-weighted
+                    approximation (season possessions / season minutes * 48) since this project doesn't have
+                    the official team-level NBA pace stat historically — disclosed as an approximation.
+                </InfoTooltip>
+            </h3>
+            {evolutionError && <p className="error-message">{evolutionError}</p>}
+            {evolution && (
+                <>
+                    <p className="page-subtitle" style={{ marginTop: '-0.5rem', marginBottom: '0.75rem' }}>
+                        Real archetype share of the qualified player pool, {seasonLabel(evolution.seasons[0])} through {seasonLabel(evolution.seasons[evolution.seasons.length - 1])}.
+                    </p>
+                    <StackedArchetypeChart evolution={evolution} colorByArchetype={colorByArchetype} />
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem 1.25rem', marginTop: '0.6rem' }}>
+                        {evolution.archetypes.map((a) => (
+                            <div key={a} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: colorByArchetype[a] }} />
+                                <span className="page-subtitle" style={{ margin: 0, fontSize: '0.78rem' }}>{a}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginTop: '1.25rem' }}>
+                        <TrendMiniChart
+                            label="3PA Rate (3PA / FGA)"
+                            data={evolution.trends}
+                            valueKey="three_pt_rate"
+                            format={(v) => `${Math.round(v * 100)}%`}
+                            color="#facc15"
+                        />
+                        <TrendMiniChart
+                            label="True Shooting %"
+                            data={evolution.trends}
+                            valueKey="ts_pct"
+                            format={(v) => `${Math.round(v * 100)}%`}
+                            color="#34d399"
+                        />
+                        <TrendMiniChart
+                            label="Pace (real proxy)"
+                            data={evolution.trends}
+                            valueKey="pace_proxy"
+                            format={(v) => v.toFixed(1)}
+                            color="#38bdf8"
+                        />
+                    </div>
+                </>
             )}
         </section>
     );

@@ -90,6 +90,11 @@ export async function fetchPlayerClusterHistory(playerName) {
     return response.data;
 }
 
+export async function fetchLeagueEvolution() {
+    const response = await axios.get(`${SIMILARITY_BASE}/clusters/evolution`);
+    return response.data;
+}
+
 export async function fetchLivePlayerSuggestions(query, limit = 20) {
     const response = await axios.get(
         `${IMPACT_BASE}/players/search`,

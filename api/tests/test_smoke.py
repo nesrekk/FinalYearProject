@@ -73,6 +73,17 @@ def test_similarity_docs_load():
     assert resp.status_code == 200
 
 
+def test_similarity_league_evolution():
+    from similarity_api import app
+    resp = TestClient(app).get("/clusters/evolution")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["seasons"]
+    assert data["archetypes"]
+    assert set(data["archetype_shares"].keys()) == set(data["archetypes"])
+    assert len(data["trends"]) == len(data["seasons"])
+
+
 # ─── impact_api (port 8002) ─────────────────────────────────────────────────
 
 def test_impact_playoff_comparison_shape():
