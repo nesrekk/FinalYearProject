@@ -4,12 +4,14 @@ import GuessThePlayer from './GuessThePlayer';
 import BlurredPlayer from './BlurredPlayer';
 import HigherOrLower from './HigherOrLower';
 import Trivia from './Trivia';
+import GuessTheGame from './GuessTheGame';
 
 const tabs = [
     { id: 'guess', label: 'Guess the Player', icon: 'sports_esports' },
     { id: 'blurred', label: 'Blurred Player', icon: 'blur_on' },
     { id: 'higherlower', label: 'Higher or Lower', icon: 'swap_vert' },
     { id: 'trivia', label: 'Trivia', icon: 'quiz' },
+    { id: 'guessgame', label: 'Guess the Game', icon: 'movie' },
 ];
 
 export default function GamesHub() {
@@ -34,6 +36,7 @@ export default function GamesHub() {
                 {activeTab === 'blurred' && <BlurredPlayer />}
                 {activeTab === 'higherlower' && <HigherOrLower />}
                 {activeTab === 'trivia' && <Trivia />}
+                {activeTab === 'guessgame' && <GuessTheGame />}
             </div>
         </div>
     );

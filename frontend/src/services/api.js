@@ -342,6 +342,31 @@ export async function fetchChampionshipOdds() {
     return response.data;
 }
 
+// ─── Games: Guess the Game ──────────────────────────────────────
+export async function fetchGuessTheGameDaily(puzzleDate) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/games/guess-the-game/daily`,
+        { params: puzzleDate ? { puzzle_date: puzzleDate } : {} }
+    );
+    return response.data;
+}
+
+export async function submitGuessTheGame(team, attemptNumber, puzzleDate) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/games/guess-the-game/guess`,
+        { params: { team, attempt_number: attemptNumber, puzzle_date: puzzleDate } }
+    );
+    return response.data;
+}
+
+export async function fetchGuessTheGameReveal(puzzleDate) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/games/guess-the-game/reveal`,
+        { params: { puzzle_date: puzzleDate } }
+    );
+    return response.data;
+}
+
 // ─── Games: Trivia ───────────────────────────────────────────────
 export async function fetchTriviaDaily(season) {
     const response = await axios.get(

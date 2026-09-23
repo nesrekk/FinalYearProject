@@ -1474,6 +1474,169 @@ def get_wp_replay_whatif(game_id: str, event_id: int):
     }
 
 
+# ─── Games: Guess the Game ───────────────────────────────────────────────────
+#
+# Same deterministic-daily-seed pattern as Guess the Player: no server-side
+# session, the "mystery" real game is re-derived from a hash of the date on
+# every request, so any request (daily/guess/reveal) is stateless and always
+# agrees on the same real answer for that date. Reuses the real WPA replay
+# infrastructure above (_fetch_game_events, the real trained model) rather
+# than re-implementing win-probability scoring.
+
+GUESS_THE_GAME_MAX_GUESSES = 3
+
+
+def _guess_the_game_pool(cursor):
+    cursor.execute(
+        """
+        WITH last_events AS (
+            SELECT DISTINCT ON (game_id) game_id, score_home, score_away
+            FROM pbp_events
+            ORDER BY game_id, action_number DESC
+        )
+        SELECT g.game_id, g.season, g.game_date, g.home_team, g.away_team,
+               le.score_home, le.score_away
+        FROM pbp_games g
+        JOIN last_events le ON le.game_id = g.game_id
+        ORDER BY g.game_id ASC;
+        """
+    )
+    cols = ["game_id", "season", "game_date", "home_team", "away_team", "score_home", "score_away"]
+    return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+
+def _guess_the_game_mystery(pool_rows, puzzle_date: date):
+    seed = f"guess-the-game-{puzzle_date.isoformat()}"
+    digest = hashlib.sha256(seed.encode()).hexdigest()
+    index = int(digest, 16) % len(pool_rows)
+    return pool_rows[index]
+
+
+def _downsample_points(points, target: int = 100):
+    if len(points) <= target:
+        return points
+    step = len(points) / target
+    indices = sorted({min(len(points) - 1, int(i * step)) for i in range(target)})
+    if indices[-1] != len(points) - 1:
+        indices.append(len(points) - 1)
+    return [points[i] for i in indices]
+
+
+@app.get("/games/guess-the-game/daily")
+def get_guess_the_game_daily(puzzle_date: Optional[str] = None):
+    """Today's puzzle: a real completed game's downsampled real win-
+    probability curve, with no team names or date — just the shape of how
+    the game actually unfolded."""
+    _wpa_model_required()
+    resolved_date = _parse_puzzle_date(puzzle_date)
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT to_regclass('public.pbp_games');")
+        if cursor.fetchone()[0] is None:
+            raise HTTPException(
+                status_code=503,
+                detail="No play-by-play data yet — run scripts/fetch_play_by_play.py first.",
+            )
+        pool_rows = _guess_the_game_pool(cursor)
+        if not pool_rows:
+            raise HTTPException(status_code=503, detail="No completed games with play-by-play available.")
+
+        mystery = _guess_the_game_mystery(pool_rows, resolved_date)
+        events = _fetch_game_events(cursor, mystery["game_id"])
+
+    points = []
+    prev_secs, prev_margin = 2880.0, 0
+    prev_wp_home = wpa_win_prob(WPA_MODEL, WPA_SCALER, prev_secs, prev_margin)
+    for _event_id, _action_number, period, secs, score_home, score_away, *_rest in events:
+        margin = score_home - score_away
+        wp_home = wpa_win_prob(WPA_MODEL, WPA_SCALER, max(secs, 0), margin)
+        points.append({
+            "seconds_elapsed": wpa_seconds_elapsed(period, secs),
+            "home_wp": round(wp_home, 4),
+        })
+        prev_secs, prev_margin, prev_wp_home = secs, margin, wp_home
+
+    return {
+        "puzzle_date": resolved_date.isoformat(),
+        "max_guesses": GUESS_THE_GAME_MAX_GUESSES,
+        "points": _downsample_points(points, 100),
+        "methodology": (
+            "The real win-probability curve (home team's perspective, from the real trained WPA model) "
+            "for one real completed game, downsampled to about 100 points. Team names and the date are "
+            "withheld until you guess or run out of guesses."
+        ),
+    }
+
+
+@app.get("/games/guess-the-game/guess")
+def guess_the_game(team: str, attempt_number: int, puzzle_date: Optional[str] = None):
+    """One guess = one real team abbreviation. Each wrong guess reveals the
+    next clue in a fixed order (season, then final margin, then one of the
+    two real teams) — a correct guess ends the puzzle immediately."""
+    attempt_number = max(1, min(attempt_number, GUESS_THE_GAME_MAX_GUESSES))
+    resolved_date = _parse_puzzle_date(puzzle_date)
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        pool_rows = _guess_the_game_pool(cursor)
+    if not pool_rows:
+        raise HTTPException(status_code=503, detail="No completed games with play-by-play available.")
+
+    mystery = _guess_the_game_mystery(pool_rows, resolved_date)
+    guess_abbr = team.strip().upper()
+    correct = guess_abbr in (mystery["home_team"], mystery["away_team"])
+    guesses_remaining = GUESS_THE_GAME_MAX_GUESSES - attempt_number
+
+    result = {
+        "attempt_number": attempt_number,
+        "correct": correct,
+        "guesses_remaining": max(0, guesses_remaining),
+    }
+
+    if correct:
+        result["mystery_game"] = {
+            "game_id": mystery["game_id"],
+            "season": mystery["season"],
+            "game_date": mystery["game_date"].isoformat() if mystery["game_date"] else None,
+            "home_team": mystery["home_team"],
+            "away_team": mystery["away_team"],
+            "final_score": {"home": mystery["score_home"], "away": mystery["score_away"]},
+        }
+        return result
+
+    if attempt_number == 1:
+        result["clue"] = {"type": "season", "value": mystery["season"]}
+    elif attempt_number == 2:
+        result["clue"] = {"type": "final_margin", "value": abs(mystery["score_home"] - mystery["score_away"])}
+    else:
+        result["clue"] = {"type": "one_team", "value": mystery["home_team"]}
+
+    return result
+
+
+@app.get("/games/guess-the-game/reveal")
+def reveal_guess_the_game(puzzle_date: Optional[str] = None):
+    """Full reveal once a player is out of guesses."""
+    resolved_date = _parse_puzzle_date(puzzle_date)
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        pool_rows = _guess_the_game_pool(cursor)
+    if not pool_rows:
+        raise HTTPException(status_code=503, detail="No completed games with play-by-play available.")
+
+    mystery = _guess_the_game_mystery(pool_rows, resolved_date)
+    return {
+        "game_id": mystery["game_id"],
+        "season": mystery["season"],
+        "game_date": mystery["game_date"].isoformat() if mystery["game_date"] else None,
+        "home_team": mystery["home_team"],
+        "away_team": mystery["away_team"],
+        "final_score": {"home": mystery["score_home"], "away": mystery["score_away"]},
+    }
+
+
 # ─── Lineup Chemistry (real 5-man unit on-court performance) ────────────────
 #
 # Real 5-man lineup combinations and their real on-court Offensive/Defensive/

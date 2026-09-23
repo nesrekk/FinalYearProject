@@ -142,3 +142,34 @@ def test_impact_wp_replay_detail_and_whatif():
     whatif_data = whatif_resp.json()
     assert "points" in whatif_data
     assert whatif_data["points_awarded"] in (2, 3)
+
+
+def test_impact_guess_the_game_daily():
+    from impact_api import app
+    resp = TestClient(app).get("/games/guess-the-game/daily")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["points"]
+    assert all("home_wp" in p for p in data["points"])
+    # No team/date leakage in the daily payload itself.
+    assert "home_team" not in data and "away_team" not in data
+
+
+def test_impact_guess_the_game_flow():
+    from impact_api import app
+    client = TestClient(app)
+    reveal = client.get("/games/guess-the-game/reveal").json()
+
+    wrong_team = "LAL" if reveal["home_team"] != "LAL" and reveal["away_team"] != "LAL" else "BOS"
+    resp = client.get("/games/guess-the-game/guess", params={"team": wrong_team, "attempt_number": 1})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["correct"] is False
+    assert data["clue"]["type"] == "season"
+
+    resp2 = client.get(
+        "/games/guess-the-game/guess",
+        params={"team": reveal["home_team"], "attempt_number": 2},
+    )
+    assert resp2.status_code == 200
+    assert resp2.json()["correct"] is True
