@@ -14,31 +14,11 @@ Usage:
     cd scripts && python3 compute_wpa.py
 """
 
-import math
-import pickle
-
-import numpy as np
 import psycopg2
 import psycopg2.extras
 
 from db_config import DB_CONFIG
-
-CLUTCH_SECONDS = 300
-CLUTCH_MARGIN = 5
-
-
-def load_model():
-    with open("wpa_model.pkl", "rb") as f:
-        model = pickle.load(f)
-    with open("wpa_scaler.pkl", "rb") as f:
-        scaler = pickle.load(f)
-    return model, scaler
-
-
-def win_prob(model, scaler, seconds_remaining, margin):
-    margin_per_sqrt = margin / math.sqrt(seconds_remaining + 1)
-    X = scaler.transform([[seconds_remaining, margin, margin_per_sqrt]])
-    return float(model.predict_proba(X)[0, 1])
+from wpa_lib import CLUTCH_MARGIN, CLUTCH_SECONDS, load_model, win_prob
 
 
 def main():

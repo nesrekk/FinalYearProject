@@ -305,6 +305,28 @@ export async function fetchClutchWpaLeaderboard(topN = 25) {
     return response.data;
 }
 
+// ─── Game Win-Probability Replay ───────────────────────────────────
+export async function fetchWpReplayList(season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/games/wp-replay/list`,
+        { params: season ? { season } : {} }
+    );
+    return response.data;
+}
+
+export async function fetchWpReplay(gameId) {
+    const response = await axios.get(`${IMPACT_BASE}/games/wp-replay/${encodeURIComponent(gameId)}`);
+    return response.data;
+}
+
+export async function fetchWpReplayWhatIf(gameId, eventId) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/games/wp-replay/${encodeURIComponent(gameId)}/whatif`,
+        { params: { event_id: eventId } }
+    );
+    return response.data;
+}
+
 // ─── Lineup Chemistry ─────────────────────────────────────────────
 export async function fetchLineupChemistry(order = 'best', minMinutes = 40, topN = 15, season) {
     const response = await axios.get(

@@ -108,3 +108,37 @@ def test_impact_lineup_chemistry():
     assert "results" in data
     assert "methodology" in data
     assert data["lineups_qualified"] <= data["lineups_total"]
+
+
+def test_impact_wp_replay_list():
+    from impact_api import app
+    resp = TestClient(app).get("/games/wp-replay/list")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "games" in data
+
+
+def test_impact_wp_replay_detail_and_whatif():
+    from impact_api import app
+    client = TestClient(app)
+    listing = client.get("/games/wp-replay/list").json()
+    if not listing.get("games"):
+        return
+    game_id = listing["games"][0]["game_id"]
+
+    resp = client.get(f"/games/wp-replay/{game_id}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "points" in data and len(data["points"]) > 0
+    assert "top_plays" in data
+
+    miss = next((p for p in data["points"] if p["is_missed_shot"]), None)
+    if miss is None:
+        return
+    whatif_resp = client.get(
+        f"/games/wp-replay/{game_id}/whatif", params={"event_id": miss["event_id"]}
+    )
+    assert whatif_resp.status_code == 200
+    whatif_data = whatif_resp.json()
+    assert "points" in whatif_data
+    assert whatif_data["points_awarded"] in (2, 3)

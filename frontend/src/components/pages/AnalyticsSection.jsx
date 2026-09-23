@@ -14,6 +14,7 @@ import DraftProspectSection from '../DraftProspectSection';
 import HeliocentricitySection from '../HeliocentricitySection';
 import ClutchWpaSection from '../ClutchWpaSection';
 import LineupChemistrySection from '../LineupChemistrySection';
+import GameReplaySection from '../GameReplaySection';
 
 const TAB_GROUPS = [
     {
@@ -42,6 +43,7 @@ const TAB_GROUPS = [
             { id: 'vegas', label: 'Vegas Scanner', icon: 'currency_exchange' },
             { id: 'playoffs', label: 'Playoff Forecaster', icon: 'military_tech' },
             { id: 'lineups', label: 'Lineup Chemistry', icon: 'diversity_3' },
+            { id: 'replay', label: 'Game Replay', icon: 'movie' },
         ],
     },
     {
@@ -149,6 +151,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'helio' && <HeliocentricitySection />}
                 {activeTab === 'wpa' && <ClutchWpaSection />}
                 {activeTab === 'lineups' && <LineupChemistrySection />}
+                {activeTab === 'replay' && <GameReplaySection />}
             </div>
         </div>
     );
