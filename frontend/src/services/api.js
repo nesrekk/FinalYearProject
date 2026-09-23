@@ -291,6 +291,15 @@ export async function fetchHeliocentricityLeaderboard(season, topN = 25) {
     return response.data;
 }
 
+// ─── Clutch-Time Win Probability Added (WPA) Tracker ─────────────
+export async function fetchClutchWpaLeaderboard(topN = 25) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/players/clutch-wpa`,
+        { params: { top_n: topN } }
+    );
+    return response.data;
+}
+
 // ─── Vegas vs. Machine: Championship Odds Scanner ───────────────
 export async function fetchChampionshipOdds() {
     const response = await axios.get(`${IMPACT_BASE}/odds/championship`);

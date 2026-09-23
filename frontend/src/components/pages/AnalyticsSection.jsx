@@ -12,6 +12,7 @@ import VegasScannerSection from '../VegasScannerSection';
 import PlayoffForecasterSection from '../PlayoffForecasterSection';
 import DraftProspectSection from '../DraftProspectSection';
 import HeliocentricitySection from '../HeliocentricitySection';
+import ClutchWpaSection from '../ClutchWpaSection';
 
 const tabs = [
     { id: 'similarity', label: 'Season Similarity', icon: 'bar_chart' },
@@ -26,6 +27,7 @@ const tabs = [
     { id: 'playoffs', label: 'Playoff Forecaster', icon: 'military_tech' },
     { id: 'prospects', label: 'Draft Prospects', icon: 'school' },
     { id: 'helio', label: 'Heliocentricity', icon: 'wb_sunny' },
+    { id: 'wpa', label: 'Clutch WPA', icon: 'timer' },
 ];
 
 export default function AnalyticsSection() {
@@ -60,6 +62,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'playoffs' && <PlayoffForecasterSection />}
                 {activeTab === 'prospects' && <DraftProspectSection />}
                 {activeTab === 'helio' && <HeliocentricitySection />}
+                {activeTab === 'wpa' && <ClutchWpaSection />}
             </div>
         </div>
     );
