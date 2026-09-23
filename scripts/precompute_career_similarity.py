@@ -24,13 +24,7 @@ warnings.filterwarnings("ignore")
 
 # ─── Configuration ──────────────────────────────────────────────────────────
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "user": "postgres",
-    "password": "meinkampf:)",
-    "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 FEATURES = [
     "career_pts", "career_ts_pct", "career_usg_pct", "career_net_rating",

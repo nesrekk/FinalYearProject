@@ -35,10 +35,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 from sklearn.preprocessing import StandardScaler
 
-DB_CONFIG = {
-    "host": "localhost", "port": "5432", "user": "postgres",
-    "password": "meinkampf:)", "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 
 def load_data():

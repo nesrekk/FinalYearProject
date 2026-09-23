@@ -22,13 +22,7 @@ warnings.filterwarnings("ignore")
 
 # ─── Configuration ──────────────────────────────────────────────────────────
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "user": "postgres",
-    "password": "meinkampf:)",
-    "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 ADJUST_COLS = ["pts", "ts_pct", "usg_pct", "net_rating", "ast_pct", "reb_pct"]
 

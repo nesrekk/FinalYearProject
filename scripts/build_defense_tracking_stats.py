@@ -52,13 +52,7 @@ import psycopg2.extras
 import requests
 from nba_api.stats.endpoints import leaguedashptdefend
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "user": "postgres",
-    "password": "meinkampf:)",
-    "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 # Tracking data starts 2013-14 (season code 2014). Matches this project's
 # season-code convention throughout (season 2014 == "2013-14").

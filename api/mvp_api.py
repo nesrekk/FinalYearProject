@@ -127,15 +127,9 @@ ALLNBA_SELECTIONS = 15
 
 # ─── Database Connection Pool ───────────────────────────────────────────────
 
-DB_POOL = pool.SimpleConnectionPool(
-    minconn=1,
-    maxconn=10,
-    host="localhost",
-    port="5432",
-    user="postgres",
-    password="meinkampf:)",
-    dbname="nba_analytics",
-)
+from db_config import DB_CONFIG
+
+DB_POOL = pool.SimpleConnectionPool(minconn=1, maxconn=10, **DB_CONFIG)
 
 
 @contextmanager
@@ -764,4 +758,4 @@ def predict_all_nba(season: int):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("mvp_api:app", host="0.0.0.0", port=8001, reload=True)
+    uvicorn.run("mvp_api:app", host="0.0.0.0", port=8000, reload=True)

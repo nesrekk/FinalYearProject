@@ -38,15 +38,9 @@ REQUEST_SLEEP_SECONDS = 5
 BACKOFF_SLEEP_SECONDS = 30
 MAX_RETRIES = 3
 
-DB_POOL = pool.SimpleConnectionPool(
-    minconn=1,
-    maxconn=3,
-    host="localhost",
-    port="5432",
-    user="postgres",
-    password="meinkampf:)",
-    dbname="nba_analytics",
-)
+from db_config import DB_CONFIG
+
+DB_POOL = pool.SimpleConnectionPool(minconn=1, maxconn=3, **DB_CONFIG)
 
 # Only one live nba_api fetch job may run at a time, project-wide. This is
 # the main anti-ban safeguard: no matter how many users search at once,

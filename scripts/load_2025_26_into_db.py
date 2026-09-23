@@ -42,13 +42,7 @@ SEASON_INT = 2026
 BASE_CSV = os.path.join(DATA_DIR, "nba_2025_26_season.csv")
 ADVANCED_CSV = os.path.join(DATA_DIR, "nba_2025_26_advanced.csv")
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "user": "postgres",
-    "password": "meinkampf:)",
-    "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 INSERT_COLUMNS = [
     "player_id", "player_name", "team_abbreviation", "season", "age", "gp", "min",

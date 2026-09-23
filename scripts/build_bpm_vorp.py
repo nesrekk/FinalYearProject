@@ -81,13 +81,7 @@ import psycopg2.extras
 
 warnings.filterwarnings("ignore")
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "user": "postgres",
-    "password": "meinkampf:)",
-    "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 # ─── BPM 2.0 coefficients (Pos_1 = point guard, Pos_5 = center) ────────────
 # Sourced from jonahmiller99/basketball-utils (open-source reproduction of

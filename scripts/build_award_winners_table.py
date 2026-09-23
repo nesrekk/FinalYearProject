@@ -16,13 +16,7 @@ import psycopg2
 
 import build_dpoy_roy_models as dpoy_roy_mod
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "user": "postgres",
-    "password": "meinkampf:)",
-    "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 
 def resolve_player_id(cursor, player_name: str, season: int):

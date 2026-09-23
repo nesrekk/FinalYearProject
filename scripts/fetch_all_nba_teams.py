@@ -27,13 +27,7 @@ import psycopg2
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DATA_DIR = os.path.join(BASE_DIR, "nba_data")
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "user": "postgres",
-    "password": "meinkampf:)",
-    "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 # ─── All-NBA Teams, 2009-10 through 2024-25 ─────────────────────────────────
 # (season_int, team_tier, player) — team_tier 1/2/3 = First/Second/Third Team.

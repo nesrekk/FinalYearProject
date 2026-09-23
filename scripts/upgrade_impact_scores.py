@@ -20,13 +20,7 @@ import psycopg2
 
 # ─── Configuration ──────────────────────────────────────────────────────────
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "user": "postgres",
-    "password": "meinkampf:)",
-    "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 REQUIRED_COLS = [
     "player_id", "player_name", "season",

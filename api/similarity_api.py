@@ -35,15 +35,9 @@ app.add_middleware(
 
 # ─── Database Connection Pool ───────────────────────────────────────────────
 
-DB_POOL = pool.SimpleConnectionPool(
-    minconn=1,
-    maxconn=10,
-    host="localhost",
-    port="5432",
-    user="postgres",
-    password="meinkampf:)",
-    dbname="nba_analytics",
-)
+from db_config import DB_CONFIG
+
+DB_POOL = pool.SimpleConnectionPool(minconn=1, maxconn=10, **DB_CONFIG)
 
 
 @contextmanager
@@ -512,4 +506,4 @@ def search_players(q: str, limit: int = 8):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("similarity_api:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("similarity_api:app", host="0.0.0.0", port=8001, reload=True)

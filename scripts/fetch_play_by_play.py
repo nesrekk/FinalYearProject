@@ -26,13 +26,7 @@ import time
 import psycopg2
 import psycopg2.extras
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "user": "postgres",
-    "password": "meinkampf:)",
-    "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 PERIOD_SECONDS = 12 * 60
 OT_SECONDS = 5 * 60

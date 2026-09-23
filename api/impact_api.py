@@ -68,15 +68,9 @@ app.add_middleware(
 
 # ─── Database Connection Pool ───────────────────────────────────────────────
 
-DB_POOL = pool.SimpleConnectionPool(
-    minconn=1,
-    maxconn=10,
-    host="localhost",
-    port="5432",
-    user="postgres",
-    password="meinkampf:)",
-    dbname="nba_analytics",
-)
+from db_config import DB_CONFIG
+
+DB_POOL = pool.SimpleConnectionPool(minconn=1, maxconn=10, **DB_CONFIG)
 
 TEAM_META = {
     "ATL": {"name": "Atlanta Hawks", "conference": "eastern"},

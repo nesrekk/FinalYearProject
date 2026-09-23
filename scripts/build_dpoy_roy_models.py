@@ -35,13 +35,7 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DATA_DIR = os.path.join(BASE_DIR, "nba_data")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "user": "postgres",
-    "password": "meinkampf:)",
-    "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 TRAIN_SEASONS = list(range(2010, 2025))  # 2009-10 through 2023-24
 TEST_SEASON = 2025                        # 2024-25

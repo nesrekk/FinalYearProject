@@ -50,13 +50,7 @@ warnings.filterwarnings("ignore")
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "user": "postgres",
-    "password": "meinkampf:)",
-    "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 # net_rating alone (not off_rating/def_rating separately) — those two are
 # mathematically off_rating - def_rating = net_rating, so including all

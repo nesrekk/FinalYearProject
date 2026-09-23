@@ -58,13 +58,7 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "user": "postgres",
-    "password": "meinkampf:)",
-    "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 FEATURES = ["pts", "reb", "ast", "stl", "blk", "tov", "fg3_pct", "ts_pct", "usg_pct", "ast_pct", "reb_pct"]
 

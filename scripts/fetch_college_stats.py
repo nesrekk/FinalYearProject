@@ -27,13 +27,7 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "api", ".env"))
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "user": "postgres",
-    "password": "meinkampf:)",
-    "dbname": "nba_analytics",
-}
+from db_config import DB_CONFIG
 
 CBBD_API_KEY = os.getenv("CBBD_API_KEY")
 CBBD_BASE = "https://api.collegebasketballdata.com"
