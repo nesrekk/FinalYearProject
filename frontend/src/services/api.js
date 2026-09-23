@@ -177,6 +177,14 @@ export async function fetchWpaValidation() {
     return response.data;
 }
 
+export async function fetchLedgerSummary(season) {
+    const response = await axios.get(
+        `${MVP_BASE}/ledger/summary`,
+        { params: season ? { season } : {} }
+    );
+    return response.data;
+}
+
 // ─── SHAP Explainability (Random Forest) ──────────────────────
 export async function fetchShapCandidates(award) {
     const response = await axios.get(`${MVP_BASE}/explain/${award}`);

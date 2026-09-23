@@ -15,6 +15,7 @@ import HeliocentricitySection from '../HeliocentricitySection';
 import ClutchWpaSection from '../ClutchWpaSection';
 import LineupChemistrySection from '../LineupChemistrySection';
 import GameReplaySection from '../GameReplaySection';
+import PredictionLedgerSection from '../PredictionLedgerSection';
 
 const TAB_GROUPS = [
     {
@@ -23,6 +24,7 @@ const TAB_GROUPS = [
             { id: 'mvp', label: 'Awards Race', icon: 'emoji_events' },
             { id: 'impact', label: 'Impact Rankings', icon: 'bolt' },
             { id: 'validation', label: 'Model Validation', icon: 'science' },
+            { id: 'ledger', label: 'Prediction Ledger', icon: 'timeline' },
         ],
     },
     {
@@ -141,6 +143,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'mvp' && <AwardsRaceSection />}
                 {activeTab === 'impact' && <ImpactSection />}
                 {activeTab === 'validation' && <ModelValidationSection />}
+                {activeTab === 'ledger' && <PredictionLedgerSection />}
                 {activeTab === 'archetypes' && <PlayerArchetypesSection />}
                 {activeTab === 'radar' && <RadarCompareSection />}
                 {activeTab === 'trends' && <TrendAnalysisSection />}

@@ -16,6 +16,7 @@ Usage:
 import os
 import pickle
 from contextlib import contextmanager
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -315,6 +316,103 @@ def get_wpa_validation():
             "observed win rate in each bucket — a well-calibrated model's points sit near the diagonal."
         ),
         "scopes": scopes,
+    }
+
+
+# ─── Prediction Ledger ───────────────────────────────────────────────────────
+#
+# Real live predictions (scripts/snapshot_predictions.py), logged with a
+# real timestamp, graded against real outcomes once they exist
+# (scripts/resolve_predictions.py). Deliberately separate from the
+# leave-one-season-out backtest endpoints above: those are honest
+# historical re-runs, this is a real record of what the live model
+# actually said, at the actual moment it said it — never blended.
+
+LEDGER_MODELS = ["mvp", "dpoy", "roy", "all_nba"]
+
+
+def get_current_nba_season() -> int:
+    now = datetime.now(timezone.utc)
+    return now.year + 1 if now.month >= 10 else now.year
+
+
+@app.get("/ledger/summary")
+def get_ledger_summary(season: int = None):
+    resolved_season = season or get_current_nba_season()
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT to_regclass('public.prediction_ledger');")
+        if cursor.fetchone()[0] is None:
+            raise HTTPException(
+                status_code=503,
+                detail="No prediction ledger yet — run scripts/snapshot_predictions.py first.",
+            )
+
+        cursor.execute(
+            """SELECT model, subject, subject_id, predicted, predicted_at
+               FROM prediction_ledger
+               WHERE season = %s AND resolved_at IS NULL
+               ORDER BY model, subject_id, predicted_at;""",
+            (resolved_season,),
+        )
+        live_rows = cursor.fetchall()
+
+        cursor.execute(
+            """SELECT model, season, COUNT(*) AS n, AVG(score) AS mean_brier, MAX(resolved_at) AS resolved_at
+               FROM prediction_ledger
+               WHERE resolved_at IS NOT NULL
+               GROUP BY model, season
+               ORDER BY season DESC, model;"""
+        )
+        resolved_rows = cursor.fetchall()
+
+    live = {model: {} for model in LEDGER_MODELS}
+    for model, subject, subject_id, predicted, predicted_at in live_rows:
+        if model not in live:
+            continue
+        entry = live[model].setdefault(subject_id, {"player_id": subject_id, "player_name": subject, "trajectory": []})
+        entry["trajectory"].append({
+            "predicted_at": predicted_at.isoformat(),
+            "probability": predicted.get("probability"),
+        })
+
+    # Only the current favorites (top 5 by most recent probability) — a full
+    # 15-candidate trajectory per model is noisy to chart and most of that
+    # field was never realistically in contention.
+    live_out = {}
+    for model, by_subject in live.items():
+        candidates = list(by_subject.values())
+        for c in candidates:
+            c["trajectory"].sort(key=lambda p: p["predicted_at"])
+            c["latest_probability"] = c["trajectory"][-1]["probability"] if c["trajectory"] else None
+        candidates.sort(key=lambda c: c["latest_probability"] or 0, reverse=True)
+        live_out[model] = candidates[:5]
+
+    resolved = [
+        {
+            "model": r[0],
+            "season": r[1],
+            "n_candidates": r[2],
+            "mean_brier_score": round(r[3], 4) if r[3] is not None else None,
+            "resolved_at": r[4].isoformat() if r[4] else None,
+        }
+        for r in resolved_rows
+    ]
+
+    return {
+        "current_season": resolved_season,
+        "live": live_out,
+        "resolved": resolved,
+        "methodology": (
+            "live holds each model's current real favorites (top 5 by most recent logged probability) and how "
+            "their real probability has moved over real logged snapshots so far this season — not a projection, "
+            "just the real history of what the live model actually said, at the real times it said it. resolved "
+            "holds real Brier scores (lower is better, 0 is perfect) for seasons that have actually finished and "
+            "gotten a real recorded winner/selection — an in-progress season simply won't appear here yet. This "
+            "is distinct from the /backtest endpoints, which are honest leave-one-season-out historical re-runs, "
+            "not live predictions; the two are never combined."
+        ),
     }
 
 

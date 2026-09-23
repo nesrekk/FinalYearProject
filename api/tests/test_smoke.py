@@ -65,6 +65,17 @@ def test_mvp_wpa_validation():
         assert "all_events" in data["scopes"]
 
 
+def test_mvp_ledger_summary():
+    from mvp_api import app
+    resp = TestClient(app).get("/ledger/summary")
+    assert resp.status_code in (200, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        assert "live" in data
+        assert "resolved" in data
+        assert set(data["live"].keys()) == {"mvp", "dpoy", "roy", "all_nba"}
+
+
 # ─── similarity_api (port 8001) ─────────────────────────────────────────────
 
 def test_similarity_docs_load():
