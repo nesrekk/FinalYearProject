@@ -17,7 +17,12 @@ is fit from real data, not assumed.
 
 Validates calibration (not just accuracy) before trusting the model: a
 well-built win-probability model should have "quoted 70% win probability"
-situations actually resolve to a win about 70% of the real time.
+situations actually resolve to a win about 70% of the real time. This
+validation — held-out ROC-AUC, Brier score, log loss, and a 10-bucket
+reliability curve, computed both across all events and restricted to
+real clutch-time events only — is stored in wpa_model_validation so the
+Model Validation tab can show it rather than it only ever being printed
+to a terminal and forgotten.
 
 Usage:
     cd scripts && python3 train_wpa_model.py
@@ -25,23 +30,31 @@ Usage:
 
 import math
 import pickle
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
 import psycopg2
+import psycopg2.extras
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 from sklearn.preprocessing import StandardScaler
 
 from db_config import DB_CONFIG
 
+# Same real NBA clutch-time definition used everywhere else in this
+# project (compute_wpa.py, the /players/clutch-wpa endpoint): final 5
+# minutes of regulation/OT, score within 5 points.
+CLUTCH_SECONDS = 300
+CLUTCH_MARGIN = 5
+
 
 def load_data():
     conn = psycopg2.connect(**DB_CONFIG)
     query = """
-        SELECT e.game_id, e.seconds_remaining, e.score_home, e.score_away, g.home_win
+        SELECT e.game_id, e.period, e.seconds_remaining, e.score_home, e.score_away, g.home_win
         FROM pbp_events e
         JOIN pbp_games g ON g.game_id = e.game_id
         WHERE e.action_type != 'period';
@@ -75,6 +88,77 @@ def calibration_check(model, scaler, X_test, y_test):
         observed = y_test[mask].mean()
         print(f"    [{lo:.1f}-{hi:.1f}) n={n:6d}  predicted~{(lo + hi) / 2:.2f}  real observed={observed:.3f}")
     return probs
+
+
+def reliability_bins(probs, y_true):
+    """10-bucket reliability curve as data (not just printed) — predicted
+    probability bucket vs. real observed win rate, plus n per bucket so
+    a UI can grey out or size buckets by real sample size."""
+    bins = np.linspace(0, 1, 11)
+    out = []
+    for i in range(10):
+        lo, hi = float(bins[i]), float(bins[i + 1])
+        mask = (probs >= lo) & (probs < hi)
+        n = int(mask.sum())
+        if n == 0:
+            continue
+        out.append({
+            "bucket_lo": lo,
+            "bucket_hi": hi,
+            "predicted_mid": (lo + hi) / 2,
+            "n": n,
+            "observed_rate": float(y_true[mask].mean()),
+        })
+    return out
+
+
+def validation_row(scope, probs, y_true, roc_auc):
+    return {
+        "scope": scope,
+        "n_events": int(len(y_true)),
+        "roc_auc": float(roc_auc) if roc_auc is not None else None,
+        "brier_score": float(brier_score_loss(y_true, probs)),
+        "log_loss": float(log_loss(y_true, probs, labels=[0, 1])),
+        "reliability_bins": reliability_bins(probs, y_true),
+    }
+
+
+def save_validation(rows, n_games_train, n_games_test):
+    conn = psycopg2.connect(**DB_CONFIG)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS wpa_model_validation (
+            id SERIAL PRIMARY KEY,
+            computed_at TIMESTAMPTZ NOT NULL,
+            scope TEXT NOT NULL,
+            n_games_train INT,
+            n_games_test INT,
+            n_events INT,
+            roc_auc DOUBLE PRECISION,
+            brier_score DOUBLE PRECISION,
+            log_loss DOUBLE PRECISION,
+            reliability_bins JSONB
+        );
+    """)
+    cursor.execute("TRUNCATE TABLE wpa_model_validation;")
+    computed_at = datetime.now(timezone.utc)
+    values = [
+        (
+            computed_at, r["scope"], n_games_train, n_games_test, r["n_events"],
+            r["roc_auc"], r["brier_score"], r["log_loss"],
+            psycopg2.extras.Json(r["reliability_bins"]),
+        )
+        for r in rows
+    ]
+    psycopg2.extras.execute_values(
+        cursor,
+        """INSERT INTO wpa_model_validation
+           (computed_at, scope, n_games_train, n_games_test, n_events, roc_auc, brier_score, log_loss, reliability_bins)
+           VALUES %s;""",
+        values,
+    )
+    conn.commit()
+    conn.close()
 
 
 def sanity_checks(model, scaler):
@@ -148,6 +232,35 @@ def main():
     with open("wpa_scaler.pkl", "wb") as f:
         pickle.dump(scaler, f)
     print("\n✅ Saved wpa_model.pkl, wpa_scaler.pkl")
+
+    # ─── Store calibration validation for the Model Validation tab ─────────
+    # Two scopes, both on the calibrated (deployed) model's real held-out
+    # predictions: every test event, and the subset that's real clutch time
+    # — the range clutch WPA actually uses. Whole-game calibration can look
+    # weaker than clutch-specific calibration (a real, disclosed nuance, not
+    # a bug), so both are stored rather than only the flattering one.
+    test_df = df.iloc[test_idx]
+    calibrated_probs = model.predict_proba(scaler.transform(X_test))[:, 1]
+
+    rows = [validation_row("all_events", calibrated_probs, y_test, auc)]
+
+    clutch_mask = (
+        (test_df["period"].values >= 4)
+        & (test_df["seconds_remaining"].values <= CLUTCH_SECONDS)
+        & (np.abs(test_df["score_margin_home"].values) <= CLUTCH_MARGIN)
+    )
+    n_clutch = int(clutch_mask.sum())
+    if n_clutch > 0:
+        clutch_y = y_test[clutch_mask]
+        clutch_probs = calibrated_probs[clutch_mask]
+        clutch_auc = roc_auc_score(clutch_y, clutch_probs) if len(set(clutch_y)) > 1 else None
+        rows.append(validation_row("clutch_only", clutch_probs, clutch_y, clutch_auc))
+        print(f"\n  Clutch-time-only test events: {n_clutch:,} (AUC {clutch_auc:.4f})" if clutch_auc else f"\n  Clutch-time-only test events: {n_clutch:,}")
+
+    n_games_train = int(df["game_id"].iloc[train_idx].nunique())
+    n_games_test = int(df["game_id"].iloc[test_idx].nunique())
+    save_validation(rows, n_games_train, n_games_test)
+    print(f"✅ Saved calibration validation ({len(rows)} scope(s)) to wpa_model_validation")
 
 
 if __name__ == "__main__":

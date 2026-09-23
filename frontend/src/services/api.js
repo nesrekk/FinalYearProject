@@ -167,6 +167,11 @@ export async function fetchAllNBABacktest() {
     return response.data;
 }
 
+export async function fetchWpaValidation() {
+    const response = await axios.get(`${MVP_BASE}/validation/wpa`);
+    return response.data;
+}
+
 // ─── SHAP Explainability (Random Forest) ──────────────────────
 export async function fetchShapCandidates(award) {
     const response = await axios.get(`${MVP_BASE}/explain/${award}`);

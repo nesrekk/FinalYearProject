@@ -55,6 +55,16 @@ def test_mvp_backtest():
     assert isinstance(resp.json(), dict)
 
 
+def test_mvp_wpa_validation():
+    from mvp_api import app
+    resp = TestClient(app).get("/validation/wpa")
+    assert resp.status_code in (200, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        assert "scopes" in data
+        assert "all_events" in data["scopes"]
+
+
 # ─── similarity_api (port 8001) ─────────────────────────────────────────────
 
 def test_similarity_docs_load():

@@ -255,6 +255,69 @@ def get_allnba_backtest():
     return {"award": "ALL_NBA", "summary": summary, "seasons": seasons}
 
 
+@app.get("/validation/wpa")
+def get_wpa_validation():
+    """
+    Real calibration validation for the Clutch-Time WPA model: held-out
+    ROC-AUC, Brier score, log loss, and a 10-bucket reliability curve
+    (predicted probability vs. real observed outcome), computed on the
+    calibrated model's real held-out test predictions (scripts/train_wpa_model.py).
+    Two scopes are returned — every held-out event, and the subset that's
+    real clutch time — since clutch-time predictions cluster closer to 50/50
+    (a harder, not worse, prediction problem), so the two scopes aren't
+    directly comparable on Brier/log-loss alone; the reliability buckets are
+    the real evidence for calibration quality in each.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT to_regclass('public.wpa_model_validation');")
+        if cursor.fetchone()[0] is None:
+            raise HTTPException(
+                status_code=503,
+                detail="WPA validation hasn't been computed yet — run scripts/train_wpa_model.py.",
+            )
+        cursor.execute(
+            """SELECT computed_at, scope, n_games_train, n_games_test, n_events,
+                      roc_auc, brier_score, log_loss, reliability_bins
+               FROM wpa_model_validation ORDER BY scope;"""
+        )
+        rows = cursor.fetchall()
+
+    if not rows:
+        raise HTTPException(
+            status_code=503,
+            detail="WPA validation hasn't been computed yet — run scripts/train_wpa_model.py.",
+        )
+
+    scopes = {}
+    computed_at = None
+    n_games_train = n_games_test = None
+    for r in rows:
+        computed_at = r[0]
+        n_games_train, n_games_test = r[2], r[3]
+        scopes[r[1]] = {
+            "n_events": r[4],
+            "roc_auc": r[5],
+            "brier_score": r[6],
+            "log_loss": r[7],
+            "reliability_bins": r[8],
+        }
+
+    return {
+        "computed_at": computed_at.isoformat() if computed_at else None,
+        "n_games_train": n_games_train,
+        "n_games_test": n_games_test,
+        "methodology": (
+            "Real held-out validation of the calibrated Clutch-Time WPA model (scripts/train_wpa_model.py): "
+            f"trained on {n_games_train} real games, evaluated on {n_games_test} real games it never trained "
+            "on, held out by GAME (not by individual play) to avoid leaking a game's later plays into training. "
+            "Reliability buckets group real held-out predictions by predicted probability and show the real "
+            "observed win rate in each bucket — a well-calibrated model's points sit near the diagonal."
+        ),
+        "scopes": scopes,
+    }
+
+
 @app.get("/backtest/{award}")
 def get_backtest_detail(award: str, model: str = DEFAULT_MODEL_TYPE):
     """Full backtest results for one award + model: summary metrics + every held-out season."""

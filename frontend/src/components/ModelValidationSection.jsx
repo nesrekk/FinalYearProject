@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchBacktestDetail, fetchBacktestComparison, fetchShapCandidates, fetchShapBreakdown, fetchAllNBABacktest } from '../services/api';
+import { fetchBacktestDetail, fetchBacktestComparison, fetchShapCandidates, fetchShapBreakdown, fetchAllNBABacktest, fetchWpaValidation } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
@@ -36,6 +36,48 @@ function RocCurveChart({ points, auc, color }) {
             <text x={ROC_SIZE - ROC_PAD} y={ROC_PAD - 12} fill={color} fontSize="13" fontWeight="700" textAnchor="end">
                 AUC = {auc?.toFixed(3) ?? '—'}
             </text>
+        </svg>
+    );
+}
+
+function ReliabilityChart({ bins, color, label }) {
+    if (!bins?.length) return null;
+    const maxN = Math.max(...bins.map((b) => b.n));
+    const ticks = [0, 0.25, 0.5, 0.75, 1];
+    const linePath = bins
+        .map((b, i) => `${i === 0 ? 'M' : 'L'} ${rocX(b.predicted_mid).toFixed(1)} ${rocY(b.observed_rate).toFixed(1)}`)
+        .join(' ');
+    return (
+        <svg viewBox={`0 0 ${ROC_SIZE} ${ROC_SIZE}`} style={{ maxWidth: 320, display: 'block' }}>
+            <rect x="0" y="0" width={ROC_SIZE} height={ROC_SIZE} fill="#1a2332" rx="8" />
+            {/* Perfect-calibration diagonal */}
+            <line x1={rocX(0)} y1={rocY(0)} x2={rocX(1)} y2={rocY(1)} stroke="#475569" strokeWidth="1" strokeDasharray="4 3" />
+            {ticks.map((t) => (
+                <React.Fragment key={t}>
+                    <line x1={rocX(t)} y1={rocY(0)} x2={rocX(t)} y2={rocY(1)} stroke="#26344a" strokeWidth="1" />
+                    <line x1={rocX(0)} y1={rocY(t)} x2={rocX(1)} y2={rocY(t)} stroke="#26344a" strokeWidth="1" />
+                    <text x={rocX(t)} y={ROC_SIZE - ROC_PAD + 16} fill="#64748b" fontSize="10" textAnchor="middle">{t}</text>
+                    <text x={ROC_PAD - 8} y={rocY(t) + 3} fill="#64748b" fontSize="10" textAnchor="end">{t}</text>
+                </React.Fragment>
+            ))}
+            <path d={linePath} fill="none" stroke={color} strokeWidth="2" />
+            {bins.map((b) => (
+                <circle
+                    key={b.bucket_lo}
+                    cx={rocX(b.predicted_mid)}
+                    cy={rocY(b.observed_rate)}
+                    r={3 + 6 * Math.sqrt(b.n / maxN)}
+                    fill={color}
+                    fillOpacity={0.85}
+                />
+            ))}
+            <text x={ROC_SIZE / 2} y={ROC_SIZE - 6} fill="#94a3b8" fontSize="11" textAnchor="middle">Predicted Win Probability</text>
+            <text x="12" y={ROC_SIZE / 2} fill="#94a3b8" fontSize="11" textAnchor="middle" transform={`rotate(-90 12 ${ROC_SIZE / 2})`}>Real Observed Win Rate</text>
+            {label && (
+                <text x={ROC_SIZE - ROC_PAD} y={ROC_PAD - 12} fill={color} fontSize="12" fontWeight="700" textAnchor="end">
+                    {label}
+                </text>
+            )}
         </svg>
     );
 }
@@ -77,7 +119,13 @@ const AWARDS = [
     { id: 'dpoy', label: 'DPOY' },
     { id: 'roy', label: 'ROY' },
     { id: 'allnba', label: 'All-NBA' },
+    { id: 'wpa', label: 'Clutch WPA' },
 ];
+
+const WPA_SCOPE_META = {
+    all_events: { label: 'All Held-Out Events', color: '#38bdf8' },
+    clutch_only: { label: 'Real Clutch Time Only', color: '#facc15' },
+};
 
 function pct(v) {
     return v == null ? '—' : `${(v * 100).toFixed(1)}%`;
@@ -103,23 +151,26 @@ export default function ModelValidationSection() {
     const [allNbaDetail, setAllNbaDetail] = useState(null);
     const [allNbaSeason, setAllNbaSeason] = useState(null);
 
+    const [wpaValidation, setWpaValidation] = useState(null);
+
     const isAllNba = award === 'allnba';
+    const isWpa = award === 'wpa';
 
     // Comparison table (all models for the current award) — also drives
-    // which model types are available to pick from. All-NBA has only one
-    // model (logreg) and its own dedicated fetch below, so skip this.
+    // which model types are available to pick from. All-NBA and WPA each
+    // have their own dedicated fetch below, so skip this for them.
     useEffect(() => {
-        if (isAllNba) { setComparison(null); return; }
+        if (isAllNba || isWpa) { setComparison(null); return; }
         let active = true;
         fetchBacktestComparison(award)
             .then((data) => { if (active) setComparison(data); })
             .catch(() => { if (active) setComparison(null); });
         return () => { active = false; };
-    }, [award, isAllNba]);
+    }, [award, isAllNba, isWpa]);
 
     // Detail (per-season table + feature importance) for the selected model.
     useEffect(() => {
-        if (isAllNba) { setDetail(null); setLoading(false); return; }
+        if (isAllNba || isWpa) { setDetail(null); setLoading(false); return; }
         let active = true;
         const timer = setTimeout(async () => {
             setLoading(true);
@@ -139,7 +190,7 @@ export default function ModelValidationSection() {
             active = false;
             clearTimeout(timer);
         };
-    }, [award, model, isAllNba]);
+    }, [award, model, isAllNba, isWpa]);
 
     // All-NBA's own backtest fetch — different shape (precision@15 across
     // 16 seasons, not rank-of-single-winner), so it doesn't share the
@@ -163,6 +214,25 @@ export default function ModelValidationSection() {
             .finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
     }, [isAllNba]);
+
+    // Clutch-Time WPA's own calibration validation fetch — reliability
+    // curves and Brier/log-loss, not a rank-of-winner backtest, so it gets
+    // its own effect and render branch rather than reusing the award ones.
+    useEffect(() => {
+        if (!isWpa) { setWpaValidation(null); return; }
+        let active = true;
+        setLoading(true);
+        setError('');
+        fetchWpaValidation()
+            .then((data) => { if (active) setWpaValidation(data); })
+            .catch((e) => {
+                if (!active) return;
+                setWpaValidation(null);
+                setError(e?.response?.data?.detail || 'No WPA validation found. Run scripts/train_wpa_model.py first.');
+            })
+            .finally(() => { if (active) setLoading(false); });
+        return () => { active = false; };
+    }, [isWpa]);
 
     // SHAP candidate list for the current award (Random Forest only —
     // Logistic Regression's coefficients already explain every prediction).
@@ -293,7 +363,7 @@ export default function ModelValidationSection() {
                     </table>
                 </div>
             )}
-            {!isAllNba && (
+            {!isAllNba && !isWpa && (
                 <p className="page-subtitle" style={{ marginTop: '-0.75rem', marginBottom: '1rem' }}>
                     Click a row to see that model's per-season detail below. The <Icon name="military_tech" size="0.9em" /> badge marks the best top-5 accuracy for {award.toUpperCase()}.
                 </p>
@@ -424,7 +494,70 @@ export default function ModelValidationSection() {
                 </>
             )}
 
-            {!loading && !isAllNba && detail && (
+            {!loading && isWpa && wpaValidation && (
+                <>
+                    <p className="page-subtitle" style={{ marginBottom: '1rem' }}>
+                        The Clutch-Time WPA model outputs a real win probability at every point in a game, so
+                        "rank of the true winner" doesn't apply here either — the honest metric is calibration:
+                        when the model says a team has a 70% chance to win, did that real team actually win
+                        about 70% of the real time it said so?
+                    </p>
+                    <div className="stat-cards-row">
+                        <div className="stat-card">
+                            <div className="stat-card-label">Games Trained On</div>
+                            <div className="stat-card-value">{wpaValidation.n_games_train}</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-card-label">Held-Out Games</div>
+                            <div className="stat-card-value">{wpaValidation.n_games_test}</div>
+                        </div>
+                    </div>
+                    <p className="page-subtitle" style={{ marginTop: '0.75rem', marginBottom: '1.25rem' }}>
+                        {wpaValidation.methodology}
+                    </p>
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem' }}>
+                        {Object.entries(wpaValidation.scopes).map(([scopeKey, scope]) => {
+                            const meta = WPA_SCOPE_META[scopeKey] || { label: scopeKey, color: '#38bdf8' };
+                            return (
+                                <div key={scopeKey}>
+                                    <h3 className="section-heading" style={{ marginTop: 0 }}>{meta.label}</h3>
+                                    <div className="stat-cards-row" style={{ marginBottom: '0.75rem' }}>
+                                        <div className="stat-card">
+                                            <div className="stat-card-label">ROC-AUC</div>
+                                            <div className="stat-card-value">{scope.roc_auc?.toFixed(3) ?? '—'}</div>
+                                        </div>
+                                        <div className="stat-card">
+                                            <div className="stat-card-label">Brier Score</div>
+                                            <div className="stat-card-value">{scope.brier_score?.toFixed(3) ?? '—'}</div>
+                                        </div>
+                                        <div className="stat-card">
+                                            <div className="stat-card-label">Log Loss</div>
+                                            <div className="stat-card-value">{scope.log_loss?.toFixed(3) ?? '—'}</div>
+                                        </div>
+                                    </div>
+                                    <p className="page-subtitle" style={{ marginBottom: '0.5rem' }}>
+                                        {scope.n_events.toLocaleString()} real held-out events. Dot size = real
+                                        sample size in that bucket; points on the dashed diagonal are well-calibrated.
+                                    </p>
+                                    <ReliabilityChart bins={scope.reliability_bins} color={meta.color} label={meta.label} />
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {wpaValidation.scopes.all_events && wpaValidation.scopes.clutch_only && (
+                        <p className="page-subtitle" style={{ marginTop: '1.25rem' }}>
+                            Brier score and log loss aren't directly comparable between the two scopes above —
+                            real clutch-time predictions cluster closer to 50/50 by definition (that's what makes
+                            a game close), which is a harder prediction problem and pushes both scores up even
+                            for a well-calibrated model. The reliability points themselves, not these two
+                            aggregate scores, are the real evidence for calibration quality in each scope.
+                        </p>
+                    )}
+                </>
+            )}
+
+            {!loading && !isAllNba && !isWpa && detail && (
                 <>
                     <div className="stat-cards-row">
                         <div className="stat-card">
