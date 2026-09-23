@@ -227,6 +227,14 @@ export async function fetchCompareProfile(playerName, season) {
     return response.data;
 }
 
+export async function fetchPairSynergy(playerA, playerB, season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/players/pair-synergy`,
+        { params: { player_a: playerA, player_b: playerB, ...(season ? { season } : {}) } }
+    );
+    return response.data;
+}
+
 // ─── Games: Guess the Player ───────────────────────────────────
 export async function fetchGuessDaily(season) {
     const response = await axios.get(

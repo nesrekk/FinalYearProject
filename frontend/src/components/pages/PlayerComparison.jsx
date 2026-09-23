@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { fetchCompareProfile, fetchLivePlayerSuggestions } from '../../services/api';
+import { fetchCompareProfile, fetchLivePlayerSuggestions, fetchPairSynergy } from '../../services/api';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import TeamLogo from '../common/TeamLogo';
 import Icon from '../common/Icon';
@@ -225,6 +225,9 @@ export default function PlayerComparison() {
     const [profileB, setProfileB] = useState(null);
     const [errorA, setErrorA] = useState('');
     const [errorB, setErrorB] = useState('');
+    const [synergy, setSynergy] = useState(null);
+    const [synergyError, setSynergyError] = useState('');
+    const [synergyLoading, setSynergyLoading] = useState(false);
 
     useSlotSuggestions(searchA, profileA?.player_name, setSuggestA);
     useSlotSuggestions(searchB, profileB?.player_name, setSuggestB);
@@ -257,6 +260,23 @@ export default function PlayerComparison() {
     }, [season]);
 
     const bothLoaded = profileA && profileB;
+
+    useEffect(() => {
+        if (!bothLoaded) { setSynergy(null); setSynergyError(''); return; }
+        let active = true;
+        setSynergyLoading(true);
+        setSynergyError('');
+        fetchPairSynergy(profileA.player_name, profileB.player_name, season)
+            .then((data) => { if (active) setSynergy(data); })
+            .catch((e) => {
+                if (!active) return;
+                setSynergy(null);
+                setSynergyError(e?.response?.data?.detail || 'Could not compute real pair synergy.');
+            })
+            .finally(() => { if (active) setSynergyLoading(false); });
+        return () => { active = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bothLoaded, profileA?.player_name, profileB?.player_name, season]);
 
     return (
         <div className="page fade-in">
@@ -440,15 +460,61 @@ export default function PlayerComparison() {
                     <div className="dashboard-card" style={{ marginTop: '1rem' }}>
                         <h3 className="section-heading" style={{ marginTop: 0 }}>
                             Fit Analysis
-                            <InfoTooltip label="How this works" title="A simplified heuristic, not a validated model">
-                                These flags are plain percentile-threshold comparisons (usage rate, 3-point attempt
-                                rate, assist rate) within the same qualified pool used everywhere else on this
-                                page — not a fitted or trained synergy model. Real on-court chemistry depends on
-                                lineup context, defensive schemes, and shot-clock situations this project has no
-                                play-by-play or lineup data to measure, so treat this as a real-data starting point
-                                for a basketball conversation, not a prediction.
+                            <InfoTooltip label="How this works" title="A real trained model, plus a simplified heuristic">
+                                The Real Pair Synergy card below is a real ridge regression (scripts/train_pair_synergy.py),
+                                trained on thousands of real 2-man lineup pairs across 17 real seasons and validated
+                                with real season-grouped cross-validation — its real R² is shown honestly, even
+                                though it's low (pair chemistry isn't well predicted by box-score features alone,
+                                which is itself a real finding). The flags underneath it are a simpler, older
+                                fallback: plain percentile-threshold comparisons (usage rate, 3PA rate, assist
+                                rate) within the same qualified pool used elsewhere on this page — not a trained
+                                model, kept here as a quick, real-data starting point for a basketball
+                                conversation alongside the model above.
                             </InfoTooltip>
                         </h3>
+
+                        {synergyLoading && <p className="page-subtitle" style={{ marginTop: 0 }}>Loading real pair synergy…</p>}
+                        {synergyError && <p className="error-message" style={{ marginTop: 0 }}>{synergyError}</p>}
+                        {synergy && (
+                            <div style={{
+                                padding: '0.9rem 1rem', borderRadius: 8, marginBottom: '1rem',
+                                background: 'rgba(167,139,250,0.08)', borderLeft: '3px solid #a78bfa',
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, marginBottom: 6 }}>
+                                    <Icon name="model_training" size="1em" style={{ color: '#a78bfa' }} />
+                                    Real Pair Synergy
+                                </div>
+                                <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginBottom: 6 }}>
+                                    <span className="page-subtitle" style={{ margin: 0 }}>
+                                        Predicted synergy <strong style={{ color: synergy.predicted_synergy >= 0 ? '#34d399' : '#f87171' }}>
+                                            {synergy.predicted_synergy >= 0 ? '+' : ''}{synergy.predicted_synergy}
+                                        </strong>
+                                    </span>
+                                    <span className="page-subtitle" style={{ margin: 0 }}>
+                                        Predicted pair net rtg <strong style={{ color: 'var(--text-primary)' }}>{synergy.predicted_pair_net_rating}</strong>
+                                    </span>
+                                    {synergy.validation && (
+                                        <span className="page-subtitle" style={{ margin: 0 }}>
+                                            Cross-validated R² <strong style={{ color: 'var(--text-primary)' }}>{synergy.validation.cv_r2_mean}</strong>
+                                            {' '}(n={synergy.validation.n_pairs.toLocaleString()} real pairs, {synergy.validation.n_seasons} real seasons)
+                                        </span>
+                                    )}
+                                </div>
+                                {synergy.observed ? (
+                                    <p className="page-subtitle" style={{ margin: 0 }}>
+                                        Real observed: {synergy.observed.min.toFixed(0)} real shared minutes this season,
+                                        real net rating <strong style={{ color: 'var(--text-primary)' }}>
+                                            {synergy.observed.net_rating >= 0 ? '+' : ''}{synergy.observed.net_rating}
+                                        </strong>
+                                    </p>
+                                ) : (
+                                    <p className="page-subtitle" style={{ margin: 0 }}>
+                                        These two haven't shared the floor (enough) this season for a real observed pair net rating.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
                         {(() => {
                             const flags = computeFitFlags(profileA, profileB);
                             if (flags.length === 0) {

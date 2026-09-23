@@ -182,6 +182,25 @@ def predict_win_pct(net_rating, ts_pct):
     return float(WIN_MODEL.predict(X)[0])
 
 
+# ─── Pair Synergy Model (loaded once at startup, used by Fit Analysis) ──────
+
+_PAIR_SYNERGY_MODEL_CANDIDATES = [
+    os.path.join(_SCRIPT_DIR, "pair_synergy_model.pkl"),
+    os.path.join(_SCRIPT_DIR, "..", "scripts", "pair_synergy_model.pkl"),
+]
+_PAIR_SYNERGY_SCALER_CANDIDATES = [
+    os.path.join(_SCRIPT_DIR, "pair_synergy_scaler.pkl"),
+    os.path.join(_SCRIPT_DIR, "..", "scripts", "pair_synergy_scaler.pkl"),
+]
+PAIR_SYNERGY_MODEL = _load_first_existing(_PAIR_SYNERGY_MODEL_CANDIDATES)
+PAIR_SYNERGY_SCALER = _load_first_existing(_PAIR_SYNERGY_SCALER_CANDIDATES)
+PAIR_SYNERGY_ARCHETYPES = [
+    "3-and-D Wing", "Bench Role Player", "Elite Two-Way Big",
+    "Playmaker", "Primary Scorer", "Rim Protector",
+]
+PAIR_SYNERGY_NUMERIC_FEATURES = ["usg_pct", "tpar", "ast_pct", "reb_pct", "dbpm"]
+
+
 # ─── Clutch WPA model (shared with scripts/compute_wpa.py via wpa_lib) ──────
 
 _SCRIPTS_DIR = os.path.join(_SCRIPT_DIR, "..", "scripts")
@@ -1867,11 +1886,12 @@ def reveal_guess_the_game(puzzle_date: Optional[str] = None):
 # sample can produce a wild net rating that means nothing), so a real
 # min_minutes cutoff is applied and always disclosed rather than hidden.
 
-def _fetch_lineup_stats_season(season: int):
-    """Live-fetch every real 5-man lineup combination for a season in one
-    request (~1.5s for the whole league), cached like the other live
-    fetches in this file."""
-    cached = _CACHE["lineup_chemistry"].get(season)
+def _fetch_lineup_stats_season(season: int, group_quantity: int = 5):
+    """Live-fetch every real lineup combination of the given size (5 for
+    full lineups, 2 for pairs) for a season in one request (~1.5-4s for
+    the whole league), cached like the other live fetches in this file."""
+    cache_key = (group_quantity, season)
+    cached = _CACHE["lineup_chemistry"].get(cache_key)
     if cached and time.time() - cached["ts"] < _CACHE_TTL_SECONDS:
         return cached["data"]
 
@@ -1880,7 +1900,7 @@ def _fetch_lineup_stats_season(season: int):
 
         season_label = f"{season - 1}-{str(season)[-2:]}"
         endpoint = leaguedashlineups.LeagueDashLineups(
-            group_quantity=5,
+            group_quantity=group_quantity,
             measure_type_detailed_defense="Advanced",
             per_mode_detailed="Totals",
             season=season_label,
@@ -1909,7 +1929,7 @@ def _fetch_lineup_stats_season(season: int):
             "pace": float(row["PACE"]),
         })
 
-    _CACHE["lineup_chemistry"][season] = {"ts": time.time(), "data": lineups}
+    _CACHE["lineup_chemistry"][cache_key] = {"ts": time.time(), "data": lineups}
     return lineups
 
 
@@ -1975,6 +1995,156 @@ def get_lineup_chemistry(season: int = None, min_minutes: float = 40, top_n: int
             "net ratings, so that noise is filtered out and disclosed here rather than hidden."
         ),
         "results": results,
+    }
+
+
+# ─── Pair Synergy (real-data upgrade to Fit Analysis) ───────────────────────
+#
+# A real ridge regression (scripts/train_pair_synergy.py) predicting a real
+# 2-man pair's "synergy" — their real observed net rating minus the
+# minutes-weighted average of each player's own real individual net rating
+# — from each player's real z-scored usage/3PA-rate/AST%/REB%/DBPM and real
+# statistical archetype. Cross-validated with real season-grouped CV; the
+# real R² is disclosed here exactly as the training script reported it,
+# honestly, even though it's low — real pair chemistry isn't well predicted
+# by these real box-score features alone, and that's a real finding, not a
+# bug to paper over. Also checks nba_api live for whether these two real
+# players have actually shared the floor this season, and shows their real
+# observed pair net rating if so.
+
+def _player_synergy_features(cursor, player_id: int, season: int):
+    cursor.execute(
+        """SELECT p.net_rating, p.min, p.gp, p.usg_pct, p.fg3a, p.fga,
+                  p.ast_pct, p.reb_pct, p.dbpm, c.archetype
+           FROM player_season_stats p
+           LEFT JOIN player_clusters c ON c.player_id = p.player_id AND c.season = p.season
+           WHERE p.player_id = %s AND p.season = %s;""",
+        (player_id, season),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    net, mn, gp, usg, fg3a, fga, ast, reb, dbpm, archetype = row
+    if archetype is None or net is None or mn is None or not gp:
+        return None
+    tpar = (fg3a / fga) if fga else None
+    raw = {"usg_pct": usg, "tpar": tpar, "ast_pct": ast, "reb_pct": reb, "dbpm": dbpm}
+    if any(v is None for v in raw.values()):
+        return None
+
+    cursor.execute(
+        """SELECT p.usg_pct, (p.fg3a::float / NULLIF(p.fga, 0)) AS tpar, p.ast_pct, p.reb_pct, p.dbpm
+           FROM player_season_stats p WHERE p.season = %s;""",
+        (season,),
+    )
+    pool = cursor.fetchall()
+    z = []
+    for i, key in enumerate(PAIR_SYNERGY_NUMERIC_FEATURES):
+        vals = [r[i] for r in pool if r[i] is not None]
+        if not vals:
+            return None
+        m = sum(vals) / len(vals)
+        sd = (sum((v - m) ** 2 for v in vals) / len(vals)) ** 0.5 or 1.0
+        z.append((raw[key] - m) / sd)
+
+    onehot = [1.0 if archetype == a else 0.0 for a in PAIR_SYNERGY_ARCHETYPES]
+    return {
+        "vec": z + onehot, "net_rating": net, "min": mn * gp, "archetype": archetype,
+    }
+
+
+@app.get("/players/pair-synergy")
+def get_pair_synergy(player_a: str, player_b: str, season: Optional[int] = None):
+    if PAIR_SYNERGY_MODEL is None or PAIR_SYNERGY_SCALER is None:
+        raise HTTPException(status_code=503, detail="Pair synergy model isn't available — run scripts/train_pair_synergy.py first.")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        resolved_season = season or get_latest_season(cursor)
+        pid_a, name_a = find_player(cursor, player_a)
+        pid_b, name_b = find_player(cursor, player_b)
+        if pid_a == pid_b:
+            raise HTTPException(status_code=400, detail="Pick two different players.")
+
+        fa = _player_synergy_features(cursor, pid_a, resolved_season)
+        fb = _player_synergy_features(cursor, pid_b, resolved_season)
+
+        cursor.execute(
+            "SELECT n_pairs, n_seasons, min_pair_minutes, cv_r2_mean, computed_at FROM pair_synergy_validation ORDER BY id DESC LIMIT 1;"
+        )
+        validation_row = cursor.fetchone()
+
+    if not fa or not fb:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Missing real qualified-season data for {name_a if not fa else name_b} in season {resolved_season} "
+                   "(needs a real archetype + real usage/3PA-rate/AST%/REB%/DBPM on file).",
+        )
+
+    ordered = sorted([(pid_a, name_a, fa), (pid_b, name_b, fb)], key=lambda t: t[0])
+    (lo_id, lo_name, lo_f), (hi_id, hi_name, hi_f) = ordered
+
+    X = [lo_f["vec"] + hi_f["vec"]]
+    X_scaled = PAIR_SYNERGY_SCALER.transform(X)
+    predicted_synergy = float(PAIR_SYNERGY_MODEL.predict(X_scaled)[0])
+
+    expected_baseline = (fa["net_rating"] * fa["min"] + fb["net_rating"] * fb["min"]) / (fa["min"] + fb["min"])
+    predicted_pair_net_rating = expected_baseline + predicted_synergy
+
+    # Real observed data: have these two actually shared the floor this season?
+    observed = None
+    try:
+        pairs = _fetch_lineup_stats_season(resolved_season, group_quantity=2)
+        for p in pairs:
+            if set(p["player_ids"]) == {pid_a, pid_b}:
+                observed = {
+                    "min": p["min"], "net_rating": p["net_rating"],
+                    "off_rating": p["off_rating"], "def_rating": p["def_rating"],
+                }
+                break
+    except HTTPException:
+        observed = None
+
+    validation = None
+    if validation_row:
+        validation = {
+            "n_pairs": validation_row[0], "n_seasons": validation_row[1],
+            "min_pair_minutes": validation_row[2], "cv_r2_mean": round(validation_row[3], 4),
+            "computed_at": validation_row[4].isoformat() if validation_row[4] else None,
+        }
+
+    return {
+        "season": resolved_season,
+        "player_a": {"player_id": pid_a, "player_name": name_a, "archetype": fa["archetype"], "net_rating": fa["net_rating"]},
+        "player_b": {"player_id": pid_b, "player_name": name_b, "archetype": fb["archetype"], "net_rating": fb["net_rating"]},
+        "predicted_synergy": round(predicted_synergy, 2),
+        "predicted_pair_net_rating": round(predicted_pair_net_rating, 2),
+        "expected_baseline_net_rating": round(expected_baseline, 2),
+        "observed": observed,
+        "validation": validation,
+        "methodology": (
+            "predicted_synergy is a real ridge regression's output: the real pair net rating you'd expect ABOVE "
+            "the minutes-weighted average of these two real players' own individual real net ratings this "
+            "season, based on their real archetypes and real z-scored usage/3PA-rate/AST%/REB%/DBPM. "
+            + (
+                f"Cross-validated on {validation['n_pairs']} real pairs across {validation['n_seasons']} real "
+                f"seasons with real season-grouped CV: R² = {validation['cv_r2_mean']}. "
+                "That R² is low — disclosed honestly rather than hidden, because it's a real finding: pair "
+                "chemistry isn't well predicted by these real box-score features alone, at least not by this "
+                "real model. Treat predicted_synergy as a rough, honestly-uncertain real-data signal, not a "
+                "confident prediction. "
+                if validation else
+                "No stored validation found — run scripts/train_pair_synergy.py to see the real cross-validated R². "
+            )
+            + (
+                "'observed' is these two real players' actual real net rating in real minutes they've actually "
+                "shared the floor together this season, live-fetched from the NBA's own data — compare it "
+                "directly against the model's prediction when available."
+                if observed else
+                "These two real players haven't shared the floor together (enough) this season for a real "
+                "observed pair net rating — 'observed' is null rather than guessed."
+            )
+        ),
     }
 
 
