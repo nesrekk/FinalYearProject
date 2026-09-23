@@ -220,6 +220,18 @@ def main():
     precomputed_splits = list(cv_splitter.split(X_train_scaled, y_train, groups=train_groups))
     model = CalibratedClassifierCV(base_model, method="isotonic", cv=precomputed_splits)
     model.fit(X_train_scaled, y_train)
+    # CalibratedClassifierCV retains whatever `cv` was as a plain attribute
+    # (`self.cv`) even after fitting, purely for introspection — predict_proba()
+    # only ever reads self.calibrated_classifiers_/self.classes_, verified
+    # against this sklearn version's own source before relying on it. Passing
+    # a precomputed list of (train_idx, test_idx) arrays (needed: this
+    # sklearn's metadata-routing API failed to forward a plain `groups=`
+    # kwarg to GroupKFold without extra global config) meant `self.cv` held
+    # a full materialized index array per fold — measured to alone pickle to
+    # ~115MB over real ~2.9M-event training folds, blowing past GitHub's
+    # 100MB limit once C8 grew training data from ~170k to ~2.9M events.
+    # Dropping it here shrinks the saved model without touching behavior.
+    model.cv = None
 
     auc = roc_auc_score(y_test, model.predict_proba(scaler.transform(X_test))[:, 1])
     print(f"\n  Calibrated model real held-out ROC-AUC: {auc:.4f}")

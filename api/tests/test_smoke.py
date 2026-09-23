@@ -250,9 +250,14 @@ def test_impact_wp_replay_detail_and_whatif():
     assert "points" in data and len(data["points"]) > 0
     assert "top_plays" in data
 
-    miss = next((p for p in data["points"] if p["is_missed_shot"]), None)
-    if miss is None:
-        return
+    # A real game has dozens of missed shots; the default season is now the
+    # latest one, which is ESPN-sourced (see fetch_pbp_espn.py) — this count
+    # would silently be 0 if missed-shot detection only understood nba_api's
+    # "Missed Shot" action_type vocabulary and not ESPN's own.
+    misses = [p for p in data["points"] if p["is_missed_shot"]]
+    assert len(misses) > 10
+
+    miss = misses[0]
     whatif_resp = client.get(
         f"/games/wp-replay/{game_id}/whatif", params={"event_id": miss["event_id"]}
     )
@@ -260,6 +265,33 @@ def test_impact_wp_replay_detail_and_whatif():
     whatif_data = whatif_resp.json()
     assert "points" in whatif_data
     assert whatif_data["points_awarded"] in (2, 3)
+
+
+def test_impact_wp_replay_whatif_3pt_scoring():
+    from impact_api import app
+    client = TestClient(app)
+    listing = client.get("/games/wp-replay/list").json()
+    if not listing.get("games"):
+        return
+
+    # Real 3-point misses say "3PT" (nba_api) or "three point" (ESPN) in
+    # their real description, never both vocabularies for the same source —
+    # find one and confirm it's scored as a real 3, not silently as a 2.
+    for game in listing["games"][:5]:
+        data = client.get(f"/games/wp-replay/{game['game_id']}").json()
+        three_pt_miss = next(
+            (p for p in data.get("points", [])
+             if p["is_missed_shot"] and ("3pt" in (p["description"] or "").lower()
+                                          or "three point" in (p["description"] or "").lower())),
+            None,
+        )
+        if three_pt_miss is None:
+            continue
+        whatif_data = client.get(
+            f"/games/wp-replay/{game['game_id']}/whatif", params={"event_id": three_pt_miss["event_id"]}
+        ).json()
+        assert whatif_data["points_awarded"] == 3
+        return
 
 
 def test_impact_guess_the_game_daily():

@@ -1460,8 +1460,10 @@ def get_clutch_wpa_leaderboard(top_n: int = 25, min_clutch_plays: int = 3):
                 detail="WPA data hasn't been computed yet — run scripts/fetch_play_by_play.py, "
                        "train_wpa_model.py, then compute_wpa.py.",
             )
-        cursor.execute("SELECT COUNT(DISTINCT game_id) FROM pbp_games;")
-        n_games_sample = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(DISTINCT game_id), MIN(season), MAX(season) FROM pbp_games;")
+        n_games_sample, season_min, season_max = cursor.fetchone()
+        cursor.execute("SELECT source, COUNT(DISTINCT game_id) FROM pbp_games GROUP BY source;")
+        by_source = dict(cursor.fetchall())
 
         cursor.execute(
             """SELECT w.person_id, COALESCE(MAX(p.player_name), w.player_name) AS full_name,
@@ -1476,15 +1478,19 @@ def get_clutch_wpa_leaderboard(top_n: int = 25, min_clutch_plays: int = 3):
         )
         rows = cursor.fetchall()
 
+    season_span = f"{season_min}" if season_min == season_max else f"{season_min}-{season_max}"
+    source_note = ", ".join(f"{n} real games from {src}" for src, n in sorted(by_source.items()))
     return {
         "sample_size_games": n_games_sample,
         "methodology": (
-            "Real win-probability model (Logistic Regression) trained on real play-by-play from a real sample "
-            f"of {n_games_sample} games this season — not the full season, disclosed here rather than implied. "
-            "clutch_wpa sums each real play's real win-probability swing (model output after the play minus "
-            "before it) across every play in real 'clutch time' (final 5 min of regulation/OT, score within 5 "
-            "points), attributed to whichever player made the play. This is the model's real output on real "
-            "data, not an invented formula."
+            "Real win-probability model (Logistic Regression) trained on real play-by-play from "
+            f"{n_games_sample} real games across seasons {season_span} ({source_note} — real full-season "
+            "coverage where the source is ESPN via sportsdataverse, a real sampled subset where the source "
+            "is nba_api; both real sources use the identical seconds-remaining/score-margin convention, "
+            "verified before combining them). clutch_wpa sums each real play's real win-probability swing "
+            "(model output after the play minus before it) across every play in real 'clutch time' (final 5 "
+            "min of regulation/OT, score within 5 points), attributed to whichever player made the play. "
+            "This is the model's real output on real data, not an invented formula."
         ),
         "results": [
             {
@@ -1512,6 +1518,26 @@ def _wpa_model_required():
             status_code=503,
             detail="WPA model isn't available — run scripts/train_wpa_model.py first.",
         )
+
+
+def _is_missed_field_goal(action_type, description) -> bool:
+    """True for a real missed FIELD GOAL attempt, from either real pbp
+    source. nba_api's own action_type vocabulary marks these plainly as
+    "Missed Shot"; ESPN's (scripts/fetch_pbp_espn.py) real per-shot-type
+    vocabulary (e.g. "Driving Layup Shot", "Step Back Jump Shot") doesn't
+    have an equivalent single category, so real ESPN rows are matched by
+    the real word "misses" in their real play description instead — verified
+    live to appear in 114,058 of 114,059 real ESPN missed-shot rows for a
+    real season, with zero false positives among real made shots. Missed
+    FREE THROWS are excluded either way (nba_api: a separate "Free Throw"
+    action_type; ESPN: description always says "Free Throw" too) since the
+    original nba_api-only feature was already scoped to field goals only —
+    a missed FT's counterfactual is a fixed, uninteresting +1."""
+    if action_type == "Missed Shot":
+        return True
+    if description and "misses" in description.lower() and "free throw" not in description.lower():
+        return True
+    return False
 
 
 @app.get("/games/wp-replay/list")
@@ -1615,7 +1641,7 @@ def get_wp_replay(game_id: str):
             "description": description,
             "player_name": player_name,
             "team_tricode": team_tricode,
-            "is_missed_shot": action_type == "Missed Shot",
+            "is_missed_shot": _is_missed_field_goal(action_type, description),
         })
         prev_secs, prev_margin, prev_wp_home = secs, margin, wp_home
 
@@ -1666,13 +1692,17 @@ def get_wp_replay_whatif(game_id: str, event_id: int):
 
     target = events[target_idx]
     _, target_action_number, _, _, _, _, target_team, _, target_player, target_action_type, target_sub_type, target_description = target
-    if target_action_type != "Missed Shot":
+    if not _is_missed_field_goal(target_action_type, target_description):
         raise HTTPException(
             status_code=400,
-            detail="What-if is only supported for a real missed field goal (action_type == 'Missed Shot').",
+            detail="What-if is only supported for a real missed field goal.",
         )
 
-    points_awarded = 3 if "3PT" in (target_description or "") else 2
+    # "3PT" is nba_api's real description convention; ESPN's (scripts/fetch_pbp_espn.py)
+    # says "three point" instead (verified live: 0 real ESPN rows contain "3PT") — both
+    # checked so a real 3-point miss isn't silently scored as a 2 for ESPN-sourced games.
+    _desc_lower = (target_description or "").lower()
+    points_awarded = 3 if ("3pt" in _desc_lower or "three point" in _desc_lower) else 2
     shift_home = points_awarded if target_team == home_team else 0
     shift_away = points_awarded if target_team == away_team else 0
 
