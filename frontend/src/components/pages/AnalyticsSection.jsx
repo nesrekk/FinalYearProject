@@ -18,6 +18,7 @@ import GameReplaySection from '../GameReplaySection';
 import PredictionLedgerSection from '../PredictionLedgerSection';
 import WithWithoutStarSection from '../WithWithoutStarSection';
 import ScheduleFatigueSection from '../ScheduleFatigueSection';
+import MatchupFinderSection from '../MatchupFinderSection';
 
 const TAB_GROUPS = [
     {
@@ -39,6 +40,7 @@ const TAB_GROUPS = [
             { id: 'trajectory', label: 'Career Trajectory', icon: 'timeline' },
             { id: 'helio', label: 'Heliocentricity', icon: 'wb_sunny' },
             { id: 'wpa', label: 'Clutch WPA', icon: 'timer' },
+            { id: 'matchups', label: 'Matchup Finder', icon: 'swords' },
         ],
     },
     {
@@ -157,6 +159,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'prospects' && <DraftProspectSection />}
                 {activeTab === 'helio' && <HeliocentricitySection />}
                 {activeTab === 'wpa' && <ClutchWpaSection />}
+                {activeTab === 'matchups' && <MatchupFinderSection />}
                 {activeTab === 'lineups' && <LineupChemistrySection />}
                 {activeTab === 'replay' && <GameReplaySection />}
                 {activeTab === 'withwithout' && <WithWithoutStarSection />}

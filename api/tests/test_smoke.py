@@ -335,3 +335,34 @@ def test_similarity_playtype_season_clusters():
         assert data["season"] == 2025
         assert data["players"]
         assert all("pca_x" in p and "style" in p for p in data["players"])
+
+
+# ─── impact_api: Matchup Finder ─────────────────────────────────────────────
+
+def test_impact_matchups_scorer_role():
+    from impact_api import app
+    resp = TestClient(app).get(
+        "/matchups/player/Luka Doncic", params={"role": "scorer", "season": 2024, "top_n": 5}
+    )
+    assert resp.status_code in (200, 404, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        assert data["role"] == "scorer"
+        assert data["toughest"] and data["easiest"]
+        assert all("reliable" in r and "matchup_fg_pct" in r for r in data["toughest"])
+
+
+def test_impact_matchups_defender_role():
+    from impact_api import app
+    resp = TestClient(app).get(
+        "/matchups/player/Luka Doncic", params={"role": "defender", "season": 2024, "top_n": 5}
+    )
+    assert resp.status_code in (200, 404, 503)
+    if resp.status_code == 200:
+        assert resp.json()["role"] == "defender"
+
+
+def test_impact_matchups_invalid_role():
+    from impact_api import app
+    resp = TestClient(app).get("/matchups/player/Luka Doncic", params={"role": "bogus"})
+    assert resp.status_code == 400

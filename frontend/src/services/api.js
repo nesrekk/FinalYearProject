@@ -506,6 +506,15 @@ export async function fetchPlaytypeSeasonClusters(season) {
     return response.data;
 }
 
+// ─── Matchup Finder ("Kryptonite" defender/scorer matchups) ─────
+export async function fetchPlayerMatchups(playerName, role = 'scorer', season, topN = 15) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/matchups/player/${encodeURIComponent(playerName)}`,
+        { params: { role, top_n: topN, ...(season ? { season } : {}) } }
+    );
+    return response.data;
+}
+
 export async function simulateTrade({ season, teamA, playerAId, teamB, playerBId }) {
     const response = await axios.get(`${IMPACT_BASE}/trade/simulate`, {
         params: { season, team_a: teamA, player_a_id: playerAId, team_b: teamB, player_b_id: playerBId },
