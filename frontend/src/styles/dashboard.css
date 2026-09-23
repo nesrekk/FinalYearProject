@@ -743,6 +743,25 @@ body {
   font-size: 1rem;
 }
 
+/* Analytics page: group selector row + sub-tab row within the chosen group */
+.tab-bar--groups {
+  margin-bottom: 0.75rem;
+}
+
+.tab-btn--group {
+  padding: 0.45rem 1rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, var(--text-secondary));
+  background: transparent;
+}
+
+.tab-bar--sub {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
 /* Data Table */
 .table-wrapper {
   overflow-x: auto;
