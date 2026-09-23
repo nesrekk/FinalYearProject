@@ -13,6 +13,7 @@ import PlayoffForecasterSection from '../PlayoffForecasterSection';
 import DraftProspectSection from '../DraftProspectSection';
 import HeliocentricitySection from '../HeliocentricitySection';
 import ClutchWpaSection from '../ClutchWpaSection';
+import LineupChemistrySection from '../LineupChemistrySection';
 
 const tabs = [
     { id: 'similarity', label: 'Season Similarity', icon: 'bar_chart' },
@@ -28,6 +29,7 @@ const tabs = [
     { id: 'prospects', label: 'Draft Prospects', icon: 'school' },
     { id: 'helio', label: 'Heliocentricity', icon: 'wb_sunny' },
     { id: 'wpa', label: 'Clutch WPA', icon: 'timer' },
+    { id: 'lineups', label: 'Lineup Chemistry', icon: 'diversity_3' },
 ];
 
 export default function AnalyticsSection() {
@@ -63,6 +65,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'prospects' && <DraftProspectSection />}
                 {activeTab === 'helio' && <HeliocentricitySection />}
                 {activeTab === 'wpa' && <ClutchWpaSection />}
+                {activeTab === 'lineups' && <LineupChemistrySection />}
             </div>
         </div>
     );

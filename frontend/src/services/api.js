@@ -300,6 +300,15 @@ export async function fetchClutchWpaLeaderboard(topN = 25) {
     return response.data;
 }
 
+// ─── Lineup Chemistry ─────────────────────────────────────────────
+export async function fetchLineupChemistry(order = 'best', minMinutes = 40, topN = 15, season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/lineups/chemistry`,
+        { params: { order, min_minutes: minMinutes, top_n: topN, ...(season ? { season } : {}) } }
+    );
+    return response.data;
+}
+
 // ─── Vegas vs. Machine: Championship Odds Scanner ───────────────
 export async function fetchChampionshipOdds() {
     const response = await axios.get(`${IMPACT_BASE}/odds/championship`);

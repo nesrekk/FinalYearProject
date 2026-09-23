@@ -118,6 +118,7 @@ _CACHE = {
     "championship_odds": {"ts": 0, "data": None},
     "playoff_stats": {},  # key: season -> {"ts": ..., "data": {name_lower: row_dict}}
     "helio_pt_stats": {},  # key: season -> {"ts": ..., "data": {name_lower: row_dict}}
+    "lineup_chemistry": {},  # key: season -> {"ts": ..., "data": [lineup_dict, ...]}
 }
 _CACHE_TTL_SECONDS = 6 * 60 * 60
 
@@ -1245,6 +1246,131 @@ def get_clutch_wpa_leaderboard(top_n: int = 25, min_clutch_plays: int = 3):
             }
             for i, r in enumerate(rows)
         ],
+    }
+
+
+# ─── Lineup Chemistry (real 5-man unit on-court performance) ────────────────
+#
+# Real 5-man lineup combinations and their real on-court Offensive/Defensive/
+# Net Rating, fetched live from nba_api's LeagueDashLineups (the NBA's own
+# real lineup data, not a simulation). This is the honest substitute for a
+# "Trade Chemistry Simulator": rather than inventing a usage-redistribution
+# formula for lineups that have never actually played together, it shows
+# how real lineups that HAVE actually shared the floor have actually
+# performed — real minutes, real possessions, real outcomes.
+#
+# Lineups with very little shared floor time are extremely noisy (a 3-minute
+# sample can produce a wild net rating that means nothing), so a real
+# min_minutes cutoff is applied and always disclosed rather than hidden.
+
+def _fetch_lineup_stats_season(season: int):
+    """Live-fetch every real 5-man lineup combination for a season in one
+    request (~1.5s for the whole league), cached like the other live
+    fetches in this file."""
+    cached = _CACHE["lineup_chemistry"].get(season)
+    if cached and time.time() - cached["ts"] < _CACHE_TTL_SECONDS:
+        return cached["data"]
+
+    try:
+        from nba_api.stats.endpoints import leaguedashlineups
+
+        season_label = f"{season - 1}-{str(season)[-2:]}"
+        endpoint = leaguedashlineups.LeagueDashLineups(
+            group_quantity=5,
+            measure_type_detailed_defense="Advanced",
+            per_mode_detailed="Totals",
+            season=season_label,
+            season_type_all_star="Regular Season",
+            timeout=45,
+        )
+        df = endpoint.get_data_frames()[0]
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Live lineup data fetch failed: {exc}")
+
+    lineups = []
+    for _, row in df.iterrows():
+        player_ids = [int(pid) for pid in str(row["GROUP_ID"]).split("-") if pid]
+        abbr_names = [n.strip() for n in str(row["GROUP_NAME"]).split(" - ") if n.strip()]
+        lineups.append({
+            "player_ids": player_ids,
+            "abbr_names": abbr_names,
+            "team_abbreviation": row["TEAM_ABBREVIATION"],
+            "gp": int(row["GP"]),
+            "min": float(row["MIN"]),
+            "off_rating": float(row["OFF_RATING"]),
+            "def_rating": float(row["DEF_RATING"]),
+            "net_rating": float(row["NET_RATING"]),
+            "ast_pct": float(row["AST_PCT"]),
+            "ts_pct": float(row["TS_PCT"]),
+            "pace": float(row["PACE"]),
+        })
+
+    _CACHE["lineup_chemistry"][season] = {"ts": time.time(), "data": lineups}
+    return lineups
+
+
+@app.get("/lineups/chemistry")
+def get_lineup_chemistry(season: int = None, min_minutes: float = 40, top_n: int = 15, order: str = "best"):
+    top_n = max(1, min(top_n, 50))
+    order = order if order in ("best", "worst") else "best"
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        resolved_season = season or get_latest_season(cursor)
+        check_season_exists(cursor, resolved_season)
+
+        lineups = _fetch_lineup_stats_season(resolved_season)
+        qualified = [l for l in lineups if l["min"] >= min_minutes]
+
+        all_ids = {pid for l in qualified for pid in l["player_ids"]}
+        name_map = {}
+        if all_ids:
+            cursor.execute(
+                """SELECT DISTINCT ON (player_id) player_id, player_name
+                   FROM player_season_stats
+                   WHERE player_id = ANY(%s)
+                   ORDER BY player_id, season DESC;""",
+                (list(all_ids),),
+            )
+            name_map = {r[0]: r[1] for r in cursor.fetchall()}
+
+    qualified.sort(key=lambda l: l["net_rating"], reverse=(order == "best"))
+    top = qualified[:top_n]
+
+    results = []
+    for i, l in enumerate(top):
+        players = [
+            {"player_id": pid, "player_name": name_map.get(pid, abbr)}
+            for pid, abbr in zip(l["player_ids"], l["abbr_names"])
+        ]
+        results.append({
+            "rank": i + 1,
+            "players": players,
+            "team_abbreviation": l["team_abbreviation"],
+            "gp": l["gp"],
+            "min": l["min"],
+            "off_rating": l["off_rating"],
+            "def_rating": l["def_rating"],
+            "net_rating": l["net_rating"],
+            "ast_pct": l["ast_pct"],
+            "ts_pct": l["ts_pct"],
+            "pace": l["pace"],
+        })
+
+    return {
+        "season": resolved_season,
+        "min_minutes": min_minutes,
+        "order": order,
+        "lineups_qualified": len(qualified),
+        "lineups_total": len(lineups),
+        "methodology": (
+            f"Real 5-man lineup combinations that have actually shared the floor this season, fetched live from "
+            f"the NBA's own real lineup data (not a simulation of hypothetical lineups). Only lineups with at "
+            f"least {min_minutes:.0f} real shared minutes are shown ({len(qualified)} of {len(lineups)} total "
+            "combinations qualify) — lineups with only a few shared minutes produce real but extremely noisy "
+            "net ratings, so that noise is filtered out and disclosed here rather than hidden."
+        ),
+        "results": results,
     }
 
 
