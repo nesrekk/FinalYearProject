@@ -17,6 +17,7 @@ import LineupChemistrySection from '../LineupChemistrySection';
 import GameReplaySection from '../GameReplaySection';
 import PredictionLedgerSection from '../PredictionLedgerSection';
 import WithWithoutStarSection from '../WithWithoutStarSection';
+import ScheduleFatigueSection from '../ScheduleFatigueSection';
 
 const TAB_GROUPS = [
     {
@@ -48,6 +49,7 @@ const TAB_GROUPS = [
             { id: 'lineups', label: 'Lineup Chemistry', icon: 'diversity_3' },
             { id: 'replay', label: 'Game Replay', icon: 'movie' },
             { id: 'withwithout', label: 'With/Without a Star', icon: 'person_off' },
+            { id: 'fatigue', label: 'Schedule Fatigue', icon: 'flight' },
         ],
     },
     {
@@ -158,6 +160,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'lineups' && <LineupChemistrySection />}
                 {activeTab === 'replay' && <GameReplaySection />}
                 {activeTab === 'withwithout' && <WithWithoutStarSection />}
+                {activeTab === 'fatigue' && <ScheduleFatigueSection />}
             </div>
         </div>
     );

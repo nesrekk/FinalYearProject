@@ -462,6 +462,23 @@ export async function fetchWithWithoutStar(team, season, playerName) {
     return response.data;
 }
 
+// ─── Schedule Fatigue ────────────────────────────────────────────
+export async function fetchRestStudy(season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/schedule/rest-study`,
+        { params: season ? { season } : {} }
+    );
+    return response.data;
+}
+
+export async function fetchScheduleDifficulty(season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/schedule/difficulty`,
+        { params: season ? { season } : {} }
+    );
+    return response.data;
+}
+
 export async function simulateTrade({ season, teamA, playerAId, teamB, playerBId }) {
     const response = await axios.get(`${IMPACT_BASE}/trade/simulate`, {
         params: { season, team_a: teamA, player_a_id: playerAId, team_b: teamB, player_b_id: playerBId },

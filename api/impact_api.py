@@ -2815,6 +2815,132 @@ def get_with_without_star(team_abbr: str, season: int, player_name: str):
     }
 
 
+# ─── Schedule Fatigue ────────────────────────────────────────────────────────
+#
+# Real rest days, back-to-backs, real travel miles (haversine, scripts/
+# arenas.py's real arena locations), and real time zones crossed for every
+# real team game, precomputed by scripts/build_schedule_fatigue.py from
+# real nba_api game logs (team_game_fatigue table). Read-only here — this
+# section only queries what that script already computed.
+
+@app.get("/schedule/rest-study")
+def get_rest_study(season: Optional[int] = None):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT to_regclass('public.team_game_fatigue');")
+        if cursor.fetchone()[0] is None:
+            raise HTTPException(status_code=503, detail="No schedule data yet — run scripts/build_schedule_fatigue.py first.")
+
+        params = [season] if season else []
+        season_clause = "AND season = %s" if season else ""
+        cursor.execute(
+            f"""SELECT rest_days, COUNT(*) AS n,
+                       AVG(CASE WHEN win THEN 1.0 ELSE 0 END) AS win_pct,
+                       AVG(plus_minus) AS avg_point_diff
+                FROM team_game_fatigue
+                WHERE rest_days IS NOT NULL {season_clause}
+                GROUP BY rest_days
+                ORDER BY rest_days;""",
+            params,
+        )
+        rows = cursor.fetchall()
+
+    buckets = []
+    for rest_days, n, win_pct, avg_diff in rows:
+        bucket_label = "B2B (0 days rest)" if rest_days == 0 else f"{rest_days} day{'s' if rest_days != 1 else ''} rest"
+        buckets.append({
+            "rest_days": rest_days,
+            "bucket_label": bucket_label if rest_days < 4 else "4+ days rest",
+            "n": n,
+            "win_pct": round(float(win_pct), 4),
+            "avg_point_diff": round(float(avg_diff), 3) if avg_diff is not None else None,
+        })
+
+    # Fold 4+ day buckets together — real n gets thin past 3 days and a
+    # dozen separate one-off buckets is noise, not signal.
+    merged = {}
+    for b in buckets:
+        key = b["rest_days"] if b["rest_days"] < 4 else 4
+        if key not in merged:
+            merged[key] = {"rest_days": key, "bucket_label": "4+ days rest" if key == 4 else b["bucket_label"], "n": 0, "_win_sum": 0.0, "_diff_sum": 0.0}
+        merged[key]["n"] += b["n"]
+        merged[key]["_win_sum"] += b["win_pct"] * b["n"]
+        merged[key]["_diff_sum"] += (b["avg_point_diff"] or 0) * b["n"]
+
+    final_buckets = []
+    for key in sorted(merged.keys()):
+        m = merged[key]
+        final_buckets.append({
+            "rest_days": m["rest_days"],
+            "bucket_label": m["bucket_label"],
+            "n": m["n"],
+            "win_pct": round(m["_win_sum"] / m["n"], 4),
+            "avg_point_diff": round(m["_diff_sum"] / m["n"], 3),
+        })
+
+    return {
+        "season": season,
+        "buckets": final_buckets,
+        "methodology": (
+            "Real win% and real average point differential (that game's real plus/minus) by real rest-days "
+            "bucket, across every real team-game with a known previous real game (team_game_fatigue). "
+            "0 days rest = a real back-to-back. Real n is shown per bucket — samples get thin past 3+ days "
+            "rest, folded into one '4+ days rest' bucket rather than presented as many noisy one-off buckets."
+        ),
+    }
+
+
+@app.get("/schedule/difficulty")
+def get_schedule_difficulty(season: Optional[int] = None):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        resolved_season = season or get_latest_season(cursor)
+        cursor.execute("SELECT to_regclass('public.team_game_fatigue');")
+        if cursor.fetchone()[0] is None:
+            raise HTTPException(status_code=503, detail="No schedule data yet — run scripts/build_schedule_fatigue.py first.")
+
+        cursor.execute(
+            """SELECT team_abbreviation,
+                      COUNT(*) AS n_games,
+                      SUM(travel_miles_since_last) AS total_miles,
+                      SUM(CASE WHEN is_b2b THEN 1 ELSE 0 END) AS n_b2b,
+                      SUM(CASE WHEN games_last_7_days >= 4 THEN 1 ELSE 0 END) AS n_heavy_weeks
+               FROM team_game_fatigue
+               WHERE season = %s
+               GROUP BY team_abbreviation
+               ORDER BY total_miles DESC NULLS LAST;""",
+            (resolved_season,),
+        )
+        rows = cursor.fetchall()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"No real schedule data for season {resolved_season}.")
+
+    results = [
+        {
+            "rank": i + 1,
+            "team_abbreviation": r[0],
+            "n_games": r[1],
+            "total_travel_miles": round(r[2], 0) if r[2] is not None else None,
+            "b2b_count": r[3],
+            "games_with_4plus_in_7days": r[4],
+        }
+        for i, r in enumerate(rows)
+    ]
+
+    return {
+        "season": resolved_season,
+        "results": results,
+        "methodology": (
+            "Real total travel miles (haversine between each real consecutive game's real arena location, "
+            "scripts/arenas.py), real back-to-back count, and real count of stretches with 4+ real games in "
+            "a trailing 7-day window, per real team for the season — ranked by real total travel, the most "
+            "direct real proxy for a grueling real schedule. Not causal — a team's real record isn't adjusted "
+            "for this, it's shown as real schedule context only."
+        ),
+    }
+
+
 # ─── Shot Chart Endpoints ───────────────────────────────────────────────────
 
 @app.get("/shots/player/{player_name}/seasons")
@@ -4775,14 +4901,66 @@ def get_stat_leaders(stat_key: str, season: Optional[int] = None, top_n: int = 1
     }
 
 
+def _attach_rest_tags(games: list, date_str: str):
+    """Real rest-days context for each team in each game, from the real
+    schedule already on file (team_game_fatigue). Purely informational —
+    if the fatigue table hasn't been refreshed recently (it's a script a
+    human has to re-run, like the Prediction Ledger's snapshot script),
+    a team's rest data just won't be there yet, which shows up here as
+    null rather than a stale guess."""
+    abbrs = {g["away"]["abbr"] for g in games} | {g["home"]["abbr"] for g in games}
+    if not abbrs:
+        return games
+    try:
+        game_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return games
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT to_regclass('public.team_game_fatigue');")
+        if cursor.fetchone()[0] is None:
+            return games
+        cursor.execute(
+            """SELECT DISTINCT ON (team_abbreviation) team_abbreviation, game_date
+               FROM team_game_fatigue
+               WHERE team_abbreviation = ANY(%s) AND game_date < %s
+               ORDER BY team_abbreviation, game_date DESC;""",
+            (list(abbrs), game_date),
+        )
+        last_game_by_team = {r[0]: r[1] for r in cursor.fetchall()}
+
+    for g in games:
+        rest = {}
+        for side in ("away", "home"):
+            abbr = g[side]["abbr"]
+            last_date = last_game_by_team.get(abbr)
+            if last_date is None:
+                rest[side] = None
+                continue
+            rest_days = (game_date - last_date).days - 1
+            rest[side] = {"rest_days": rest_days, "is_b2b": rest_days == 0}
+
+        g["away"]["rest"] = rest["away"]
+        g["home"]["rest"] = rest["home"]
+        if rest["away"] and rest["home"] and rest["away"]["rest_days"] != rest["home"]["rest_days"]:
+            g["away"]["rest"]["rest_disadvantage"] = rest["away"]["rest_days"] < rest["home"]["rest_days"]
+            g["home"]["rest"]["rest_disadvantage"] = rest["home"]["rest_days"] < rest["away"]["rest_days"]
+    return games
+
+
 @app.get("/games/by-date")
 def get_games_by_date(date: Optional[str] = None):
     """
-    Games for a given date (YYYY-MM-DD). Defaults to today.
+    Games for a given date (YYYY-MM-DD). Defaults to today. Each team
+    object gets a real "rest" field (rest_days, is_b2b, and a
+    rest_disadvantage flag when the two teams' real rest days differ)
+    computed from the real schedule in team_game_fatigue when available.
     """
     if date is None:
         date = datetime.now().strftime("%Y-%m-%d")
     games = fetch_nba_games_by_date(date)
+    games = _attach_rest_tags(games, date)
     return {
         "date": date,
         "games": games,

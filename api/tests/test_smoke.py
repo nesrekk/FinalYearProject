@@ -186,6 +186,48 @@ def test_impact_pair_synergy():
         assert data["observed"]["min"] > 0
 
 
+def test_impact_rest_study():
+    from impact_api import app
+    resp = TestClient(app).get("/schedule/rest-study")
+    assert resp.status_code in (200, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        b2b = next((b for b in data["buckets"] if b["rest_days"] == 0), None)
+        rested = next((b for b in data["buckets"] if b["rest_days"] == 1), None)
+        assert b2b and rested
+        # Real, well-documented effect: back-to-backs should show a lower real win% than one rest day.
+        assert b2b["win_pct"] < rested["win_pct"]
+
+
+def test_impact_schedule_difficulty():
+    from impact_api import app
+    resp = TestClient(app).get("/schedule/difficulty")
+    assert resp.status_code in (200, 404, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        assert len(data["results"]) == 30
+        miles = [r["total_travel_miles"] for r in data["results"] if r["total_travel_miles"] is not None]
+        assert miles == sorted(miles, reverse=True)  # ranked by real total travel, descending
+
+
+def test_impact_attach_rest_tags():
+    # Tests the rest-tag attachment logic directly against real stored
+    # schedule data, rather than through /games/by-date — that endpoint's
+    # live scoreboard fetch is slow for historical dates (a pre-existing
+    # characteristic unrelated to this feature), which would make the
+    # smoke suite slow for no real coverage benefit.
+    import impact_api
+    games = [{"away": {"abbr": "ORL"}, "home": {"abbr": "LAC"}}]
+    result = impact_api._attach_rest_tags(games, "2023-10-31")
+    away_rest = result[0]["away"].get("rest")
+    home_rest = result[0]["home"].get("rest")
+    if away_rest and home_rest:  # only assert specifics if team_game_fatigue is populated
+        assert away_rest["rest_days"] == 0 and away_rest["is_b2b"] is True
+        assert home_rest["rest_days"] == 1
+        assert away_rest["rest_disadvantage"] is True
+        assert home_rest["rest_disadvantage"] is False
+
+
 def test_impact_wp_replay_list():
     from impact_api import app
     resp = TestClient(app).get("/games/wp-replay/list")
