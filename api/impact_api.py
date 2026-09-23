@@ -106,6 +106,14 @@ TEAM_META = {
     "WAS": {"name": "Washington Wizards", "conference": "eastern"},
 }
 
+# Real team IDs from nba_api's bundled static teams list (not a live fetch —
+# same source the frontend's teamAssets.js already uses for logos).
+try:
+    from nba_api.stats.static import teams as _nba_static_teams
+    TEAM_ABBR_TO_ID = {t["abbreviation"]: t["id"] for t in _nba_static_teams.get_teams()}
+except Exception:
+    TEAM_ABBR_TO_ID = {}
+
 _CACHE = {
     "team_badges": {"ts": 0, "data": {}},
     "standings_bdl": {},  # key: season -> {"ts": ..., "data": ...}
@@ -114,6 +122,8 @@ _CACHE = {
     "playoff_stats": {},  # key: season -> {"ts": ..., "data": {name_lower: row_dict}}
     "helio_pt_stats": {},  # key: season -> {"ts": ..., "data": {name_lower: row_dict}}
     "lineup_chemistry": {},  # key: season -> {"ts": ..., "data": [lineup_dict, ...]}
+    "team_game_log": {},  # key: (team_id, season) -> {"ts": ..., "data": [game_dict, ...]}
+    "player_game_log": {},  # key: (player_id, season) -> {"ts": ..., "data": set(game_id)}
 }
 _CACHE_TTL_SECONDS = 6 * 60 * 60
 
@@ -2306,6 +2316,127 @@ def find_player(cursor, player_name: str):
             return pid, pname
 
     raise HTTPException(status_code=404, detail=f"Player '{player_name}' not found.")
+
+
+# ─── With vs. Without a Star ─────────────────────────────────────────────────
+#
+# Real team record and real point differential in games a real player did
+# vs. didn't play, for one team + season + player. Live-fetched from
+# nba_api's LeagueGameFinder (real full-season team game log + real
+# full-season player game log — the same endpoint/pattern the WPA pipeline
+# already uses), cached like the other live fetches in this file. This is
+# a real, disclosed ASSOCIATION, not a causal claim: who else was in or
+# out of the lineup for those same real games also matters, and this
+# endpoint doesn't control for that.
+
+def _fetch_team_game_log(team_id: int, season: int):
+    cached = _CACHE["team_game_log"].get((team_id, season))
+    if cached and time.time() - cached["ts"] < _CACHE_TTL_SECONDS:
+        return cached["data"]
+
+    try:
+        from nba_api.stats.endpoints import leaguegamefinder
+
+        season_label = f"{season - 1}-{str(season)[-2:]}"
+        endpoint = leaguegamefinder.LeagueGameFinder(
+            team_id_nullable=str(team_id),
+            season_nullable=season_label,
+            season_type_nullable="Regular Season",
+            timeout=30,
+        )
+        df = endpoint.get_data_frames()[0]
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Live team game log fetch failed: {exc}")
+
+    games = [
+        {
+            "game_id": row["GAME_ID"],
+            "wl": row["WL"],
+            "plus_minus": float(row["PLUS_MINUS"]) if row["PLUS_MINUS"] is not None else None,
+        }
+        for _, row in df.iterrows()
+    ]
+    _CACHE["team_game_log"][(team_id, season)] = {"ts": time.time(), "data": games}
+    return games
+
+
+def _fetch_player_game_ids(player_id: int, season: int, team_id: int):
+    cache_key = (player_id, season, team_id)
+    cached = _CACHE["player_game_log"].get(cache_key)
+    if cached and time.time() - cached["ts"] < _CACHE_TTL_SECONDS:
+        return cached["data"]
+
+    try:
+        from nba_api.stats.endpoints import leaguegamefinder
+
+        season_label = f"{season - 1}-{str(season)[-2:]}"
+        endpoint = leaguegamefinder.LeagueGameFinder(
+            player_id_nullable=str(player_id),
+            season_nullable=season_label,
+            season_type_nullable="Regular Season",
+            timeout=30,
+        )
+        df = endpoint.get_data_frames()[0]
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Live player game log fetch failed: {exc}")
+
+    game_ids = set(df[df["TEAM_ID"] == team_id]["GAME_ID"].tolist())
+    _CACHE["player_game_log"][cache_key] = {"ts": time.time(), "data": game_ids}
+    return game_ids
+
+
+@app.get("/teams/with-without/{team_abbr}/{season}")
+def get_with_without_star(team_abbr: str, season: int, player_name: str):
+    team_abbr = team_abbr.upper()
+    team_id = TEAM_ABBR_TO_ID.get(team_abbr)
+    if team_id is None:
+        raise HTTPException(status_code=400, detail=f"Unknown team abbreviation '{team_abbr}'.")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        player_id, resolved_name = find_player(cursor, player_name)
+
+    team_games = _fetch_team_game_log(team_id, season)
+    if not team_games:
+        raise HTTPException(status_code=404, detail=f"No real games found for {team_abbr} in season {season}.")
+
+    played_game_ids = _fetch_player_game_ids(player_id, season, team_id)
+
+    with_games = [g for g in team_games if g["game_id"] in played_game_ids]
+    without_games = [g for g in team_games if g["game_id"] not in played_game_ids]
+
+    def summarize(games):
+        n = len(games)
+        if n == 0:
+            return {"n": 0, "wins": 0, "losses": 0, "win_pct": None, "avg_point_diff": None}
+        wins = sum(1 for g in games if g["wl"] == "W")
+        losses = n - wins
+        diffs = [g["plus_minus"] for g in games if g["plus_minus"] is not None]
+        avg_diff = sum(diffs) / len(diffs) if diffs else None
+        return {
+            "n": n,
+            "wins": wins,
+            "losses": losses,
+            "win_pct": round(wins / n, 3),
+            "avg_point_diff": round(avg_diff, 2) if avg_diff is not None else None,
+        }
+
+    return {
+        "team_abbreviation": team_abbr,
+        "season": season,
+        "player_id": player_id,
+        "player_name": resolved_name,
+        "with_player": summarize(with_games),
+        "without_player": summarize(without_games),
+        "methodology": (
+            f"Real {team_abbr} team game log and real {resolved_name} game log for season {season}, both "
+            "live-fetched from the NBA's own real per-game data, not a model. This is an association, not a "
+            "causal claim: other players being in or out of the lineup for the same real games also affects "
+            "the real result, and this comparison doesn't control for that. Real sample sizes for both splits "
+            "are always shown — draw conclusions cautiously from a small 'without' sample, which is common for "
+            "a player who rarely sits."
+        ),
+    }
 
 
 # ─── Shot Chart Endpoints ───────────────────────────────────────────────────

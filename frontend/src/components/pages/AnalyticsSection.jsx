@@ -16,6 +16,7 @@ import ClutchWpaSection from '../ClutchWpaSection';
 import LineupChemistrySection from '../LineupChemistrySection';
 import GameReplaySection from '../GameReplaySection';
 import PredictionLedgerSection from '../PredictionLedgerSection';
+import WithWithoutStarSection from '../WithWithoutStarSection';
 
 const TAB_GROUPS = [
     {
@@ -46,6 +47,7 @@ const TAB_GROUPS = [
             { id: 'playoffs', label: 'Playoff Forecaster', icon: 'military_tech' },
             { id: 'lineups', label: 'Lineup Chemistry', icon: 'diversity_3' },
             { id: 'replay', label: 'Game Replay', icon: 'movie' },
+            { id: 'withwithout', label: 'With/Without a Star', icon: 'person_off' },
         ],
     },
     {
@@ -155,6 +157,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'wpa' && <ClutchWpaSection />}
                 {activeTab === 'lineups' && <LineupChemistrySection />}
                 {activeTab === 'replay' && <GameReplaySection />}
+                {activeTab === 'withwithout' && <WithWithoutStarSection />}
             </div>
         </div>
     );

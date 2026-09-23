@@ -434,6 +434,15 @@ export async function fetchTradeRoster(team, season) {
     return response.data;
 }
 
+// ─── With vs. Without a Star ────────────────────────────────────
+export async function fetchWithWithoutStar(team, season, playerName) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/teams/with-without/${team}/${season}`,
+        { params: { player_name: playerName } }
+    );
+    return response.data;
+}
+
 export async function simulateTrade({ season, teamA, playerAId, teamB, playerBId }) {
     const response = await axios.get(`${IMPACT_BASE}/trade/simulate`, {
         params: { season, team_a: teamA, player_a_id: playerAId, team_b: teamB, player_b_id: playerBId },

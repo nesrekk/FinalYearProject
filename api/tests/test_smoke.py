@@ -132,6 +132,17 @@ def test_impact_lineup_chemistry():
     assert data["lineups_qualified"] <= data["lineups_total"]
 
 
+def test_impact_with_without_star():
+    from impact_api import app
+    resp = TestClient(app).get(
+        "/teams/with-without/PHI/2024", params={"player_name": "Joel Embiid"}
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["with_player"]["n"] + data["without_player"]["n"] > 70  # ~real 82-game season
+    assert data["with_player"]["win_pct"] is not None
+
+
 def test_impact_wp_replay_list():
     from impact_api import app
     resp = TestClient(app).get("/games/wp-replay/list")
