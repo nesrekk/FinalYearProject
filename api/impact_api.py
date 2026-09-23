@@ -117,6 +117,7 @@ _CACHE = {
     "player_images": {},  # key: normalized_name -> {"ts": ..., "url": ...}
     "championship_odds": {"ts": 0, "data": None},
     "playoff_stats": {},  # key: season -> {"ts": ..., "data": {name_lower: row_dict}}
+    "helio_pt_stats": {},  # key: season -> {"ts": ..., "data": {name_lower: row_dict}}
 }
 _CACHE_TTL_SECONDS = 6 * 60 * 60
 
@@ -1040,6 +1041,143 @@ def get_draft_prospect_comp(player_name: str, season: Optional[int] = None, top_
         ],
         "projected_nba_rookie_outcome": projected,
         "bridge_pool_size": bridge_pool_size,
+    }
+
+
+# ─── Heliocentricity Index ───────────────────────────────────────────────────
+#
+# How much of a team's real offense runs through one player. Every input is
+# real, live NBA tracking data (touches, real time of possession, real usage
+# and assist rate already in this project's DB) — no fabricated "what if
+# they sat out" simulation, which would require inventing an effect size
+# with nothing real to fit it against (the same reasoning that ruled out a
+# few other proposed features this session). The index itself is a simple,
+# fully disclosed average of real percentile ranks — the same kind of
+# transparent weighted composite this project's own Impact Score already
+# uses, not a trained or validated model.
+
+def _fetch_pt_possession_stats(season: int):
+    """Real per-player touch/possession tracking data for a whole season, one
+    request for the whole league (~1.5s), cached like the other league-wide
+    live fetches in this file."""
+    cached = _CACHE["helio_pt_stats"].get(season)
+    if cached and time.time() - cached["ts"] < _CACHE_TTL_SECONDS:
+        return cached["data"]
+
+    try:
+        from nba_api.stats.endpoints import leaguedashptstats
+
+        season_label = f"{season - 1}-{str(season)[-2:]}"
+        endpoint = leaguedashptstats.LeagueDashPtStats(
+            season=season_label,
+            season_type_all_star="Regular Season",
+            per_mode_simple="PerGame",
+            player_or_team="Player",
+            pt_measure_type="Possessions",
+            timeout=30,
+        )
+        data = endpoint.get_dict()
+        rs = data.get("resultSets", [{}])[0]
+        headers, rows = rs.get("headers", []), rs.get("rowSet", [])
+        idx = {h: i for i, h in enumerate(headers)}
+
+        def val(row, key, default=None):
+            i = idx.get(key)
+            return row[i] if i is not None and i < len(row) else default
+
+        by_name = {}
+        team_totals = {}
+        for row in rows:
+            name = str(val(row, "PLAYER_NAME", "") or "").strip()
+            team = str(val(row, "TEAM_ABBREVIATION", "") or "")
+            top = float(val(row, "TIME_OF_POSS", 0) or 0)
+            if not name:
+                continue
+            by_name[name.lower()] = {
+                "player_id": int(val(row, "PLAYER_ID", 0) or 0),
+                "player_name": name,
+                "team_abbreviation": team,
+                "touches": float(val(row, "TOUCHES", 0) or 0),
+                "time_of_poss": top,
+                "avg_sec_per_touch": float(val(row, "AVG_SEC_PER_TOUCH", 0) or 0),
+                "pts_per_touch": float(val(row, "PTS_PER_TOUCH", 0) or 0),
+            }
+            team_totals[team] = team_totals.get(team, 0.0) + top
+
+        for row in by_name.values():
+            team_top = team_totals.get(row["team_abbreviation"]) or 1.0
+            row["time_of_poss_share"] = round(100 * row["time_of_poss"] / team_top, 1)
+    except Exception:
+        by_name = {}
+
+    _CACHE["helio_pt_stats"][season] = {"ts": time.time(), "data": by_name}
+    return by_name
+
+
+@app.get("/players/heliocentricity")
+def get_heliocentricity_leaderboard(season: Optional[int] = None, top_n: int = 25):
+    """Real touches/time-of-possession-share/usage%/assist% for this
+    season's qualified pool, ranked by a disclosed equal-weighted average
+    of each stat's real percentile rank."""
+    top_n = max(1, min(top_n, 100))
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        resolved_season = season or get_latest_season(cursor)
+        check_season_exists(cursor, resolved_season)
+        cursor.execute(
+            """
+            SELECT player_id, player_name, team_abbreviation, usg_pct, ast_pct
+            FROM player_season_stats
+            WHERE season = %s AND min >= %s AND gp >= %s
+              AND usg_pct IS NOT NULL AND ast_pct IS NOT NULL;
+            """,
+            (resolved_season, RADAR_MIN_MINUTES, RADAR_MIN_GAMES),
+        )
+        db_rows = cursor.fetchall()
+
+    pt_stats = _fetch_pt_possession_stats(resolved_season)
+    if not pt_stats:
+        raise HTTPException(status_code=502, detail="Live touch/possession tracking data is unavailable right now.")
+
+    combined = []
+    for player_id, player_name, team_abbr, usg_pct, ast_pct in db_rows:
+        pt = pt_stats.get(player_name.lower())
+        if not pt:
+            continue
+        combined.append({
+            "player_id": player_id, "player_name": player_name, "team_abbreviation": team_abbr,
+            "usg_pct": usg_pct, "ast_pct": ast_pct,
+            "touches": pt["touches"], "time_of_poss_share": pt["time_of_poss_share"],
+            "avg_sec_per_touch": pt["avg_sec_per_touch"], "pts_per_touch": pt["pts_per_touch"],
+        })
+
+    if len(combined) < 10:
+        raise HTTPException(status_code=404, detail=f"Not enough matched players to build a leaderboard for season {resolved_season}.")
+
+    pools = {k: [r[k] for r in combined] for k in ("time_of_poss_share", "touches", "usg_pct", "ast_pct")}
+    for r in combined:
+        pcts = [_percentile_rank(r[k], pools[k]) for k in ("time_of_poss_share", "touches", "usg_pct", "ast_pct")]
+        r["percentiles"] = {
+            "time_of_poss_share": pcts[0], "touches": pcts[1], "usg_pct": pcts[2], "ast_pct": pcts[3],
+        }
+        r["heliocentricity_index"] = round(sum(pcts) / len(pcts), 1)
+
+    combined.sort(key=lambda r: r["heliocentricity_index"], reverse=True)
+
+    return {
+        "season": resolved_season,
+        "pool_size": len(combined),
+        "methodology": (
+            "heliocentricity_index is the simple average of four real percentile ranks within this season's "
+            "qualified pool (min>=15 mpg, gp>=20): real time-of-possession share of the player's own team "
+            "(live NBA tracking data), real touches per game, real usage%, and real assist%. Equal weights, "
+            "fully disclosed — not a trained or fitted model, the same kind of transparent composite this "
+            "project's own Impact Score already uses."
+        ),
+        "results": [
+            {**r, "rank": i + 1} for i, r in enumerate(combined[:top_n])
+        ],
     }
 
 

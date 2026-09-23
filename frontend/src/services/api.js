@@ -282,6 +282,15 @@ export async function fetchDraftProspectComp(player, season, topNComps = 5) {
     return response.data;
 }
 
+// ─── Heliocentricity Index ────────────────────────────────────────
+export async function fetchHeliocentricityLeaderboard(season, topN = 25) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/players/heliocentricity`,
+        { params: season ? { season, top_n: topN } : { top_n: topN } }
+    );
+    return response.data;
+}
+
 // ─── Vegas vs. Machine: Championship Odds Scanner ───────────────
 export async function fetchChampionshipOdds() {
     const response = await axios.get(`${IMPACT_BASE}/odds/championship`);
