@@ -241,7 +241,9 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
             }
         }
 
+        let lastClientY = -1000;
         function onMouseMove(e) {
+            lastClientY = e.clientY;
             mouse.x = e.clientX;
             mouse.y = e.clientY + (window.scrollY || 0);
             mouse.in = e.clientX >= 0 && e.clientX <= W && e.clientY >= 0 && e.clientY <= H;
@@ -251,6 +253,12 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
             mouse.in = false;
         }
         function onScroll() {
+            // The cursor doesn't move on-screen while the page scrolls, but
+            // its world-space position does (everything else here is
+            // world-space) — recompute it from the last known screen
+            // position, or repel/attract would act on a stale spot that
+            // drifts away from the real cursor as soon as scrolling starts.
+            mouse.y = lastClientY + (window.scrollY || 0);
             ensureRunning();
         }
 

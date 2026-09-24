@@ -151,12 +151,9 @@
 .landing-hero {
   position: relative;
   min-height: min(720px, 90vh);
-  border-radius: var(--radius-hero);
-  border: 1px solid var(--hairline);
-  /* Transparent so the global fixed particle field (behind the whole page)
-     shows through the hero card instead of being painted over. */
+  /* No border/card background — the hero sits directly on the global
+     particle field instead of looking like a boxed panel. */
   background: transparent;
-  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;

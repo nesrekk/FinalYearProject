@@ -158,6 +158,15 @@ export default function FeatureChapters({ particleFieldRef, onNavigate }) {
 
         function applyActive() {
             const id = [...visibleSet.current][0] || null;
+            // IntersectionObserver re-fires on every threshold crossing
+            // (0/0.5/1), which happens repeatedly while scrolling even when
+            // the active chapter hasn't actually changed — re-morphing to
+            // the same shape on every one of those looked like the
+            // animation kept restarting/glitching mid-scroll. Only
+            // reassign when the active chapter id itself changes; a
+            // separate effect below handles a shape's data arriving late
+            // for a chapter that's already active.
+            if (id === activeRef.current) return;
             activeRef.current = id;
             const field = particleFieldRef.current;
             if (!field) return;
