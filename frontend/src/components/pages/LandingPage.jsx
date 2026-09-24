@@ -46,6 +46,8 @@ function useHeroCursorScope() {
     return useRef(null);
 }
 
+const HERO_HEIGHT = 720;
+
 export default function LandingPage({ onOpenToday, onNavigate }) {
     const heroRef = useHeroCursorScope();
     const [stats, setStats] = useState(null);
@@ -65,11 +67,12 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
 
     return (
         <div className="landing-page">
+            <ParticleField heroHeight={HERO_HEIGHT} />
+            <div className="landing-film-grain" aria-hidden="true" />
             <CustomCursor scopeRef={heroRef} />
 
             <section className="landing-hero-wrap">
                 <div className="landing-hero" ref={heroRef}>
-                    <ParticleField className="landing-hero-field" />
                     <CursorGlow scopeRef={heroRef} />
                     <button
                         type="button"
