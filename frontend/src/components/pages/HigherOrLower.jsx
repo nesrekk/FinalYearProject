@@ -5,6 +5,9 @@ import PlayerHeadshot from '../common/PlayerHeadshot';
 import TeamLogo from '../common/TeamLogo';
 import Icon from '../common/Icon';
 import InfoTooltip from '../common/InfoTooltip';
+import GameCursorScope from '../games/GameCursorScope';
+import ShareResult from '../games/ShareResult';
+import { localDateIso } from '../../utils/date';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 
 const BEST_STREAK_KEY = 'nbahub_higher_lower_best_streak';
@@ -147,6 +150,7 @@ export default function HigherOrLower() {
     }, [status, lastCorrect]);
 
     return (
+        <GameCursorScope>
         <div className="page fade-in">
             <div className="dashboard-card">
                 <h2 className="card-title hb-page-title">
@@ -175,7 +179,7 @@ export default function HigherOrLower() {
                 </div>
 
                 {pool && (status === 'idle' || status === 'gameover') && (
-                    <button type="button" className="input-field" style={{ marginTop: '1rem', cursor: 'pointer', maxWidth: 220 }} onClick={startGame}>
+                    <button type="button" className="input-field" data-magnetic style={{ marginTop: '1rem', cursor: 'pointer', maxWidth: 220 }} onClick={startGame}>
                         <Icon name="play_arrow" size="1em" style={{ verticalAlign: 'middle', marginRight: 4 }} />
                         {status === 'gameover' ? 'Play Again' : 'Start'}
                     </button>
@@ -198,6 +202,12 @@ export default function HigherOrLower() {
                         <p className="page-subtitle">
                             {next.player_name}'s {statLabel.toLowerCase()} was {fmtValue(next[statKey])} vs {current.player_name}'s {fmtValue(current[statKey])}.
                         </p>
+                        <ShareResult
+                            gameTitle="Higher or Lower"
+                            puzzleDate={localDateIso()}
+                            outcomes={[...Array(streak).fill(true), false]}
+                            summary={`Streak: ${streak}`}
+                        />
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -217,16 +227,16 @@ export default function HigherOrLower() {
                             <div style={{ fontFamily: 'var(--font)', fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>VS</div>
                             {status === 'playing' ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <button type="button" className="input-field" style={{ cursor: 'pointer' }} onClick={() => guess('higher')}>
+                                    <button type="button" className="input-field" data-magnetic style={{ cursor: 'pointer' }} onClick={() => guess('higher')}>
                                         <Icon name="arrow_upward" size="1em" style={{ verticalAlign: 'middle', marginRight: 4, color: '#facc15' }} /> Higher
                                     </button>
-                                    <button type="button" className="input-field" style={{ cursor: 'pointer' }} onClick={() => guess('lower')}>
+                                    <button type="button" className="input-field" data-magnetic style={{ cursor: 'pointer' }} onClick={() => guess('lower')}>
                                         <Icon name="arrow_downward" size="1em" style={{ verticalAlign: 'middle', marginRight: 4, color: '#facc15' }} /> Lower
                                     </button>
                                 </div>
                             ) : (
                                 lastCorrect && (
-                                    <button type="button" className="input-field" style={{ cursor: 'pointer' }} onClick={advance}>
+                                    <button type="button" className="input-field" data-magnetic style={{ cursor: 'pointer' }} onClick={advance}>
                                         <Icon name="check" size="1em" style={{ verticalAlign: 'middle', marginRight: 4, color: '#34d399' }} /> Next
                                     </button>
                                 )
@@ -237,5 +247,6 @@ export default function HigherOrLower() {
                 </motion.div>
             )}
         </div>
+        </GameCursorScope>
     );
 }

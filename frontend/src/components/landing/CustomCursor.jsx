@@ -57,8 +57,14 @@ export default function CustomCursor({ scopeRef }) {
         scope.addEventListener('mousemove', onMouseMove);
         scope.addEventListener('mouseleave', onMouseLeave);
 
-        const magneticEls = Array.from(scope.querySelectorAll('[data-magnetic]'));
-        const cleanupFns = magneticEls.map((el) => {
+        // Bind (and later unbind) magnetic listeners per element, tracked so
+        // content that mounts/unmounts after this effect runs — e.g. a
+        // "Start" or "Next" button appearing once a daily game loads its
+        // state — still gets the magnetic pull, not just whatever existed
+        // at the first paint.
+        const bound = new Map();
+        function bindMagnetic(el) {
+            if (bound.has(el)) return;
             function onEnter() { setMagnetic(true); }
             function onMove(e) {
                 const rect = el.getBoundingClientRect();
@@ -77,18 +83,41 @@ export default function CustomCursor({ scopeRef }) {
             el.addEventListener('mouseenter', onEnter);
             el.addEventListener('mousemove', onMove);
             el.addEventListener('mouseleave', onLeave);
-            return () => {
+            bound.set(el, () => {
                 el.removeEventListener('mouseenter', onEnter);
                 el.removeEventListener('mousemove', onMove);
                 el.removeEventListener('mouseleave', onLeave);
-            };
+            });
+        }
+        function unbindMagnetic(el) {
+            bound.get(el)?.();
+            bound.delete(el);
+        }
+
+        Array.from(scope.querySelectorAll('[data-magnetic]')).forEach(bindMagnetic);
+
+        const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                mutation.addedNodes.forEach((node) => {
+                    if (!(node instanceof Element)) return;
+                    if (node.matches?.('[data-magnetic]')) bindMagnetic(node);
+                    node.querySelectorAll?.('[data-magnetic]').forEach(bindMagnetic);
+                });
+                mutation.removedNodes.forEach((node) => {
+                    if (!(node instanceof Element)) return;
+                    if (node.matches?.('[data-magnetic]')) unbindMagnetic(node);
+                    node.querySelectorAll?.('[data-magnetic]').forEach(unbindMagnetic);
+                });
+            }
         });
+        observer.observe(scope, { childList: true, subtree: true });
 
         return () => {
             cancelAnimationFrame(raf);
             scope.removeEventListener('mousemove', onMouseMove);
             scope.removeEventListener('mouseleave', onMouseLeave);
-            cleanupFns.forEach((fn) => fn());
+            observer.disconnect();
+            bound.forEach((cleanup) => cleanup());
         };
     }, [scopeRef]);
 

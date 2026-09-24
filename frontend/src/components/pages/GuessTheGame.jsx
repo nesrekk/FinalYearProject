@@ -6,6 +6,8 @@ import { TEAM_NAME_TO_ABBR } from '../../utils/teamAssets';
 import TeamLogo from '../common/TeamLogo';
 import Icon from '../common/Icon';
 import InfoTooltip from '../common/InfoTooltip';
+import GameCursorScope from '../games/GameCursorScope';
+import ShareResult from '../games/ShareResult';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 
 const STORAGE_PREFIX = 'nbahub_guess_the_game:';
@@ -160,6 +162,7 @@ export default function GuessTheGame() {
     }
 
     return (
+        <GameCursorScope>
         <div className="page fade-in">
             <div className="dashboard-card">
                 <h2 className="card-title hb-page-title">
@@ -207,7 +210,7 @@ export default function GuessTheGame() {
                         {suggestions.length > 0 && (
                             <ul className="autocomplete-list" style={{
                                 position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                                background: '#1e293b', border: '1px solid #334155', borderRadius: 6,
+                                background: 'var(--surface-2)', border: '1px solid var(--hairline)', borderRadius: 6,
                                 marginTop: 4, maxHeight: 240, overflowY: 'auto', listStyle: 'none', padding: 0,
                             }}>
                                 {suggestions.map((t) => (
@@ -215,7 +218,7 @@ export default function GuessTheGame() {
                                         <button
                                             type="button"
                                             onClick={() => submitTeam(t.abbr)}
-                                            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', background: 'transparent', border: 'none', color: '#e2e8f0', cursor: 'pointer' }}
+                                            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer' }}
                                         >
                                             <TeamLogo abbreviation={t.abbr} size={16} />
                                             {t.name}
@@ -283,9 +286,16 @@ export default function GuessTheGame() {
                             {reveal.game_date} · Real season {reveal.season - 1}-{String(reveal.season).slice(-2)}
                         </p>
                         <p className="page-subtitle">Come back tomorrow for a new mystery game.</p>
+                        <ShareResult
+                            gameTitle="Guess the Game"
+                            puzzleDate={puzzleDate}
+                            outcomes={attempts.map((a) => a.correct)}
+                            summary={status === 'won' ? `Solved in ${attempts.length}/${daily.max_guesses}` : `${daily.max_guesses}/${daily.max_guesses}`}
+                        />
                     </motion.div>
                 )}
             </AnimatePresence>
         </div>
+        </GameCursorScope>
     );
 }

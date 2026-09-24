@@ -4,6 +4,8 @@ import { fetchTriviaDaily, submitTriviaGuess } from '../../services/api';
 import { localDateIso } from '../../utils/date';
 import Icon from '../common/Icon';
 import InfoTooltip from '../common/InfoTooltip';
+import GameCursorScope from '../games/GameCursorScope';
+import ShareResult from '../games/ShareResult';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 
 const STORAGE_PREFIX = 'nbahub_trivia:';
@@ -88,6 +90,7 @@ export default function Trivia() {
     }
 
     return (
+        <GameCursorScope>
         <div className="page fade-in">
             <div className="dashboard-card">
                 <h2 className="card-title hb-page-title">
@@ -154,7 +157,7 @@ export default function Trivia() {
                         })}
                     </div>
                     {pendingResult && (
-                        <button type="button" className="input-field" style={{ marginTop: '1rem', cursor: 'pointer', maxWidth: 160 }} onClick={advance}>
+                        <button type="button" className="input-field" data-magnetic style={{ marginTop: '1rem', cursor: 'pointer', maxWidth: 160 }} onClick={advance}>
                             {currentIndex + 1 >= daily.questions.length ? 'See Results' : 'Next'}
                             <Icon name="arrow_forward" size="1em" style={{ verticalAlign: 'middle', marginLeft: 4 }} />
                         </button>
@@ -175,9 +178,16 @@ export default function Trivia() {
                             Final Score: {score} / {daily.questions.length}
                         </h3>
                         <p className="page-subtitle">Come back tomorrow for a new set of questions.</p>
+                        <ShareResult
+                            gameTitle="Trivia"
+                            puzzleDate={puzzleDate}
+                            outcomes={answers.map((a) => a.correct)}
+                            summary={`Score: ${score}/${daily.questions.length}`}
+                        />
                     </motion.div>
                 )}
             </AnimatePresence>
         </div>
+        </GameCursorScope>
     );
 }

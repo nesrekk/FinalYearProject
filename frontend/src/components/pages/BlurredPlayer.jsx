@@ -5,6 +5,8 @@ import { localDateIso } from '../../utils/date';
 import TeamLogo from '../common/TeamLogo';
 import Icon from '../common/Icon';
 import InfoTooltip from '../common/InfoTooltip';
+import GameCursorScope from '../games/GameCursorScope';
+import ShareResult from '../games/ShareResult';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 
 const STORAGE_PREFIX = 'nbahub_blurred_player:';
@@ -125,6 +127,7 @@ export default function BlurredPlayer() {
     const imageUrl = daily ? getBlurredPlayerImageUrl(daily.season, puzzleDate) : null;
 
     return (
+        <GameCursorScope>
         <div className="page fade-in">
             <div className="dashboard-card">
                 <h2 className="card-title hb-page-title">
@@ -180,7 +183,7 @@ export default function BlurredPlayer() {
                             {suggestions.length > 0 && (
                                 <ul className="autocomplete-list" style={{
                                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                                    background: '#1e293b', border: '1px solid #334155', borderRadius: 6,
+                                    background: 'var(--surface-2)', border: '1px solid var(--hairline)', borderRadius: 6,
                                     marginTop: 4, maxHeight: 240, overflowY: 'auto', listStyle: 'none', padding: 0, textAlign: 'left',
                                 }}>
                                     {suggestions.map((p) => (
@@ -188,7 +191,7 @@ export default function BlurredPlayer() {
                                             <button
                                                 type="button"
                                                 onClick={() => submitGuess(p.player_name)}
-                                                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', background: 'transparent', border: 'none', color: '#e2e8f0', cursor: 'pointer' }}
+                                                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer' }}
                                             >
                                                 <TeamLogo abbreviation={p.team_abbreviation} size={16} />
                                                 {p.player_name}
@@ -220,6 +223,12 @@ export default function BlurredPlayer() {
                             <span className="page-subtitle" style={{ margin: 0 }}>{reveal.player_name} · {reveal.team_abbreviation}</span>
                         </div>
                         <p className="page-subtitle">Come back tomorrow for a new mystery player.</p>
+                        <ShareResult
+                            gameTitle="Blurred Player"
+                            puzzleDate={puzzleDate}
+                            outcomes={guesses.map((g) => g.correct)}
+                            summary={status === 'won' ? `Solved in ${guesses.length}/${daily.max_guesses}` : `${daily.max_guesses}/${daily.max_guesses}`}
+                        />
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -246,5 +255,6 @@ export default function BlurredPlayer() {
                 </div>
             )}
         </div>
+        </GameCursorScope>
     );
 }
