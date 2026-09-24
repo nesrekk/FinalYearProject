@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { mockTeamStats, allTeams } from '../../services/mockData';
 import { fetchCurrentMeta } from '../../services/api';
 import TeamLogo from '../common/TeamLogo';
+import BigStat from '../ui/BigStat';
+import { TEAM_COLORS } from '../../utils/teamAssets';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 
 const statLabels = [
@@ -22,6 +24,7 @@ export default function TeamComparison() {
     const [teamA, setTeamA] = useState('LAL');
     const [teamB, setTeamB] = useState('BOS');
     const [loading, setLoading] = useState(false);
+    const [standings, setStandings] = useState(null);
 
     const { isAdvanced } = useMotionMode();
     const preset = motionPreset(isAdvanced);
@@ -39,6 +42,12 @@ export default function TeamComparison() {
                     setTeamKeys(keys);
                     if (!incoming[teamA]) setTeamA(keys[0]);
                     if (!incoming[teamB]) setTeamB(keys[1] || keys[0]);
+                }
+                if (active && meta?.standings) {
+                    const combined = [...(meta.standings.eastern || []), ...(meta.standings.western || [])];
+                    const byAbbr = {};
+                    combined.forEach((t) => { if (t.abbr) byAbbr[t.abbr] = t; });
+                    setStandings(byAbbr);
                 }
             } catch {
                 // keep fallback data
@@ -90,14 +99,35 @@ export default function TeamComparison() {
             </div>
 
             {canRender && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <TeamLogo abbreviation={statsA.abbr} size={28} />
-                        <span className="page-subtitle" style={{ margin: 0 }}>{statsA.name}</span>
+                <div className="team-compare-hero">
+                    <div
+                        className="team-compare-hero-side"
+                        style={{ '--team-wash': TEAM_COLORS[statsA.abbr] || 'var(--brand)' }}
+                    >
+                        <TeamLogo abbreviation={statsA.abbr} size={40} />
+                        <span className="team-compare-hero-name">{statsA.name}</span>
+                        {standings?.[teamA] && (
+                            <BigStat
+                                label={`${standings[teamA].pct} win pct`}
+                                value={`${standings[teamA].w}-${standings[teamA].l}`}
+                                className="team-compare-hero-stat"
+                            />
+                        )}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span className="page-subtitle" style={{ margin: 0 }}>{statsB.name}</span>
-                        <TeamLogo abbreviation={statsB.abbr} size={28} />
+                    <span className="vs-divider">VS</span>
+                    <div
+                        className="team-compare-hero-side team-compare-hero-side--right"
+                        style={{ '--team-wash': TEAM_COLORS[statsB.abbr] || 'var(--accent)' }}
+                    >
+                        {standings?.[teamB] && (
+                            <BigStat
+                                label={`${standings[teamB].pct} win pct`}
+                                value={`${standings[teamB].w}-${standings[teamB].l}`}
+                                className="team-compare-hero-stat"
+                            />
+                        )}
+                        <span className="team-compare-hero-name">{statsB.name}</span>
+                        <TeamLogo abbreviation={statsB.abbr} size={40} />
                     </div>
                 </div>
             )}
@@ -122,6 +152,7 @@ export default function TeamComparison() {
                                     <div className="comp-bar comp-bar--left">
                                         <motion.div
                                             className="comp-bar-fill comp-bar-fill--a"
+                                            style={{ background: TEAM_COLORS[statsA.abbr] || 'var(--accent)' }}
                                             initial={{ width: 0 }}
                                             animate={{ width: `${pctA}%` }}
                                             transition={{ ...preset.tableTransition, delay }}
@@ -131,6 +162,7 @@ export default function TeamComparison() {
                                     <div className="comp-bar comp-bar--right">
                                         <motion.div
                                             className="comp-bar-fill comp-bar-fill--b"
+                                            style={{ background: TEAM_COLORS[statsB.abbr] || 'var(--brand)' }}
                                             initial={{ width: 0 }}
                                             animate={{ width: `${pctB}%` }}
                                             transition={{ ...preset.tableTransition, delay }}
