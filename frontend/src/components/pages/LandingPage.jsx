@@ -4,6 +4,7 @@ import CustomCursor from '../landing/CustomCursor';
 import CursorGlow from '../landing/CursorGlow';
 import WelcomeIntro from '../landing/WelcomeIntro';
 import FeatureChapters from '../landing/FeatureChapters';
+import TeamRibbons from '../landing/TeamRibbons';
 import BigStat from '../ui/BigStat';
 import Section from '../ui/Section';
 import Skeleton from '../ui/Skeleton';
@@ -127,6 +128,8 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
                 </p>
             </div>
             <FeatureChapters particleFieldRef={particleFieldRef} onNavigate={onNavigate} />
+
+            <TeamRibbons />
 
             <Section
                 className="landing-section"
