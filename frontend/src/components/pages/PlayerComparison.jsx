@@ -153,7 +153,7 @@ function SearchBox({ placeholder, value, onChange, suggestions, onPick, color })
             {suggestions?.length > 0 && (
                 <ul className="autocomplete-list" style={{
                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                    background: '#1e293b', border: '1px solid #334155', borderRadius: 6,
+                    background: 'var(--surface-2)', border: '1px solid var(--hairline)', borderRadius: 6,
                     marginTop: 4, maxHeight: 220, overflowY: 'auto', listStyle: 'none', padding: 0,
                 }}>
                     {suggestions.map((name) => (
@@ -161,7 +161,7 @@ function SearchBox({ placeholder, value, onChange, suggestions, onPick, color })
                             <button
                                 type="button"
                                 onClick={() => onPick(name)}
-                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', background: 'transparent', border: 'none', color: '#e2e8f0', cursor: 'pointer' }}
+                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer' }}
                             >
                                 {name}
                             </button>
@@ -478,10 +478,10 @@ export default function PlayerComparison() {
                         {synergy && (
                             <div style={{
                                 padding: '0.9rem 1rem', borderRadius: 8, marginBottom: '1rem',
-                                background: 'rgba(167,139,250,0.08)', borderLeft: '3px solid #a78bfa',
+                                background: 'color-mix(in srgb, var(--brand) 8%, transparent)', borderLeft: '3px solid var(--brand)',
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, marginBottom: 6 }}>
-                                    <Icon name="model_training" size="1em" style={{ color: '#a78bfa' }} />
+                                    <Icon name="model_training" size="1em" style={{ color: 'var(--brand)' }} />
                                     Real Pair Synergy
                                 </div>
                                 <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginBottom: 6 }}>
