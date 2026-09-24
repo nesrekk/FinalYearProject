@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import ParticleField from '../landing/ParticleField';
 import CustomCursor from '../landing/CustomCursor';
 import CursorGlow from '../landing/CursorGlow';
+import WelcomeIntro from '../landing/WelcomeIntro';
 import BigStat from '../ui/BigStat';
 import Section from '../ui/Section';
 import Skeleton from '../ui/Skeleton';
@@ -53,6 +54,7 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
     const [stats, setStats] = useState(null);
     const [statsError, setStatsError] = useState(false);
     const [games, setGames] = useState(null);
+    const [introDone, setIntroDone] = useState(false);
 
     useEffect(() => {
         let active = true;
@@ -70,6 +72,7 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
             <ParticleField heroHeight={HERO_HEIGHT} />
             <div className="landing-film-grain" aria-hidden="true" />
             <CustomCursor scopeRef={heroRef} />
+            {!introDone && <WelcomeIntro onDone={() => setIntroDone(true)} />}
 
             <section className="landing-hero-wrap">
                 <div className="landing-hero" ref={heroRef}>

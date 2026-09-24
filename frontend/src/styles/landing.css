@@ -24,9 +24,51 @@
   display: block;
 }
 
-.landing-page > *:not(.particle-field-fixed):not(.landing-film-grain) {
+.landing-page > *:not(.particle-field-fixed):not(.landing-film-grain):not(.landing-intro-overlay) {
   position: relative;
   z-index: 1;
+}
+
+/* ── Welcome intro ──────────────────────────────── */
+.landing-intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.landing-intro-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.landing-intro-counter {
+  position: absolute;
+  bottom: var(--space-6);
+  left: var(--space-6);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  letter-spacing: 0.02em;
+}
+
+.landing-intro-skip {
+  position: absolute;
+  top: var(--space-6);
+  right: var(--space-6);
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* Full-page film-grain texture, above all content (mix-blend-mode: overlay
