@@ -7,6 +7,7 @@ import {
 import {
     barsShape, courtShotsShape, wpLineShape, trajectoryConeShape, calibrationShape,
 } from './chapterShapes';
+import FloatingPlayerCard from './FloatingPlayerCard';
 
 // Walk backwards from `startSeason` to find one the award models can
 // actually predict on — mirrors DashboardHome's resolveSeasonWithData, since
@@ -122,6 +123,7 @@ export default function FeatureChapters({ particleFieldRef, onNavigate }) {
     const containerRef = useRef(null);
     const activeRef = useRef(null);
     const visibleSet = useRef(new Set());
+    const cardRangeRef = useRef(null);
 
     const rectFor = useCallback((chapterId) => {
         const el = containerRef.current?.querySelector(`[data-pane-for="${chapterId}"]`);
@@ -195,6 +197,7 @@ export default function FeatureChapters({ particleFieldRef, onNavigate }) {
 
     return (
         <div className="chapters" ref={containerRef}>
+            <div className="floating-card-range" ref={cardRangeRef}>
             <Chapter
                 id="awards"
                 align="left"
@@ -260,6 +263,8 @@ export default function FeatureChapters({ particleFieldRef, onNavigate }) {
                     </p>
                 )}
             </Chapter>
+            <FloatingPlayerCard rangeRef={cardRangeRef} player={d.favorite} />
+            </div>
 
             <Chapter
                 id="trajectory"
