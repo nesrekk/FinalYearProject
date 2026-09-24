@@ -515,6 +515,15 @@ export async function fetchPlayerMatchups(playerName, role = 'scorer', season, t
     return response.data;
 }
 
+// ─── Referee Tendencies ──────────────────────────────────────────
+export async function fetchRefereeTendencies(minGames = 10, sort = 'n_games') {
+    const response = await axios.get(
+        `${IMPACT_BASE}/referees/tendencies`,
+        { params: { min_games: minGames, sort } }
+    );
+    return response.data;
+}
+
 export async function simulateTrade({ season, teamA, playerAId, teamB, playerBId }) {
     const response = await axios.get(`${IMPACT_BASE}/trade/simulate`, {
         params: { season, team_a: teamA, player_a_id: playerAId, team_b: teamB, player_b_id: playerBId },

@@ -433,3 +433,30 @@ def test_impact_matchups_has_source():
     assert resp.status_code in (200, 404, 503)
     if resp.status_code == 200:
         _assert_has_source(resp.json())
+
+
+# ─── C6: Referee Tendencies ─────────────────────────────────────────────────
+
+def test_referee_tendencies_shape():
+    from impact_api import app
+    resp = TestClient(app).get("/referees/tendencies", params={"min_games": 1})
+    assert resp.status_code in (200, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        assert "officials" in data and isinstance(data["officials"], list)
+        assert "methodology" in data
+        _assert_has_source(data)
+        for o in data["officials"]:
+            assert o["n_games"] >= 1
+            assert "small_n_warning" in o
+            assert "fouls_diff_pct" in o and "fta_diff_pct" in o
+
+
+def test_referee_tendencies_min_games_filter():
+    from impact_api import app
+    resp = TestClient(app).get("/referees/tendencies", params={"min_games": 25})
+    assert resp.status_code in (200, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        assert all(o["n_games"] >= 25 for o in data["officials"])
+        assert all(not o["small_n_warning"] for o in data["officials"])

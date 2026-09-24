@@ -19,6 +19,7 @@ import PredictionLedgerSection from '../PredictionLedgerSection';
 import WithWithoutStarSection from '../WithWithoutStarSection';
 import ScheduleFatigueSection from '../ScheduleFatigueSection';
 import MatchupFinderSection from '../MatchupFinderSection';
+import RefereeTendenciesSection from '../RefereeTendenciesSection';
 
 const TAB_GROUPS = [
     {
@@ -52,6 +53,7 @@ const TAB_GROUPS = [
             { id: 'replay', label: 'Game Replay', icon: 'movie' },
             { id: 'withwithout', label: 'With/Without a Star', icon: 'person_off' },
             { id: 'fatigue', label: 'Schedule Fatigue', icon: 'flight' },
+            { id: 'referees', label: 'Referee Tendencies', icon: 'sports_score' },
         ],
     },
     {
@@ -164,6 +166,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'replay' && <GameReplaySection />}
                 {activeTab === 'withwithout' && <WithWithoutStarSection />}
                 {activeTab === 'fatigue' && <ScheduleFatigueSection />}
+                {activeTab === 'referees' && <RefereeTendenciesSection />}
             </div>
         </div>
     );
