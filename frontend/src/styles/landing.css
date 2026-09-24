@@ -540,10 +540,7 @@
 
 .chapter {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-6);
-  min-height: 60vh;
+  justify-content: center;
   padding: var(--space-8) 0;
   border-bottom: 1px solid var(--hairline);
 }
@@ -552,21 +549,13 @@
   border-bottom: none;
 }
 
-@media (min-width: 900px) {
-  .chapter {
-    flex-direction: row;
-    min-height: 100vh;
-    gap: var(--space-8);
-  }
-
-  .chapter--right {
-    flex-direction: row-reverse;
-  }
+.chapter--right {
+  justify-content: center;
 }
 
 .chapter-text {
-  flex: 1 1 0;
-  max-width: 520px;
+  max-width: 560px;
+  text-align: center;
 }
 
 .chapter-title {
@@ -590,25 +579,13 @@
   cursor: pointer;
 }
 
-.chapter-visual {
-  flex: 1 1 0;
-  width: 100%;
-  min-height: 280px;
-  height: 40vh;
-}
-
-@media (min-width: 900px) {
-  .chapter-visual {
-    height: 60vh;
-  }
-}
-
 .chapter-legend {
-  margin-top: var(--space-6);
+  margin: var(--space-6) auto 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   max-width: 320px;
+  text-align: left;
 }
 
 .chapter-legend li {
@@ -623,119 +600,6 @@
 .chapter-legend-inline {
   margin-top: var(--space-6);
   font-size: 13px;
-  color: var(--text-3);
-}
-
-/* ── Floating 3D player card ────────────────────── */
-.floating-card-range {
-  position: relative;
-}
-
-.floating-card-layer {
-  display: none;
-  pointer-events: none;
-}
-
-@media (min-width: 768px) {
-  .floating-card-layer {
-    display: block;
-    /* `position: sticky` doesn't work here: <body> carries its own
-       `overflow` rule elsewhere in the app, which makes body (not the
-       viewport) the nearest scrolling box sticky positioning resolves
-       against — since body itself never scrolls (html/window does), the
-       card would just sit at its normal flow position and never stick.
-       `position: fixed` isn't affected by an ancestor's `overflow` (only
-       by `transform`/`filter`/`perspective` on an ancestor, and nothing
-       up this tree sets those), so it reliably tracks the true viewport;
-       the card's own visibility is already scroll-driven via the
-       opacity motion value, so it simply has nothing to show outside
-       chapters 1–3. */
-    position: fixed;
-    top: 18vh;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 3;
-    perspective: 1200px;
-  }
-}
-
-.floating-card {
-  pointer-events: auto;
-  width: 220px;
-  padding: var(--space-5);
-  border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--surface) 55%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid transparent;
-  background-image: linear-gradient(color-mix(in srgb, var(--surface) 55%, transparent), color-mix(in srgb, var(--surface) 55%, transparent)), linear-gradient(135deg, var(--team-color), var(--brand-3));
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  transform-style: preserve-3d;
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.12s linear, opacity 0.2s linear;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .floating-card {
-    transition: none;
-  }
-}
-
-.floating-card-sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.14) 50%, transparent 70%);
-  pointer-events: none;
-}
-
-.floating-card-headshot {
-  width: 100%;
-  height: 140px;
-  object-fit: cover;
-  object-position: top;
-  border-radius: var(--radius-control);
-  background: var(--surface-2);
-}
-
-.floating-card-name {
-  margin-top: var(--space-3);
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--text);
-}
-
-.floating-card-team {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--text-2);
-}
-
-.floating-card-stats {
-  margin-top: var(--space-4);
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.floating-card-stats > div {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.floating-card-stat-value {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.floating-card-stat-label {
-  margin-top: 2px;
-  font-size: 10px;
-  letter-spacing: 0.04em;
   color: var(--text-3);
 }
 

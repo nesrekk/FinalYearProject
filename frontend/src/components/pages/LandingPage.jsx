@@ -149,7 +149,7 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
                     Six of the roughly thirty tools inside — every one backed by a real Postgres table you can trace to a real upstream source. Scroll, and the particles become the real data.
                 </p>
             </div>
-            <FeatureChapters particleFieldRef={particleFieldRef} onNavigate={onNavigate} />
+            <FeatureChapters onNavigate={onNavigate} />
 
             <TeamRibbons />
 

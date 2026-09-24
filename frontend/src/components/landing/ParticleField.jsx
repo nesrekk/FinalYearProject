@@ -8,8 +8,6 @@ const ATTRACTOR_RADIUS = 160;
 const PARTICLE_CAP_DESKTOP = 2500;
 const PARTICLE_CAP_MOBILE = 900;
 const MOBILE_BREAKPOINT = 768;
-const MORPH_STAGGER_MS = 450;
-const MORPH_DIM_ALPHA = 0.35;
 
 function hexToRgb(hex) {
     const n = parseInt(hex.slice(1), 16);
@@ -40,35 +38,19 @@ const REDUCED_MOTION = typeof window !== 'undefined' && window.matchMedia
 // coordinate; each frame subtracts window.scrollY to get screen space). That
 // lets the same field run behind every section instead of one instance per
 // section. Particles above `heroHeight` (world y) use a denser grid; below
-// it they use a lighter one so body text stays readable. Ported physics
-// (repel + swirl + spring-home) is otherwise unchanged from the hero-only
-// version.
+// it they use a lighter one so body text stays readable.
 //
-// Morph engine (ref API): setTargets(points | null) reassigns the nearest
-// available particles to `points` (an array of {x, y, c?} in the SAME
-// document/world-space coordinates as everything else — an optional `c`
-// CSS color string overrides that particle's usual gradient color while
-// morphed, for chapters that need semantic color, e.g. makes vs. misses.
-// Callers compute a
-// section's shape from its real bounding rect + window.scrollY so it scrolls
-// naturally with that section). Each assigned particle springs to its target
-// instead of its home position, staggered by the target's position in the
-// array so it reads as a flow rather than a jump; particles left over keep
-// drifting as dim background. setTargets(null) releases every particle back
-// to its home position. Mouse repel keeps working on morphed particles too,
-// since it's applied on top of whichever target (home or morph) is active.
+// Ref API: setAttractor(point | null) — a local pull point in world-space
+// (e.g. the final CTA button): nearby particles (within ATTRACTOR_RADIUS)
+// get pulled toward it instead of their home position; setAttractor(null)
+// releases them.
 const ParticleField = forwardRef(function ParticleField({ className = '', heroHeight = 720 }, ref) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const heroHeightRef = useRef(heroHeight);
-    const setTargetsRef = useRef(() => {});
     const setAttractorRef = useRef(() => {});
 
     useImperativeHandle(ref, () => ({
-        setTargets: (points) => setTargetsRef.current(points),
-        // A local pull point in world-space, e.g. the final CTA button:
-        // nearby particles (within ATTRACTOR_RADIUS) get pulled toward it
-        // instead of their home position. setAttractor(null) releases them.
         setAttractor: (point) => setAttractorRef.current(point),
     }), []);
 
@@ -91,7 +73,6 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
         let raf = null;
         let idleFrames = 0;
         let visible = true;
-        let hasActiveMorph = false;
         let isLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
 
         function currentIsLight() {
@@ -152,24 +133,19 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
                         hx, hy, x: hx, y: hy, vx: 0, vy: 0,
                         c: gradAt(hx / W),
                         a: (0.15 + Math.random() * 0.35) * (inRest ? REST_ALPHA_MUL : 1),
-                        mtx: null, mty: null, mc: null, morphAt: 0,
                     });
                 }
             }
             particles = next;
         }
 
-        function drawFrame(now) {
+        function drawFrame() {
             isLight = currentIsLight();
             const alphaMul = isLight ? 1.3 : 1;
             const scrollY = window.scrollY || 0;
             ctx.clearRect(0, 0, W, H);
             let maxSpeed = 0;
             for (const p of particles) {
-                const morphed = p.mtx != null && now >= p.morphAt;
-                const tgx = morphed ? p.mtx : p.hx;
-                const tgy = morphed ? p.mty : p.hy;
-
                 const dx = p.x - mouse.x;
                 const dy = p.y - mouse.y;
                 const d2 = dx * dx + dy * dy;
@@ -179,7 +155,7 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
                     p.vx += (dx / d) * f - (dy / d) * f * 0.6;
                     p.vy += (dy / d) * f + (dx / d) * f * 0.6;
                 }
-                if (attractor && !morphed) {
+                if (attractor) {
                     const adx = attractor.x - p.x;
                     const ady = attractor.y - p.y;
                     const ad2 = adx * adx + ady * ady;
@@ -190,8 +166,8 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
                         p.vy += (ady / ad) * af;
                     }
                 }
-                p.vx += (tgx - p.x) * 0.04;
-                p.vy += (tgy - p.y) * 0.04;
+                p.vx += (p.hx - p.x) * 0.04;
+                p.vy += (p.hy - p.y) * 0.04;
                 p.vx *= 0.86;
                 p.vy *= 0.86;
                 p.x += p.vx;
@@ -205,9 +181,8 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
 
                 const ang = sp > 0.05 ? Math.atan2(p.vy, p.vx) : 0.6;
                 const len = 3 + Math.min(sp * 2.5, 9);
-                const dim = hasActiveMorph && p.mtx == null ? MORPH_DIM_ALPHA : 1;
-                ctx.strokeStyle = morphed && p.mc ? p.mc : p.c;
-                ctx.globalAlpha = Math.min(1, (p.a + sp * 0.15) * alphaMul * dim);
+                ctx.strokeStyle = p.c;
+                ctx.globalAlpha = Math.min(1, (p.a + sp * 0.15) * alphaMul);
                 ctx.lineWidth = 1.6;
                 ctx.lineCap = 'round';
                 ctx.beginPath();
@@ -219,9 +194,9 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
             return maxSpeed;
         }
 
-        function loop(now) {
+        function loop() {
             if (!visible) return;
-            const maxSpeed = drawFrame(now);
+            const maxSpeed = drawFrame();
             if (!mouse.in && maxSpeed < 0.02) {
                 idleFrames += 1;
             } else {
@@ -262,57 +237,9 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
             ensureRunning();
         }
 
-        function setTargets(points) {
-            // Release every particle back to its home position.
-            if (!points || points.length === 0) {
-                for (const p of particles) { p.mtx = null; p.mty = null; p.mc = null; }
-                hasActiveMorph = false;
-                if (REDUCED_MOTION) drawFrame(performance.now());
-                else ensureRunning();
-                return;
-            }
-
-            // Re-pick from the whole field each time (not just currently
-            // unmorphed particles) so a new shape can grow out of whichever
-            // particles already ended up near it, including ones still
-            // mid-flight from the previous shape.
-            const pool = particles.slice();
-            for (const p of particles) { p.mtx = null; p.mty = null; p.mc = null; }
-
-            const n = Math.min(points.length, pool.length);
-            const now = performance.now();
-            for (let i = 0; i < n; i++) {
-                const target = points[i];
-                // Nearest-remaining-particle assignment so a new shape grows
-                // out of whichever particles are already close to it instead
-                // of a random reshuffle.
-                let bestIdx = -1;
-                let bestD = Infinity;
-                for (let j = 0; j < pool.length; j++) {
-                    const cand = pool[j];
-                    if (cand._taken) continue;
-                    const d = (cand.x - target.x) ** 2 + (cand.y - target.y) ** 2;
-                    if (d < bestD) { bestD = d; bestIdx = j; }
-                }
-                if (bestIdx === -1) break;
-                const chosen = pool[bestIdx];
-                chosen._taken = true;
-                chosen.mtx = target.x;
-                chosen.mty = target.y;
-                chosen.mc = target.c || null;
-                chosen.morphAt = now + (i / n) * MORPH_STAGGER_MS;
-                if (REDUCED_MOTION) { chosen.x = target.x; chosen.y = target.y; }
-            }
-            for (const p of pool) delete p._taken;
-            hasActiveMorph = true;
-            if (REDUCED_MOTION) drawFrame(performance.now());
-            else ensureRunning();
-        }
-        setTargetsRef.current = setTargets;
-
         function setAttractor(point) {
             attractor = point;
-            if (REDUCED_MOTION) drawFrame(performance.now());
+            if (REDUCED_MOTION) drawFrame();
             else ensureRunning();
         }
         setAttractorRef.current = setAttractor;
@@ -320,7 +247,7 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
         buildParticles();
 
         if (REDUCED_MOTION) {
-            drawFrame(performance.now());
+            drawFrame();
         } else {
             ensureRunning();
             window.addEventListener('mousemove', onMouseMove);
@@ -330,7 +257,7 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
 
         const ro = new ResizeObserver(() => {
             buildParticles();
-            if (REDUCED_MOTION) drawFrame(performance.now());
+            if (REDUCED_MOTION) drawFrame();
             else ensureRunning();
         });
         ro.observe(document.body);
@@ -343,7 +270,6 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
         document.addEventListener('visibilitychange', onVisibilityChange);
 
         return () => {
-            setTargetsRef.current = () => {};
             setAttractorRef.current = () => {};
             if (raf) cancelAnimationFrame(raf);
             window.removeEventListener('mousemove', onMouseMove);

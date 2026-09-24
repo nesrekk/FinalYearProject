@@ -1,13 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     fetchCurrentMeta, fetchMVPPrediction, fetchBacktestOverview,
     fetchShotSeasons, fetchPlayerShots, fetchWpReplayList, fetchWpReplay,
     fetchPlayerTrajectory, fetchWpaValidation,
 } from '../../services/api';
-import {
-    barsShape, courtShotsShape, wpLineShape, trajectoryConeShape, calibrationShape,
-} from './chapterShapes';
-import FloatingPlayerCard from './FloatingPlayerCard';
 
 // Walk backwards from `startSeason` to find one the award models can
 // actually predict on — mirrors DashboardHome's resolveSeasonWithData, since
@@ -96,7 +92,6 @@ function useChapterData() {
 }
 
 function Chapter({ id, eyebrow, title, gradientWord, copy, exploreLabel, onExplore, align, children }) {
-    const paneRef = useRef(null);
     return (
         <div className={`chapter chapter--${align}`} data-chapter-id={id}>
             <div className="chapter-text">
@@ -110,103 +105,18 @@ function Chapter({ id, eyebrow, title, gradientWord, copy, exploreLabel, onExplo
                         {exploreLabel} &rarr;
                     </button>
                 )}
-            </div>
-            <div className="chapter-visual" ref={paneRef} data-pane-for={id} role="img" aria-label={copy}>
                 {children}
             </div>
         </div>
     );
 }
 
-export default function FeatureChapters({ particleFieldRef, onNavigate }) {
+export default function FeatureChapters({ onNavigate }) {
     const data = useChapterData();
-    const containerRef = useRef(null);
-    const activeRef = useRef(null);
-    const visibleSet = useRef(new Set());
-    const cardRangeRef = useRef(null);
-
-    const rectFor = useCallback((chapterId) => {
-        const el = containerRef.current?.querySelector(`[data-pane-for="${chapterId}"]`);
-        if (!el) return { left: 0, top: 0, width: 0, height: 0 };
-        const r = el.getBoundingClientRect();
-        const scrollY = window.scrollY || 0;
-        return { left: r.left, top: r.top + scrollY, width: r.width, height: r.height };
-    }, []);
-
-    const shapes = useMemo(() => {
-        if (data.status !== 'done') return {};
-        const out = {};
-        if (data.top5.length) out.awards = () => barsShape(rectFor('awards'), data.top5.map((r) => r.mvp_probability));
-        if (data.shots?.shots?.length) out.shots = () => courtShotsShape(rectFor('shots'), data.shots.shots);
-        if (data.wpGame?.points?.length) out.wpa = () => wpLineShape(rectFor('wpa'), data.wpGame.points);
-        if (data.trajectory?.projection?.length) out.trajectory = () => trajectoryConeShape(rectFor('trajectory'), data.trajectory.projection);
-        if (data.calibration?.reliability_bins?.length) out.calibration = () => calibrationShape(rectFor('calibration'), data.calibration.reliability_bins);
-        return out;
-    }, [data.status, data.top5, data.shots, data.wpGame, data.trajectory, data.calibration, rectFor]);
-    const shapesRef = useRef(shapes);
-    useEffect(() => {
-        shapesRef.current = shapes;
-    }, [shapes]);
-
-    // Mounted once: tracks which chapter(s) are 50%+ in view and drives the
-    // particle field for whichever one is active, always reading shapes via
-    // a ref so a chapter's data arriving late (shots/trajectory can be slow)
-    // doesn't require tearing down and reattaching the observer.
-    useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return undefined;
-
-        function applyActive() {
-            const id = [...visibleSet.current][0] || null;
-            // IntersectionObserver re-fires on every threshold crossing
-            // (0/0.5/1), which happens repeatedly while scrolling even when
-            // the active chapter hasn't actually changed — re-morphing to
-            // the same shape on every one of those looked like the
-            // animation kept restarting/glitching mid-scroll. Only
-            // reassign when the active chapter id itself changes; a
-            // separate effect below handles a shape's data arriving late
-            // for a chapter that's already active.
-            if (id === activeRef.current) return;
-            activeRef.current = id;
-            const field = particleFieldRef.current;
-            if (!field) return;
-            if (!id || !shapesRef.current[id]) {
-                field.setTargets(null);
-                return;
-            }
-            field.setTargets(shapesRef.current[id]());
-        }
-
-        const io = new IntersectionObserver((entries) => {
-            for (const entry of entries) {
-                const id = entry.target.getAttribute('data-chapter-id');
-                if (entry.isIntersecting && entry.intersectionRatio >= 0.5) visibleSet.current.add(id);
-                else visibleSet.current.delete(id);
-            }
-            applyActive();
-        }, { threshold: [0, 0.5, 1] });
-
-        container.querySelectorAll('[data-chapter-id]').forEach((el) => io.observe(el));
-        const field = particleFieldRef.current;
-
-        return () => {
-            io.disconnect();
-            field?.setTargets(null);
-        };
-    }, [particleFieldRef]);
-
-    // Refresh the currently-active chapter's shape when its data streams in
-    // after the chapter was already scrolled into view.
-    useEffect(() => {
-        const id = activeRef.current;
-        if (id && shapes[id]) particleFieldRef.current?.setTargets(shapes[id]());
-    }, [shapes, particleFieldRef]);
-
     const d = data;
 
     return (
-        <div className="chapters" ref={containerRef}>
-            <div className="floating-card-range" ref={cardRangeRef}>
+        <div className="chapters">
             <Chapter
                 id="awards"
                 align="left"
@@ -272,8 +182,6 @@ export default function FeatureChapters({ particleFieldRef, onNavigate }) {
                     </p>
                 )}
             </Chapter>
-            <FloatingPlayerCard rangeRef={cardRangeRef} player={d.favorite} />
-            </div>
 
             <Chapter
                 id="trajectory"
