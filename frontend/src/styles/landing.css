@@ -6,22 +6,24 @@
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-  cursor: none;
 }
 
-/* `cursor: none` only affects elements that don't set their own cursor —
-   and a lot of buttons/inputs across this app declare `cursor: pointer`
-   explicitly, which wins over the inherited `none` the instant you hover
-   them, popping the native arrow back. Forcing it on every descendant
-   closes that gap. */
-.landing-page,
-.landing-page * {
+/* The custom cursor only tracks and renders while the pointer is inside
+   .landing-hero (CustomCursor's scopeRef) — it goes inactive as soon as
+   the pointer leaves it. `cursor: none` must therefore be scoped to the
+   same element: forcing it across the whole .landing-page left every
+   button/input below the hero with no cursor at all (native suppressed,
+   custom inactive). Forced on every descendant, not just the hero root,
+   since plenty of buttons/inputs declare their own `cursor: pointer`
+   which otherwise wins over the inherited `none` on hover. */
+.landing-hero,
+.landing-hero * {
   cursor: none !important;
 }
 
 @media (pointer: coarse) {
-  .landing-page,
-  .landing-page * {
+  .landing-hero,
+  .landing-hero * {
     cursor: auto !important;
   }
 }
