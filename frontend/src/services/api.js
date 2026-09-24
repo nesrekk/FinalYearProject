@@ -569,6 +569,12 @@ export async function fetchPlayerProfile(playerName, season) {
     return response.data;
 }
 
+// ─── Landing page ──────────────────────────────────────────────
+export async function fetchSiteStats() {
+    const response = await axios.get(`${IMPACT_BASE}/meta/site-stats`);
+    return response.data;
+}
+
 export async function fetchGamesByDate(date) {
     const d = date || localDateIso();
     const key = `games_by_date:${d}`;

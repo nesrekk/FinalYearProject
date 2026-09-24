@@ -1,6 +1,8 @@
 
 from fastapi import APIRouter
 
+from source_badge import make_source
+
 from impact_core import (
     TEAM_META,
     fetch_balldontlie_standings,
@@ -15,6 +17,38 @@ from impact_core import (
 )
 
 router = APIRouter()
+
+
+@router.get("/meta/site-stats")
+def get_site_stats():
+    """
+    Real, live-counted headline numbers for the landing page (real season
+    span, real player-season count, real college player-season count) —
+    computed directly from the same tables every other endpoint reads, not
+    hardcoded, so they never drift from what's actually in the database.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT MIN(season), MAX(season), COUNT(*) FROM player_season_stats;")
+        season_min, season_max, n_player_seasons = cursor.fetchone()
+
+        cursor.execute("SELECT to_regclass('public.college_player_season_stats');")
+        n_college_seasons = 0
+        if cursor.fetchone()[0] is not None:
+            cursor.execute("SELECT COUNT(*) FROM college_player_season_stats;")
+            n_college_seasons = cursor.fetchone()[0]
+
+    return {
+        "season_min": season_min,
+        "season_max": season_max,
+        "n_seasons": (season_max - season_min + 1) if season_min and season_max else 0,
+        "n_player_seasons": n_player_seasons,
+        "n_college_seasons": n_college_seasons,
+        "_source": make_source(
+            ["player_season_stats", "college_player_season_stats"],
+            "Postgres COUNT/MIN/MAX over this project's own real tables",
+        ),
+    }
 
 
 @router.get("/meta/current")

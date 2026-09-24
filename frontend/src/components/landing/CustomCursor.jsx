@@ -1,0 +1,109 @@
+import React, { useEffect, useRef, useState } from 'react';
+
+const LERP = 0.18;
+const RING_BASE = 34;
+const RING_MAGNETIC = 64;
+
+const COARSE_POINTER = typeof window !== 'undefined' && window.matchMedia
+    ? window.matchMedia('(pointer: coarse)').matches
+    : false;
+const REDUCED_MOTION = typeof window !== 'undefined' && window.matchMedia
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    : false;
+
+// A 6px dot exactly at the pointer, a 34px ring that lags behind it, and
+// magnetic pull on any [data-magnetic] button within `scopeRef`. Off on
+// touch devices and reduced motion — the native cursor stays visible then.
+export default function CustomCursor({ scopeRef }) {
+    const dotRef = useRef(null);
+    const ringRef = useRef(null);
+    const [active, setActive] = useState(false);
+    const [magnetic, setMagnetic] = useState(false);
+
+    useEffect(() => {
+        if (COARSE_POINTER || REDUCED_MOTION) return undefined;
+        const scope = scopeRef.current;
+        if (!scope) return undefined;
+
+        const dot = dotRef.current;
+        const ring = ringRef.current;
+        const pointer = { x: -100, y: -100 };
+        const ringPos = { x: -100, y: -100 };
+        const hasMoved = { current: false };
+        let raf = null;
+
+        function onMouseMove(e) {
+            pointer.x = e.clientX;
+            pointer.y = e.clientY;
+            if (!hasMoved.current) {
+                hasMoved.current = true;
+                setActive(true);
+            }
+        }
+        function onMouseLeave() {
+            hasMoved.current = false;
+            setActive(false);
+        }
+
+        function tick() {
+            ringPos.x += (pointer.x - ringPos.x) * LERP;
+            ringPos.y += (pointer.y - ringPos.y) * LERP;
+            if (dot) dot.style.transform = `translate(${pointer.x}px, ${pointer.y}px)`;
+            if (ring) ring.style.transform = `translate(${ringPos.x}px, ${ringPos.y}px)`;
+            raf = requestAnimationFrame(tick);
+        }
+        raf = requestAnimationFrame(tick);
+
+        scope.addEventListener('mousemove', onMouseMove);
+        scope.addEventListener('mouseleave', onMouseLeave);
+
+        const magneticEls = Array.from(scope.querySelectorAll('[data-magnetic]'));
+        const cleanupFns = magneticEls.map((el) => {
+            function onEnter() { setMagnetic(true); }
+            function onMove(e) {
+                const rect = el.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                const dx = e.clientX - cx;
+                const dy = e.clientY - cy;
+                el.style.transition = 'none';
+                el.style.transform = `translate(${dx * 0.25}px, ${dy * 0.35}px)`;
+            }
+            function onLeave() {
+                setMagnetic(false);
+                el.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                el.style.transform = 'translate(0, 0)';
+            }
+            el.addEventListener('mouseenter', onEnter);
+            el.addEventListener('mousemove', onMove);
+            el.addEventListener('mouseleave', onLeave);
+            return () => {
+                el.removeEventListener('mouseenter', onEnter);
+                el.removeEventListener('mousemove', onMove);
+                el.removeEventListener('mouseleave', onLeave);
+            };
+        });
+
+        return () => {
+            cancelAnimationFrame(raf);
+            scope.removeEventListener('mousemove', onMouseMove);
+            scope.removeEventListener('mouseleave', onMouseLeave);
+            cleanupFns.forEach((fn) => fn());
+        };
+    }, [scopeRef]);
+
+    if (COARSE_POINTER || REDUCED_MOTION) return null;
+
+    const ringSize = magnetic ? RING_MAGNETIC : RING_BASE;
+
+    return (
+        <>
+            <span ref={dotRef} className="custom-cursor-dot" style={{ opacity: active ? 1 : 0 }} />
+            <span
+                ref={ringRef}
+                className={`custom-cursor-ring${magnetic ? ' custom-cursor-ring--magnetic' : ''}`}
+                style={{ width: ringSize, height: ringSize, marginLeft: -ringSize / 2, marginTop: -ringSize / 2, opacity: active ? 1 : 0 }}
+            />
+        </>
+    );
+}

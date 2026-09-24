@@ -1,6 +1,7 @@
 import './styles/tokens.css';
 import './styles/shell.css';
 import './styles/kit.css';
+import './styles/landing.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';

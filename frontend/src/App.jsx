@@ -24,15 +24,23 @@ import TradeAnalyzer from './components/pages/TradeAnalyzer';
 import DraftValueGuide from './components/pages/DraftValueGuide';
 import RookieClassTracker from './components/pages/RookieClassTracker';
 import GamesHub from './components/pages/GamesHub';
+import LandingPage from './components/pages/LandingPage';
 import { prefetchCoreData } from './services/api';
 import './styles/dashboard.css';
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
+  const [showLanding, setShowLanding] = useState(true);
 
   useEffect(() => {
     prefetchCoreData();
   }, []);
+
+  const enterApp = (page, hash) => {
+    setShowLanding(false);
+    setActivePage(page || 'dashboard');
+    if (hash) requestAnimationFrame(() => { window.location.hash = hash; });
+  };
 
   const renderPage = () => {
     switch (activePage) {
@@ -53,6 +61,10 @@ export default function App() {
       default: return <DashboardHome onNavigate={setActivePage} />;
     }
   };
+
+  if (showLanding) {
+    return <LandingPage onOpenToday={() => enterApp('dashboard')} onNavigate={enterApp} />;
+  }
 
   return (
     <div className="top-shell">

@@ -460,3 +460,17 @@ def test_referee_tendencies_min_games_filter():
         data = resp.json()
         assert all(o["n_games"] >= 25 for o in data["officials"])
         assert all(not o["small_n_warning"] for o in data["officials"])
+
+
+# ─── UI redesign: real landing-page headline stats ──────────────────────────
+
+def test_meta_site_stats():
+    from impact_api import app
+    resp = TestClient(app).get("/meta/site-stats")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["n_seasons"] > 0
+    assert data["n_player_seasons"] > 0
+    assert data["n_college_seasons"] > 0
+    assert data["season_max"] >= data["season_min"]
+    _assert_has_source(data)
