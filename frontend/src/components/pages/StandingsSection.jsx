@@ -43,7 +43,7 @@ export default function StandingsSection() {
     const leader = data[0] || null;
 
     return (
-        <div className="page page-standings fade-in">
+        <div className="page page-standings page-wide fade-in">
             {loading && <p className="page-subtitle" style={{ marginBottom: '0.75rem' }}>Loading current season standings...</p>}
 
             <div className="hb-segmented" style={{ marginBottom: '1rem' }}>

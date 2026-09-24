@@ -895,6 +895,86 @@ body {
   margin-bottom: var(--space-6);
 }
 
+/* ── Full-width tables (Stats / Leaders / Standings) ── */
+/* Breaks out of the shared --page-max-width container so wide data
+   tables (many stat columns) get real room, instead of the same 1200px
+   reading-width used by prose pages. */
+.page-wide {
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
+  padding-left: max(var(--gutter), calc((100vw - 1500px) / 2));
+  padding-right: max(var(--gutter), calc((100vw - 1500px) / 2));
+}
+
+@media (min-width: 768px) {
+  .page-wide {
+    padding-left: max(32px, calc((100vw - 1500px) / 2));
+    padding-right: max(32px, calc((100vw - 1500px) / 2));
+  }
+}
+
+/* Sticky identity columns: "#" (36px) then the name/player/team column,
+   so the row's identity stays put while a wide stat table scrolls
+   horizontally underneath it. */
+.data-table td:first-child,
+.data-table th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+}
+
+.data-table td:nth-child(2),
+.data-table th:nth-child(2) {
+  position: sticky;
+  left: 36px;
+  z-index: 2;
+  background: var(--surface);
+}
+
+.data-table thead th:first-child,
+.data-table thead th:nth-child(2) {
+  z-index: 3;
+}
+
+.data-table tbody tr.clickable-row:hover td:first-child,
+.data-table tbody tr.clickable-row:hover td:nth-child(2) {
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+/* ── Filter chips (pill-styled rail items on table-filter pages) ── */
+.hb-rail-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.hb-rail-chips .hb-rail-item {
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+
+.hb-rail-chips .hb-rail-item.hb-rail-item--active {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
+  border-color: var(--accent);
+}
+
+/* The rail itself is a narrow fixed-width sidebar (200px) — full chip
+   wrapping only has room to breathe on wider screens where the rail
+   grows; below that it still wraps, just more cramped. */
+@media (min-width: 1068px) {
+  .hb-rail {
+    width: 240px;
+  }
+}
+
 /* Data Table */
 .table-wrapper {
   overflow-x: auto;

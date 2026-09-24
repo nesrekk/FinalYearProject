@@ -85,7 +85,7 @@ export default function StatLeaders() {
   const leader = leaders[0] || null;
 
   return (
-    <div className="page fade-in">
+    <div className="page page-wide fade-in">
       <div className="hb-shell">
         <div className="hb-rail">
           <div className="hb-rail-title">
@@ -98,7 +98,7 @@ export default function StatLeaders() {
 
           <div className="hb-rail-group">
             <span className="hb-rail-label">Stat</span>
-            <div className="hb-rail-list">
+            <div className="hb-rail-list hb-rail-chips">
               {STAT_OPTIONS.map((opt) => (
                 <button
                   key={opt.key}
@@ -114,7 +114,7 @@ export default function StatLeaders() {
 
           <div className="hb-rail-group">
             <span className="hb-rail-label">Hustle (real effort stats)</span>
-            <div className="hb-rail-list">
+            <div className="hb-rail-list hb-rail-chips">
               {HUSTLE_STAT_OPTIONS.map((opt) => (
                 <button
                   key={opt.key}

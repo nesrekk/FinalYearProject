@@ -154,7 +154,7 @@ export default function PlayerStats() {
     }
 
     return (
-        <div className="page page-players fade-in">
+        <div className="page page-players page-wide fade-in">
             <div className="hb-shell">
                 <div className="hb-rail">
                     <div className="hb-rail-title">
@@ -204,7 +204,7 @@ export default function PlayerStats() {
 
                     <div className="hb-rail-group">
                         <span className="hb-rail-label">Position</span>
-                        <div className="hb-rail-list">
+                        <div className="hb-rail-list hb-rail-chips">
                             {POSITIONS.map((pos) => (
                                 <button
                                     key={pos}
@@ -220,7 +220,7 @@ export default function PlayerStats() {
 
                     <div className="hb-rail-group">
                         <span className="hb-rail-label">View</span>
-                        <div className="hb-rail-list">
+                        <div className="hb-rail-list hb-rail-chips">
                             {Object.entries(STAT_TABS).map(([id, cfg]) => (
                                 <button
                                     key={id}
