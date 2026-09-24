@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import StatCard from '../common/StatCard';
 import TeamLogo from '../common/TeamLogo';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import Icon from '../common/Icon';
 import InfoTooltip from '../common/InfoTooltip';
+import Section from '../ui/Section';
+import { BentoGrid, Tile } from '../ui/BentoGrid';
+import BigStat from '../ui/BigStat';
+import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
+import { EmptyState } from '../ui/EmptyState';
 import { abbrFromTeamName } from '../../utils/teamAssets';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import { mockLiveScores } from '../../services/mockData';
@@ -162,6 +166,24 @@ export default function DashboardHome({ onNavigate }) {
         return west.length > 0 ? west[0] : null;
     }, [meta]);
 
+    const greeting = useMemo(() => {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'Good morning.';
+        if (hour < 18) return 'Good afternoon.';
+        return 'Good evening.';
+    }, []);
+
+    const todayLabel = useMemo(
+        () => new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
+        []
+    );
+
+    const standingsPreview = useMemo(() => {
+        const east = (meta?.standings?.eastern || []).slice(0, 3);
+        const west = (meta?.standings?.western || []).slice(0, 3);
+        return { east, west };
+    }, [meta]);
+
     const formLeaders = useMemo(() => {
         const east = meta?.standings?.eastern || [];
         const west = meta?.standings?.western || [];
@@ -178,94 +200,169 @@ export default function DashboardHome({ onNavigate }) {
 
     return (
         <div className="page page-dashboard fade-in">
-            {/* Hero */}
-            <div className="dashboard-hero">
-                <div className="dashboard-hero-content">
-                    <h2 className="hero-title hb-page-title">Welcome to <span className="text-accent">NBA Hub</span></h2>
-                    <p className="hero-subtitle">Your all-in-one NBA analytics command center. Track live games, explore player stats, compare teams, and predict awards.</p>
-                </div>
-                <div className="hero-glow"></div>
+            {/* Greeting */}
+            <div className="dashboard-greeting">
+                <p className="text-eyebrow">{todayLabel}</p>
+                <h2 className="text-display dashboard-greeting-title">{greeting}</h2>
             </div>
 
-            {/* Quick Stats */}
-            <motion.div
-                key={`stats-${isAdvanced}`}
-                className="stat-cards-row"
-                variants={GRID_VARIANTS}
-                custom={preset.stagger}
-                initial="hidden"
-                animate="show"
-            >
-                <motion.div variants={CARD_VARIANTS} transition={preset.fieldSpring}>
-                    <StatCard
-                        icon={<Icon name="sports_basketball" />}
-                        label="Games Today"
-                        value={games.length}
-                        sub={`${liveGames} live · ${finalGames} final · ${scheduledGames} scheduled`}
-                    />
-                </motion.div>
-                <motion.div variants={CARD_VARIANTS} transition={preset.fieldSpring}>
-                    <StatCard
-                        icon={<Icon name="local_fire_department" />}
-                        label="Top Scorer"
-                        value={meta?.top_scorer?.player_name || 'Scoring Leader'}
-                        sub={meta?.top_scorer?.ppg != null ? `${meta.top_scorer.ppg} PPG` : 'Current season'}
-                    />
-                </motion.div>
-                <motion.div variants={CARD_VARIANTS} transition={preset.fieldSpring}>
-                    <StatCard
-                        icon={<Icon name="emoji_events" />}
-                        label="#1 Seed"
-                        value={topSeed ? topSeed.team.replace('Oklahoma City ', '') : 'Thunder'}
-                        sub={topSeed ? `${topSeed.w}-${topSeed.l} (${topSeed.pct})` : '47-13 (.783)'}
-                    />
-                </motion.div>
-                <motion.div variants={CARD_VARIANTS} transition={preset.fieldSpring}>
-                    <StatCard
-                        icon={<Icon name="trending_up" />}
-                        label="MVP Favorite"
-                        value={awardsRace.mvp?.player_name || (awardsLoading ? 'Loading…' : 'No prediction')}
-                        sub={awardsRace.mvp ? awardCardLine('mvp', awardsRace.mvp) : (awardsRace.season ? seasonLabel(awardsRace.season) : '')}
-                    />
-                </motion.div>
-            </motion.div>
+            {/* Bento overview */}
+            <BentoGrid className="dashboard-bento">
+                <Tile span={8} className="dashboard-tile dashboard-tile--games" onClick={() => onNavigate('scores')}>
+                    <div className="dashboard-tile-header">
+                        <p className="text-eyebrow">Today&apos;s Games</p>
+                        <span className="dashboard-tile-meta">{liveGames} live · {finalGames} final · {scheduledGames} scheduled</span>
+                    </div>
+                    {games.length === 0 ? (
+                        <EmptyState icon="sports_basketball" message="No games scheduled today." />
+                    ) : (
+                        <div className="dashboard-game-list">
+                            {games.slice(0, 4).map((g) => (
+                                <div key={g.id} className={`dashboard-game-row${g.status === 'LIVE' ? ' dashboard-game-row--live' : ''}`}>
+                                    <span className="dashboard-game-team">
+                                        <TeamLogo abbreviation={g.away?.abbr} size={22} />
+                                        {g.away?.abbr}
+                                    </span>
+                                    <span className="dashboard-game-score">
+                                        {g.away?.score ?? '–'} <em>–</em> {g.home?.score ?? '–'}
+                                    </span>
+                                    <span className="dashboard-game-team dashboard-game-team--home">
+                                        {g.home?.abbr}
+                                        <TeamLogo abbreviation={g.home?.abbr} size={22} />
+                                    </span>
+                                    <span className={`dashboard-game-status${g.status === 'LIVE' ? ' dashboard-game-status--live' : ''}`}>
+                                        {g.status === 'LIVE' ? `● ${g.quarter || 'LIVE'}` : (g.status_text || g.status)}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </Tile>
+
+                <Tile span={4} className="dashboard-tile dashboard-tile--mvp" onClick={() => onNavigate('analytics')}>
+                    <p className="text-eyebrow">
+                        MVP Favorite {awardsRace.season ? `· ${seasonLabel(awardsRace.season)}` : ''}
+                    </p>
+                    {awardsLoading ? (
+                        <SkeletonGroup lines={3} />
+                    ) : awardsRace.mvp ? (
+                        <>
+                            <div className="entity-row" style={{ margin: '0.75rem 0' }}>
+                                <PlayerHeadshot playerId={awardsRace.mvp.player_id} playerName={awardsRace.mvp.player_name} size={48} />
+                                <div className="entity-row-text">
+                                    <span className="entity-row-name">{awardsRace.mvp.player_name}</span>
+                                    <span className="entity-row-sub">
+                                        <TeamLogo abbreviation={awardsRace.mvp.team_abbreviation} size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                                        {awardsRace.mvp.team_abbreviation}
+                                    </span>
+                                </div>
+                            </div>
+                            <BigStat
+                                label="Win probability"
+                                value={awardsRace.mvp.mvp_probability != null ? awardsRace.mvp.mvp_probability * 100 : null}
+                                digits={1}
+                                className="dashboard-mvp-stat"
+                            />
+                            <div className="probability-bar">
+                                <div
+                                    className="probability-bar-fill"
+                                    style={{ width: `${Math.min(100, (awardsRace.mvp.mvp_probability || 0) * 100)}%` }}
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <EmptyState icon="emoji_events" message="No MVP prediction available." />
+                    )}
+                </Tile>
+
+                <Tile span={4} className="dashboard-tile" onClick={() => onNavigate('leaders')}>
+                    <p className="text-eyebrow">Top Scorer</p>
+                    {meta?.top_scorer ? (
+                        <BigStat
+                            label={meta.top_scorer.player_name}
+                            value={meta.top_scorer.ppg}
+                            digits={1}
+                        />
+                    ) : (
+                        <Skeleton variant="text" width="6rem" height="2.5rem" />
+                    )}
+                </Tile>
+
+                <Tile span={4} className="dashboard-tile" onClick={() => onNavigate('standings')}>
+                    <p className="text-eyebrow">#1 Seed</p>
+                    {topSeed ? (
+                        <>
+                            <p className="text-stat dashboard-seed-value">{topSeed.w}-{topSeed.l}</p>
+                            <span className="dashboard-tile-sub">{topSeed.team} · {topSeed.pct}</span>
+                        </>
+                    ) : (
+                        <Skeleton variant="text" width="6rem" height="2.5rem" />
+                    )}
+                </Tile>
+
+                <Tile span={4} className="dashboard-tile" onClick={() => onNavigate('standings')}>
+                    <p className="text-eyebrow">Standings</p>
+                    {standingsPreview.east.length === 0 && standingsPreview.west.length === 0 ? (
+                        <Skeleton variant="text" width="100%" height="4rem" />
+                    ) : (
+                        <div className="dashboard-standings-preview">
+                            <div>
+                                <span className="dashboard-standings-conf">East</span>
+                                {standingsPreview.east.map((t, i) => (
+                                    <span key={t.team} className="dashboard-standings-row">{i + 1}. {t.team}</span>
+                                ))}
+                            </div>
+                            <div>
+                                <span className="dashboard-standings-conf">West</span>
+                                {standingsPreview.west.map((t, i) => (
+                                    <span key={t.team} className="dashboard-standings-row">{i + 1}. {t.team}</span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </Tile>
+            </BentoGrid>
 
             {/* Quick Links */}
-            <h3 className="section-heading">Explore</h3>
-            <motion.div
-                key={`links-${isAdvanced}`}
-                className="quick-links-grid"
-                variants={GRID_VARIANTS}
-                custom={preset.stagger}
-                initial="hidden"
-                animate="show"
-            >
-                {[
-                    { id: 'scores', icon: 'sports_basketball', title: 'Live Scores', desc: 'Real-time game updates' },
-                    { id: 'standings', icon: 'emoji_events', title: 'Standings', desc: 'Conference rankings' },
-                    { id: 'teams', icon: 'swords', title: 'Team Comparison', desc: 'Head-to-head stats' },
-                    { id: 'players', icon: 'person', title: 'Player Stats', desc: 'Browse player data' },
-                    { id: 'shotcharts', icon: 'adjust', title: 'Shot Charts', desc: 'Shooting visualizations' },
-                    { id: 'analytics', icon: 'insights', title: 'Analytics', desc: 'Similarity & predictions' },
-                ].map((link) => (
-                    <motion.button
-                        key={link.id}
-                        className="quick-link-card"
-                        onClick={() => onNavigate(link.id)}
-                        variants={CARD_VARIANTS}
-                        transition={preset.fieldSpring}
-                        whileHover={isAdvanced ? { y: -2 } : undefined}
-                    >
-                        <span className="quick-link-icon"><Icon name={link.icon} /></span>
-                        <span className="quick-link-title">{link.title}</span>
-                        <span className="quick-link-desc">{link.desc}</span>
-                    </motion.button>
-                ))}
-            </motion.div>
+            <Section className="dashboard-section" eyebrow="Explore" title="Jump straight in.">
+                <motion.div
+                    key={`links-${isAdvanced}`}
+                    className="quick-links-grid"
+                    variants={GRID_VARIANTS}
+                    custom={preset.stagger}
+                    initial="hidden"
+                    animate="show"
+                >
+                    {[
+                        { id: 'scores', icon: 'sports_basketball', title: 'Live Scores', desc: 'Real-time game updates' },
+                        { id: 'standings', icon: 'emoji_events', title: 'Standings', desc: 'Conference rankings' },
+                        { id: 'teams', icon: 'swords', title: 'Team Comparison', desc: 'Head-to-head stats' },
+                        { id: 'players', icon: 'person', title: 'Player Stats', desc: 'Browse player data' },
+                        { id: 'shotcharts', icon: 'adjust', title: 'Shot Charts', desc: 'Shooting visualizations' },
+                        { id: 'analytics', icon: 'insights', title: 'Analytics', desc: 'Similarity & predictions' },
+                    ].map((link) => (
+                        <motion.button
+                            key={link.id}
+                            className="quick-link-card"
+                            onClick={() => onNavigate(link.id)}
+                            variants={CARD_VARIANTS}
+                            transition={preset.fieldSpring}
+                            whileHover={isAdvanced ? { y: -2 } : undefined}
+                        >
+                            <span className="quick-link-icon"><Icon name={link.icon} /></span>
+                            <span className="quick-link-title">{link.title}</span>
+                            <span className="quick-link-desc">{link.desc}</span>
+                        </motion.button>
+                    ))}
+                </motion.div>
+            </Section>
 
             {/* Awards Race Snapshot */}
-            <h3 className="section-heading">
-                Awards Race {awardsRace.season ? `· ${seasonLabel(awardsRace.season)}` : ''}
+            <Section
+                className="dashboard-section"
+                eyebrow="Predictions"
+                title={<>Awards Race {awardsRace.season ? `· ${seasonLabel(awardsRace.season)}` : ''}</>}
+            >
                 <InfoTooltip label="What are the seed/streak badges?" title="Real context, not a hidden score">
                     The seed and "won it before" badges are real data (this season's actual standings, and this
                     project's real award-winner history) shown for context — they're never applied to the
@@ -274,134 +371,136 @@ export default function DashboardHome({ onNavigate }) {
                     invented penalty into the model's own number would misrepresent it as validated rather than
                     a guess, so instead the raw signal is just shown alongside the model's real output.
                 </InfoTooltip>
-            </h3>
-            <motion.div
-                key={`awards-${isAdvanced}`}
-                className="award-cards-grid"
-                variants={GRID_VARIANTS}
-                custom={preset.stagger}
-                initial="hidden"
-                animate="show"
-            >
-                {['mvp', 'dpoy', 'roy', 'allnba'].map((award) => {
-                    const row = awardsRace[award];
-                    const prob = row
-                        ? (award === 'allnba' ? row.all_nba_probability : row[`${award}_probability`])
-                        : null;
-                    return (
-                        <motion.button
-                            key={award}
-                            className="award-card"
-                            onClick={() => onNavigate('analytics')}
-                            variants={CARD_VARIANTS}
-                            transition={preset.fieldSpring}
-                            whileHover={isAdvanced ? { y: -2 } : undefined}
-                        >
-                            <div className="award-card-top">
-                                <span className="pill-badge"><Icon name={AWARD_META[award].icon} size="0.9em" /> {AWARD_META[award].label}</span>
-                                {prob != null && <span className="award-card-prob">{(prob * 100).toFixed(1)}%</span>}
-                            </div>
-                            {awardsLoading ? (
-                                <p className="award-card-name">Loading…</p>
-                            ) : row ? (
-                                <>
-                                    <div className="entity-row" style={{ margin: '0.6rem 0' }}>
-                                        <PlayerHeadshot playerId={row.player_id} playerName={row.player_name} size={44} />
-                                        <div className="entity-row-text">
-                                            <span className="entity-row-name">{row.player_name}</span>
-                                            <span className="entity-row-sub">
-                                                <TeamLogo abbreviation={row.team_abbreviation} size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                                                {row.team_abbreviation}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    {prob != null && (
-                                        <div className="probability-bar">
-                                            <div className="probability-bar-fill" style={{ width: `${Math.min(100, prob * 100)}%` }} />
-                                        </div>
-                                    )}
-                                    <p className="award-card-desc">{awardCardLine(award, row)}</p>
-                                    <div className="award-card-badges">
-                                        {(() => {
-                                            const seed = findTeamSeed(row.team_abbreviation);
-                                            return seed && (
-                                                <span className="voter-badge">
-                                                    <Icon name="format_list_numbered" size="0.85em" /> #{seed.seed} {seed.conference}
+                <motion.div
+                    key={`awards-${isAdvanced}`}
+                    className="award-cards-grid"
+                    variants={GRID_VARIANTS}
+                    custom={preset.stagger}
+                    initial="hidden"
+                    animate="show"
+                >
+                    {['mvp', 'dpoy', 'roy', 'allnba'].map((award) => {
+                        const row = awardsRace[award];
+                        const prob = row
+                            ? (award === 'allnba' ? row.all_nba_probability : row[`${award}_probability`])
+                            : null;
+                        return (
+                            <motion.button
+                                key={award}
+                                className="award-card"
+                                onClick={() => onNavigate('analytics')}
+                                variants={CARD_VARIANTS}
+                                transition={preset.fieldSpring}
+                                whileHover={isAdvanced ? { y: -2 } : undefined}
+                            >
+                                <div className="award-card-top">
+                                    <span className="pill-badge"><Icon name={AWARD_META[award].icon} size="0.9em" /> {AWARD_META[award].label}</span>
+                                    {prob != null && <span className="award-card-prob">{(prob * 100).toFixed(1)}%</span>}
+                                </div>
+                                {awardsLoading ? (
+                                    <p className="award-card-name">Loading…</p>
+                                ) : row ? (
+                                    <>
+                                        <div className="entity-row" style={{ margin: '0.6rem 0' }}>
+                                            <PlayerHeadshot playerId={row.player_id} playerName={row.player_name} size={44} />
+                                            <div className="entity-row-text">
+                                                <span className="entity-row-name">{row.player_name}</span>
+                                                <span className="entity-row-sub">
+                                                    <TeamLogo abbreviation={row.team_abbreviation} size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                                                    {row.team_abbreviation}
                                                 </span>
-                                            );
-                                        })()}
-                                        {row.recent_win_streak > 0 && (
-                                            <span className="voter-badge voter-badge--streak">
-                                                <Icon name="history" size="0.85em" />
-                                                Won last {row.recent_win_streak === 1 ? 'year' : `${row.recent_win_streak} years`}
-                                            </span>
+                                            </div>
+                                        </div>
+                                        {prob != null && (
+                                            <div className="probability-bar">
+                                                <div className="probability-bar-fill" style={{ width: `${Math.min(100, prob * 100)}%` }} />
+                                            </div>
                                         )}
-                                    </div>
-                                </>
-                            ) : (
-                                <p className="award-card-name">No prediction available</p>
-                            )}
-                        </motion.button>
-                    );
-                })}
-            </motion.div>
+                                        <p className="award-card-desc">{awardCardLine(award, row)}</p>
+                                        <div className="award-card-badges">
+                                            {(() => {
+                                                const seed = findTeamSeed(row.team_abbreviation);
+                                                return seed && (
+                                                    <span className="voter-badge">
+                                                        <Icon name="format_list_numbered" size="0.85em" /> #{seed.seed} {seed.conference}
+                                                    </span>
+                                                );
+                                            })()}
+                                            {row.recent_win_streak > 0 && (
+                                                <span className="voter-badge voter-badge--streak">
+                                                    <Icon name="history" size="0.85em" />
+                                                    Won last {row.recent_win_streak === 1 ? 'year' : `${row.recent_win_streak} years`}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <p className="award-card-name">No prediction available</p>
+                                )}
+                            </motion.button>
+                        );
+                    })}
+                </motion.div>
+            </Section>
 
             {/* Latest Headlines */}
-            <h3 className="section-heading">Latest Headlines</h3>
-            <div className="mini-news-list">
-                {news.slice(0, 3).map((item) => (
-                    <div key={item.id} className="mini-news-item" onClick={() => onNavigate('news')}>
-                        <span className="mini-news-category">{item.category}</span>
-                        <p className="mini-news-headline">{item.headline}</p>
-                        <span className="mini-news-meta">{item.source} · {item.date}</span>
-                    </div>
-                ))}
-                {news.length === 0 && (
-                    <p className="empty-message">No live headlines loaded yet.</p>
-                )}
-            </div>
+            <Section className="dashboard-section" eyebrow="News" title="Latest headlines.">
+                <div className="mini-news-list">
+                    {news.slice(0, 3).map((item) => (
+                        <div key={item.id} className="mini-news-item" onClick={() => onNavigate('news')}>
+                            <span className="mini-news-category">{item.category}</span>
+                            <p className="mini-news-headline">{item.headline}</p>
+                            <span className="mini-news-meta">{item.source} · {item.date}</span>
+                        </div>
+                    ))}
+                    {news.length === 0 && (
+                        <EmptyState icon="newspaper" message="No live headlines loaded yet." />
+                    )}
+                </div>
+            </Section>
 
-            <h3 className="section-heading" style={{ marginTop: '1.5rem' }}>Team Form Tracker (Live)</h3>
-            <div className="table-wrapper">
-                <table className="data-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Team</th>
-                            <th>Record</th>
-                            <th>PCT</th>
-                            <th>L10</th>
-                            <th>Streak</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {formLeaders.map((team, idx) => (
-                            <tr key={`${team.abbr}-${idx}`}>
-                                <td className="rank-cell">{idx + 1}</td>
-                                <td className="team-cell">
-                                    <span className="entity-row">
-                                        <TeamLogo abbreviation={team.abbr || abbrFromTeamName(team.team)} size={24} />
-                                        {team.team}
-                                    </span>
-                                </td>
-                                <td>{team.w}-{team.l}</td>
-                                <td className="text-accent">{team.pct}</td>
-                                <td>{team.last10 || '-'}</td>
-                                <td>
-                                    <span className={`streak-badge ${String(team.streak || '').startsWith('W') ? 'streak--win' : 'streak--loss'}`}>
-                                        {team.streak || '-'}
-                                    </span>
-                                </td>
-                            </tr>
-                        ))}
-                        {formLeaders.length === 0 && (
+            <Section className="dashboard-section" eyebrow="Live" title="Team form tracker.">
+                <div className="table-wrapper">
+                    <table className="data-table">
+                        <thead>
                             <tr>
-                                <td colSpan={6} className="empty-message">Live team form data is loading...</td>
+                                <th>#</th>
+                                <th>Team</th>
+                                <th>Record</th>
+                                <th>PCT</th>
+                                <th>L10</th>
+                                <th>Streak</th>
                             </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                            {formLeaders.map((team, idx) => (
+                                <tr key={`${team.abbr}-${idx}`}>
+                                    <td className="rank-cell">{idx + 1}</td>
+                                    <td className="team-cell">
+                                        <span className="entity-row">
+                                            <TeamLogo abbreviation={team.abbr || abbrFromTeamName(team.team)} size={24} />
+                                            {team.team}
+                                        </span>
+                                    </td>
+                                    <td>{team.w}-{team.l}</td>
+                                    <td className="text-accent">{team.pct}</td>
+                                    <td>{team.last10 || '-'}</td>
+                                    <td>
+                                        <span className={`streak-badge ${String(team.streak || '').startsWith('W') ? 'streak--win' : 'streak--loss'}`}>
+                                            {team.streak || '-'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                            {formLeaders.length === 0 && (
+                                <tr>
+                                    <td colSpan={6} className="empty-message">Live team form data is loading...</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </Section>
         </div>
     );
 }
