@@ -75,7 +75,7 @@ export default function App() {
 
   return (
     <div className="top-shell">
-      <TopNav activePage={activePage} onNavigate={setActivePage} />
+      <TopNav activePage={activePage} onNavigate={setActivePage} onGoToLanding={() => setShowLanding(true)} />
       <main className="top-shell-main">
         <PageHeader activePage={activePage} />
         <AnimatePresence mode="wait">

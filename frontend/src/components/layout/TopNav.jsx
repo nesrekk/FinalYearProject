@@ -75,7 +75,7 @@ function NavItem({ group, isActive, onNavigate }) {
     );
 }
 
-export default function TopNav({ activePage, onNavigate }) {
+export default function TopNav({ activePage, onNavigate, onGoToLanding }) {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [paletteOpen, setPaletteOpen] = useState(false);
     const activeGroup = groupForPage(activePage);
@@ -118,6 +118,17 @@ export default function TopNav({ activePage, onNavigate }) {
                     </nav>
 
                     <div className="top-nav-right">
+                        {onGoToLanding && (
+                            <button
+                                type="button"
+                                className="nav-icon-btn"
+                                onClick={onGoToLanding}
+                                aria-label="Back to landing page"
+                                title="Back to landing page"
+                            >
+                                <Icon name="home" size="1.1em" />
+                            </button>
+                        )}
                         <button type="button" className="nav-search-pill" onClick={() => setPaletteOpen(true)}>
                             <Icon name="search" size="1em" />
                             <span>Search</span>
@@ -156,6 +167,16 @@ export default function TopNav({ activePage, onNavigate }) {
                         </div>
                         <div className="mobile-sheet-body">
                             <ThemeToggle className="mobile-sheet-theme-toggle" />
+                            {onGoToLanding && (
+                                <button
+                                    type="button"
+                                    className="mobile-sheet-group-title"
+                                    onClick={() => { setMobileOpen(false); onGoToLanding(); }}
+                                >
+                                    <Icon name="home" />
+                                    Back to landing page
+                                </button>
+                            )}
                             {NAV_GROUPS.map((group) => (
                                 <div key={group.id} className="mobile-sheet-group">
                                     <button

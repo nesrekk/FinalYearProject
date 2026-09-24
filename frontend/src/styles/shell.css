@@ -226,6 +226,25 @@
   }
 }
 
+.nav-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-control);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
+}
+
+.nav-icon-btn:hover {
+  color: var(--text);
+  border-color: var(--text-3);
+}
+
 .nav-hamburger {
   display: flex;
   align-items: center;
