@@ -846,7 +846,7 @@ body {
 .tab-btn--active {
   color: var(--accent) !important;
   background: var(--accent-dim) !important;
-  border-color: rgba(56, 189, 248, 0.3) !important;
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent) !important;
 }
 
 .tab-icon {
@@ -870,6 +870,29 @@ body {
 .tab-bar--sub {
   padding-top: 0.75rem;
   border-top: 1px solid var(--border);
+}
+
+.analytics-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding: 0;
+  background: none;
+  border: none;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.analytics-back-btn:hover {
+  color: var(--text);
+}
+
+.analytics-tool-title {
+  margin-bottom: var(--space-6);
 }
 
 /* Data Table */

@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Icon from '../common/Icon';
+import AnalyticsIndex from '../analytics/AnalyticsIndex';
+import AboutModelDrawer from '../ui/AboutModelDrawer';
+import { TOOL_META } from '../analytics/toolMeta';
 import SimilaritySection from '../SimilaritySection';
 import AwardsRaceSection from '../AwardsRaceSection';
 import ImpactSection from '../ImpactSection';
@@ -65,7 +68,6 @@ const TAB_GROUPS = [
 ];
 
 const ALL_TABS = TAB_GROUPS.flatMap((g) => g.tabs);
-const DEFAULT_TAB = 'similarity';
 
 function groupNameForTab(tabId) {
     const group = TAB_GROUPS.find((g) => g.tabs.some((t) => t.id === tabId));
@@ -78,15 +80,19 @@ function tabFromHash() {
 }
 
 export default function AnalyticsSection() {
-    const [activeTab, setActiveTab] = useState(() => tabFromHash() || DEFAULT_TAB);
-    const [activeGroup, setActiveGroup] = useState(() => groupNameForTab(tabFromHash() || DEFAULT_TAB));
+    const [activeTab, setActiveTab] = useState(() => tabFromHash());
+    const [activeGroup, setActiveGroup] = useState(() => {
+        const tab = tabFromHash();
+        return tab ? groupNameForTab(tab) : null;
+    });
 
     // Keep the URL hash in sync so a specific tab can be linked/bookmarked
     // directly, without polluting browser back/forward history on every click.
     useEffect(() => {
-        const newHash = `#${activeTab}`;
+        const newHash = activeTab ? `#${activeTab}` : '';
         if (window.location.hash !== newHash) {
-            window.history.replaceState(null, '', newHash);
+            if (newHash) window.history.replaceState(null, '', newHash);
+            else window.history.replaceState(null, '', window.location.pathname + window.location.search);
         }
     }, [activeTab]);
 
@@ -117,8 +123,35 @@ export default function AnalyticsSection() {
         }
     }
 
+    function openTool(tabId) {
+        setActiveTab(tabId);
+        setActiveGroup(groupNameForTab(tabId));
+    }
+
+    function backToIndex() {
+        setActiveTab(null);
+        setActiveGroup(null);
+    }
+
+    if (!activeTab) {
+        return (
+            <div className="page page-analytics fade-in">
+                <AnalyticsIndex groups={TAB_GROUPS} onSelect={openTool} />
+            </div>
+        );
+    }
+
+    const activeMeta = ALL_TABS.find((t) => t.id === activeTab);
+    const about = TOOL_META[activeTab]?.about;
+
     return (
         <div className="page page-analytics fade-in">
+            <button type="button" className="analytics-back-btn" onClick={backToIndex}>
+                <Icon name="arrow_back" size="1em" /> Analytics
+            </button>
+
+            <h2 className="text-display analytics-tool-title">{activeMeta?.label}</h2>
+
             {/* Group selector */}
             <div className="tab-bar tab-bar--groups">
                 {TAB_GROUPS.map((group) => (
@@ -144,6 +177,12 @@ export default function AnalyticsSection() {
                     </button>
                 ))}
             </div>
+
+            {about && (
+                <AboutModelDrawer key={activeTab}>
+                    <p>{about}</p>
+                </AboutModelDrawer>
+            )}
 
             {/* Tab content */}
             <div className="analytics-content fade-in">
