@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 import ParticleField from '../landing/ParticleField';
 import CustomCursor from '../landing/CustomCursor';
 import CursorGlow from '../landing/CursorGlow';
 import WelcomeIntro from '../landing/WelcomeIntro';
+import FeatureChapters from '../landing/FeatureChapters';
 import BigStat from '../ui/BigStat';
 import Section from '../ui/Section';
 import Skeleton from '../ui/Skeleton';
@@ -11,37 +11,6 @@ import { fetchSiteStats, fetchGamesByDate } from '../../services/api';
 import { localDateIso } from '../../utils/date';
 import TeamLogo from '../common/TeamLogo';
 import Footer from '../layout/Footer';
-
-const FEATURES = [
-    {
-        id: 'analytics',
-        hash: 'mvp',
-        eyebrow: 'Models',
-        title: 'Awards Race',
-        copy: 'Real logistic-regression probability for MVP, DPOY, ROY and All-NBA — validated against every real past season, not eyeballed.',
-    },
-    {
-        id: 'analytics',
-        hash: 'trajectory',
-        eyebrow: 'Player Analysis',
-        title: 'Career Trajectory',
-        copy: 'Real similar-player comps project a real aging curve, shown as an honest uncertainty cone rather than a single confident line.',
-    },
-    {
-        id: 'analytics',
-        hash: 'wpa',
-        eyebrow: 'Player Analysis',
-        title: 'Win-Probability Replay',
-        copy: 'Every real play of a real game, replayed through the same real model that trained on 7,652 real games — click any missed shot for a real counterfactual.',
-    },
-    {
-        id: 'analytics',
-        hash: 'prospects',
-        eyebrow: 'Prospects',
-        title: 'Draft Prospect Comps',
-        copy: 'Real D1 college production matched to real NBA rookie outcomes across ~105,000 real college player-seasons.',
-    },
-];
 
 function useHeroCursorScope() {
     return useRef(null);
@@ -148,32 +117,16 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
                 </div>
             )}
 
-            <Section
-                className="landing-section"
-                eyebrow="How it works"
-                title={<span id="how-it-works">Built to be <span className="text-gradient">checked</span>.</span>}
-                subtitle="Four of the roughly thirty tools inside — every one backed by a real Postgres table you can trace to a real upstream source."
-            >
-                <div className="landing-features">
-                    {FEATURES.map((f) => (
-                        <motion.button
-                            type="button"
-                            key={f.title}
-                            className="landing-feature"
-                            onClick={() => onNavigate(f.id, f.hash)}
-                            initial={{ opacity: 0, y: 16 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true, margin: '-60px' }}
-                            transition={{ type: 'spring', stiffness: 260, damping: 30 }}
-                        >
-                            <p className="text-eyebrow">{f.eyebrow}</p>
-                            <h3 className="text-headline landing-feature-title">{f.title}</h3>
-                            <p className="landing-feature-copy">{f.copy}</p>
-                            <span className="landing-feature-link">Explore &rarr;</span>
-                        </motion.button>
-                    ))}
-                </div>
-            </Section>
+            <div id="how-it-works" className="chapters-intro">
+                <p className="text-eyebrow">How it works</p>
+                <h2 className="text-display-lg">
+                    Built to be <span className="text-gradient">checked.</span>
+                </h2>
+                <p className="chapters-intro-subtitle">
+                    Six of the roughly thirty tools inside — every one backed by a real Postgres table you can trace to a real upstream source. Scroll, and the particles become the real data.
+                </p>
+            </div>
+            <FeatureChapters particleFieldRef={particleFieldRef} onNavigate={onNavigate} />
 
             <Section
                 className="landing-section"

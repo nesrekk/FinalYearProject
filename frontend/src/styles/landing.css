@@ -504,3 +504,127 @@
 .landing-game-tile:hover {
   transform: scale(1.02);
 }
+
+/* ── Feature chapters ───────────────────────────── */
+.chapters-intro {
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  padding: var(--section-padding) var(--gutter) 0;
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .chapters-intro {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
+
+.chapters-intro-subtitle {
+  max-width: 560px;
+  margin: var(--space-4) auto 0;
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.chapters {
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+@media (min-width: 768px) {
+  .chapters {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
+
+.chapter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: 60vh;
+  padding: var(--space-8) 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.chapter:last-child {
+  border-bottom: none;
+}
+
+@media (min-width: 900px) {
+  .chapter {
+    flex-direction: row;
+    min-height: 100vh;
+    gap: var(--space-8);
+  }
+
+  .chapter--right {
+    flex-direction: row-reverse;
+  }
+}
+
+.chapter-text {
+  flex: 1 1 0;
+  max-width: 520px;
+}
+
+.chapter-title {
+  margin-top: var(--space-3);
+}
+
+.chapter-copy {
+  margin-top: var(--space-4);
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.chapter-link {
+  display: inline-block;
+  margin-top: var(--space-5);
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font);
+  cursor: pointer;
+}
+
+.chapter-visual {
+  flex: 1 1 0;
+  width: 100%;
+  min-height: 280px;
+  height: 40vh;
+}
+
+@media (min-width: 900px) {
+  .chapter-visual {
+    height: 60vh;
+  }
+}
+
+.chapter-legend {
+  margin-top: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 320px;
+}
+
+.chapter-legend li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: var(--space-2);
+}
+
+.chapter-legend-inline {
+  margin-top: var(--space-6);
+  font-size: 13px;
+  color: var(--text-3);
+}

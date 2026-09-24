@@ -44,8 +44,11 @@ const REDUCED_MOTION = typeof window !== 'undefined' && window.matchMedia
 // version.
 //
 // Morph engine (ref API): setTargets(points | null) reassigns the nearest
-// available particles to `points` (an array of {x, y} in the SAME
-// document/world-space coordinates as everything else — callers compute a
+// available particles to `points` (an array of {x, y, c?} in the SAME
+// document/world-space coordinates as everything else — an optional `c`
+// CSS color string overrides that particle's usual gradient color while
+// morphed, for chapters that need semantic color, e.g. makes vs. misses.
+// Callers compute a
 // section's shape from its real bounding rect + window.scrollY so it scrolls
 // naturally with that section). Each assigned particle springs to its target
 // instead of its home position, staggered by the target's position in the
@@ -142,7 +145,7 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
                         hx, hy, x: hx, y: hy, vx: 0, vy: 0,
                         c: gradAt(hx / W),
                         a: (0.15 + Math.random() * 0.35) * (inRest ? REST_ALPHA_MUL : 1),
-                        mtx: null, mty: null, morphAt: 0,
+                        mtx: null, mty: null, mc: null, morphAt: 0,
                     });
                 }
             }
@@ -185,7 +188,7 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
                 const ang = sp > 0.05 ? Math.atan2(p.vy, p.vx) : 0.6;
                 const len = 3 + Math.min(sp * 2.5, 9);
                 const dim = hasActiveMorph && p.mtx == null ? MORPH_DIM_ALPHA : 1;
-                ctx.strokeStyle = p.c;
+                ctx.strokeStyle = morphed && p.mc ? p.mc : p.c;
                 ctx.globalAlpha = Math.min(1, (p.a + sp * 0.15) * alphaMul * dim);
                 ctx.lineWidth = 1.6;
                 ctx.lineCap = 'round';
@@ -236,7 +239,7 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
         function setTargets(points) {
             // Release every particle back to its home position.
             if (!points || points.length === 0) {
-                for (const p of particles) { p.mtx = null; p.mty = null; }
+                for (const p of particles) { p.mtx = null; p.mty = null; p.mc = null; }
                 hasActiveMorph = false;
                 if (REDUCED_MOTION) drawFrame(performance.now());
                 else ensureRunning();
@@ -248,7 +251,7 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
             // particles already ended up near it, including ones still
             // mid-flight from the previous shape.
             const pool = particles.slice();
-            for (const p of particles) { p.mtx = null; p.mty = null; }
+            for (const p of particles) { p.mtx = null; p.mty = null; p.mc = null; }
 
             const n = Math.min(points.length, pool.length);
             const now = performance.now();
@@ -270,6 +273,7 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
                 chosen._taken = true;
                 chosen.mtx = target.x;
                 chosen.mty = target.y;
+                chosen.mc = target.c || null;
                 chosen.morphAt = now + (i / n) * MORPH_STAGGER_MS;
                 if (REDUCED_MOTION) { chosen.x = target.x; chosen.y = target.y; }
             }
