@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchRadarProfile, fetchLivePlayerSuggestions } from '../services/api';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 
 // Debounced suggestion fetch for one search slot, with a cancellation guard
@@ -203,6 +204,7 @@ export default function RadarCompareSection() {
                     can't outrank a real high-volume shooter), Spacing is an index of how much a player's
                     outside shooting pulls defenders away from the paint.
                 </InfoTooltip>
+                <SourceBadge source={activeSlots[0]?.data?._source} />
             </h2>
             <p className="page-subtitle">Compare up to 3 players' statistical profiles for one season.</p>
 

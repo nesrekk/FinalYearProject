@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchTradeTeams, fetchTradeRoster, fetchWithWithoutStar } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
 import PlayerHeadshot from './common/PlayerHeadshot';
@@ -84,6 +85,7 @@ export default function WithWithoutStarSection() {
                     this doesn't control for that. Real sample sizes for both splits are always shown; a
                     durable player who rarely sits will have a small, noisy "without" sample.
                 </InfoTooltip>
+                <SourceBadge source={result?._source} />
             </h2>
             <p className="page-subtitle">Pick a season, a team, then a player from that roster.</p>
 

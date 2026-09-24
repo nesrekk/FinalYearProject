@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchRestStudy, fetchScheduleDifficulty } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
 
@@ -82,6 +83,7 @@ export default function ScheduleFatigueSection() {
                         modeled or predicted. This data is a snapshot from whenever that script last ran, not a
                         live feed, so very recent real games may not be reflected yet.
                     </InfoTooltip>
+                    <SourceBadge source={restStudy?._source || difficulty?._source} />
                 </h3>
             </div>
 

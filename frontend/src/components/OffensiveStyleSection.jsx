@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchPlaytypeArchetypes, fetchPlaytypeSeasonClusters } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 
 const PALETTE = ['#facc15', '#fb923c', '#38bdf8', '#a78bfa', '#34d399', '#f87171'];
 
@@ -77,6 +78,7 @@ export default function OffensiveStyleSection() {
                     is lower than the stat archetypes' (play-type mixes overlap more than production profiles
                     do) — disclosed honestly, not hidden.
                 </InfoTooltip>
+                <SourceBadge source={seasonData?._source} />
             </h3>
 
             {styles.length > 0 && (

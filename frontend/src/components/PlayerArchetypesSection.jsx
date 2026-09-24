@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchArchetypes, fetchSeasonClusters, fetchPlayerClusterHistory, fetchLivePlayerSuggestions, fetchLeagueEvolution } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import OffensiveStyleSection from './OffensiveStyleSection';
 
@@ -209,6 +210,7 @@ export default function PlayerArchetypesSection() {
                     predefined. Only the NAME given to each already-discovered group ("Rim Protector",
                     "Playmaker"...) uses basketball knowledge; the grouping itself is 100% data-driven.
                 </InfoTooltip>
+                <SourceBadge source={seasonData?._source} />
             </h2>
             <p className="page-subtitle">
                 Every dot below is one player-season, positioned by a 2D projection of their stat profile —

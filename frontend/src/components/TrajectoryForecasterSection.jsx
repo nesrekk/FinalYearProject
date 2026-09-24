@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchPlayerTrajectory, fetchPlayerSuggestions } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 
@@ -163,6 +164,7 @@ export default function TrajectoryForecasterSection() {
                         see how the projection would have done. Every comp used is listed below — nothing here
                         is a black box.
                     </InfoTooltip>
+                    <SourceBadge source={data?._source} />
                 </h3>
                 <div style={{ position: 'relative', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>

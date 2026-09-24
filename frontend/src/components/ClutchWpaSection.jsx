@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import TeamLogo from './common/TeamLogo';
+import SourceBadge from './common/SourceBadge';
 
 function wpaColor(v) {
     if (v == null) return 'var(--text-muted)';
@@ -40,19 +41,20 @@ export default function ClutchWpaSection() {
                     Clutch-Time Win Probability Added
                     <InfoTooltip label="How this works" title="A real trained model, not a formula guess">
                         A real Logistic Regression win-probability model, trained on real play-by-play (real
-                        running score, real game clock, real final winner) from a real sample of games this
-                        season — same library and same interpretable-coefficients approach this project already
+                        running score, real game clock, real final winner) from real games across multiple
+                        seasons — same library and same interpretable-coefficients approach this project already
                         uses for MVP/DPOY/ROY. WPA per play is the model's real output after the play minus its
                         real output before the play, credited to whichever player made that play. Clutch time
                         uses the NBA's own real definition: final 5 minutes of regulation/OT with the score
-                        within 5 points. The sample size is real games actually fetched, not the full season —
-                        shown below rather than implied to be comprehensive.
+                        within 5 points. The real sample size is shown below rather than implied to be the full
+                        historical record.
                     </InfoTooltip>
+                    <SourceBadge source={data?._source} />
                 </h3>
                 {error && <p className="error-message">{error}</p>}
                 {data && (
                     <p className="page-subtitle" style={{ marginTop: '0.5rem' }}>
-                        Trained on a real sample of {data.sample_size_games} games this season
+                        Trained on {data.sample_size_games} real games
                     </p>
                 )}
             </div>

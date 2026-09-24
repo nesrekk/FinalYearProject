@@ -4,6 +4,7 @@ import DataTable from './DataTable';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
+import SourceBadge from './common/SourceBadge';
 
 const AWARDS = {
     mvp: {
@@ -63,6 +64,7 @@ export default function AwardsRaceSection() {
     const [season, setSeason] = useState('2025');
     const [results, setResults] = useState(null);
     const [poolInfo, setPoolInfo] = useState(null);
+    const [source, setSource] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -74,6 +76,7 @@ export default function AwardsRaceSection() {
         setError('');
         setResults(null);
         setPoolInfo(null);
+        setSource(null);
 
         try {
             const data = await cfg.fetch(season);
@@ -85,6 +88,7 @@ export default function AwardsRaceSection() {
                 probability: row[cfg.probKey] != null ? row[cfg.probKey] * 100 : null,
             }));
             setResults(ranked);
+            setSource(data._source ?? null);
             if (data.candidate_pool_rule) {
                 setPoolInfo(`${data.candidate_pool_size} eligible candidates (${data.candidate_pool_rule})`);
             }
@@ -99,6 +103,7 @@ export default function AwardsRaceSection() {
         setAward(id);
         setResults(null);
         setPoolInfo(null);
+        setSource(null);
         setError('');
     };
 
@@ -110,6 +115,7 @@ export default function AwardsRaceSection() {
                 <InfoTooltip label={`How ${cfg.label} Prediction works`} title="Under the hood">
                     {cfg.blurb}
                 </InfoTooltip>
+                <SourceBadge source={source} />
             </h2>
 
             <div className="tab-bar" style={{ marginBottom: '1rem' }}>

@@ -4,11 +4,13 @@ import DataTable from './DataTable';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
+import SourceBadge from './common/SourceBadge';
 
 export default function SimilaritySection() {
     const [player, setPlayer] = useState('');
     const [season, setSeason] = useState('2026');
     const [results, setResults] = useState(null);
+    const [source, setSource] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [suggestions, setSuggestions] = useState([]);
@@ -37,6 +39,7 @@ export default function SimilaritySection() {
         setLoading(true);
         setError('');
         setResults(null);
+        setSource(null);
 
         try {
             const data = await fetchSeasonSimilarity(player.trim(), season);
@@ -46,6 +49,7 @@ export default function SimilaritySection() {
                 player: row.player ?? row.player_name,
             }));
             setResults(normalized);
+            setSource(Array.isArray(data) ? null : data._source ?? null);
         } catch (err) {
             setError(err.response?.data?.detail || 'Failed to fetch similarity data.');
         } finally {
@@ -66,6 +70,7 @@ export default function SimilaritySection() {
                     usage, impact signals). Similarity is computed using cosine similarity, which compares the
                     direction of two vectors (stat “profile”) and returns the closest matches.
                 </InfoTooltip>
+                <SourceBadge source={source} />
             </h2>
 
             <div className="input-row">

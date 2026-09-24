@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchDraftProspectComp, fetchLivePlayerSuggestions } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import LengthMattersCard from './LengthMattersCard';
@@ -95,6 +96,7 @@ export default function DraftProspectSection() {
                         outlier talent's real outcome can look very different from what pure production comps
                         suggest — that's a real limitation, not something this tool papers over.
                     </InfoTooltip>
+                    <SourceBadge source={data?._source} />
                 </h3>
                 <div style={{ position: 'relative', maxWidth: 360 }}>
                     <input

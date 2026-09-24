@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchPlayerHistory, fetchTeamHistory, fetchTradeTeams, fetchLivePlayerSuggestions } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 
 const PLAYER_STATS = [
@@ -191,6 +192,7 @@ export default function TrendAnalysisSection() {
                     methodology, not an official team box score — this DB has no team-level game log, so
                     "team eFG%" here means "this roster's players' own eFG%, weighted by minutes played."
                 </InfoTooltip>
+                <SourceBadge source={(mode === 'player' ? playerHistory : teamHistory)?._source} />
             </h2>
 
             <div className="tab-bar" style={{ marginBottom: '1rem' }}>

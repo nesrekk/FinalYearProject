@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchWpReplayList, fetchWpReplay, fetchWpReplayWhatIf } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
 
@@ -154,6 +155,7 @@ export default function GameReplaySection() {
                         looked had that one shot gone in, assuming everything afterward happened exactly as it
                         really did.
                     </InfoTooltip>
+                    <SourceBadge source={replay?._source} />
                 </h3>
                 {gamesError && <p className="error-message">{gamesError}</p>}
                 {games && (

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchLedgerSummary } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 
@@ -111,6 +112,7 @@ export default function PredictionLedgerSection() {
                     is a real, growing record of what the live model actually said, checked against what actually
                     happened. It starts sparse and gets more useful the longer it runs.
                 </InfoTooltip>
+                <SourceBadge source={data?._source} />
             </h2>
 
             {data && (

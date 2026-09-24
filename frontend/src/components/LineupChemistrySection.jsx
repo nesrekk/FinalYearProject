@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchLineupChemistry } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import TeamLogo from './common/TeamLogo';
@@ -49,6 +50,7 @@ export default function LineupChemistrySection() {
                         rating. A minimum shared-minutes cutoff is applied to filter out tiny, noisy samples,
                         shown below rather than hidden.
                     </InfoTooltip>
+                    <SourceBadge source={data?._source} />
                 </h3>
                 {data && (
                     <p className="page-subtitle" style={{ marginTop: '0.5rem' }}>

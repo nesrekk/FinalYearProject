@@ -398,3 +398,38 @@ def test_impact_matchups_invalid_role():
     from impact_api import app
     resp = TestClient(app).get("/matchups/player/Luka Doncic", params={"role": "bogus"})
     assert resp.status_code == 400
+
+
+# ─── A2: Source Badges ───────────────────────────────────────────────────────
+# Spot-checks _source (api/source_badge.py) on one endpoint per service —
+# a representative sample of the ~20 main Analytics endpoints that got one
+# in the A2 sweep, not an exhaustive per-endpoint test.
+
+def _assert_has_source(data):
+    src = data.get("_source")
+    assert src is not None
+    assert isinstance(src.get("tables"), list) and src["tables"]
+    assert src.get("upstream_api")
+    assert "live" in src and "as_of" in src
+
+
+def test_mvp_predict_has_source():
+    from mvp_api import app
+    resp = TestClient(app).get("/mvp/predict/2025")
+    assert resp.status_code == 200
+    _assert_has_source(resp.json())
+
+
+def test_similarity_season_has_source():
+    from similarity_api import app
+    resp = TestClient(app).get("/similarity/season/LeBron James/2024")
+    assert resp.status_code == 200
+    _assert_has_source(resp.json())
+
+
+def test_impact_matchups_has_source():
+    from impact_api import app
+    resp = TestClient(app).get("/matchups/player/Luka Doncic", params={"season": 2024})
+    assert resp.status_code in (200, 404, 503)
+    if resp.status_code == 200:
+        _assert_has_source(resp.json())

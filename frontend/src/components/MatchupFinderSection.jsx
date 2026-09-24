@@ -4,6 +4,7 @@ import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
+import SourceBadge from './common/SourceBadge';
 
 function MatchupRow({ row, highlight }) {
     return (
@@ -84,6 +85,7 @@ export default function MatchupFinderSection() {
                     samples produce noisy, misleading percentages. Real full league-wide coverage starts at the
                     2017-18 season.
                 </InfoTooltip>
+                <SourceBadge source={result?._source} />
             </h2>
             <p className="page-subtitle">
                 Search a player, then choose whether they're the scorer (who guards them toughest?) or the

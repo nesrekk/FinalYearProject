@@ -4,10 +4,12 @@ import DataTable from './DataTable';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
+import SourceBadge from './common/SourceBadge';
 
 export default function ImpactSection() {
     const [season, setSeason] = useState('2026');
     const [results, setResults] = useState(null);
+    const [source, setSource] = useState(null);
     const [activeTab, setActiveTab] = useState(null); // 'raw' | 'star'
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -19,6 +21,7 @@ export default function ImpactSection() {
         setLoading(true);
         setError('');
         setResults(null);
+        setSource(null);
         setActiveTab(type);
 
         try {
@@ -32,6 +35,7 @@ export default function ImpactSection() {
                 win_pct: row.win_pct ?? row.w_pct,
             }));
             setResults(ranked);
+            setSource(Array.isArray(data) ? null : data._source ?? null);
         } catch (err) {
             setError(err.response?.data?.detail || 'Failed to fetch impact rankings.');
         } finally {
@@ -72,6 +76,7 @@ export default function ImpactSection() {
                     somewhat hotter than basketball-reference.com's own numbers. Treat it as "who's better than
                     whom, roughly by how much," not as numerically identical to the official site.
                 </InfoTooltip>
+                <SourceBadge source={source} />
             </h2>
 
             <div className="input-row">

@@ -17,6 +17,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2 import pool
 
+from source_badge import make_source
+
 # ─── App Setup ──────────────────────────────────────────────────────────────
 
 app = FastAPI(
@@ -160,7 +162,8 @@ def get_archetypes():
                 "representative_players": r[5],
             }
             for r in rows
-        ]
+        ],
+        "_source": make_source(["cluster_archetypes"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -194,7 +197,10 @@ def get_season_clusters(season: int):
 
     cols = ["player_id", "player_name", "team_abbreviation", "archetype", "pca_x", "pca_y",
             "pts", "reb", "ast", "stl", "blk", "tov", "fg3_pct", "ts_pct", "usg_pct", "ast_pct", "reb_pct"]
-    return {"season": season, "players": [dict(zip(cols, row)) for row in rows]}
+    return {
+        "season": season, "players": [dict(zip(cols, row)) for row in rows],
+        "_source": make_source(["player_clusters"], "nba_api (stats.nba.com)"),
+    }
 
 
 @app.get("/clusters/player/{player_name}")
@@ -258,7 +264,8 @@ def get_playtype_archetypes():
             {"cluster_id": r[0], "style": r[1], "n_player_seasons": r[2], "silhouette_score": r[3],
              "centroid": r[4], "representative_players": r[5]}
             for r in rows
-        ]
+        ],
+        "_source": make_source(["playtype_cluster_archetypes"], "nba_api (Synergy play-type tracking)"),
     }
 
 
@@ -277,7 +284,10 @@ def get_playtype_season_clusters(season: int):
         raise HTTPException(status_code=404, detail=f"No offensive-style cluster results for season {season}. Run scripts/cluster_playtypes.py first.")
 
     cols = ["player_id", "player_name", "team_abbreviation", "style", "pca_x", "pca_y"]
-    return {"season": season, "players": [dict(zip(cols, row)) for row in rows]}
+    return {
+        "season": season, "players": [dict(zip(cols, row)) for row in rows],
+        "_source": make_source(["playtype_clusters"], "nba_api (Synergy play-type tracking)"),
+    }
 
 
 # ─── League Evolution ────────────────────────────────────────────────────────
@@ -366,6 +376,7 @@ def get_league_evolution():
             "this project doesn't have a historical source for), disclosed as an approximation rather than "
             "presented as the official number."
         ),
+        "_source": make_source(["player_clusters", "player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -428,6 +439,7 @@ def get_season_similarity(player_name: str, season: int, top_n: int = 10):
             }
             for row in rows
         ],
+        "_source": make_source(["season_similarity", "player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -546,6 +558,7 @@ def get_player_trajectory(player_name: str, season: int, top_n_comps: int = 5, p
         "career": career,
         "comps": comps,
         "projection": projection,
+        "_source": make_source(["season_similarity", "player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 

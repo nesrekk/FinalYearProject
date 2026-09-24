@@ -25,6 +25,8 @@ from psycopg2 import pool
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from source_badge import make_source
+
 # ─── App Setup ──────────────────────────────────────────────────────────────
 
 app = FastAPI(
@@ -253,7 +255,13 @@ def get_allnba_backtest():
             for r in cursor.fetchall()
         ]
 
-    return {"award": "ALL_NBA", "summary": summary, "seasons": seasons}
+    return {
+        "award": "ALL_NBA", "summary": summary, "seasons": seasons,
+        "_source": make_source(
+            ["all_nba_backtest_summary", "all_nba_backtest_seasons"], "nba_api (stats.nba.com)",
+            as_of=summary.get("updated_at"),
+        ),
+    }
 
 
 @app.get("/validation/wpa")
@@ -316,6 +324,10 @@ def get_wpa_validation():
             "observed win rate in each bucket — a well-calibrated model's points sit near the diagonal."
         ),
         "scopes": scopes,
+        "_source": make_source(
+            ["wpa_model_validation"], "nba_api + ESPN via sportsdataverse (play-by-play)",
+            as_of=computed_at.isoformat() if computed_at else None,
+        ),
     }
 
 
@@ -413,6 +425,7 @@ def get_ledger_summary(season: int = None):
             "is distinct from the /backtest endpoints, which are honest leave-one-season-out historical re-runs, "
             "not live predictions; the two are never combined."
         ),
+        "_source": make_source(["prediction_ledger"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -453,7 +466,10 @@ def get_backtest_detail(award: str, model: str = DEFAULT_MODEL_TYPE):
             for row in cursor.fetchall()
         ]
 
-    return {"award": award.upper(), "model_type": model, "summary": summary, "seasons": seasons}
+    return {
+        "award": award.upper(), "model_type": model, "summary": summary, "seasons": seasons,
+        "_source": make_source(["model_backtest_summary", "model_backtest_seasons"], "nba_api (stats.nba.com)"),
+    }
 
 
 @app.get("/backtest/{award}/compare")
@@ -476,7 +492,10 @@ def get_backtest_comparison(award: str):
             status_code=404,
             detail=f"No backtest results for '{award}'. Run scripts/backtest_models.py first.",
         )
-    return {"award": award.upper(), "models": summaries}
+    return {
+        "award": award.upper(), "models": summaries,
+        "_source": make_source(["model_backtest_summary"], "nba_api (stats.nba.com)"),
+    }
 
 
 # ─── SHAP Explainability (Random Forest only) ───────────────────────────────
@@ -675,6 +694,7 @@ def predict_mvp(season: int, top_n: int = 15):
             }
             for i, (_, row) in enumerate(df.iterrows())
         ],
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -751,6 +771,7 @@ def predict_dpoy(season: int, top_n: int = 15):
             }
             for i, (_, row) in enumerate(df.iterrows())
         ],
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -832,6 +853,7 @@ def predict_roy(season: int, top_n: int = 15):
             }
             for i, (_, row) in enumerate(df.iterrows())
         ],
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -912,6 +934,7 @@ def predict_all_nba(season: int):
             }
             for i, (_, row) in enumerate(df.iterrows())
         ],
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 

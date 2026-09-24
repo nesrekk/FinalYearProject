@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchBacktestDetail, fetchBacktestComparison, fetchShapCandidates, fetchShapBreakdown, fetchAllNBABacktest, fetchWpaValidation } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 
 const ROC_SIZE = 320;
@@ -313,6 +314,7 @@ export default function ModelValidationSection() {
                     upcoming season. This is different from (and more honest than) just re-scoring a
                     model against data it already trained on, which tends to look artificially good.
                 </InfoTooltip>
+                <SourceBadge source={detail?._source || allNbaDetail?._source || wpaValidation?._source} />
             </h2>
 
             <div className="tab-bar" style={{ marginBottom: '1rem' }}>

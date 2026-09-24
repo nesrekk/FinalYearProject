@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchPlayoffComparison, fetchLivePlayerSuggestions } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import { STAT_GLOSSARY } from '../utils/statGlossary';
@@ -94,6 +95,7 @@ export default function PlayoffForecasterSection() {
                         as 4), so a small-sample warning shows whenever that's the case — don't read too much
                         into a 4-game sweep.
                     </InfoTooltip>
+                    <SourceBadge source={data?._source} />
                 </h3>
                 <div style={{ position: 'relative', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>

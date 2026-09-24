@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import TeamLogo from './common/TeamLogo';
+import SourceBadge from './common/SourceBadge';
 
 function indexColor(v) {
     if (v == null) return 'var(--text-muted)';
@@ -54,6 +55,7 @@ export default function HeliocentricitySection() {
                         runs through one player; it does NOT simulate what happens if that player sits out, since
                         that would mean inventing an effect size with no real data to fit it against.
                     </InfoTooltip>
+                    <SourceBadge source={data?._source} />
                 </h3>
                 <div className="input-row">
                     <input

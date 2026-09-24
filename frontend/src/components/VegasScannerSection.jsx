@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchChampionshipOdds } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
 
@@ -83,6 +84,7 @@ export default function VegasScannerSection() {
                         real-data comparison, not a betting recommendation, and the free odds API quota is
                         limited so this refreshes at most a few times a day.
                     </InfoTooltip>
+                    <SourceBadge source={data?._source} />
                 </h3>
                 {data && (
                     <p className="page-subtitle" style={{ marginTop: 0 }}>

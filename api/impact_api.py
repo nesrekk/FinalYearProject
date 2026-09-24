@@ -41,6 +41,7 @@ from scipy.optimize import brentq
 from scipy.stats import pearsonr
 
 import shots_lib
+from source_badge import make_source
 
 load_dotenv()
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
@@ -866,6 +867,7 @@ def get_playoff_comparison(player_name: str, season: int):
             "playoffs": None,
             "note": f"{resolved_name}'s team did not make the playoffs in season {season}, "
                     f"or they did not appear in a playoff game — no real playoff data exists for this comparison.",
+            "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com)", live=True),
         }
 
     deltas = {}
@@ -881,6 +883,7 @@ def get_playoff_comparison(player_name: str, season: int):
         "playoffs": playoff,
         "deltas": deltas,
         "small_sample_warning": playoff["gp"] < 10,
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com)", live=True),
     }
 
 
@@ -1209,6 +1212,10 @@ def get_draft_prospect_comp(
             "Comparison is on real college stats only. Add include_measurements=true to also match on "
             "real wingspan/standing reach from the NBA Draft Combine (narrows to real combine attendees only)."
         ),
+        "_source": make_source(
+            ["college_player_season_stats", "draft_combine", "player_season_stats"],
+            "CollegeBasketballData.com + nba_api (stats.nba.com)",
+        ),
     }
 
 
@@ -1290,6 +1297,7 @@ def get_length_study():
             "correlation coefficient, not a causal claim — length is one real input among many real factors "
             "(effort, positioning, IQ) that drive real defensive production."
         ),
+        "_source": make_source(["draft_combine", "player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -1427,6 +1435,9 @@ def get_heliocentricity_leaderboard(season: Optional[int] = None, top_n: int = 2
         "results": [
             {**r, "rank": i + 1} for i, r in enumerate(combined[:top_n])
         ],
+        "_source": make_source(
+            ["player_season_stats"], "nba_api (stats.nba.com, live touch/possession tracking)", live=True,
+        ),
     }
 
 
@@ -1500,6 +1511,7 @@ def get_clutch_wpa_leaderboard(top_n: int = 25, min_clutch_plays: int = 3):
             }
             for i, r in enumerate(rows)
         ],
+        "_source": make_source(["player_wpa_totals", "pbp_games", "pbp_events"], "nba_api + ESPN via sportsdataverse (play-by-play)"),
     }
 
 
@@ -1664,6 +1676,10 @@ def get_wp_replay(game_id: str):
         ),
         "points": points,
         "top_plays": top_plays,
+        "_source": make_source(
+            ["pbp_games", "pbp_events"],
+            "ESPN via sportsdataverse" if game_id.startswith("espn_") else "nba_api (stats.nba.com)",
+        ),
     }
 
 
@@ -2025,6 +2041,7 @@ def get_lineup_chemistry(season: int = None, min_minutes: float = 40, top_n: int
             "net ratings, so that noise is filtered out and disclosed here rather than hidden."
         ),
         "results": results,
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com, LeagueDashLineups, live)", live=True),
     }
 
 
@@ -2842,6 +2859,7 @@ def get_with_without_star(team_abbr: str, season: int, player_name: str):
             "are always shown — draw conclusions cautiously from a small 'without' sample, which is common for "
             "a player who rarely sits."
         ),
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com, live game logs)", live=True),
     }
 
 
@@ -2917,6 +2935,7 @@ def get_rest_study(season: Optional[int] = None):
             "0 days rest = a real back-to-back. Real n is shown per bucket — samples get thin past 3+ days "
             "rest, folded into one '4+ days rest' bucket rather than presented as many noisy one-off buckets."
         ),
+        "_source": make_source(["team_game_fatigue"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -2968,6 +2987,7 @@ def get_schedule_difficulty(season: Optional[int] = None):
             "direct real proxy for a grueling real schedule. Not causal — a team's real record isn't adjusted "
             "for this, it's shown as real schedule context only."
         ),
+        "_source": make_source(["team_game_fatigue"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -3156,6 +3176,7 @@ def get_player_matchups(player_name: str, role: str = "scorer", season: Optional
             f"{int(MATCHUP_RELIABLE_POSS)} real partial possessions matched up are marked unreliable — small "
             "samples produce noisy FG% (a single defended shot is either 0% or 100%)."
         ),
+        "_source": make_source(["player_matchups"], "nba_api (stats.nba.com, LeagueSeasonMatchups)"),
     }
 
 
@@ -3330,6 +3351,7 @@ def get_radar_profile(player_name: str, season: int):
         "season": season,
         "pool_size": n,
         "stats": percentiles,
+        "_source": make_source(["player_season_stats", "defense_tracking_stats"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -4018,6 +4040,7 @@ def get_player_history(player_name: str):
         "player_id": player_id,
         "player_name": resolved_name,
         "seasons": [dict(zip(cols, row)) for row in rows],
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -4075,7 +4098,10 @@ def get_team_history(team_abbr: str):
         entry["ftr"] = (wfta / wfga) if wfga else None
         seasons.append(entry)
 
-    return {"team": team_abbr.upper(), "seasons": seasons}
+    return {
+        "team": team_abbr.upper(), "seasons": seasons,
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com)"),
+    }
 
 
 @app.get("/")
@@ -4396,6 +4422,7 @@ def get_bpm_leaderboard(season: int, top_n: int = 20, min_minutes: float = 20.0,
             }
             for i, r in enumerate(rows)
         ],
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -4431,6 +4458,7 @@ def get_raw_impact(season: int, top_n: int = 20):
             }
             for i, r in enumerate(rows)
         ],
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -4466,6 +4494,7 @@ def get_star_impact(season: int, top_n: int = 20):
             }
             for i, r in enumerate(rows)
         ],
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 
@@ -5436,6 +5465,10 @@ def get_championship_odds_scanner():
             "real-data comparison, not a betting recommendation."
         ),
         "teams": rows,
+        "_source": make_source(
+            ["player_season_stats"], "The Odds API (live) + nba_api (stats.nba.com)",
+            as_of=odds_data["last_update"], live=True,
+        ),
     }
 
 
