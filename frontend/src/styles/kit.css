@@ -593,13 +593,18 @@
 }
 
 /* ── Game cursor scope ──────────────────────────── */
-.game-cursor-scope {
-  cursor: none;
+/* Forced on every descendant, not just the scope root — plenty of
+   buttons/inputs declare their own `cursor: pointer`, which otherwise
+   wins over the inherited `none` as soon as you hover them. */
+.game-cursor-scope,
+.game-cursor-scope * {
+  cursor: none !important;
 }
 
 @media (pointer: coarse) {
-  .game-cursor-scope {
-    cursor: auto;
+  .game-cursor-scope,
+  .game-cursor-scope * {
+    cursor: auto !important;
   }
 }
 

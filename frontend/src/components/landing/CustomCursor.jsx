@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
-const LERP = 0.18;
-const RING_BASE = 34;
-const RING_MAGNETIC = 64;
+const LERP = 0.35;
+const RING_BASE = 22;
+const RING_MAGNETIC = 40;
 
 const COARSE_POINTER = typeof window !== 'undefined' && window.matchMedia
     ? window.matchMedia('(pointer: coarse)').matches
@@ -122,10 +123,20 @@ export default function CustomCursor({ scopeRef }) {
     }, [scopeRef]);
 
     if (COARSE_POINTER || REDUCED_MOTION) return null;
+    if (typeof document === 'undefined') return null;
 
     const ringSize = magnetic ? RING_MAGNETIC : RING_BASE;
 
-    return (
+    // Portaled straight to <body> — rendering these inline, nested inside
+    // page content, meant they sat inside whatever Framer Motion
+    // `motion.div` wraps the current page. Framer keeps an inline
+    // `transform` on that div at all times (not just mid-animation), and
+    // per the CSS spec `position: fixed` becomes relative to the nearest
+    // transformed ancestor instead of the real viewport — so the dot/ring
+    // rendered visibly offset from the actual pointer, worse the more the
+    // page had scrolled. Portaling to body guarantees no ancestor transform
+    // can ever intercept it again.
+    return createPortal(
         <>
             <span ref={dotRef} className="custom-cursor-dot" style={{ opacity: active ? 1 : 0 }} />
             <span
@@ -133,6 +144,7 @@ export default function CustomCursor({ scopeRef }) {
                 className={`custom-cursor-ring${magnetic ? ' custom-cursor-ring--magnetic' : ''}`}
                 style={{ width: ringSize, height: ringSize, marginLeft: -ringSize / 2, marginTop: -ringSize / 2, opacity: active ? 1 : 0 }}
             />
-        </>
+        </>,
+        document.body
     );
 }
