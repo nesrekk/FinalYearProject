@@ -9,7 +9,7 @@ import TeamRibbons from '../landing/TeamRibbons';
 import BigStat from '../ui/BigStat';
 import Section from '../ui/Section';
 import Skeleton from '../ui/Skeleton';
-import { fetchSiteStats, fetchGamesByDate } from '../../services/api';
+import { fetchSiteStats, fetchGamesByDate, fetchWpaValidation } from '../../services/api';
 import { localDateIso } from '../../utils/date';
 import TeamLogo from '../common/TeamLogo';
 import Footer from '../layout/Footer';
@@ -27,15 +27,35 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
     const [statsError, setStatsError] = useState(false);
     const [games, setGames] = useState(null);
     const [introDone, setIntroDone] = useState(false);
+    const [wpaValidation, setWpaValidation] = useState(null);
+    const ctaRef = useRef(null);
 
     useEffect(() => {
         let active = true;
         Promise.resolve().then(() => {
             fetchSiteStats().then((d) => { if (active) setStats(d); }).catch(() => { if (active) setStatsError(true); });
             fetchGamesByDate(localDateIso()).then((d) => { if (active) setGames(d?.games || []); }).catch(() => { if (active) setGames([]); });
+            fetchWpaValidation().then((d) => {
+                if (!active) return;
+                const row = d?.scopes?.all_events || Object.values(d?.scopes || {})[0];
+                if (row) setWpaValidation(row);
+            }).catch(() => {});
         });
         return () => { active = false; };
     }, []);
+
+    function onCtaEnter() {
+        const el = ctaRef.current;
+        if (!el || !particleFieldRef.current) return;
+        const r = el.getBoundingClientRect();
+        particleFieldRef.current.setAttractor({
+            x: r.left + r.width / 2,
+            y: r.top + r.height / 2 + (window.scrollY || 0),
+        });
+    }
+    function onCtaLeave() {
+        particleFieldRef.current?.setAttractor(null);
+    }
 
     const seasonLabel = stats ? `${stats.season_min}–${stats.season_max}` : '…';
 
@@ -152,7 +172,10 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
                     <div className="landing-trust-item">
                         <span className="material-symbols-outlined icon">science</span>
                         <h3 className="text-headline">Validated models</h3>
-                        <p>Every predictive model is backtested against real held-out seasons, with the real accuracy shown alongside the prediction.</p>
+                        <p>
+                            Every predictive model is backtested against real held-out seasons, with the real accuracy shown alongside the prediction
+                            {wpaValidation ? ` — the win-probability model's real held-out ROC-AUC is ${wpaValidation.roc_auc.toFixed(2)}, Brier score ${wpaValidation.brier_score.toFixed(3)}.` : '.'}
+                        </p>
                     </div>
                 </div>
             </Section>
@@ -166,6 +189,20 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
                     ))}
                 </div>
             </Section>
+
+            <section className="landing-final-cta">
+                <button
+                    type="button"
+                    ref={ctaRef}
+                    className="landing-final-cta-btn"
+                    data-magnetic
+                    onClick={onOpenToday}
+                    onMouseEnter={onCtaEnter}
+                    onMouseLeave={onCtaLeave}
+                >
+                    Open NBA Hub
+                </button>
+            </section>
 
             <Footer />
         </div>

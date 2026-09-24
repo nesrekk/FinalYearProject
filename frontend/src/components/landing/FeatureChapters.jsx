@@ -111,7 +111,7 @@ function Chapter({ id, eyebrow, title, gradientWord, copy, exploreLabel, onExplo
                     </button>
                 )}
             </div>
-            <div className="chapter-visual" ref={paneRef} data-pane-for={id}>
+            <div className="chapter-visual" ref={paneRef} data-pane-for={id} role="img" aria-label={copy}>
                 {children}
             </div>
         </div>

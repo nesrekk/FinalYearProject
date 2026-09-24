@@ -4,6 +4,7 @@ const HERO_GRID = 22;
 const REST_GRID = 34;
 const REST_ALPHA_MUL = 0.6;
 const REPEL_RADIUS = 110;
+const ATTRACTOR_RADIUS = 160;
 const PARTICLE_CAP_DESKTOP = 2500;
 const PARTICLE_CAP_MOBILE = 900;
 const MOBILE_BREAKPOINT = 768;
@@ -61,9 +62,14 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
     const containerRef = useRef(null);
     const heroHeightRef = useRef(heroHeight);
     const setTargetsRef = useRef(() => {});
+    const setAttractorRef = useRef(() => {});
 
     useImperativeHandle(ref, () => ({
         setTargets: (points) => setTargetsRef.current(points),
+        // A local pull point in world-space, e.g. the final CTA button:
+        // nearby particles (within ATTRACTOR_RADIUS) get pulled toward it
+        // instead of their home position. setAttractor(null) releases them.
+        setAttractor: (point) => setAttractorRef.current(point),
     }), []);
 
     useEffect(() => {
@@ -81,6 +87,7 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
         let worldH = 0;
         let particles = [];
         const mouse = { x: 0, y: 0, in: false };
+        let attractor = null;
         let raf = null;
         let idleFrames = 0;
         let visible = true;
@@ -171,6 +178,17 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
                     const f = (1 - d / REPEL_RADIUS) * 2.2;
                     p.vx += (dx / d) * f - (dy / d) * f * 0.6;
                     p.vy += (dy / d) * f + (dx / d) * f * 0.6;
+                }
+                if (attractor && !morphed) {
+                    const adx = attractor.x - p.x;
+                    const ady = attractor.y - p.y;
+                    const ad2 = adx * adx + ady * ady;
+                    if (ad2 < ATTRACTOR_RADIUS * ATTRACTOR_RADIUS) {
+                        const ad = Math.sqrt(ad2) || 1;
+                        const af = (1 - ad / ATTRACTOR_RADIUS) * 1.4;
+                        p.vx += (adx / ad) * af;
+                        p.vy += (ady / ad) * af;
+                    }
                 }
                 p.vx += (tgx - p.x) * 0.04;
                 p.vy += (tgy - p.y) * 0.04;
@@ -284,6 +302,13 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
         }
         setTargetsRef.current = setTargets;
 
+        function setAttractor(point) {
+            attractor = point;
+            if (REDUCED_MOTION) drawFrame(performance.now());
+            else ensureRunning();
+        }
+        setAttractorRef.current = setAttractor;
+
         buildParticles();
 
         if (REDUCED_MOTION) {
@@ -311,6 +336,7 @@ const ParticleField = forwardRef(function ParticleField({ className = '', heroHe
 
         return () => {
             setTargetsRef.current = () => {};
+            setAttractorRef.current = () => {};
             if (raf) cancelAnimationFrame(raf);
             window.removeEventListener('mousemove', onMouseMove);
             window.removeEventListener('mouseleave', onMouseLeave);

@@ -812,3 +812,25 @@
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Final CTA ──────────────────────────────────── */
+.landing-final-cta {
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  padding: var(--section-padding) var(--gutter);
+  display: flex;
+  justify-content: center;
+}
+
+.landing-final-cta-btn {
+  padding: 22px 48px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--brand-gradient);
+  color: #0b0b0d;
+  font-family: var(--font);
+  font-size: 19px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 16px 48px rgba(255, 61, 127, 0.25);
+}

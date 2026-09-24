@@ -139,7 +139,12 @@ export default function TeamRibbons() {
             <h2 className="text-display-lg">
                 Every team. Every game. <span className="text-gradient">{sinceYear ? `Since ${sinceYear}.` : 'Since day one.'}</span>
             </h2>
-            <div className="ribbons-canvas-wrap" ref={containerRef}>
+            <div
+                className="ribbons-canvas-wrap"
+                ref={containerRef}
+                role="img"
+                aria-label={teams && teams.length > 0 ? `Real current-season records for all ${teams.length} NBA teams; hover a ribbon for a team's real record.` : 'Team standings'}
+            >
                 <canvas ref={canvasRef} aria-hidden="true" />
                 {tooltip && (
                     <div
