@@ -216,9 +216,9 @@ def test_impact_attach_rest_tags():
     # live scoreboard fetch is slow for historical dates (a pre-existing
     # characteristic unrelated to this feature), which would make the
     # smoke suite slow for no real coverage benefit.
-    import impact_api
+    import impact_core
     games = [{"away": {"abbr": "ORL"}, "home": {"abbr": "LAC"}}]
-    result = impact_api._attach_rest_tags(games, "2023-10-31")
+    result = impact_core._attach_rest_tags(games, "2023-10-31")
     away_rest = result[0]["away"].get("rest")
     home_rest = result[0]["home"].get("rest")
     if away_rest and home_rest:  # only assert specifics if team_game_fatigue is populated
