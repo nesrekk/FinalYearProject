@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ParticleField from '../landing/ParticleField';
 import CustomCursor from '../landing/CustomCursor';
 import CursorGlow from '../landing/CursorGlow';
+import LiveShotHero from '../landing/LiveShotHero';
 import WelcomeIntro from '../landing/WelcomeIntro';
 import FeatureChapters from '../landing/FeatureChapters';
 import TeamRibbons from '../landing/TeamRibbons';
@@ -56,6 +57,7 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
                     >
                         <span className="material-symbols-outlined icon">more_horiz</span>
                     </button>
+                    <LiveShotHero />
                     <div className="landing-hero-content">
                         <p className="text-eyebrow">NBA HUB &middot; {seasonLabel}</p>
                         <h1 className="text-display-xl landing-hero-title">
