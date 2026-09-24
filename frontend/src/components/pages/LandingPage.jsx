@@ -51,6 +51,7 @@ const HERO_HEIGHT = 720;
 
 export default function LandingPage({ onOpenToday, onNavigate }) {
     const heroRef = useHeroCursorScope();
+    const particleFieldRef = useRef(null);
     const [stats, setStats] = useState(null);
     const [statsError, setStatsError] = useState(false);
     const [games, setGames] = useState(null);
@@ -69,7 +70,7 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
 
     return (
         <div className="landing-page">
-            <ParticleField heroHeight={HERO_HEIGHT} />
+            <ParticleField ref={particleFieldRef} heroHeight={HERO_HEIGHT} />
             <div className="landing-film-grain" aria-hidden="true" />
             <CustomCursor scopeRef={heroRef} />
             {!introDone && <WelcomeIntro onDone={() => setIntroDone(true)} />}

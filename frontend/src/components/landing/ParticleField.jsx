@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, forwardRef } from 'react';
 
 const HERO_GRID = 22;
 const REST_GRID = 34;
@@ -7,6 +7,8 @@ const REPEL_RADIUS = 110;
 const PARTICLE_CAP_DESKTOP = 2500;
 const PARTICLE_CAP_MOBILE = 900;
 const MOBILE_BREAKPOINT = 768;
+const MORPH_STAGGER_MS = 450;
+const MORPH_DIM_ALPHA = 0.35;
 
 function hexToRgb(hex) {
     const n = parseInt(hex.slice(1), 16);
@@ -40,10 +42,26 @@ const REDUCED_MOTION = typeof window !== 'undefined' && window.matchMedia
 // it they use a lighter one so body text stays readable. Ported physics
 // (repel + swirl + spring-home) is otherwise unchanged from the hero-only
 // version.
-export default function ParticleField({ className = '', heroHeight = 720 }) {
+//
+// Morph engine (ref API): setTargets(points | null) reassigns the nearest
+// available particles to `points` (an array of {x, y} in the SAME
+// document/world-space coordinates as everything else — callers compute a
+// section's shape from its real bounding rect + window.scrollY so it scrolls
+// naturally with that section). Each assigned particle springs to its target
+// instead of its home position, staggered by the target's position in the
+// array so it reads as a flow rather than a jump; particles left over keep
+// drifting as dim background. setTargets(null) releases every particle back
+// to its home position. Mouse repel keeps working on morphed particles too,
+// since it's applied on top of whichever target (home or morph) is active.
+const ParticleField = forwardRef(function ParticleField({ className = '', heroHeight = 720 }, ref) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const heroHeightRef = useRef(heroHeight);
+    const setTargetsRef = useRef(() => {});
+
+    useImperativeHandle(ref, () => ({
+        setTargets: (points) => setTargetsRef.current(points),
+    }), []);
 
     useEffect(() => {
         heroHeightRef.current = heroHeight;
@@ -63,6 +81,7 @@ export default function ParticleField({ className = '', heroHeight = 720 }) {
         let raf = null;
         let idleFrames = 0;
         let visible = true;
+        let hasActiveMorph = false;
         let isLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
 
         function currentIsLight() {
@@ -123,19 +142,24 @@ export default function ParticleField({ className = '', heroHeight = 720 }) {
                         hx, hy, x: hx, y: hy, vx: 0, vy: 0,
                         c: gradAt(hx / W),
                         a: (0.15 + Math.random() * 0.35) * (inRest ? REST_ALPHA_MUL : 1),
+                        mtx: null, mty: null, morphAt: 0,
                     });
                 }
             }
             particles = next;
         }
 
-        function drawFrame() {
+        function drawFrame(now) {
             isLight = currentIsLight();
             const alphaMul = isLight ? 1.3 : 1;
             const scrollY = window.scrollY || 0;
             ctx.clearRect(0, 0, W, H);
             let maxSpeed = 0;
             for (const p of particles) {
+                const morphed = p.mtx != null && now >= p.morphAt;
+                const tgx = morphed ? p.mtx : p.hx;
+                const tgy = morphed ? p.mty : p.hy;
+
                 const dx = p.x - mouse.x;
                 const dy = p.y - mouse.y;
                 const d2 = dx * dx + dy * dy;
@@ -145,8 +169,8 @@ export default function ParticleField({ className = '', heroHeight = 720 }) {
                     p.vx += (dx / d) * f - (dy / d) * f * 0.6;
                     p.vy += (dy / d) * f + (dx / d) * f * 0.6;
                 }
-                p.vx += (p.hx - p.x) * 0.04;
-                p.vy += (p.hy - p.y) * 0.04;
+                p.vx += (tgx - p.x) * 0.04;
+                p.vy += (tgy - p.y) * 0.04;
                 p.vx *= 0.86;
                 p.vy *= 0.86;
                 p.x += p.vx;
@@ -160,8 +184,9 @@ export default function ParticleField({ className = '', heroHeight = 720 }) {
 
                 const ang = sp > 0.05 ? Math.atan2(p.vy, p.vx) : 0.6;
                 const len = 3 + Math.min(sp * 2.5, 9);
+                const dim = hasActiveMorph && p.mtx == null ? MORPH_DIM_ALPHA : 1;
                 ctx.strokeStyle = p.c;
-                ctx.globalAlpha = Math.min(1, (p.a + sp * 0.15) * alphaMul);
+                ctx.globalAlpha = Math.min(1, (p.a + sp * 0.15) * alphaMul * dim);
                 ctx.lineWidth = 1.6;
                 ctx.lineCap = 'round';
                 ctx.beginPath();
@@ -173,9 +198,9 @@ export default function ParticleField({ className = '', heroHeight = 720 }) {
             return maxSpeed;
         }
 
-        function loop() {
+        function loop(now) {
             if (!visible) return;
-            const maxSpeed = drawFrame();
+            const maxSpeed = drawFrame(now);
             if (!mouse.in && maxSpeed < 0.02) {
                 idleFrames += 1;
             } else {
@@ -208,10 +233,57 @@ export default function ParticleField({ className = '', heroHeight = 720 }) {
             ensureRunning();
         }
 
+        function setTargets(points) {
+            // Release every particle back to its home position.
+            if (!points || points.length === 0) {
+                for (const p of particles) { p.mtx = null; p.mty = null; }
+                hasActiveMorph = false;
+                if (REDUCED_MOTION) drawFrame(performance.now());
+                else ensureRunning();
+                return;
+            }
+
+            // Re-pick from the whole field each time (not just currently
+            // unmorphed particles) so a new shape can grow out of whichever
+            // particles already ended up near it, including ones still
+            // mid-flight from the previous shape.
+            const pool = particles.slice();
+            for (const p of particles) { p.mtx = null; p.mty = null; }
+
+            const n = Math.min(points.length, pool.length);
+            const now = performance.now();
+            for (let i = 0; i < n; i++) {
+                const target = points[i];
+                // Nearest-remaining-particle assignment so a new shape grows
+                // out of whichever particles are already close to it instead
+                // of a random reshuffle.
+                let bestIdx = -1;
+                let bestD = Infinity;
+                for (let j = 0; j < pool.length; j++) {
+                    const cand = pool[j];
+                    if (cand._taken) continue;
+                    const d = (cand.x - target.x) ** 2 + (cand.y - target.y) ** 2;
+                    if (d < bestD) { bestD = d; bestIdx = j; }
+                }
+                if (bestIdx === -1) break;
+                const chosen = pool[bestIdx];
+                chosen._taken = true;
+                chosen.mtx = target.x;
+                chosen.mty = target.y;
+                chosen.morphAt = now + (i / n) * MORPH_STAGGER_MS;
+                if (REDUCED_MOTION) { chosen.x = target.x; chosen.y = target.y; }
+            }
+            for (const p of pool) delete p._taken;
+            hasActiveMorph = true;
+            if (REDUCED_MOTION) drawFrame(performance.now());
+            else ensureRunning();
+        }
+        setTargetsRef.current = setTargets;
+
         buildParticles();
 
         if (REDUCED_MOTION) {
-            drawFrame();
+            drawFrame(performance.now());
         } else {
             ensureRunning();
             window.addEventListener('mousemove', onMouseMove);
@@ -221,7 +293,7 @@ export default function ParticleField({ className = '', heroHeight = 720 }) {
 
         const ro = new ResizeObserver(() => {
             buildParticles();
-            if (REDUCED_MOTION) drawFrame();
+            if (REDUCED_MOTION) drawFrame(performance.now());
             else ensureRunning();
         });
         ro.observe(document.body);
@@ -234,6 +306,7 @@ export default function ParticleField({ className = '', heroHeight = 720 }) {
         document.addEventListener('visibilitychange', onVisibilityChange);
 
         return () => {
+            setTargetsRef.current = () => {};
             if (raf) cancelAnimationFrame(raf);
             window.removeEventListener('mousemove', onMouseMove);
             window.removeEventListener('mouseleave', onMouseLeave);
@@ -248,4 +321,6 @@ export default function ParticleField({ className = '', heroHeight = 720 }) {
             <canvas ref={canvasRef} />
         </div>
     );
-}
+});
+
+export default ParticleField;
