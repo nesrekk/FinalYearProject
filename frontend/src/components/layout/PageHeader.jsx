@@ -37,17 +37,8 @@ const pageDescriptions = {
 export default function PageHeader({ activePage }) {
     return (
         <header className="page-header">
-            <div className="page-header-text">
-                <h1 className="page-title">{pageTitles[activePage] || 'Dashboard'}</h1>
-                <p className="page-subtitle">{pageDescriptions[activePage] || ''}</p>
-            </div>
-            <div className="page-header-search">
-                <input
-                    type="text"
-                    placeholder="Search players, teams…"
-                    className="search-input"
-                />
-            </div>
+            <h1 className="page-title">{pageTitles[activePage] || 'Dashboard'}</h1>
+            <p className="page-subtitle">{pageDescriptions[activePage] || ''}</p>
         </header>
     );
 }

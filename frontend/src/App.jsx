@@ -6,7 +6,9 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import Sidebar from './components/layout/Sidebar';
+import { AnimatePresence, motion } from 'framer-motion';
+import TopNav from './components/layout/TopNav';
+import Footer from './components/layout/Footer';
 import PageHeader from './components/layout/PageHeader';
 import DashboardHome from './components/pages/DashboardHome';
 import LiveScores from './components/pages/LiveScores';
@@ -23,7 +25,6 @@ import DraftValueGuide from './components/pages/DraftValueGuide';
 import RookieClassTracker from './components/pages/RookieClassTracker';
 import GamesHub from './components/pages/GamesHub';
 import { prefetchCoreData } from './services/api';
-import ThemeToggle from './components/ui/ThemeToggle';
 import './styles/dashboard.css';
 
 export default function App() {
@@ -54,18 +55,23 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell">
-      {/* Step 1 (design tokens): temporary fixed placement so the new
-          dark/light theme system is testable now. Moves into the
-          redesigned top nav in Step 2. */}
-      <ThemeToggle className="theme-toggle--floating" />
-      <Sidebar activePage={activePage} onNavigate={setActivePage} />
-      <div className="main-area">
+    <div className="top-shell">
+      <TopNav activePage={activePage} onNavigate={setActivePage} />
+      <main className="top-shell-main">
         <PageHeader activePage={activePage} />
-        <main className="main-content">
-          {renderPage()}
-        </main>
-      </div>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activePage}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+          >
+            {renderPage()}
+          </motion.div>
+        </AnimatePresence>
+      </main>
+      <Footer />
     </div>
   );
 }
