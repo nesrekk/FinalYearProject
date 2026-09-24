@@ -40,29 +40,29 @@ function TrajectoryChart({ candidates }) {
 
     return (
         <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }}>
-            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="#1a2332" rx="8" />
+            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
             {[0, 0.25, 0.5, 0.75, 1].map((t) => (
                 <React.Fragment key={t}>
-                    <line x1={PAD_L} y1={y(t)} x2={CHART_W - PAD_R} y2={y(t)} stroke="#26344a" strokeWidth="1" />
-                    <text x={PAD_L - 6} y={y(t) + 3} fill="#64748b" fontSize="9" textAnchor="end">{Math.round(t * 100)}%</text>
+                    <line x1={PAD_L} y1={y(t)} x2={CHART_W - PAD_R} y2={y(t)} stroke="var(--hairline)" strokeWidth="1" />
+                    <text x={PAD_L - 6} y={y(t) + 3} fill="var(--text-3)" fontSize="9" textAnchor="end">{Math.round(t * 100)}%</text>
                 </React.Fragment>
             ))}
             {candidates.map((c, ci) => {
                 const color = COLORS[ci % COLORS.length];
                 const points = c.trajectory.map((p) => ({ x: x(new Date(p.predicted_at).getTime()), y: y(p.probability) }));
                 if (points.length === 1) {
-                    return <circle key={c.player_id} cx={points[0].x} cy={points[0].y} r={5} fill={color} stroke="#0f172a" strokeWidth="1.5" />;
+                    return <circle key={c.player_id} cx={points[0].x} cy={points[0].y} r={5} fill={color} stroke="var(--surface)" strokeWidth="1.5" />;
                 }
                 const path = points.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ');
                 return (
                     <g key={c.player_id}>
                         <path d={path} fill="none" stroke={color} strokeWidth="2" />
-                        <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r={4} fill={color} stroke="#0f172a" strokeWidth="1.5" />
+                        <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r={4} fill={color} stroke="var(--surface)" strokeWidth="1.5" />
                     </g>
                 );
             })}
-            <text x={PAD_L} y={CHART_H - 4} fill="#64748b" fontSize="9">{fmtTime(new Date(tMin).toISOString())}</text>
-            <text x={CHART_W - PAD_R} y={CHART_H - 4} fill="#64748b" fontSize="9" textAnchor="end">{fmtTime(new Date(tMax).toISOString())}</text>
+            <text x={PAD_L} y={CHART_H - 4} fill="var(--text-3)" fontSize="9">{fmtTime(new Date(tMin).toISOString())}</text>
+            <text x={CHART_W - PAD_R} y={CHART_H - 4} fill="var(--text-3)" fontSize="9" textAnchor="end">{fmtTime(new Date(tMax).toISOString())}</text>
         </svg>
     );
 }

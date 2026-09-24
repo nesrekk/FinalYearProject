@@ -38,19 +38,19 @@ function StackedArchetypeChart({ evolution, colorByArchetype }) {
 
     return (
         <svg viewBox={`0 0 ${EVO_W} ${EVO_H}`} style={{ width: '100%', display: 'block' }}>
-            <rect x="0" y="0" width={EVO_W} height={EVO_H} fill="#1a2332" rx="8" />
+            <rect x="0" y="0" width={EVO_W} height={EVO_H} fill="var(--surface-2)" rx="8" />
             {[0, 0.25, 0.5, 0.75, 1].map((t) => (
                 <React.Fragment key={t}>
-                    <line x1={EVO_PAD_L} y1={evoY(t)} x2={EVO_W - EVO_PAD_R} y2={evoY(t)} stroke="#26344a" strokeWidth="1" />
-                    <text x={EVO_PAD_L - 6} y={evoY(t) + 3} fill="#64748b" fontSize="9" textAnchor="end">{Math.round(t * 100)}%</text>
+                    <line x1={EVO_PAD_L} y1={evoY(t)} x2={EVO_W - EVO_PAD_R} y2={evoY(t)} stroke="var(--hairline)" strokeWidth="1" />
+                    <text x={EVO_PAD_L - 6} y={evoY(t) + 3} fill="var(--text-3)" fontSize="9" textAnchor="end">{Math.round(t * 100)}%</text>
                 </React.Fragment>
             ))}
             {layers.map((l) => (
-                <path key={l.archetype} d={l.path} fill={colorByArchetype[l.archetype] || '#94a3b8'} fillOpacity={0.85} stroke="#0f172a" strokeWidth="0.5" />
+                <path key={l.archetype} d={l.path} fill={colorByArchetype[l.archetype] || '#94a3b8'} fillOpacity={0.85} stroke="var(--surface)" strokeWidth="0.5" />
             ))}
             {seasons.map((s, i) => (
                 i % tickEvery === 0 && (
-                    <text key={s} x={evoX(i)} y={EVO_H - 6} fill="#64748b" fontSize="9" textAnchor="middle">{s}</text>
+                    <text key={s} x={evoX(i)} y={EVO_H - 6} fill="var(--text-3)" fontSize="9" textAnchor="middle">{s}</text>
                 )
             ))}
         </svg>
@@ -73,10 +73,10 @@ function TrendMiniChart({ label, data, valueKey, format, color }) {
         <div>
             <div className="page-subtitle" style={{ marginBottom: 4, fontSize: '0.78rem' }}>{label}</div>
             <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', display: 'block' }}>
-                <rect x="0" y="0" width={w} height={h} fill="#1a2332" rx="6" />
+                <rect x="0" y="0" width={w} height={h} fill="var(--surface-2)" rx="6" />
                 <path d={path} fill="none" stroke={color} strokeWidth="2" />
-                <text x={padL} y={h - 3} fill="#64748b" fontSize="8">{data[0].season}</text>
-                <text x={w - padR} y={h - 3} fill="#64748b" fontSize="8" textAnchor="end">{data[data.length - 1].season}</text>
+                <text x={padL} y={h - 3} fill="var(--text-3)" fontSize="8">{data[0].season}</text>
+                <text x={w - padR} y={h - 3} fill="var(--text-3)" fontSize="8" textAnchor="end">{data[data.length - 1].season}</text>
                 <text x={padL} y={padT + 8} fill={color} fontSize="9" fontWeight="700">{format(vMax)}</text>
                 <text x={padL} y={h - padB + 4} fill={color} fontSize="9" fontWeight="700">{format(vMin)}</text>
             </svg>
@@ -258,7 +258,7 @@ export default function PlayerArchetypesSection() {
             {!loading && plot && (
                 <div className="court-container" style={{ marginTop: '1rem' }}>
                     <svg viewBox={`0 0 ${plot.width} ${plot.height}`} className="court-svg" style={{ maxHeight: 420 }}>
-                        <rect x="0" y="0" width={plot.width} height={plot.height} fill="#1a2332" rx="8" />
+                        <rect x="0" y="0" width={plot.width} height={plot.height} fill="var(--surface-2)" rx="8" />
                         {visiblePlayers.map((p) => (
                             <circle
                                 key={p.player_id}

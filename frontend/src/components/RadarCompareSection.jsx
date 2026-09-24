@@ -240,19 +240,19 @@ export default function RadarCompareSection() {
                 <>
                     <div className="court-container">
                         <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="court-svg" style={{ maxHeight: 460 }}>
-                            <rect x="0" y="0" width={SIZE} height={SIZE} fill="#1a2332" rx="8" />
+                            <rect x="0" y="0" width={SIZE} height={SIZE} fill="var(--surface-2)" rx="8" />
                             {[0.25, 0.5, 0.75, 1].map((f) => (
-                                <polygon key={f} points={ringPolygonPoints(visibleAxes.length, f)} fill="none" stroke="#334155" strokeWidth="1" />
+                                <polygon key={f} points={ringPolygonPoints(visibleAxes.length, f)} fill="none" stroke="var(--hairline)" strokeWidth="1" />
                             ))}
                             {visibleAxes.map((axis, i) => {
                                 const outer = axisPoint(i, visibleAxes.length, 100);
                                 const labelPt = axisPoint(i, visibleAxes.length, 118);
                                 return (
                                     <React.Fragment key={axis}>
-                                        <line x1={CENTER} y1={CENTER} x2={outer.x} y2={outer.y} stroke="#334155" strokeWidth="1" />
+                                        <line x1={CENTER} y1={CENTER} x2={outer.x} y2={outer.y} stroke="var(--hairline)" strokeWidth="1" />
                                         <text
                                             x={labelPt.x} y={labelPt.y}
-                                            fill="#94a3b8" fontSize="12" textAnchor="middle" dominantBaseline="middle"
+                                            fill="var(--text-2)" fontSize="12" textAnchor="middle" dominantBaseline="middle"
                                         >
                                             {STAT_LABELS[axis]}
                                         </text>

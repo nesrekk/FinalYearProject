@@ -181,12 +181,12 @@ export default function GuessTheGame() {
 
                 {daily && (
                     <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block', marginTop: '0.75rem' }}>
-                        <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="#1a2332" rx="8" />
-                        <line x1={PAD_L} y1={chartY(0.5)} x2={CHART_W - PAD_R} y2={chartY(0.5)} stroke="#475569" strokeWidth="1" strokeDasharray="4 3" />
+                        <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
+                        <line x1={PAD_L} y1={chartY(0.5)} x2={CHART_W - PAD_R} y2={chartY(0.5)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
                         {[0, 0.5, 1].map((t) => (
-                            <text key={t} x={PAD_L - 8} y={chartY(t) + 3} fill="#64748b" fontSize="10" textAnchor="end">{Math.round(t * 100)}%</text>
+                            <text key={t} x={PAD_L - 8} y={chartY(t) + 3} fill="var(--text-3)" fontSize="10" textAnchor="end">{Math.round(t * 100)}%</text>
                         ))}
-                        <path d={linePath} fill="none" stroke="#a78bfa" strokeWidth="2.5" />
+                        <path d={linePath} fill="none" stroke="var(--accent)" strokeWidth="2.5" />
                     </svg>
                 )}
             </div>

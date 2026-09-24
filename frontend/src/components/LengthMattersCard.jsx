@@ -22,14 +22,14 @@ function ScatterChart({ points, xKey, yKey, xLabel, yLabel, color }) {
 
     return (
         <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }}>
-            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="#1a2332" rx="8" />
+            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
             {points.map((p) => (
                 <circle key={p.player_id} cx={x(p[xKey])} cy={y(p[yKey])} r={3} fill={color} fillOpacity={0.65}>
                     <title>{p.player_name}: {xLabel} {p[xKey]}, {yLabel} {p[yKey]}</title>
                 </circle>
             ))}
-            <text x={CHART_W / 2} y={CHART_H - 6} fill="#94a3b8" fontSize="11" textAnchor="middle">{xLabel}</text>
-            <text x="12" y={CHART_H / 2} fill="#94a3b8" fontSize="11" textAnchor="middle" transform={`rotate(-90 12 ${CHART_H / 2})`}>{yLabel}</text>
+            <text x={CHART_W / 2} y={CHART_H - 6} fill="var(--text-2)" fontSize="11" textAnchor="middle">{xLabel}</text>
+            <text x="12" y={CHART_H / 2} fill="var(--text-2)" fontSize="11" textAnchor="middle" transform={`rotate(-90 12 ${CHART_H / 2})`}>{yLabel}</text>
         </svg>
     );
 }

@@ -59,35 +59,35 @@ function TrajectoryChart({ data }) {
 
     return (
         <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
-            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="#1a2332" rx="8" />
+            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
             {yTicks.map((t, idx) => (
                 <React.Fragment key={idx}>
-                    <line x1={PAD_L} y1={yFor(t)} x2={CHART_W - PAD_R} y2={yFor(t)} stroke="#26344a" strokeWidth="1" />
-                    <text x={PAD_L - 8} y={yFor(t) + 3} fill="#64748b" fontSize="10" textAnchor="end">{t.toFixed(0)}</text>
+                    <line x1={PAD_L} y1={yFor(t)} x2={CHART_W - PAD_R} y2={yFor(t)} stroke="var(--hairline)" strokeWidth="1" />
+                    <text x={PAD_L - 8} y={yFor(t) + 3} fill="var(--text-3)" fontSize="10" textAnchor="end">{t.toFixed(0)}</text>
                 </React.Fragment>
             ))}
             {[...new Set(allAges)].sort((a, b) => a - b).map((age) => (
-                <text key={age} x={xFor(age)} y={CHART_H - PAD_B + 16} fill="#64748b" fontSize="9" textAnchor="middle">
+                <text key={age} x={xFor(age)} y={CHART_H - PAD_B + 16} fill="var(--text-3)" fontSize="9" textAnchor="middle">
                     Age {age}
                 </text>
             ))}
 
-            <path d={bandPath} fill="#a78bfa" fillOpacity={0.15} stroke="none" />
-            <path d={actualPath} fill="none" stroke="#38bdf8" strokeWidth="2.5" />
-            <path d={projPath} fill="none" stroke="#a78bfa" strokeWidth="2" strokeDasharray="5 4" />
+            <path d={bandPath} fill="var(--text-3)" fillOpacity={0.15} stroke="none" />
+            <path d={actualPath} fill="none" stroke="var(--accent)" strokeWidth="2.5" />
+            <path d={projPath} fill="none" stroke="var(--text-3)" strokeWidth="2" strokeDasharray="5 4" />
 
             {actual.map((p) => (
-                <circle key={`actual-${p.age}`} cx={xFor(p.age)} cy={yFor(p.pts)} r={3} fill="#38bdf8">
+                <circle key={`actual-${p.age}`} cx={xFor(p.age)} cy={yFor(p.pts)} r={3} fill="var(--accent)">
                     <title>Age {p.age} (real): {p.pts.toFixed(1)} pts</title>
                 </circle>
             ))}
             {projected.map((p) => p.pts != null && (
-                <circle key={`proj-${p.age}`} cx={xFor(p.age)} cy={yFor(p.pts)} r={3.5} fill="#a78bfa">
+                <circle key={`proj-${p.age}`} cx={xFor(p.age)} cy={yFor(p.pts)} r={3.5} fill="var(--text-3)">
                     <title>Age {p.age} (projected): {p.pts.toFixed(1)} pts (comp range {p.floor?.toFixed(1)}-{p.ceiling?.toFixed(1)})</title>
                 </circle>
             ))}
             {overlay.map((p) => (
-                <circle key={`overlay-${p.age}`} cx={xFor(p.age)} cy={yFor(p.pts)} r={4} fill="none" stroke="#facc15" strokeWidth="2">
+                <circle key={`overlay-${p.age}`} cx={xFor(p.age)} cy={yFor(p.pts)} r={4} fill="none" stroke="var(--text-3)" strokeWidth="2">
                     <title>Age {p.age} (what actually happened): {p.pts.toFixed(1)} pts</title>
                 </circle>
             ))}

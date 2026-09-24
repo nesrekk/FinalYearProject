@@ -368,17 +368,17 @@ export default function PlayerComparison() {
                         </p>
                         <div style={{ display: 'flex', justifyContent: 'center' }}>
                             <svg viewBox={`0 0 ${RADAR_SIZE} ${RADAR_SIZE}`} style={{ maxWidth: 420, width: '100%', height: 'auto' }}>
-                                <rect x="0" y="0" width={RADAR_SIZE} height={RADAR_SIZE} fill="#12151a" rx="8" />
+                                <rect x="0" y="0" width={RADAR_SIZE} height={RADAR_SIZE} fill="var(--surface-2)" rx="8" />
                                 {[0.25, 0.5, 0.75, 1].map((f) => (
-                                    <polygon key={f} points={ringPoints(profileA.skill_profile.length, f)} fill="none" stroke="#2a2e35" strokeWidth="1" />
+                                    <polygon key={f} points={ringPoints(profileA.skill_profile.length, f)} fill="none" stroke="var(--hairline)" strokeWidth="1" />
                                 ))}
                                 {profileA.skill_profile.map((axis, i) => {
                                     const outer = radarPoint(i, profileA.skill_profile.length, 100);
                                     const labelPt = radarPoint(i, profileA.skill_profile.length, 122);
                                     return (
                                         <React.Fragment key={axis.key}>
-                                            <line x1={RADAR_CENTER} y1={RADAR_CENTER} x2={outer.x} y2={outer.y} stroke="#2a2e35" strokeWidth="1" />
-                                            <text x={labelPt.x} y={labelPt.y} fill="#94a3b8" fontSize="12" textAnchor="middle" dominantBaseline="middle">{axis.label}</text>
+                                            <line x1={RADAR_CENTER} y1={RADAR_CENTER} x2={outer.x} y2={outer.y} stroke="var(--hairline)" strokeWidth="1" />
+                                            <text x={labelPt.x} y={labelPt.y} fill="var(--text-2)" fontSize="12" textAnchor="middle" dominantBaseline="middle">{axis.label}</text>
                                         </React.Fragment>
                                     );
                                 })}

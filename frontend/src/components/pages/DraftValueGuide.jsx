@@ -24,14 +24,14 @@ function ValueCurveChart({ buckets }) {
 
     return (
         <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
-            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="#1a2332" rx="8" />
+            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
             {[0, 0.25, 0.5, 0.75, 1].map((t) => {
                 const v = minVal + t * span;
                 const y = yFor(v);
                 return (
                     <React.Fragment key={t}>
-                        <line x1={PAD_L} y1={y} x2={CHART_W - PAD_R} y2={y} stroke="#26344a" strokeWidth="1" />
-                        <text x={PAD_L - 8} y={y + 3} fill="#64748b" fontSize="10" textAnchor="end">{v.toFixed(1)}</text>
+                        <line x1={PAD_L} y1={y} x2={CHART_W - PAD_R} y2={y} stroke="var(--hairline)" strokeWidth="1" />
+                        <text x={PAD_L - 8} y={y + 3} fill="var(--text-3)" fontSize="10" textAnchor="end">{v.toFixed(1)}</text>
                     </React.Fragment>
                 );
             })}
@@ -43,21 +43,21 @@ function ValueCurveChart({ buckets }) {
                 const h = Math.abs(yFor(val) - zeroY);
                 return (
                     <React.Fragment key={b.range}>
-                        <rect x={x} y={y} width={w} height={Math.max(h, 1)} fill="#38bdf8" rx="3">
+                        <rect x={x} y={y} width={w} height={Math.max(h, 1)} fill="var(--accent)" rx="3">
                             <title>{`Picks ${b.range}: ${fmt(b.avg_career_impact_raw)} avg career impact (n=${b.n_players})`}</title>
                         </rect>
-                        <text x={x + w / 2} y={CHART_H - PAD_B + 16} fill="#94a3b8" fontSize="11" textAnchor="middle">
+                        <text x={x + w / 2} y={CHART_H - PAD_B + 16} fill="var(--text-2)" fontSize="11" textAnchor="middle">
                             {b.range}
                         </text>
                         {b.avg_career_impact_raw != null && (
-                            <text x={x + w / 2} y={y - 6} fill="#38bdf8" fontSize="10" textAnchor="middle">
+                            <text x={x + w / 2} y={y - 6} fill="var(--accent)" fontSize="10" textAnchor="middle">
                                 {fmt(b.avg_career_impact_raw)}
                             </text>
                         )}
                     </React.Fragment>
                 );
             })}
-            <text x={CHART_W / 2} y={CHART_H - 6} fill="#94a3b8" fontSize="11" textAnchor="middle">Overall Pick Range</text>
+            <text x={CHART_W / 2} y={CHART_H - 6} fill="var(--text-2)" fontSize="11" textAnchor="middle">Overall Pick Range</text>
         </svg>
     );
 }

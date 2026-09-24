@@ -373,7 +373,7 @@ export default function ShotCharts() {
 
       <div className="court-container">
         <svg viewBox="0 0 500 470" className="court-svg">
-          <rect x="0" y="0" width="500" height="470" fill="#1a2332" rx="8" />
+          <rect x="0" y="0" width="500" height="470" fill="var(--surface-2)" rx="8" />
 
           {viewMode === 'heatmap' && heatmapCells.map((c) => {
             const svgCell = rectSvg(c.xRawMin, c.yRawMin, c.xRawMin + HEATMAP_CELL_SIZE, c.yRawMin + HEATMAP_CELL_SIZE);
@@ -392,19 +392,19 @@ export default function ShotCharts() {
             );
           })}
 
-          <rect {...COURT.outerBox} fill="none" stroke="#334155" strokeWidth="2" rx="4" />
-          <rect {...COURT.paintOuter} fill="rgba(56,189,248,0.04)" stroke="#475569" strokeWidth="1.5" />
-          <rect {...COURT.paintInner} fill="none" stroke="#475569" strokeWidth="1" />
-          <path d={COURT.freeThrowTop} fill="none" stroke="#475569" strokeWidth="1.5" />
-          <path d={COURT.freeThrowBottom} fill="none" stroke="#475569" strokeWidth="1" strokeDasharray="4 3" />
-          <path d={COURT.restrictedArea} fill="none" stroke="#475569" strokeWidth="1" strokeDasharray="4 3" />
-          <circle cx={COURT.hoop.cx} cy={COURT.hoop.cy} r={COURT.hoop.r} fill="none" stroke="#38bdf8" strokeWidth="2" />
-          <line x1={COURT.backboard.x1} y1={COURT.backboard.y} x2={COURT.backboard.x2} y2={COURT.backboard.y} stroke="#64748b" strokeWidth="3" />
-          <line {...COURT.corner3Left} stroke="#475569" strokeWidth="1.5" />
-          <line {...COURT.corner3Right} stroke="#475569" strokeWidth="1.5" />
-          <path d={COURT.threePointArc} fill="none" stroke="#475569" strokeWidth="1.5" />
-          <path d={COURT.halfCourtOuter} fill="none" stroke="#334155" strokeWidth="1" strokeDasharray="6 4" />
-          <path d={COURT.halfCourtInner} fill="none" stroke="#334155" strokeWidth="1" strokeDasharray="6 4" />
+          <rect {...COURT.outerBox} fill="none" stroke="var(--hairline)" strokeWidth="2" rx="4" />
+          <rect {...COURT.paintOuter} fill="rgba(56,189,248,0.04)" stroke="var(--hairline)" strokeWidth="1.5" />
+          <rect {...COURT.paintInner} fill="none" stroke="var(--hairline)" strokeWidth="1" />
+          <path d={COURT.freeThrowTop} fill="none" stroke="var(--hairline)" strokeWidth="1.5" />
+          <path d={COURT.freeThrowBottom} fill="none" stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
+          <path d={COURT.restrictedArea} fill="none" stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
+          <circle cx={COURT.hoop.cx} cy={COURT.hoop.cy} r={COURT.hoop.r} fill="none" stroke="var(--accent)" strokeWidth="2" />
+          <line x1={COURT.backboard.x1} y1={COURT.backboard.y} x2={COURT.backboard.x2} y2={COURT.backboard.y} stroke="var(--text-3)" strokeWidth="3" />
+          <line {...COURT.corner3Left} stroke="var(--hairline)" strokeWidth="1.5" />
+          <line {...COURT.corner3Right} stroke="var(--hairline)" strokeWidth="1.5" />
+          <path d={COURT.threePointArc} fill="none" stroke="var(--hairline)" strokeWidth="1.5" />
+          <path d={COURT.halfCourtOuter} fill="none" stroke="var(--hairline)" strokeWidth="1" strokeDasharray="6 4" />
+          <path d={COURT.halfCourtInner} fill="none" stroke="var(--hairline)" strokeWidth="1" strokeDasharray="6 4" />
 
           {/* Shots — same toSvgX/toSvgY transform as every court line above,
               so a shot beyond the real arc always renders outside it. */}

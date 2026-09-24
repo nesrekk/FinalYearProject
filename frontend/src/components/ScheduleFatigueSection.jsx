@@ -26,18 +26,18 @@ function RestBucketChart({ buckets }) {
 
     return (
         <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }}>
-            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="#1a2332" rx="8" />
-            <line x1={PAD_L} y1={y(0.5)} x2={CHART_W - PAD_R} y2={y(0.5)} stroke="#475569" strokeWidth="1" strokeDasharray="4 3" />
-            <path d={path} fill="none" stroke="#38bdf8" strokeWidth="2.5" />
+            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
+            <line x1={PAD_L} y1={y(0.5)} x2={CHART_W - PAD_R} y2={y(0.5)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
+            <path d={path} fill="none" stroke="var(--accent)" strokeWidth="2.5" />
             {buckets.map((b, i) => (
-                <circle key={b.rest_days} cx={x(i)} cy={y(b.win_pct)} r={4 + 4 * Math.sqrt(b.n / Math.max(...buckets.map((x2) => x2.n)))} fill="#38bdf8">
+                <circle key={b.rest_days} cx={x(i)} cy={y(b.win_pct)} r={4 + 4 * Math.sqrt(b.n / Math.max(...buckets.map((x2) => x2.n)))} fill="var(--accent)">
                     <title>{b.bucket_label}: {(b.win_pct * 100).toFixed(1)}% win rate, n={b.n.toLocaleString()}</title>
                 </circle>
             ))}
             {buckets.map((b, i) => (
-                <text key={b.rest_days} x={x(i)} y={CHART_H - 8} fill="#64748b" fontSize="9" textAnchor="middle">{b.bucket_label}</text>
+                <text key={b.rest_days} x={x(i)} y={CHART_H - 8} fill="var(--text-3)" fontSize="9" textAnchor="middle">{b.bucket_label}</text>
             ))}
-            <text x="4" y={CHART_H / 2} fill="#94a3b8" fontSize="10" textAnchor="middle" transform={`rotate(-90 4 ${CHART_H / 2})`}>Win %</text>
+            <text x="4" y={CHART_H / 2} fill="var(--text-2)" fontSize="10" textAnchor="middle" transform={`rotate(-90 4 ${CHART_H / 2})`}>Win %</text>
         </svg>
     );
 }

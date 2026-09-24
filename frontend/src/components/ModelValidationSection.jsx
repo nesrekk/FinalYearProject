@@ -19,21 +19,21 @@ function RocCurveChart({ points, auc, color }) {
     const ticks = [0, 0.25, 0.5, 0.75, 1];
     return (
         <svg viewBox={`0 0 ${ROC_SIZE} ${ROC_SIZE}`} style={{ maxWidth: 320, display: 'block' }}>
-            <rect x="0" y="0" width={ROC_SIZE} height={ROC_SIZE} fill="#1a2332" rx="8" />
+            <rect x="0" y="0" width={ROC_SIZE} height={ROC_SIZE} fill="var(--surface-2)" rx="8" />
             {/* Random-guess diagonal baseline */}
-            <line x1={rocX(0)} y1={rocY(0)} x2={rocX(1)} y2={rocY(1)} stroke="#475569" strokeWidth="1" strokeDasharray="4 3" />
+            <line x1={rocX(0)} y1={rocY(0)} x2={rocX(1)} y2={rocY(1)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
             {ticks.map((t) => (
                 <React.Fragment key={t}>
-                    <line x1={rocX(t)} y1={rocY(0)} x2={rocX(t)} y2={rocY(1)} stroke="#26344a" strokeWidth="1" />
-                    <line x1={rocX(0)} y1={rocY(t)} x2={rocX(1)} y2={rocY(t)} stroke="#26344a" strokeWidth="1" />
-                    <text x={rocX(t)} y={ROC_SIZE - ROC_PAD + 16} fill="#64748b" fontSize="10" textAnchor="middle">{t}</text>
-                    <text x={ROC_PAD - 8} y={rocY(t) + 3} fill="#64748b" fontSize="10" textAnchor="end">{t}</text>
+                    <line x1={rocX(t)} y1={rocY(0)} x2={rocX(t)} y2={rocY(1)} stroke="var(--hairline)" strokeWidth="1" />
+                    <line x1={rocX(0)} y1={rocY(t)} x2={rocX(1)} y2={rocY(t)} stroke="var(--hairline)" strokeWidth="1" />
+                    <text x={rocX(t)} y={ROC_SIZE - ROC_PAD + 16} fill="var(--text-3)" fontSize="10" textAnchor="middle">{t}</text>
+                    <text x={ROC_PAD - 8} y={rocY(t) + 3} fill="var(--text-3)" fontSize="10" textAnchor="end">{t}</text>
                 </React.Fragment>
             ))}
             <path d={areaPath} fill={color} fillOpacity={0.12} stroke="none" />
             <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" />
-            <text x={ROC_SIZE / 2} y={ROC_SIZE - 6} fill="#94a3b8" fontSize="11" textAnchor="middle">False Positive Rate</text>
-            <text x="12" y={ROC_SIZE / 2} fill="#94a3b8" fontSize="11" textAnchor="middle" transform={`rotate(-90 12 ${ROC_SIZE / 2})`}>True Positive Rate</text>
+            <text x={ROC_SIZE / 2} y={ROC_SIZE - 6} fill="var(--text-2)" fontSize="11" textAnchor="middle">False Positive Rate</text>
+            <text x="12" y={ROC_SIZE / 2} fill="var(--text-2)" fontSize="11" textAnchor="middle" transform={`rotate(-90 12 ${ROC_SIZE / 2})`}>True Positive Rate</text>
             <text x={ROC_SIZE - ROC_PAD} y={ROC_PAD - 12} fill={color} fontSize="13" fontWeight="700" textAnchor="end">
                 AUC = {auc?.toFixed(3) ?? '—'}
             </text>
@@ -50,15 +50,15 @@ function ReliabilityChart({ bins, color, label }) {
         .join(' ');
     return (
         <svg viewBox={`0 0 ${ROC_SIZE} ${ROC_SIZE}`} style={{ maxWidth: 320, display: 'block' }}>
-            <rect x="0" y="0" width={ROC_SIZE} height={ROC_SIZE} fill="#1a2332" rx="8" />
+            <rect x="0" y="0" width={ROC_SIZE} height={ROC_SIZE} fill="var(--surface-2)" rx="8" />
             {/* Perfect-calibration diagonal */}
-            <line x1={rocX(0)} y1={rocY(0)} x2={rocX(1)} y2={rocY(1)} stroke="#475569" strokeWidth="1" strokeDasharray="4 3" />
+            <line x1={rocX(0)} y1={rocY(0)} x2={rocX(1)} y2={rocY(1)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
             {ticks.map((t) => (
                 <React.Fragment key={t}>
-                    <line x1={rocX(t)} y1={rocY(0)} x2={rocX(t)} y2={rocY(1)} stroke="#26344a" strokeWidth="1" />
-                    <line x1={rocX(0)} y1={rocY(t)} x2={rocX(1)} y2={rocY(t)} stroke="#26344a" strokeWidth="1" />
-                    <text x={rocX(t)} y={ROC_SIZE - ROC_PAD + 16} fill="#64748b" fontSize="10" textAnchor="middle">{t}</text>
-                    <text x={ROC_PAD - 8} y={rocY(t) + 3} fill="#64748b" fontSize="10" textAnchor="end">{t}</text>
+                    <line x1={rocX(t)} y1={rocY(0)} x2={rocX(t)} y2={rocY(1)} stroke="var(--hairline)" strokeWidth="1" />
+                    <line x1={rocX(0)} y1={rocY(t)} x2={rocX(1)} y2={rocY(t)} stroke="var(--hairline)" strokeWidth="1" />
+                    <text x={rocX(t)} y={ROC_SIZE - ROC_PAD + 16} fill="var(--text-3)" fontSize="10" textAnchor="middle">{t}</text>
+                    <text x={ROC_PAD - 8} y={rocY(t) + 3} fill="var(--text-3)" fontSize="10" textAnchor="end">{t}</text>
                 </React.Fragment>
             ))}
             <path d={linePath} fill="none" stroke={color} strokeWidth="2" />
@@ -72,8 +72,8 @@ function ReliabilityChart({ bins, color, label }) {
                     fillOpacity={0.85}
                 />
             ))}
-            <text x={ROC_SIZE / 2} y={ROC_SIZE - 6} fill="#94a3b8" fontSize="11" textAnchor="middle">Predicted Win Probability</text>
-            <text x="12" y={ROC_SIZE / 2} fill="#94a3b8" fontSize="11" textAnchor="middle" transform={`rotate(-90 12 ${ROC_SIZE / 2})`}>Real Observed Win Rate</text>
+            <text x={ROC_SIZE / 2} y={ROC_SIZE - 6} fill="var(--text-2)" fontSize="11" textAnchor="middle">Predicted Win Probability</text>
+            <text x="12" y={ROC_SIZE / 2} fill="var(--text-2)" fontSize="11" textAnchor="middle" transform={`rotate(-90 12 ${ROC_SIZE / 2})`}>Real Observed Win Rate</text>
             {label && (
                 <text x={ROC_SIZE - ROC_PAD} y={ROC_PAD - 12} fill={color} fontSize="12" fontWeight="700" textAnchor="end">
                     {label}

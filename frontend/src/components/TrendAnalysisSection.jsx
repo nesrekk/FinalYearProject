@@ -62,16 +62,16 @@ function LineTrendChart({ points, statDef, color }) {
 
     return (
         <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
-            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="#1a2332" rx="8" />
+            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
             {yTicks.map((t, idx) => (
                 <React.Fragment key={idx}>
-                    <line x1={PAD_L} y1={yFor(t)} x2={CHART_W - PAD_R} y2={yFor(t)} stroke="#26344a" strokeWidth="1" />
-                    <text x={PAD_L - 8} y={yFor(t) + 3} fill="#64748b" fontSize="10" textAnchor="end">{fmt(t)}</text>
+                    <line x1={PAD_L} y1={yFor(t)} x2={CHART_W - PAD_R} y2={yFor(t)} stroke="var(--hairline)" strokeWidth="1" />
+                    <text x={PAD_L - 8} y={yFor(t) + 3} fill="var(--text-3)" fontSize="10" textAnchor="end">{fmt(t)}</text>
                 </React.Fragment>
             ))}
             {points.map((p, i) => (
                 (i % Math.ceil(points.length / 10) === 0 || i === points.length - 1) && (
-                    <text key={p.season} x={xFor(i)} y={CHART_H - PAD_B + 16} fill="#64748b" fontSize="9" textAnchor="middle">
+                    <text key={p.season} x={xFor(i)} y={CHART_H - PAD_B + 16} fill="var(--text-3)" fontSize="9" textAnchor="middle">
                         {seasonLabel(p.season)}
                     </text>
                 )

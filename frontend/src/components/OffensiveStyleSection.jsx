@@ -121,7 +121,7 @@ export default function OffensiveStyleSection() {
             {!loading && plot && (
                 <div className="court-container">
                     <svg viewBox={`0 0 ${plot.width} ${plot.height}`} className="court-svg" style={{ maxHeight: 380 }}>
-                        <rect x="0" y="0" width={plot.width} height={plot.height} fill="#1a2332" rx="8" />
+                        <rect x="0" y="0" width={plot.width} height={plot.height} fill="var(--surface-2)" rx="8" />
                         {visiblePlayers.map((p) => (
                             <circle
                                 key={p.player_id}

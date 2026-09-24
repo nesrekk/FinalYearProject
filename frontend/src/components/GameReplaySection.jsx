@@ -189,25 +189,25 @@ export default function GameReplaySection() {
                     </div>
 
                     <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }}>
-                        <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="#1a2332" rx="8" />
+                        <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
                         {/* 50% reference line */}
-                        <line x1={PAD_L} y1={chartY(0.5)} x2={CHART_W - PAD_R} y2={chartY(0.5)} stroke="#475569" strokeWidth="1" strokeDasharray="4 3" />
+                        <line x1={PAD_L} y1={chartY(0.5)} x2={CHART_W - PAD_R} y2={chartY(0.5)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
                         {[0, 0.25, 0.5, 0.75, 1].map((t) => (
-                            <text key={t} x={PAD_L - 8} y={chartY(t) + 3} fill="#64748b" fontSize="10" textAnchor="end">{Math.round(t * 100)}%</text>
+                            <text key={t} x={PAD_L - 8} y={chartY(t) + 3} fill="var(--text-3)" fontSize="10" textAnchor="end">{Math.round(t * 100)}%</text>
                         ))}
                         {periodTicks.map((t) => (
                             <React.Fragment key={t}>
-                                <line x1={chartX(t)} y1={PAD_T} x2={chartX(t)} y2={CHART_H - PAD_B} stroke="#26344a" strokeWidth="1" />
-                                <text x={chartX(t)} y={CHART_H - PAD_B + 16} fill="#64748b" fontSize="10" textAnchor="middle">
+                                <line x1={chartX(t)} y1={PAD_T} x2={chartX(t)} y2={CHART_H - PAD_B} stroke="var(--hairline)" strokeWidth="1" />
+                                <text x={chartX(t)} y={CHART_H - PAD_B + 16} fill="var(--text-3)" fontSize="10" textAnchor="middle">
                                     {t <= 2880 ? `Q${t / 720 + (t === 2880 ? 0 : 1)}` : `OT${(t - 2880) / 300}`}
                                 </text>
                             </React.Fragment>
                         ))}
 
                         {/* Home-team win probability line */}
-                        <path d={linePath} fill="none" stroke="#38bdf8" strokeWidth="2" />
+                        <path d={linePath} fill="none" stroke="var(--accent)" strokeWidth="2" />
                         {whatifPath && (
-                            <path d={whatifPath} fill="none" stroke="#facc15" strokeWidth="2" strokeDasharray="6 4" />
+                            <path d={whatifPath} fill="none" stroke="var(--text-3)" strokeWidth="2" strokeDasharray="6 4" />
                         )}
 
                         {/* Top-play markers */}
@@ -218,7 +218,7 @@ export default function GameReplaySection() {
                                 cy={chartY(p.home_wp)}
                                 r={hovered?.event_id === p.event_id ? 7 : 5}
                                 fill={wpColor(p.home_wp)}
-                                stroke="#0f172a"
+                                stroke="var(--surface)"
                                 strokeWidth="1.5"
                                 style={{ cursor: 'pointer' }}
                                 onMouseEnter={() => setHovered(p)}
@@ -226,8 +226,8 @@ export default function GameReplaySection() {
                             />
                         ))}
 
-                        <text x={CHART_W / 2} y={CHART_H - 4} fill="#94a3b8" fontSize="11" textAnchor="middle">Game Clock</text>
-                        <text x="10" y={CHART_H / 2} fill="#94a3b8" fontSize="11" textAnchor="middle" transform={`rotate(-90 10 ${CHART_H / 2})`}>Home Win Probability</text>
+                        <text x={CHART_W / 2} y={CHART_H - 4} fill="var(--text-2)" fontSize="11" textAnchor="middle">Game Clock</text>
+                        <text x="10" y={CHART_H / 2} fill="var(--text-2)" fontSize="11" textAnchor="middle" transform={`rotate(-90 10 ${CHART_H / 2})`}>Home Win Probability</text>
                     </svg>
 
                     <div style={{ minHeight: 44, marginTop: '0.5rem' }}>
@@ -257,7 +257,7 @@ export default function GameReplaySection() {
                         Real Missed Shots ({missedShots.length}) — click one for "what if"
                     </h4>
                     <svg viewBox={`0 0 ${CHART_W} 28`} style={{ width: '100%', display: 'block' }}>
-                        <rect x="0" y="0" width={CHART_W} height={28} fill="#1a2332" rx="6" />
+                        <rect x="0" y="0" width={CHART_W} height={28} fill="var(--surface-2)" rx="6" />
                         {missedShots.map((p) => (
                             <circle
                                 key={p.event_id}
