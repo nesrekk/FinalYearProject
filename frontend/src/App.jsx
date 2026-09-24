@@ -23,6 +23,7 @@ import DraftValueGuide from './components/pages/DraftValueGuide';
 import RookieClassTracker from './components/pages/RookieClassTracker';
 import GamesHub from './components/pages/GamesHub';
 import { prefetchCoreData } from './services/api';
+import ThemeToggle from './components/ui/ThemeToggle';
 import './styles/dashboard.css';
 
 export default function App() {
@@ -54,6 +55,10 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      {/* Step 1 (design tokens): temporary fixed placement so the new
+          dark/light theme system is testable now. Moves into the
+          redesigned top nav in Step 2. */}
+      <ThemeToggle className="theme-toggle--floating" />
       <Sidebar activePage={activePage} onNavigate={setActivePage} />
       <div className="main-area">
         <PageHeader activePage={activePage} />

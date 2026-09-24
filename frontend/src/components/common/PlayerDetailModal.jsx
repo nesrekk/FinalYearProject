@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import { fetchPlayerHistory, fetchPlayerClusterHistory, fetchPlaytypeProfile } from '../../services/api';
 import Loader from '../Loader';
 import Icon from './Icon';
@@ -24,26 +24,29 @@ export default function PlayerDetailModal({ player, onClose }) {
 
     useEffect(() => {
         let cancelled = false;
-        setLoading(true);
-        setError('');
-        Promise.allSettled([
-            fetchPlayerHistory(player.player_name),
-            fetchPlayerClusterHistory(player.player_name),
-            fetchPlaytypeProfile(player.player_name),
-        ]).then(([historyResult, clusterResult, playtypeResult]) => {
+        Promise.resolve().then(() => {
             if (cancelled) return;
-            if (historyResult.status === 'fulfilled') {
-                setHistory(historyResult.value);
-            } else {
-                setError('Could not load year-by-year stats for this player.');
-            }
-            if (clusterResult.status === 'fulfilled') {
-                setClusters(clusterResult.value);
-            }
-            if (playtypeResult.status === 'fulfilled') {
-                setPlaytypes(playtypeResult.value);
-            }
-            setLoading(false);
+            setLoading(true);
+            setError('');
+            Promise.allSettled([
+                fetchPlayerHistory(player.player_name),
+                fetchPlayerClusterHistory(player.player_name),
+                fetchPlaytypeProfile(player.player_name),
+            ]).then(([historyResult, clusterResult, playtypeResult]) => {
+                if (cancelled) return;
+                if (historyResult.status === 'fulfilled') {
+                    setHistory(historyResult.value);
+                } else {
+                    setError('Could not load year-by-year stats for this player.');
+                }
+                if (clusterResult.status === 'fulfilled') {
+                    setClusters(clusterResult.value);
+                }
+                if (playtypeResult.status === 'fulfilled') {
+                    setPlaytypes(playtypeResult.value);
+                }
+                setLoading(false);
+            });
         });
         return () => { cancelled = true; };
     }, [player.player_name]);

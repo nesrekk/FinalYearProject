@@ -75,15 +75,18 @@ export default function PredictionLedgerSection() {
 
     useEffect(() => {
         let active = true;
-        setLoading(true);
-        setError('');
-        fetchLedgerSummary()
-            .then((d) => { if (active) setData(d); })
-            .catch((e) => {
-                if (!active) return;
-                setError(e?.response?.data?.detail || 'No prediction ledger found. Run scripts/snapshot_predictions.py first.');
-            })
-            .finally(() => { if (active) setLoading(false); });
+        Promise.resolve().then(() => {
+            if (!active) return;
+            setLoading(true);
+            setError('');
+            fetchLedgerSummary()
+                .then((d) => { if (active) setData(d); })
+                .catch((e) => {
+                    if (!active) return;
+                    setError(e?.response?.data?.detail || 'No prediction ledger found. Run scripts/snapshot_predictions.py first.');
+                })
+                .finally(() => { if (active) setLoading(false); });
+        });
         return () => { active = false; };
     }, []);
 

@@ -140,10 +140,10 @@ export default function HigherOrLower() {
     }
 
     useEffect(() => {
-        if (status === 'revealed' && lastCorrect === false) {
-            endRun();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        if (status !== 'revealed' || lastCorrect !== false) return;
+        // Deferred a tick so the 'revealed' state still gets its paint (same
+        // as before) rather than calling setState synchronously in the effect.
+        Promise.resolve().then(() => endRun());
     }, [status, lastCorrect]);
 
     return (
@@ -214,7 +214,7 @@ export default function HigherOrLower() {
                     <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
                         <PlayerCard player={current} statLabel={statLabel} value={current[statKey]} hidden={false} color="#38bdf8" />
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>VS</div>
+                            <div style={{ fontFamily: 'var(--font)', fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>VS</div>
                             {status === 'playing' ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                     <button type="button" className="input-field" style={{ cursor: 'pointer' }} onClick={() => guess('higher')}>

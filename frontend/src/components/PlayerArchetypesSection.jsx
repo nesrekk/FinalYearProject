@@ -24,16 +24,15 @@ function StackedArchetypeChart({ evolution, colorByArchetype }) {
     const evoX = (i) => EVO_PAD_L + (i / (seasons.length - 1 || 1)) * EVO_PLOT_W;
     const evoY = (cum) => EVO_PAD_T + (1 - cum) * EVO_PLOT_H;
 
-    let cumulative = seasons.map(() => 0);
-    const layers = archetypes.map((archetype) => {
+    const baseline = seasons.map(() => 0);
+    const layers = archetypes.reduce((acc, archetype) => {
+        const prevCumulative = acc.length ? acc[acc.length - 1].cumulative : baseline;
         const shares = evolution.archetype_shares[archetype] || [];
-        const top = shares.map((s, i) => cumulative[i] + (s.share || 0));
-        const bottomPath = cumulative.map((c, i) => `${i === 0 ? 'M' : 'L'} ${evoX(i).toFixed(1)} ${evoY(c).toFixed(1)}`).join(' ');
+        const top = shares.map((s, i) => prevCumulative[i] + (s.share || 0));
+        const bottomPath = prevCumulative.map((c, i) => `${i === 0 ? 'M' : 'L'} ${evoX(i).toFixed(1)} ${evoY(c).toFixed(1)}`).join(' ');
         const topPath = top.map((c, i) => `L ${evoX(i).toFixed(1)} ${evoY(c).toFixed(1)}`).reverse().join(' ');
-        const layer = { archetype, path: `${bottomPath} ${topPath} Z` };
-        cumulative = top;
-        return layer;
-    });
+        return [...acc, { archetype, path: `${bottomPath} ${topPath} Z`, cumulative: top }];
+    }, []);
 
     const tickEvery = seasons.length > 10 ? 3 : 1;
 

@@ -1,0 +1,232 @@
+/* ═══════════════════════════════════════════════════
+   NBA Hub — Design tokens
+   Source of truth for color, type, spacing, radius,
+   depth and motion. Imported first, before dashboard.css.
+   ═══════════════════════════════════════════════════ */
+
+:root {
+  /* ── Color: dark (default) ─────────────────────── */
+  --bg: #0b0b0d;
+  --surface: #141416;
+  --surface-2: #1c1c1f;
+  --text: #f5f5f7;
+  --text-2: #a1a1a6;
+  --text-3: #6e6e73;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --accent: #2997ff;
+  --brand: #ff6b1a;
+  --brand-2: #ff3d7f;
+  --brand-3: #2997ff;
+  --positive: #30d158;
+  --negative: #ff453a;
+  --brand-gradient: linear-gradient(90deg, #ff6b1a, #ff3d7f 45%, #2997ff);
+
+  /* ── Depth: dark uses hairlines, not shadows ───── */
+  --shadow-card: none;
+
+  /* ── Font ───────────────────────────────────────── */
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+
+  /* ── Type scale ─────────────────────────────────── */
+  --text-display-xl-size: clamp(48px, 8vw, 96px);
+  --text-display-xl-weight: 700;
+  --text-display-xl-tracking: -0.03em;
+  --text-display-xl-leading: 1.05;
+
+  --text-display-size: clamp(36px, 5vw, 56px);
+  --text-display-weight: 700;
+
+  --text-title-size: 28px;
+  --text-title-weight: 600;
+
+  --text-headline-size: 21px;
+  --text-headline-weight: 600;
+
+  --text-body-size: 17px;
+  --text-body-leading: 1.5;
+
+  --text-callout-size: 15px;
+
+  --text-eyebrow-size: 13px;
+  --text-eyebrow-weight: 500;
+  --text-eyebrow-tracking: 0.08em;
+
+  --text-stat-size: 56px;
+  --text-stat-weight: 600;
+
+  /* ── Spacing (4px scale) ────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  --page-max-width: 1200px;
+  --gutter: 16px;
+  --section-padding: clamp(64px, 12vh, 140px);
+
+  /* ── Radius ─────────────────────────────────────── */
+  --radius-control: 12px;
+  --radius-card: 18px;
+  --radius-hero: 28px;
+  --radius-pill: 999px;
+
+  /* ── Motion ─────────────────────────────────────── */
+  --spring-stiffness: 260;
+  --spring-damping: 30;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-fast: 0.16s;
+  --motion-base: 0.28s;
+  --motion-count-up: 900ms;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --bg: #fbfbfd;
+    --surface: #ffffff;
+    --surface-2: #f5f5f7;
+    --text: #1d1d1f;
+    --text-2: #6e6e73;
+    --text-3: #86868b;
+    --hairline: rgba(0, 0, 0, 0.08);
+    --accent: #0071e3;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  }
+}
+
+:root[data-theme='light'] {
+  --bg: #fbfbfd;
+  --surface: #ffffff;
+  --surface-2: #f5f5f7;
+  --text: #1d1d1f;
+  --text-2: #6e6e73;
+  --text-3: #86868b;
+  --hairline: rgba(0, 0, 0, 0.08);
+  --accent: #0071e3;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+* {
+  font-variant-numeric: tabular-nums;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.text-display-xl {
+  font-size: var(--text-display-xl-size);
+  font-weight: var(--text-display-xl-weight);
+  letter-spacing: var(--text-display-xl-tracking);
+  line-height: var(--text-display-xl-leading);
+}
+
+.text-display {
+  font-size: var(--text-display-size);
+  font-weight: var(--text-display-weight);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.text-title {
+  font-size: var(--text-title-size);
+  font-weight: var(--text-title-weight);
+}
+
+.text-headline {
+  font-size: var(--text-headline-size);
+  font-weight: var(--text-headline-weight);
+}
+
+.text-body {
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-leading);
+}
+
+.text-callout {
+  font-size: var(--text-callout-size);
+}
+
+.text-eyebrow {
+  font-size: var(--text-eyebrow-size);
+  font-weight: var(--text-eyebrow-weight);
+  text-transform: uppercase;
+  letter-spacing: var(--text-eyebrow-tracking);
+  color: var(--text-2);
+}
+
+.text-stat {
+  font-size: var(--text-stat-size);
+  font-weight: var(--text-stat-weight);
+}
+
+.text-gradient {
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Temporary minimal styling for the Step 1 theme toggle — will move into
+   the redesigned nav bar (and the shared SegmentedControl) in later steps. */
+.theme-toggle--floating {
+  position: fixed;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 500;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+}
+
+.theme-toggle-btn {
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+}
+
+.theme-toggle-btn:hover {
+  color: var(--text);
+}
+
+.theme-toggle-btn--active {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.theme-toggle-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

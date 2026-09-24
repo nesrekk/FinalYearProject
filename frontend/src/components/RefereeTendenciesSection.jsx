@@ -36,11 +36,14 @@ export default function RefereeTendenciesSection() {
 
     useEffect(() => {
         let active = true;
-        setLoading(true);
-        fetchRefereeTendencies(minGames, sort)
-            .then((d) => { if (active) { setData(d); setError(''); } })
-            .catch((e) => { if (active) setError(e?.response?.data?.detail || 'Could not load referee tendencies.'); })
-            .finally(() => { if (active) setLoading(false); });
+        Promise.resolve().then(() => {
+            if (!active) return;
+            setLoading(true);
+            fetchRefereeTendencies(minGames, sort)
+                .then((d) => { if (active) { setData(d); setError(''); } })
+                .catch((e) => { if (active) setError(e?.response?.data?.detail || 'Could not load referee tendencies.'); })
+                .finally(() => { if (active) setLoading(false); });
+        });
         return () => { active = false; };
     }, [minGames, sort]);
 

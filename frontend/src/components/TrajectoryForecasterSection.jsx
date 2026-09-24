@@ -140,7 +140,7 @@ export default function TrajectoryForecasterSection() {
 
     useEffect(() => {
         load(playerName, season, projectYears);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [playerName, season, projectYears]);
 
     function pick(name) {

@@ -275,7 +275,7 @@ export default function PlayerComparison() {
             })
             .finally(() => { if (active) setSynergyLoading(false); });
         return () => { active = false; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [bothLoaded, profileA?.player_name, profileB?.player_name, season]);
 
     return (
@@ -326,7 +326,7 @@ export default function PlayerComparison() {
                     <div className="dashboard-card" style={{ marginTop: '1rem' }}>
                         <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
                             <BioCard profile={profileA} color={COLOR_A} />
-                            <div style={{ alignSelf: 'center', fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: '1.3rem', color: 'var(--text-muted)' }}>VS</div>
+                            <div style={{ alignSelf: 'center', fontFamily: 'var(--font)', fontWeight: 700, fontSize: '1.3rem', color: 'var(--text-muted)' }}>VS</div>
                             <BioCard profile={profileB} color={COLOR_B} />
                         </div>
                     </div>
