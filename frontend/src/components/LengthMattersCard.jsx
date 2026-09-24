@@ -21,7 +21,7 @@ function ScatterChart({ points, xKey, yKey, xLabel, yLabel, color }) {
     const y = (v) => PAD_T + (1 - (v - yMin) / ((yMax - yMin) || 1)) * PLOT_H;
 
     return (
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }}>
+        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Scatter plot of ${xLabel} versus ${yLabel} for every player, showing the real correlation between wingspan-minus-height and defensive production`}>
             <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
             {points.map((p) => (
                 <circle key={p.player_id} cx={x(p[xKey])} cy={y(p[yKey])} r={3} fill={color} fillOpacity={0.65}>

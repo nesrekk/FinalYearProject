@@ -39,7 +39,7 @@ function TrajectoryChart({ candidates }) {
     const y = (p) => PAD_T + (1 - p) * PLOT_H;
 
     return (
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }}>
+        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Line chart of each logged award candidate's real predicted win probability over time, from ${candidates.length} tracked candidate${candidates.length === 1 ? '' : 's'}`}>
             <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
             {[0, 0.25, 0.5, 0.75, 1].map((t) => (
                 <React.Fragment key={t}>

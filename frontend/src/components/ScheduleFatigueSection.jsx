@@ -25,7 +25,7 @@ function RestBucketChart({ buckets }) {
     const path = buckets.map((b, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(b.win_pct).toFixed(1)}`).join(' ');
 
     return (
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }}>
+        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label="Line chart of real team win percentage by days of rest before the game, with dot size showing sample size in each rest bucket">
             <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
             <line x1={PAD_L} y1={y(0.5)} x2={CHART_W - PAD_R} y2={y(0.5)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
             <path d={path} fill="none" stroke="var(--accent)" strokeWidth="2.5" />

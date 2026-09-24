@@ -23,7 +23,7 @@ function ValueCurveChart({ buckets }) {
     const zeroY = yFor(0);
 
     return (
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="Bar chart of average career impact score by draft-pick range, showing how a player's real career value tends to fall as their draft slot gets later">
             <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
             {[0, 0.25, 0.5, 0.75, 1].map((t) => {
                 const v = minVal + t * span;

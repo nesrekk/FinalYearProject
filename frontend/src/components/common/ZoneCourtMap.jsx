@@ -66,7 +66,7 @@ export default function ZoneCourtMap({ zones, leagueZones, size = 280 }) {
     const colorFor = (zoneName) => heatColor(byZone[zoneName]?.fg_pct, leagueByZone[zoneName]?.fg_pct);
 
     return (
-        <svg viewBox="0 0 500 460" style={{ width: '100%', maxWidth: size, height: 'auto', display: 'block' }}>
+        <svg viewBox="0 0 500 460" style={{ width: '100%', maxWidth: size, height: 'auto', display: 'block' }} role="img" aria-label="Half-court shot chart colored by zone, showing this player's field goal percentage in each court zone relative to league average — red zones are hotter than league average, blue zones are colder">
             <rect x={FULL_RECT.x} y={FULL_RECT.y} width={FULL_RECT.width} height={FULL_RECT.height} fill="var(--surface-2)" rx="6" />
             {/* Above the Break 3 wash covers the whole court; everything below layers on top */}
             <rect x={FULL_RECT.x} y={FULL_RECT.y} width={FULL_RECT.width} height={FULL_RECT.height} fill={colorFor('Above the Break 3')} />

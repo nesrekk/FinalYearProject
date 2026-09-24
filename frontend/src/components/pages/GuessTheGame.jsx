@@ -183,7 +183,7 @@ export default function GuessTheGame() {
                 {loadError && <p className="error-message">{loadError}</p>}
 
                 {daily && (
-                    <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block', marginTop: '0.75rem' }}>
+                    <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block', marginTop: '0.75rem' }} role="img" aria-label="Line chart of today's mystery game's real home-team win probability over the course of the game, with team names and date hidden as the puzzle">
                         <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
                         <line x1={PAD_L} y1={chartY(0.5)} x2={CHART_W - PAD_R} y2={chartY(0.5)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
                         {[0, 0.5, 1].map((t) => (

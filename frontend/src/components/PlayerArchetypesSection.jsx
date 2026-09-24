@@ -37,7 +37,7 @@ function StackedArchetypeChart({ evolution, colorByArchetype }) {
     const tickEvery = seasons.length > 10 ? 3 : 1;
 
     return (
-        <svg viewBox={`0 0 ${EVO_W} ${EVO_H}`} style={{ width: '100%', display: 'block' }}>
+        <svg viewBox={`0 0 ${EVO_W} ${EVO_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Stacked area chart of each player archetype's share of the qualified player pool from ${seasons[0]} through ${seasons[seasons.length - 1]}`}>
             <rect x="0" y="0" width={EVO_W} height={EVO_H} fill="var(--surface-2)" rx="8" />
             {[0, 0.25, 0.5, 0.75, 1].map((t) => (
                 <React.Fragment key={t}>
@@ -72,7 +72,7 @@ function TrendMiniChart({ label, data, valueKey, format, color }) {
     return (
         <div>
             <div className="page-subtitle" style={{ marginBottom: 4, fontSize: '0.78rem' }}>{label}</div>
-            <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', display: 'block' }}>
+            <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Line chart of ${label} from ${data[0].season} to ${data[data.length - 1].season}, ranging from ${format(vMin)} to ${format(vMax)}`}>
                 <rect x="0" y="0" width={w} height={h} fill="var(--surface-2)" rx="6" />
                 <path d={path} fill="none" stroke={color} strokeWidth="2" />
                 <text x={padL} y={h - 3} fill="var(--text-3)" fontSize="8">{data[0].season}</text>
@@ -257,7 +257,7 @@ export default function PlayerArchetypesSection() {
 
             {!loading && plot && (
                 <div className="court-container" style={{ marginTop: '1rem' }}>
-                    <svg viewBox={`0 0 ${plot.width} ${plot.height}`} className="court-svg" style={{ maxHeight: 420 }}>
+                    <svg viewBox={`0 0 ${plot.width} ${plot.height}`} className="court-svg" style={{ maxHeight: 420 }} role="img" aria-label={`Scatter plot of a 2D projection of each player's statistical profile for the ${season} season, with dots colored by player archetype cluster`}>
                         <rect x="0" y="0" width={plot.width} height={plot.height} fill="var(--surface-2)" rx="8" />
                         {visiblePlayers.map((p) => (
                             <circle

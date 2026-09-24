@@ -188,7 +188,7 @@ export default function GameReplaySection() {
                         <span className="page-subtitle" style={{ marginLeft: 8 }}>{replay.game_date}</span>
                     </div>
 
-                    <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }}>
+                    <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Line chart of ${replay.home_team}'s real home win probability over the course of the game from ${replay.away_team} ${replay.final_score.away} vs ${replay.home_team} ${replay.final_score.home}, tracked play by play from tip-off through the final buzzer, with markers on the top swing plays`}>
                         <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
                         {/* 50% reference line */}
                         <line x1={PAD_L} y1={chartY(0.5)} x2={CHART_W - PAD_R} y2={chartY(0.5)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
@@ -256,7 +256,7 @@ export default function GameReplaySection() {
                     <h4 className="section-heading" style={{ marginTop: '1rem', marginBottom: '0.4rem', fontSize: '0.85rem' }}>
                         Real Missed Shots ({missedShots.length}) — click one for "what if"
                     </h4>
-                    <svg viewBox={`0 0 ${CHART_W} 28`} style={{ width: '100%', display: 'block' }}>
+                    <svg viewBox={`0 0 ${CHART_W} 28`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Timeline strip of ${missedShots.length} real missed shots during the game; select one to see a counterfactual "what if it had gone in" win-probability line`}>
                         <rect x="0" y="0" width={CHART_W} height={28} fill="var(--surface-2)" rx="6" />
                         {missedShots.map((p) => (
                             <circle

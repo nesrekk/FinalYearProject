@@ -58,7 +58,7 @@ function TrajectoryChart({ data }) {
     const yTicks = [0, 0.25, 0.5, 0.75, 1].map((t) => yMin + t * (yMax - yMin));
 
     return (
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label={`Line chart of ${data.player_name}'s real career points per game by age, with a projected trajectory and comp-based ceiling/floor band for future ages, and any actual outcomes overlaid where already known`}>
             <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
             {yTicks.map((t, idx) => (
                 <React.Fragment key={idx}>

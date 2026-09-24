@@ -120,7 +120,7 @@ export default function OffensiveStyleSection() {
 
             {!loading && plot && (
                 <div className="court-container">
-                    <svg viewBox={`0 0 ${plot.width} ${plot.height}`} className="court-svg" style={{ maxHeight: 380 }}>
+                    <svg viewBox={`0 0 ${plot.width} ${plot.height}`} className="court-svg" style={{ maxHeight: 380 }} role="img" aria-label={`Scatter plot of a 2D projection of each player's offensive play-type frequency mix for the ${season} season, with dots colored by offensive style cluster`}>
                         <rect x="0" y="0" width={plot.width} height={plot.height} fill="var(--surface-2)" rx="8" />
                         {visiblePlayers.map((p) => (
                             <circle

@@ -239,7 +239,7 @@ export default function RadarCompareSection() {
             {activeSlots.length > 0 && (
                 <>
                     <div className="court-container">
-                        <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="court-svg" style={{ maxHeight: 460 }}>
+                        <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="court-svg" style={{ maxHeight: 460 }} role="img" aria-label={`Radar chart comparing ${activeSlots.map((s) => s.playerName).join(', ')} across percentile rank on ${visibleAxes.length} stats: ${visibleAxes.map((a) => STAT_LABELS[a]).join(', ')}`}>
                             <rect x="0" y="0" width={SIZE} height={SIZE} fill="var(--surface-2)" rx="8" />
                             {[0.25, 0.5, 0.75, 1].map((f) => (
                                 <polygon key={f} points={ringPolygonPoints(visibleAxes.length, f)} fill="none" stroke="var(--hairline)" strokeWidth="1" />

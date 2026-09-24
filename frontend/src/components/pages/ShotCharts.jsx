@@ -372,7 +372,9 @@ export default function ShotCharts() {
       </div>
 
       <div className="court-container">
-        <svg viewBox="0 0 500 470" className="court-svg">
+        <svg viewBox="0 0 500 470" className="court-svg" role="img" aria-label={viewMode === 'heatmap'
+          ? `Half-court heat map of ${resolvedPlayer || 'the selected player'}'s real field goal percentage by court zone for the ${season || 'selected'} season, colored from cold (low FG%) to hot (high FG%) with opacity showing shot volume`
+          : `Half-court shot chart of every real shot ${resolvedPlayer || 'the selected player'} attempted in the ${season || 'selected'} season, plotted at its real court location and marked made or missed`}>
           <rect x="0" y="0" width="500" height="470" fill="var(--surface-2)" rx="8" />
 
           {viewMode === 'heatmap' && heatmapCells.map((c) => {

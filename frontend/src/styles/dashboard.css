@@ -2415,6 +2415,28 @@ body {
   background: var(--accent-hover);
 }
 
+.btn-primary {
+  border: none;
+  background: var(--accent);
+  color: #0d1013;
+  font-weight: 700;
+  font-size: 0.85rem;
+  font-family: var(--font);
+  border-radius: var(--radius-control);
+  padding: 0.6rem 1.1rem;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .hb-load-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;

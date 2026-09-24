@@ -367,7 +367,7 @@ export default function PlayerComparison() {
                             Percentile rank vs. all qualified players this season · pool size {profileA.pool_size}
                         </p>
                         <div style={{ display: 'flex', justifyContent: 'center' }}>
-                            <svg viewBox={`0 0 ${RADAR_SIZE} ${RADAR_SIZE}`} style={{ maxWidth: 420, width: '100%', height: 'auto' }}>
+                            <svg viewBox={`0 0 ${RADAR_SIZE} ${RADAR_SIZE}`} style={{ maxWidth: 420, width: '100%', height: 'auto' }} role="img" aria-label={`Radar chart comparing ${profileA.player_name} and ${profileB.player_name}'s percentile rank against all qualified players this season across ${profileA.skill_profile.length} skill categories`}>
                                 <rect x="0" y="0" width={RADAR_SIZE} height={RADAR_SIZE} fill="var(--surface-2)" rx="8" />
                                 {[0.25, 0.5, 0.75, 1].map((f) => (
                                     <polygon key={f} points={ringPoints(profileA.skill_profile.length, f)} fill="none" stroke="var(--hairline)" strokeWidth="1" />

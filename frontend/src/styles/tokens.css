@@ -11,7 +11,7 @@
   --surface-2: #1c1c1f;
   --text: #f5f5f7;
   --text-2: #a1a1a6;
-  --text-3: #6e6e73;
+  --text-3: #86868c;
   --hairline: rgba(255, 255, 255, 0.08);
   --accent: #2997ff;
   --brand: #ff6b1a;
@@ -93,7 +93,7 @@
     --surface-2: #f5f5f7;
     --text: #1d1d1f;
     --text-2: #6e6e73;
-    --text-3: #86868b;
+    --text-3: #707075;
     --hairline: rgba(0, 0, 0, 0.08);
     --accent: #0071e3;
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
@@ -106,7 +106,7 @@
   --surface-2: #f5f5f7;
   --text: #1d1d1f;
   --text-2: #6e6e73;
-  --text-3: #86868b;
+  --text-3: #707075;
   --hairline: rgba(0, 0, 0, 0.08);
   --accent: #0071e3;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
@@ -217,6 +217,19 @@ body {
 
 .theme-toggle-btn:focus-visible {
   outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Universal keyboard-focus ring. Several older components set
+   `outline: none` on inputs/buttons and only compensate with a
+   border-color change, which fails WCAG 2.4.11's visible-focus
+   requirement for keyboard users — this one rule restores a real ring
+   everywhere, without having to touch every individual class.
+   !important is deliberate here: several older components set
+   `outline: none` unconditionally (not just on :focus), which would
+   otherwise win the cascade by load order and silently swallow this. */
+:focus-visible {
+  outline: 2px solid var(--accent) !important;
   outline-offset: 2px;
 }
 

@@ -5,28 +5,35 @@
  * Each microservice (ports 8000, 8001, 8002) needs CORSMiddleware.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import TopNav from './components/layout/TopNav';
 import Footer from './components/layout/Footer';
 import PageHeader from './components/layout/PageHeader';
 import DashboardHome from './components/pages/DashboardHome';
-import LiveScores from './components/pages/LiveScores';
-import NewsSection from './components/pages/NewsSection';
-import StandingsSection from './components/pages/StandingsSection';
-import TeamComparison from './components/pages/TeamComparison';
-import PlayerStats from './components/pages/PlayerStats';
-import PlayerComparison from './components/pages/PlayerComparison';
-import ShotCharts from './components/pages/ShotCharts';
-import AnalyticsSection from './components/pages/AnalyticsSection';
-import StatLeaders from './components/pages/StatLeaders';
-import TradeAnalyzer from './components/pages/TradeAnalyzer';
-import DraftValueGuide from './components/pages/DraftValueGuide';
-import RookieClassTracker from './components/pages/RookieClassTracker';
-import GamesHub from './components/pages/GamesHub';
 import LandingPage from './components/pages/LandingPage';
+import Loader from './components/Loader';
 import { prefetchCoreData } from './services/api';
 import './styles/dashboard.css';
+
+// Code-split: only the landing page + Today dashboard (the two views
+// everyone hits first) are in the main bundle. Every other page is its
+// own chunk, fetched the first time it's actually opened — this is what
+// keeps the single-bundle warning from `vite build` from just growing
+// forever as pages accumulate.
+const LiveScores = lazy(() => import('./components/pages/LiveScores'));
+const NewsSection = lazy(() => import('./components/pages/NewsSection'));
+const StandingsSection = lazy(() => import('./components/pages/StandingsSection'));
+const TeamComparison = lazy(() => import('./components/pages/TeamComparison'));
+const PlayerStats = lazy(() => import('./components/pages/PlayerStats'));
+const PlayerComparison = lazy(() => import('./components/pages/PlayerComparison'));
+const ShotCharts = lazy(() => import('./components/pages/ShotCharts'));
+const AnalyticsSection = lazy(() => import('./components/pages/AnalyticsSection'));
+const StatLeaders = lazy(() => import('./components/pages/StatLeaders'));
+const TradeAnalyzer = lazy(() => import('./components/pages/TradeAnalyzer'));
+const DraftValueGuide = lazy(() => import('./components/pages/DraftValueGuide'));
+const RookieClassTracker = lazy(() => import('./components/pages/RookieClassTracker'));
+const GamesHub = lazy(() => import('./components/pages/GamesHub'));
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
@@ -79,7 +86,9 @@ export default function App() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
           >
-            {renderPage()}
+            <Suspense fallback={<Loader />}>
+              {renderPage()}
+            </Suspense>
           </motion.div>
         </AnimatePresence>
       </main>

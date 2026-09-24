@@ -18,7 +18,7 @@ function RocCurveChart({ points, auc, color }) {
     const areaPath = `${linePath} L ${rocX(1).toFixed(1)} ${rocY(0).toFixed(1)} L ${rocX(0).toFixed(1)} ${rocY(0).toFixed(1)} Z`;
     const ticks = [0, 0.25, 0.5, 0.75, 1];
     return (
-        <svg viewBox={`0 0 ${ROC_SIZE} ${ROC_SIZE}`} style={{ maxWidth: 320, display: 'block' }}>
+        <svg viewBox={`0 0 ${ROC_SIZE} ${ROC_SIZE}`} style={{ maxWidth: 320, display: 'block' }} role="img" aria-label={`ROC curve plotting true positive rate against false positive rate across every decision threshold, pooled across held-out seasons, with an AUC of ${auc?.toFixed(3) ?? 'unavailable'}; the dashed diagonal marks what random guessing would trace`}>
             <rect x="0" y="0" width={ROC_SIZE} height={ROC_SIZE} fill="var(--surface-2)" rx="8" />
             {/* Random-guess diagonal baseline */}
             <line x1={rocX(0)} y1={rocY(0)} x2={rocX(1)} y2={rocY(1)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
@@ -49,7 +49,7 @@ function ReliabilityChart({ bins, color, label }) {
         .map((b, i) => `${i === 0 ? 'M' : 'L'} ${rocX(b.predicted_mid).toFixed(1)} ${rocY(b.observed_rate).toFixed(1)}`)
         .join(' ');
     return (
-        <svg viewBox={`0 0 ${ROC_SIZE} ${ROC_SIZE}`} style={{ maxWidth: 320, display: 'block' }}>
+        <svg viewBox={`0 0 ${ROC_SIZE} ${ROC_SIZE}`} style={{ maxWidth: 320, display: 'block' }} role="img" aria-label={`Reliability (calibration) chart of predicted win probability versus real observed win rate${label ? ` for ${label}` : ''}, with dot size showing sample size per bucket; points on the dashed diagonal are well-calibrated`}>
             <rect x="0" y="0" width={ROC_SIZE} height={ROC_SIZE} fill="var(--surface-2)" rx="8" />
             {/* Perfect-calibration diagonal */}
             <line x1={rocX(0)} y1={rocY(0)} x2={rocX(1)} y2={rocY(1)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />

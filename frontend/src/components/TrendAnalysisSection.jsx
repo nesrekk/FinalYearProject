@@ -61,7 +61,7 @@ function LineTrendChart({ points, statDef, color }) {
     const peak = valid.reduce((a, b) => (b.value > a.value ? b : a), valid[0]);
 
     return (
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label={`Line chart of ${statDef.label} by season, with the peak season marked in gold`}>
             <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
             {yTicks.map((t, idx) => (
                 <React.Fragment key={idx}>
