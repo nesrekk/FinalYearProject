@@ -23,6 +23,7 @@ import WithWithoutStarSection from '../WithWithoutStarSection';
 import ScheduleFatigueSection from '../ScheduleFatigueSection';
 import MatchupFinderSection from '../MatchupFinderSection';
 import RefereeTendenciesSection from '../RefereeTendenciesSection';
+import GarbageTimeSection from '../GarbageTimeSection';
 
 const TAB_GROUPS = [
     {
@@ -45,6 +46,7 @@ const TAB_GROUPS = [
             { id: 'helio', label: 'Heliocentricity', icon: 'wb_sunny' },
             { id: 'wpa', label: 'Clutch WPA', icon: 'timer' },
             { id: 'matchups', label: 'Matchup Finder', icon: 'swords' },
+            { id: 'garbage', label: 'Garbage-Time Deflator', icon: 'delete_sweep' },
         ],
     },
     {
@@ -206,6 +208,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'withwithout' && <WithWithoutStarSection />}
                 {activeTab === 'fatigue' && <ScheduleFatigueSection />}
                 {activeTab === 'referees' && <RefereeTendenciesSection />}
+                {activeTab === 'garbage' && <GarbageTimeSection />}
             </div>
         </div>
     );

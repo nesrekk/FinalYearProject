@@ -74,6 +74,12 @@ export const TOOL_META = {
         tagline: 'How a defender actually fares against a specific scorer.',
         about: 'Real player-vs-player matchup data from the NBA’s own player-tracking cameras — real partial possessions and the real FG% the offensive player shot in those specific matchups. Pairs below 20 partial possessions are greyed out and marked small sample. Full league-wide coverage starts at the 2017-18 season.',
     },
+    garbage: {
+        group: 'Player Analysis',
+        visual: 'line',
+        tagline: 'How much of a player’s scoring came when the game was already decided.',
+        about: 'Every real play in ESPN’s full-season play-by-play is given a Leverage Index: the expected win-probability swing of the next play at that moment (time left × score margin), from this project’s own win-probability model, scaled so the average play is 1.0. Plays are bucketed as garbage time, low, medium or high leverage, and each player’s real points, shots, rebounds, assists and turnovers are split by bucket. Filtered PPG drops garbage-time and low-leverage points. Rebuilt per-game scoring is checked against the official per-game line every season.',
+    },
     vegas: {
         group: 'Teams & Markets',
         visual: 'line',

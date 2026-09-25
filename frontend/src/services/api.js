@@ -520,6 +520,23 @@ export async function fetchPlayerMatchups(playerName, role = 'scorer', season, t
     return response.data;
 }
 
+// ─── Garbage-Time Deflator ───────────────────────────────────────
+export async function fetchGarbageTime(season, minPpg = 0, topN = 10) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/players/garbage-time`,
+        { params: { min_ppg: minPpg, top_n: topN, ...(season ? { season } : {}) } }
+    );
+    return response.data;
+}
+
+export async function fetchGarbageTimePlayer(playerId, season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/players/garbage-time/player/${playerId}`,
+        { params: season ? { season } : {} }
+    );
+    return response.data;
+}
+
 // ─── Referee Tendencies ──────────────────────────────────────────
 export async function fetchRefereeTendencies(minGames = 10, sort = 'n_games') {
     const response = await axios.get(

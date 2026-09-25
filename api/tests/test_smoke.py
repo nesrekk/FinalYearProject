@@ -583,3 +583,40 @@ def test_backtest_compare_has_three_models():
     for m in data["models"]:
         assert 0 <= m["roc_auc"] <= 1
         assert 0 <= m["top1_accuracy"] <= 1
+
+
+def test_garbage_time_shape_and_validation():
+    """Garbage-Time Deflator (scripts/build_leverage_splits.py). The rebuilt
+    per-game scoring must track the real official per-game line almost
+    exactly — this is the feature's own real validation metric."""
+    from impact_api import app
+    resp = TestClient(app).get("/players/garbage-time", params={"season": 2025, "min_ppg": 10})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["season"] == 2025
+    assert len(data["top_scorers"]) == 30
+    assert all(r["qualified"] for r in data["top_scorers"])
+    assert all(r["ppg_raw"] >= 10 for r in data["empty_calories"])
+    v = data["validation"]
+    assert v["ppg_vs_official_r"] > 0.99
+    assert v["ppg_vs_official_mae"] < 0.1
+    assert v["points_attribution_rate"] > 0.97
+    shares = v["event_share_by_bucket"]
+    assert abs(sum(shares.values()) - 1) < 1e-6
+    for r in data["top_scorers"]:
+        assert r["ppg_filtered"] <= r["ppg_ex_garbage"] <= r["ppg_raw"] + 1e-9
+    _assert_has_source(data)
+
+
+def test_garbage_time_player_card():
+    from impact_api import app
+    client = TestClient(app)
+    # Real player: Shai Gilgeous-Alexander (1628983), 2025-26.
+    resp = client.get("/players/garbage-time/player/1628983", params={"season": 2026})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert [s["bucket"] for s in data["splits"]] == ["garbage", "low", "medium", "high"]
+    assert sum(s["pts"] for s in data["splits"]) == data["player"]["pts"]
+    assert data["small_sample_warning"] is False
+    _assert_has_source(data)
+    assert client.get("/players/garbage-time", params={"season": 1999}).status_code == 404
