@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { fetchCompareProfile, fetchLivePlayerSuggestions, fetchPairSynergy } from '../../services/api';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import TeamLogo from '../common/TeamLogo';
 import Icon from '../common/Icon';
 import InfoTooltip from '../common/InfoTooltip';
+import AutocompleteDropdown from '../common/AutocompleteDropdown';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 
@@ -137,11 +138,13 @@ function useSlotSuggestions(query, resolvedName, setSuggestions) {
 }
 
 function SearchBox({ placeholder, value, onChange, suggestions, onPick, color }) {
+    const inputRef = useRef(null);
     return (
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
                 <input
+                    ref={inputRef}
                     type="text"
                     className="input-field"
                     placeholder={placeholder}
@@ -150,25 +153,7 @@ function SearchBox({ placeholder, value, onChange, suggestions, onPick, color })
                     style={{ width: '100%' }}
                 />
             </div>
-            {suggestions?.length > 0 && (
-                <ul className="autocomplete-list" style={{
-                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                    background: 'var(--surface-2)', border: '1px solid var(--hairline)', borderRadius: 6,
-                    marginTop: 4, maxHeight: 220, overflowY: 'auto', listStyle: 'none', padding: 0,
-                }}>
-                    {suggestions.map((name) => (
-                        <li key={name}>
-                            <button
-                                type="button"
-                                onClick={() => onPick(name)}
-                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer' }}
-                            >
-                                {name}
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            )}
+            <AutocompleteDropdown anchorRef={inputRef} items={suggestions} onPick={onPick} />
         </div>
     );
 }

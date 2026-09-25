@@ -210,7 +210,37 @@ export default function GameReplaySection() {
                             <path d={whatifPath} fill="none" stroke="var(--text-3)" strokeWidth="2" strokeDasharray="6 4" />
                         )}
 
-                        {/* Top-play markers */}
+                        {/* Invisible hover targets on every real play (not just the top 5) so hovering
+                            anywhere along the line shows that play's real detail, not only at the
+                            handful of marked swing plays. */}
+                        {replay.points.map((p) => (
+                            <circle
+                                key={`hit-${p.event_id}`}
+                                cx={chartX(p.seconds_elapsed)}
+                                cy={chartY(p.home_wp)}
+                                r={5}
+                                fill="transparent"
+                                style={{ cursor: 'pointer', pointerEvents: 'all' }}
+                                onMouseEnter={() => setHovered(p)}
+                                onMouseLeave={() => setHovered((h) => (h?.event_id === p.event_id ? null : h))}
+                            />
+                        ))}
+
+                        {/* Highlighted dot for whichever play is currently hovered (from the full
+                            series above, or one of the always-visible top-play markers below). */}
+                        {hovered && (
+                            <circle
+                                cx={chartX(hovered.seconds_elapsed)}
+                                cy={chartY(hovered.home_wp)}
+                                r={6}
+                                fill={wpColor(hovered.home_wp)}
+                                stroke="var(--surface)"
+                                strokeWidth="1.5"
+                                style={{ pointerEvents: 'none' }}
+                            />
+                        )}
+
+                        {/* Top-play markers (always visible, on top of the hover layer) */}
                         {replay.top_plays.map((p) => (
                             <circle
                                 key={p.event_id}
@@ -220,14 +250,12 @@ export default function GameReplaySection() {
                                 fill={wpColor(p.home_wp)}
                                 stroke="var(--surface)"
                                 strokeWidth="1.5"
-                                style={{ cursor: 'pointer' }}
-                                onMouseEnter={() => setHovered(p)}
-                                onMouseLeave={() => setHovered(null)}
+                                style={{ cursor: 'pointer', pointerEvents: 'none' }}
                             />
                         ))}
 
                         <text x={CHART_W / 2} y={CHART_H - 4} fill="var(--text-2)" fontSize="11" textAnchor="middle">Game Clock</text>
-                        <text x="10" y={CHART_H / 2} fill="var(--text-2)" fontSize="11" textAnchor="middle" transform={`rotate(-90 10 ${CHART_H / 2})`}>Home Win Probability</text>
+                        <text x="14" y={CHART_H / 2} fill="var(--text-2)" fontSize="11" textAnchor="middle" transform={`rotate(-90 14 ${CHART_H / 2})`}>Home Win Probability</text>
                     </svg>
 
                     <div style={{ minHeight: 44, marginTop: '0.5rem' }}>

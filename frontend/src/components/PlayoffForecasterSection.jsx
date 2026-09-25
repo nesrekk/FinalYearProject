@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { fetchPlayoffComparison, fetchLivePlayerSuggestions } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
+import AutocompleteDropdown from './common/AutocompleteDropdown';
 import { STAT_GLOSSARY } from '../utils/statGlossary';
 
 const ROWS = [
@@ -28,6 +29,7 @@ function deltaColor(v) {
 }
 
 export default function PlayoffForecasterSection() {
+    const searchInputRef = useRef(null);
     const [searchInput, setSearchInput] = useState('Jayson Tatum');
     const [suggestions, setSuggestions] = useState([]);
     const [playerName, setPlayerName] = useState('Jayson Tatum');
@@ -100,6 +102,7 @@ export default function PlayoffForecasterSection() {
                 <div style={{ position: 'relative', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
                         <input
+                            ref={searchInputRef}
                             type="text"
                             className="input-field"
                             placeholder="Player name…"
@@ -107,25 +110,7 @@ export default function PlayoffForecasterSection() {
                             onChange={(e) => setSearchInput(e.target.value)}
                             style={{ width: '100%' }}
                         />
-                        {suggestions.length > 0 && (
-                            <ul className="autocomplete-list" style={{
-                                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                                background: '#1e293b', border: '1px solid #334155', borderRadius: 6,
-                                marginTop: 4, maxHeight: 220, overflowY: 'auto', listStyle: 'none', padding: 0,
-                            }}>
-                                {suggestions.map((name) => (
-                                    <li key={name}>
-                                        <button
-                                            type="button"
-                                            onClick={() => pick(name)}
-                                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', background: 'transparent', border: 'none', color: '#e2e8f0', cursor: 'pointer' }}
-                                        >
-                                            {name}
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
+                        <AutocompleteDropdown anchorRef={searchInputRef} items={suggestions} onPick={pick} />
                     </div>
                     <input
                         type="number"

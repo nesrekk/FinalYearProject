@@ -16,6 +16,7 @@ const PLOT_W = CHART_W - PAD_L - PAD_R;
 const PLOT_H = CHART_H - PAD_T - PAD_B;
 
 function RestBucketChart({ buckets }) {
+    const [hovered, setHovered] = useState(null);
     if (!buckets?.length) return null;
     const vals = buckets.map((b) => b.win_pct);
     const vMin = Math.min(...vals, 0.4);
@@ -23,22 +24,56 @@ function RestBucketChart({ buckets }) {
     const x = (i) => PAD_L + (i / (buckets.length - 1 || 1)) * PLOT_W;
     const y = (v) => PAD_T + (1 - (v - vMin) / ((vMax - vMin) || 1)) * PLOT_H;
     const path = buckets.map((b, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(b.win_pct).toFixed(1)}`).join(' ');
+    const maxN = Math.max(...buckets.map((b) => b.n));
 
     return (
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label="Line chart of real team win percentage by days of rest before the game, with dot size showing sample size in each rest bucket">
-            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
-            <line x1={PAD_L} y1={y(0.5)} x2={CHART_W - PAD_R} y2={y(0.5)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
-            <path d={path} fill="none" stroke="var(--accent)" strokeWidth="2.5" />
-            {buckets.map((b, i) => (
-                <circle key={b.rest_days} cx={x(i)} cy={y(b.win_pct)} r={4 + 4 * Math.sqrt(b.n / Math.max(...buckets.map((x2) => x2.n)))} fill="var(--accent)">
-                    <title>{b.bucket_label}: {(b.win_pct * 100).toFixed(1)}% win rate, n={b.n.toLocaleString()}</title>
-                </circle>
-            ))}
-            {buckets.map((b, i) => (
-                <text key={b.rest_days} x={x(i)} y={CHART_H - 8} fill="var(--text-3)" fontSize="9" textAnchor="middle">{b.bucket_label}</text>
-            ))}
-            <text x="4" y={CHART_H / 2} fill="var(--text-2)" fontSize="10" textAnchor="middle" transform={`rotate(-90 4 ${CHART_H / 2})`}>Win %</text>
-        </svg>
+        <div style={{ position: 'relative' }}>
+            <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label="Line chart of real team win percentage by days of rest before the game, with dot size showing sample size in each rest bucket">
+                <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
+                <line x1={PAD_L} y1={y(0.5)} x2={CHART_W - PAD_R} y2={y(0.5)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
+                <path d={path} fill="none" stroke="var(--accent)" strokeWidth="2.5" />
+                {buckets.map((b, i) => {
+                    const r = 4 + 4 * Math.sqrt(b.n / maxN);
+                    return (
+                        <circle
+                            key={b.rest_days} cx={x(i)} cy={y(b.win_pct)}
+                            r={hovered?.rest_days === b.rest_days ? r + 2 : r} fill="var(--accent)"
+                            style={{ cursor: 'pointer' }}
+                            onMouseEnter={() => setHovered({ ...b, x: x(i), y: y(b.win_pct) })}
+                            onMouseLeave={() => setHovered((h) => (h?.rest_days === b.rest_days ? null : h))}
+                        />
+                    );
+                })}
+                {buckets.map((b, i) => (
+                    <text key={b.rest_days} x={x(i)} y={CHART_H - 8} fill="var(--text-3)" fontSize="9" textAnchor="middle">{b.bucket_label}</text>
+                ))}
+                <text x="14" y={CHART_H / 2} fill="var(--text-2)" fontSize="10" textAnchor="middle" transform={`rotate(-90 14 ${CHART_H / 2})`}>Win %</text>
+            </svg>
+            {hovered && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        left: `${(hovered.x / CHART_W) * 100}%`,
+                        top: `${(hovered.y / CHART_H) * 100}%`,
+                        transform: 'translate(-50%, -120%)',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--hairline)',
+                        borderRadius: 8,
+                        padding: '0.5rem 0.65rem',
+                        fontSize: '0.75rem',
+                        color: 'var(--text)',
+                        whiteSpace: 'nowrap',
+                        pointerEvents: 'none',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+                        zIndex: 5,
+                    }}
+                >
+                    <div style={{ fontWeight: 600 }}>{hovered.bucket_label}</div>
+                    <div>{(hovered.win_pct * 100).toFixed(1)}% win rate</div>
+                    <div style={{ color: 'var(--text-3)' }}>n = {hovered.n.toLocaleString()} games</div>
+                </div>
+            )}
+        </div>
     );
 }
 

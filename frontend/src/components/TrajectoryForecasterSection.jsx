@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { fetchPlayerTrajectory, fetchPlayerSuggestions } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
+import AutocompleteDropdown from './common/AutocompleteDropdown';
 
 const CHART_W = 720, CHART_H = 320, PAD_L = 56, PAD_R = 20, PAD_T = 20, PAD_B = 36;
 
@@ -67,6 +68,19 @@ function TrajectoryChart({ data }) {
         onMouseLeave: () => setHovered((h) => (h?.key === key ? null : h)),
     });
 
+    // Band/projected-line hover targets have no single (age, pts) point, so
+    // they get a static explanatory tooltip anchored at the chart's midpoint
+    // instead of following the cursor to one specific value.
+    const midAge = (ageMin + ageMax) / 2;
+    const bandHoverProps = {
+        onMouseEnter: () => setHovered({ key: 'band', x: xFor(midAge), y: yFor(yMin + (yMax - yMin) * 0.3), label: 'Comp range', note: 'Real range between the best and worst outcome among the comps used — not a statistical confidence interval.' }),
+        onMouseLeave: () => setHovered((h) => (h?.key === 'band' ? null : h)),
+    };
+    const projLineHoverProps = {
+        onMouseEnter: () => setHovered({ key: 'projLine', x: xFor(midAge), y: yFor(yMin + (yMax - yMin) * 0.7), label: 'Projected (comp-weighted)', note: 'Points-per-game weighted by how similar each real comp was at this age.' }),
+        onMouseLeave: () => setHovered((h) => (h?.key === 'projLine' ? null : h)),
+    };
+
     return (
         <div style={{ position: 'relative' }}>
             <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label={`Line chart of ${data.player_name}'s real career points per game by age, with a projected trajectory and comp-based ceiling/floor band for future ages, and any actual outcomes overlaid where already known`}>
@@ -83,9 +97,14 @@ function TrajectoryChart({ data }) {
                     </text>
                 ))}
 
-                <path d={bandPath} fill="var(--text-3)" fillOpacity={0.15} stroke="none" />
+                <path
+                    d={bandPath} fill="var(--text-3)" fillOpacity={hovered?.key === 'band' ? 0.28 : 0.15} stroke="none"
+                    style={{ cursor: 'pointer' }} {...bandHoverProps}
+                />
                 <path d={actualPath} fill="none" stroke={COLOR_ACTUAL} strokeWidth="2.5" />
-                <path d={projPath} fill="none" stroke={COLOR_PROJECTED} strokeWidth="2" strokeDasharray="5 4" />
+                {/* Wider invisible path under the dashed line makes it easy to hover without needing pixel-perfect aim on a 2px stroke. */}
+                <path d={projPath} fill="none" stroke="transparent" strokeWidth="14" style={{ cursor: 'pointer' }} {...projLineHoverProps} />
+                <path d={projPath} fill="none" stroke={COLOR_PROJECTED} strokeWidth={hovered?.key === 'projLine' ? 3 : 2} strokeDasharray="5 4" style={{ pointerEvents: 'none' }} />
 
                 {actual.map((p) => (
                     <circle
@@ -138,9 +157,15 @@ function TrajectoryChart({ data }) {
                     }}
                 >
                     <div style={{ fontWeight: 600 }}>{hovered.label}</div>
-                    <div>Age {hovered.age} &middot; {hovered.pts.toFixed(1)} pts</div>
-                    {hovered.floor != null && hovered.ceiling != null && (
-                        <div style={{ color: 'var(--text-3)' }}>Range {hovered.floor.toFixed(1)}–{hovered.ceiling.toFixed(1)}</div>
+                    {hovered.note ? (
+                        <div style={{ color: 'var(--text-3)', maxWidth: 220, whiteSpace: 'normal' }}>{hovered.note}</div>
+                    ) : (
+                        <>
+                            <div>Age {hovered.age} &middot; {hovered.pts.toFixed(1)} pts</div>
+                            {hovered.floor != null && hovered.ceiling != null && (
+                                <div style={{ color: 'var(--text-3)' }}>Range {hovered.floor.toFixed(1)}–{hovered.ceiling.toFixed(1)}</div>
+                            )}
+                        </>
                     )}
                 </div>
             )}
@@ -149,6 +174,7 @@ function TrajectoryChart({ data }) {
 }
 
 export default function TrajectoryForecasterSection() {
+    const searchInputRef = useRef(null);
     const [searchInput, setSearchInput] = useState('Anthony Edwards');
     const [suggestions, setSuggestions] = useState([]);
     const [playerName, setPlayerName] = useState('Anthony Edwards');
@@ -222,6 +248,7 @@ export default function TrajectoryForecasterSection() {
                 <div style={{ position: 'relative', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
                         <input
+                            ref={searchInputRef}
                             type="text"
                             className="input-field"
                             placeholder="Player name…"
@@ -229,25 +256,7 @@ export default function TrajectoryForecasterSection() {
                             onChange={(e) => setSearchInput(e.target.value)}
                             style={{ width: '100%' }}
                         />
-                        {suggestions.length > 0 && (
-                            <ul className="autocomplete-list" style={{
-                                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                                background: '#1e293b', border: '1px solid #334155', borderRadius: 6,
-                                marginTop: 4, maxHeight: 220, overflowY: 'auto', listStyle: 'none', padding: 0,
-                            }}>
-                                {suggestions.map((name) => (
-                                    <li key={name}>
-                                        <button
-                                            type="button"
-                                            onClick={() => pick(name)}
-                                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', background: 'transparent', border: 'none', color: '#e2e8f0', cursor: 'pointer' }}
-                                        >
-                                            {name}
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
+                        <AutocompleteDropdown anchorRef={searchInputRef} items={suggestions} onPick={pick} />
                     </div>
                     <input
                         type="number"
