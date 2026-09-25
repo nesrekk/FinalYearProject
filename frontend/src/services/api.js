@@ -644,6 +644,27 @@ export async function fetchPlayerShots(playerName, season) {
     return response.data;
 }
 
+export async function fetchHofCareerLeaders(stat, limit = 50) {
+    return getWithCache(`hof_career_${stat}_${limit}`, 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/hof/career-leaders`, { params: { stat, limit } });
+        return response.data;
+    });
+}
+
+export async function fetchHofGreatestSeasons(stat, limit = 50, minGp = 50) {
+    return getWithCache(`hof_seasons_${stat}_${limit}_${minGp}`, 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/hof/greatest-seasons`, { params: { stat, limit, min_gp: minGp } });
+        return response.data;
+    });
+}
+
+export async function fetchHofLongevity(limit = 50) {
+    return getWithCache(`hof_longevity_${limit}`, 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/hof/longevity`, { params: { limit } });
+        return response.data;
+    });
+}
+
 export async function prefetchCoreData() {
     const today = localDateIso();
     await Promise.allSettled([

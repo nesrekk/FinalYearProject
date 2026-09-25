@@ -25,6 +25,7 @@ from routers import (
     games_misc,
     guess_the_game,
     guess_the_player,
+    hall_of_fame,
     heliocentricity,
     higher_lower,
     impact_rankings,
@@ -78,7 +79,7 @@ for _router_module in (
     higher_lower, blurred_player, trivia, trend_analysis, trade_analyzer,
     players_table, impact_rankings, draft_value, player_impact, meta, media,
     players_search_profile, leaders, games_misc, news, vegas_scanner,
-    team_comparison,
+    team_comparison, hall_of_fame,
 ):
     app.include_router(_router_module.router)
 

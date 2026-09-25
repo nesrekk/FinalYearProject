@@ -32,6 +32,7 @@ const AnalyticsSection = lazy(() => import('./components/pages/AnalyticsSection'
 const StatLeaders = lazy(() => import('./components/pages/StatLeaders'));
 const TradeAnalyzer = lazy(() => import('./components/pages/TradeAnalyzer'));
 const DraftValueGuide = lazy(() => import('./components/pages/DraftValueGuide'));
+const HallOfFame = lazy(() => import('./components/pages/HallOfFame'));
 const RookieClassTracker = lazy(() => import('./components/pages/RookieClassTracker'));
 const GamesHub = lazy(() => import('./components/pages/GamesHub'));
 
@@ -63,6 +64,7 @@ export default function App() {
       case 'leaders': return <StatLeaders />;
       case 'trade': return <TradeAnalyzer />;
       case 'draft': return <DraftValueGuide />;
+      case 'hof': return <HallOfFame />;
       case 'rookies': return <RookieClassTracker />;
       case 'games': return <GamesHub />;
       default: return <DashboardHome onNavigate={setActivePage} />;

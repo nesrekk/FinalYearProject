@@ -508,3 +508,49 @@ def test_news_current_shape():
         assert item["category"] in (
             "News", "Injuries", "Trade Rumors", "Game Recap", "Player Watch",
         )
+
+
+def test_hof_career_leaders():
+    from impact_api import app
+    resp = TestClient(app).get("/hof/career-leaders", params={"stat": "pts", "limit": 5})
+    assert resp.status_code == 200
+    data = resp.json()
+    leaders = data["leaders"]
+    assert len(leaders) == 5
+    # Real, well-known record: LeBron James passed Kareem for the real
+    # all-time scoring lead in 2023 — should be #1 given full 1950-2026 data.
+    assert leaders[0]["player_name"] == "LeBron James"
+    totals = [l["career_total"] for l in leaders]
+    assert totals == sorted(totals, reverse=True)
+    _assert_has_source(data)
+
+
+def test_hof_greatest_seasons():
+    from impact_api import app
+    resp = TestClient(app).get("/hof/greatest-seasons", params={"stat": "pts", "limit": 5})
+    assert resp.status_code == 200
+    data = resp.json()
+    seasons = data["seasons"]
+    # Real NBA record: Wilt Chamberlain's 50.4 PPG in 1961-62 is the real
+    # highest-scoring season in NBA history.
+    assert seasons[0]["player_name"] == "Wilt Chamberlain"
+    assert seasons[0]["season_label"] == "1961-62"
+    assert seasons[0]["value"] > 49
+    _assert_has_source(data)
+
+
+def test_hof_greatest_seasons_invalid_stat():
+    from impact_api import app
+    resp = TestClient(app).get("/hof/greatest-seasons", params={"stat": "not_a_real_column"})
+    assert resp.status_code == 400
+
+
+def test_hof_longevity():
+    from impact_api import app
+    resp = TestClient(app).get("/hof/longevity", params={"limit": 5})
+    assert resp.status_code == 200
+    data = resp.json()
+    # Real NBA record: Robert Parish played more real career games (1,611)
+    # than anyone else in NBA history.
+    assert any(l["player_name"] == "Robert Parish" for l in data["leaders"])
+    _assert_has_source(data)

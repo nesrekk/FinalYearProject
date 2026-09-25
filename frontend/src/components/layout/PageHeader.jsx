@@ -14,6 +14,7 @@ const pageTitles = {
     trade: 'Trade Analyzer',
     draft: 'Draft Value Guide',
     rookies: 'Rookie Class Tracker',
+    hof: 'Hall of Fame',
     games: 'Games',
 };
 
@@ -31,6 +32,7 @@ const pageDescriptions = {
     trade: 'Simulate a 1-for-1 trade and see the roster impact',
     draft: 'Career value by draft slot, best-value picks, and draft class browsing',
     rookies: 'This season\'s rookie class, ranked by ROY probability, with historical comps',
+    hof: 'Real all-time career leaders, single-season records, and longevity — 1950 to today',
     games: 'Daily player-guessing puzzles and a career-stats streak game, all built on real data',
 };
 

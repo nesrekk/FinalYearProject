@@ -21,6 +21,7 @@ export const NAV_GROUPS = [
             { id: 'shotcharts', label: 'Shot Charts', icon: 'adjust' },
             { id: 'draft', label: 'Draft Value Guide', icon: 'school' },
             { id: 'rookies', label: 'Rookie Class Tracker', icon: 'eco' },
+            { id: 'hof', label: 'Hall of Fame', icon: 'stars' },
         ],
     },
     {

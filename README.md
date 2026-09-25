@@ -48,6 +48,7 @@ Read this whole section before touching anything. It exists so you don't need th
 - Live scores, standings, news, team comparison, full player-stats browser with sortable/filterable tables
 - Shot charts (real shot-location data, live-fetched and cached per player/season)
 - Stat leaders, Draft Value Guide (career value by draft slot), Rookie Class Tracker (this season's rookies ranked by real ROY probability). Stat Leaders also includes a real **Hustle** stat group (deflections, contested shots, screen assists, loose balls, charges drawn, box outs — NBA's own real hustle-stat tracking, `scripts/fetch_hustle_stats.py`) alongside the traditional box-score stats.
+- **Hall of Fame** — real all-time career leaders, single-season records, and career-longevity leaders, computed live from `player_season_stats`' full 1950-2026 coverage (`api/routers/hall_of_fame.py`). Named for "statistical greatness," not literal induction — this project has no real Naismith Hall of Fame membership dataset from any source it uses, and says so directly in the page's own `InfoTooltip` rather than implying verified induction data it doesn't have.
 
 **Player Comparison**
 - Head-to-head statistical profiles with percentile ranks against a real qualified-player pool
