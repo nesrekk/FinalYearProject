@@ -620,3 +620,27 @@ def test_garbage_time_player_card():
     assert data["small_sample_warning"] is False
     _assert_has_source(data)
     assert client.get("/players/garbage-time", params={"season": 1999}).status_code == 404
+
+
+def test_dad_index_shape_and_sanity():
+    """DAD Index (scripts/build_dad_index.py). Real sniff test: 2023-24's
+    Lu Dort — one of the league's known point-of-attack stoppers — draws
+    harder-than-average assignments."""
+    from impact_api import app
+    client = TestClient(app)
+    resp = client.get("/defense/dad", params={"season": 2024})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["season"] == 2024
+    defs = data["defenders"]
+    assert len(defs) == data["validation"]["n_qualified"] > 200
+    assert all(d["total_poss"] >= 1000 for d in defs)
+    assert [d["dad"] for d in defs] == sorted((d["dad"] for d in defs), reverse=True)
+    assert abs(sum(d["dad_z"] for d in defs) / len(defs)) < 1e-6
+    assert data["validation"]["year_over_year_r"] > 0.3
+    dort = next(d for d in defs if d["player_name"] == "Luguentz Dort")
+    assert dort["dad_z"] > 1
+    assert 1 <= len(dort["top_assignments"]) <= 3
+    assert dort["quadrant"] in data["quadrants"]
+    _assert_has_source(data)
+    assert client.get("/defense/dad", params={"season": 2010}).status_code == 404

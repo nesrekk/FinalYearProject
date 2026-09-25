@@ -537,6 +537,15 @@ export async function fetchGarbageTimePlayer(playerId, season) {
     return response.data;
 }
 
+// ─── DAD Index (Defensive Assignment Difficulty) ─────────────────
+export async function fetchDadIndex(season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/defense/dad`,
+        { params: season ? { season } : {} }
+    );
+    return response.data;
+}
+
 // ─── Referee Tendencies ──────────────────────────────────────────
 export async function fetchRefereeTendencies(minGames = 10, sort = 'n_games') {
     const response = await axios.get(
