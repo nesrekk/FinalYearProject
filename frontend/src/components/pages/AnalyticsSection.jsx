@@ -24,6 +24,7 @@ import ScheduleFatigueSection from '../ScheduleFatigueSection';
 import MatchupFinderSection from '../MatchupFinderSection';
 import RefereeTendenciesSection from '../RefereeTendenciesSection';
 import GarbageTimeSection from '../GarbageTimeSection';
+import DadIndexSection from '../DadIndexSection';
 
 const TAB_GROUPS = [
     {
@@ -47,6 +48,7 @@ const TAB_GROUPS = [
             { id: 'wpa', label: 'Clutch WPA', icon: 'timer' },
             { id: 'matchups', label: 'Matchup Finder', icon: 'swords' },
             { id: 'garbage', label: 'Garbage-Time Deflator', icon: 'delete_sweep' },
+            { id: 'dad', label: 'DAD Index', icon: 'shield' },
         ],
     },
     {
@@ -209,6 +211,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'fatigue' && <ScheduleFatigueSection />}
                 {activeTab === 'referees' && <RefereeTendenciesSection />}
                 {activeTab === 'garbage' && <GarbageTimeSection />}
+                {activeTab === 'dad' && <DadIndexSection />}
             </div>
         </div>
     );

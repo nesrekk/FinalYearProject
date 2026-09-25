@@ -80,6 +80,12 @@ export const TOOL_META = {
         tagline: 'How much of a player’s scoring came when the game was already decided.',
         about: 'Every real play in ESPN’s full-season play-by-play is given a Leverage Index: the expected win-probability swing of the next play at that moment (time left × score margin), from this project’s own win-probability model, scaled so the average play is 1.0. Plays are bucketed as garbage time, low, medium or high leverage, and each player’s real points, shots, rebounds, assists and turnovers are split by bucket. Filtered PPG drops garbage-time and low-leverage points. Rebuilt per-game scoring is checked against the official per-game line every season.',
     },
+    dad: {
+        group: 'Player Analysis',
+        visual: 'scatter',
+        tagline: 'How hard each defender’s real assignments actually were.',
+        about: 'DAD Index (OBPM-weighted): for every defender, the share of their real tracked partial possessions spent on each offensive player, times that player’s OBPM (this project’s own Box Plus/Minus reproduction; players under 500 minutes count as replacement level, −2.0). Z-scored per season, and optionally within position. Plotted against the NBA’s own defended-FG% differential (defended FG% minus the shooters’ normal FG%). Descriptive only — no help defense, rebounding or scheme.',
+    },
     vegas: {
         group: 'Teams & Markets',
         visual: 'line',
