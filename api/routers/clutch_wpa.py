@@ -1,5 +1,6 @@
 import time
 from source_badge import make_source
+from wpa_lib import PBP_DEDUP_WHERE
 
 from fastapi import APIRouter, HTTPException
 
@@ -22,9 +23,10 @@ def get_clutch_wpa_leaderboard(top_n: int = 25, min_clutch_plays: int = 3):
                 detail="WPA data hasn't been computed yet — run scripts/fetch_play_by_play.py, "
                        "train_wpa_model.py, then compute_wpa.py.",
             )
-        cursor.execute("SELECT COUNT(DISTINCT game_id), MIN(season), MAX(season) FROM pbp_games;")
+        # Same one-copy-per-real-game filter compute_wpa.py used to build the totals.
+        cursor.execute("SELECT COUNT(DISTINCT game_id), MIN(season), MAX(season) FROM pbp_games g WHERE " + PBP_DEDUP_WHERE)
         n_games_sample, season_min, season_max = cursor.fetchone()
-        cursor.execute("SELECT source, COUNT(DISTINCT game_id) FROM pbp_games GROUP BY source;")
+        cursor.execute("SELECT source, COUNT(DISTINCT game_id) FROM pbp_games g WHERE " + PBP_DEDUP_WHERE + " GROUP BY source;")
         by_source = dict(cursor.fetchall())
 
         cursor.execute(
@@ -49,7 +51,7 @@ def get_clutch_wpa_leaderboard(top_n: int = 25, min_clutch_plays: int = 3):
             f"{n_games_sample} real games across seasons {season_span} ({source_note} — real full-season "
             "coverage where the source is ESPN via sportsdataverse, a real sampled subset where the source "
             "is nba_api; both real sources use the identical seconds-remaining/score-margin convention, "
-            "verified before combining them). clutch_wpa sums each real play's real win-probability swing "
+            "verified before combining them; a game stored by both sources is counted once, using the ESPN copy). clutch_wpa sums each real play's real win-probability swing "
             "(model output after the play minus before it) across every play in real 'clutch time' (final 5 "
             "min of regulation/OT, score within 5 points), attributed to whichever player made the play. "
             "This is the model's real output on real data, not an invented formula."

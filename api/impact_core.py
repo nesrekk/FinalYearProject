@@ -165,6 +165,7 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 from wpa_lib import CLUTCH_MARGIN as WPA_CLUTCH_MARGIN
 from wpa_lib import CLUTCH_SECONDS as WPA_CLUTCH_SECONDS
+from wpa_lib import PBP_DEDUP_WHERE
 from wpa_lib import load_model as _load_wpa_model
 from wpa_lib import seconds_elapsed as wpa_seconds_elapsed
 from wpa_lib import win_prob as wpa_win_prob
@@ -855,6 +856,7 @@ def _guess_the_game_pool(cursor):
                le.score_home, le.score_away
         FROM pbp_games g
         JOIN last_events le ON le.game_id = g.game_id
+        WHERE """ + PBP_DEDUP_WHERE + """
         ORDER BY g.game_id ASC;
         """
     )
