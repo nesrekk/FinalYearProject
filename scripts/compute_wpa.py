@@ -31,16 +31,19 @@ import psycopg2
 import psycopg2.extras
 
 from db_config import DB_CONFIG
-from wpa_lib import CLUTCH_MARGIN, CLUTCH_SECONDS, load_model, win_prob
+from wpa_lib import CLUTCH_MARGIN, CLUTCH_SECONDS, PBP_DEDUP_WHERE, load_model, win_prob
 
 
 def load_events(conn):
+    # PBP_DEDUP_WHERE: one copy per real game (the ESPN one), so no play is
+    # counted twice in a player's totals.
     query = """
         SELECT e.game_id, e.action_number, e.id, e.period, e.seconds_remaining,
                e.score_home, e.score_away, e.team_tricode, e.person_id, e.player_name,
                g.home_team
         FROM pbp_events e
         JOIN pbp_games g ON g.game_id = e.game_id
+        WHERE """ + PBP_DEDUP_WHERE + """
         ORDER BY e.game_id, e.action_number, e.id;
     """
     return pd.read_sql_query(query, conn)

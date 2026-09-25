@@ -29,6 +29,29 @@ OT_SECONDS = 5 * 60
 
 _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# pbp_games holds the same real game twice whenever the nba_api sample
+# (fetch_play_by_play.py) and ESPN's full season (fetch_pbp_espn.py)
+# overlap — different game_ids, same real game. Checked directly: all 420
+# nba_api games (2024-25) have an ESPN twin with the identical final score.
+# 418 match on game_date + home_team + away_team; the other 2 are real
+# neutral-site games (2024-12-14 NBA Cup semifinal MIL-ATL in Las Vegas,
+# 2025-01-25 IND-SAS in Paris) where nba_api's copy has home_team NULL, so
+# the match is date + whichever teams are known (a team plays at most once
+# per date). The ESPN copy is kept (full-season source, correct home team);
+# an nba_api game with no ESPN twin would still be kept. Filter on a
+# pbp_games alias `g`: "... FROM pbp_games g WHERE " + PBP_DEDUP_WHERE.
+PBP_DEDUP_WHERE = """NOT (
+    g.source = 'nba_api'
+    AND (g.home_team IS NOT NULL OR g.away_team IS NOT NULL)
+    AND EXISTS (
+        SELECT 1 FROM pbp_games twin
+        WHERE twin.source = 'espn'
+          AND twin.game_date = g.game_date
+          AND COALESCE(g.home_team, twin.home_team) IN (twin.home_team, twin.away_team)
+          AND COALESCE(g.away_team, twin.away_team) IN (twin.home_team, twin.away_team)
+    )
+)"""
+
 
 def load_model():
     with open(os.path.join(_SCRIPTS_DIR, "wpa_model.pkl"), "rb") as f:

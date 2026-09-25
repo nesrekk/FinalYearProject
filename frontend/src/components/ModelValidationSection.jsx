@@ -540,7 +540,8 @@ export default function ModelValidationSection() {
                             </div>
                             <p className="page-subtitle" style={{ marginTop: '0.5rem' }}>
                                 Same real held-out-by-game test split for both. Gradient Boosting performs
-                                essentially identically here (not better) — the hand-engineered interaction
+                                essentially identically here (ROC-AUC within ~0.001 in both scopes, not
+                                meaningfully better) — the hand-engineered interaction
                                 feature (margin / √time-remaining) already captures the nonlinearity a tree
                                 model would otherwise need to learn on its own, so there's little real room
                                 left for a more complex model to improve on. The deployed model stays Logistic

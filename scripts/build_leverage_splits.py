@@ -7,12 +7,11 @@ project's own trained win-probability model (wpa_lib.py) over real
 play-by-play.
 
 Data: pbp_events / pbp_games, ESPN source only (sportsdataverse, real full
-seasons). The small nba_api sample is deliberately excluded here: 418 of
-its 420 games are the SAME real games as ESPN rows (same date + teams,
-checked directly), so combining the two would double-count those games'
-production; the remaining 2 nba_api-only games are dropped for format
-consistency (nba_api's assist text is last-name-only and can't be matched
-to a player id reliably). The 3 real NBA Cup finals are excluded too (see
+seasons). The small nba_api sample is deliberately excluded here: all 420
+of its games are the SAME real games as ESPN rows (418 by date + teams; the
+other 2 are neutral-site games with a NULL nba_api home_team, same date and
+final score — see wpa_lib.PBP_DEDUP_WHERE), so combining the two would
+double-count those games' production. The 3 real NBA Cup finals are excluded too (see
 NBA_CUP_FINALS). No new data is fetched.
 
 Method (all thresholds documented in the API response too):

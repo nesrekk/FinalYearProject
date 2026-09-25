@@ -58,6 +58,7 @@ from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 from sklearn.preprocessing import StandardScaler
 
 from db_config import DB_CONFIG
+from wpa_lib import PBP_DEDUP_WHERE
 
 # Same real NBA clutch-time definition used everywhere else in this
 # project (compute_wpa.py, the /players/clutch-wpa endpoint): final 5
@@ -67,13 +68,15 @@ CLUTCH_MARGIN = 5
 
 
 def load_data():
+    # PBP_DEDUP_WHERE drops the nba_api copy of every game ESPN also has —
+    # without it, the same real game could land in train AND test under its
+    # two game_ids, leaking into the held-out-by-game evaluation.
     conn = psycopg2.connect(**DB_CONFIG)
     query = """
         SELECT e.game_id, e.period, e.seconds_remaining, e.score_home, e.score_away, g.home_win
         FROM pbp_events e
         JOIN pbp_games g ON g.game_id = e.game_id
-        WHERE e.action_type != 'period';
-    """
+        WHERE e.action_type != 'period' AND """ + PBP_DEDUP_WHERE + ";"
     df = pd.read_sql_query(query, conn)
     conn.close()
     return df

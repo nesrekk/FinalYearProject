@@ -1,5 +1,6 @@
 import re
 from source_badge import make_source
+from wpa_lib import PBP_DEDUP_WHERE
 from wpa_lib import seconds_elapsed as wpa_seconds_elapsed
 from wpa_lib import win_prob as wpa_win_prob
 
@@ -42,7 +43,7 @@ def get_wp_replay_list(season: int = None):
                    le.score_home, le.score_away
             FROM pbp_games g
             JOIN last_events le ON le.game_id = g.game_id
-            WHERE g.season = %s
+            WHERE g.season = %s AND """ + PBP_DEDUP_WHERE + """
             ORDER BY g.game_date DESC;
             """,
             (resolved_season,),
