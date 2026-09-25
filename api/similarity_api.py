@@ -312,25 +312,31 @@ def get_league_evolution():
         )
         archetype_rows = cursor.fetchall()
 
+        if not archetype_rows:
+            raise HTTPException(
+                status_code=404,
+                detail="No cluster results found. Run scripts/cluster_players.py first.",
+            )
+
+        # Scoped to exactly the seasons player_clusters actually covers, so
+        # these league-average trends never silently outrun the archetype
+        # data displayed right alongside them (player_season_stats now goes
+        # back to 1950 via the Kaggle historical import, well before
+        # clustering was ever run).
+        seasons = sorted({r[0] for r in archetype_rows})
         cursor.execute(
             """SELECT season,
                       SUM((fg3a::float / NULLIF(fga, 0)) * min * gp) / NULLIF(SUM(min * gp), 0) AS three_pt_rate,
                       SUM(ts_pct * min * gp) / NULLIF(SUM(min * gp), 0) AS ts_pct,
                       SUM(poss) / NULLIF(SUM(min * gp), 0) * 48 AS pace_proxy
                FROM player_season_stats
-               WHERE gp > 0 AND min > 0
+               WHERE gp > 0 AND min > 0 AND season = ANY(%s)
                GROUP BY season
-               ORDER BY season;"""
+               ORDER BY season;""",
+            (seasons,),
         )
         trend_rows = cursor.fetchall()
 
-    if not archetype_rows:
-        raise HTTPException(
-            status_code=404,
-            detail="No cluster results found. Run scripts/cluster_players.py first.",
-        )
-
-    seasons = sorted({r[0] for r in archetype_rows})
     archetypes = sorted({r[1] for r in archetype_rows})
     season_totals = {}
     for season, archetype, n in archetype_rows:
