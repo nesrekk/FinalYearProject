@@ -36,6 +36,7 @@ function seasonLabel(s) {
 }
 
 function LineTrendChart({ points, statDef, color }) {
+    const [hovered, setHovered] = useState(null);
     const valid = points.filter((p) => p.value != null);
     if (!valid.length) return <p className="empty-message">No data for this stat.</p>;
 
@@ -61,28 +62,60 @@ function LineTrendChart({ points, statDef, color }) {
     const peak = valid.reduce((a, b) => (b.value > a.value ? b : a), valid[0]);
 
     return (
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label={`Line chart of ${statDef.label} by season, with the peak season marked in gold`}>
-            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
-            {yTicks.map((t, idx) => (
-                <React.Fragment key={idx}>
-                    <line x1={PAD_L} y1={yFor(t)} x2={CHART_W - PAD_R} y2={yFor(t)} stroke="var(--hairline)" strokeWidth="1" />
-                    <text x={PAD_L - 8} y={yFor(t) + 3} fill="var(--text-3)" fontSize="10" textAnchor="end">{fmt(t)}</text>
-                </React.Fragment>
-            ))}
-            {points.map((p, i) => (
-                (i % Math.ceil(points.length / 10) === 0 || i === points.length - 1) && (
-                    <text key={p.season} x={xFor(i)} y={CHART_H - PAD_B + 16} fill="var(--text-3)" fontSize="9" textAnchor="middle">
-                        {seasonLabel(p.season)}
-                    </text>
-                )
-            ))}
-            <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" />
-            {valid.map((p) => (
-                <circle key={p.season} cx={xFor(p.i)} cy={yFor(p.value)} r={p.season === peak.season ? 4.5 : 3} fill={p.season === peak.season ? '#facc15' : color}>
-                    <title>{seasonLabel(p.season)}: {fmt(p.value)}</title>
-                </circle>
-            ))}
-        </svg>
+        <div style={{ position: 'relative' }}>
+            <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label={`Line chart of ${statDef.label} by season, with the peak season marked in gold`}>
+                <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
+                {yTicks.map((t, idx) => (
+                    <React.Fragment key={idx}>
+                        <line x1={PAD_L} y1={yFor(t)} x2={CHART_W - PAD_R} y2={yFor(t)} stroke="var(--hairline)" strokeWidth="1" />
+                        <text x={PAD_L - 8} y={yFor(t) + 3} fill="var(--text-3)" fontSize="10" textAnchor="end">{fmt(t)}</text>
+                    </React.Fragment>
+                ))}
+                {points.map((p, i) => (
+                    (i % Math.ceil(points.length / 10) === 0 || i === points.length - 1) && (
+                        <text key={p.season} x={xFor(i)} y={CHART_H - PAD_B + 16} fill="var(--text-3)" fontSize="9" textAnchor="middle">
+                            {seasonLabel(p.season)}
+                        </text>
+                    )
+                ))}
+                <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" />
+                {valid.map((p) => (
+                    <circle
+                        key={p.season} cx={xFor(p.i)} cy={yFor(p.value)}
+                        r={hovered?.season === p.season ? (p.season === peak.season ? 6 : 5) : (p.season === peak.season ? 4.5 : 3)}
+                        fill={p.season === peak.season ? '#facc15' : color}
+                        style={{ cursor: 'pointer' }}
+                        onMouseEnter={() => setHovered({ season: p.season, x: xFor(p.i), y: yFor(p.value), value: p.value, isPeak: p.season === peak.season })}
+                        onMouseLeave={() => setHovered((h) => (h?.season === p.season ? null : h))}
+                    >
+                        <title>{seasonLabel(p.season)}: {fmt(p.value)}</title>
+                    </circle>
+                ))}
+            </svg>
+            {hovered && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        left: `${(hovered.x / CHART_W) * 100}%`,
+                        top: `${(hovered.y / CHART_H) * 100}%`,
+                        transform: 'translate(-50%, -120%)',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--hairline)',
+                        borderRadius: 8,
+                        padding: '0.5rem 0.65rem',
+                        fontSize: '0.75rem',
+                        color: 'var(--text)',
+                        whiteSpace: 'nowrap',
+                        pointerEvents: 'none',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+                        zIndex: 5,
+                    }}
+                >
+                    <div style={{ fontWeight: 600 }}>{seasonLabel(hovered.season)}{hovered.isPeak ? ' · peak' : ''}</div>
+                    <div>{statDef.label}: {fmt(hovered.value)}</div>
+                </div>
+            )}
+        </div>
     );
 }
 

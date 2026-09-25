@@ -19,7 +19,12 @@ function buildChartPoints(data) {
     return { actual, projected, overlay };
 }
 
+const COLOR_ACTUAL = '#38bdf8';
+const COLOR_PROJECTED = '#a78bfa';
+const COLOR_OVERLAY = '#facc15';
+
 function TrajectoryChart({ data }) {
+    const [hovered, setHovered] = useState(null);
     const { actual, projected, overlay } = buildChartPoints(data);
     const allAges = [...actual.map((p) => p.age), ...projected.map((p) => p.age)];
     const allValues = [
@@ -57,41 +62,89 @@ function TrajectoryChart({ data }) {
 
     const yTicks = [0, 0.25, 0.5, 0.75, 1].map((t) => yMin + t * (yMax - yMin));
 
+    const hoverProps = (key, point, label) => ({
+        onMouseEnter: () => setHovered({ key, x: xFor(point.age), y: yFor(point.pts), age: point.age, pts: point.pts, floor: point.floor, ceiling: point.ceiling, label }),
+        onMouseLeave: () => setHovered((h) => (h?.key === key ? null : h)),
+    });
+
     return (
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label={`Line chart of ${data.player_name}'s real career points per game by age, with a projected trajectory and comp-based ceiling/floor band for future ages, and any actual outcomes overlaid where already known`}>
-            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
-            {yTicks.map((t, idx) => (
-                <React.Fragment key={idx}>
-                    <line x1={PAD_L} y1={yFor(t)} x2={CHART_W - PAD_R} y2={yFor(t)} stroke="var(--hairline)" strokeWidth="1" />
-                    <text x={PAD_L - 8} y={yFor(t) + 3} fill="var(--text-3)" fontSize="10" textAnchor="end">{t.toFixed(0)}</text>
-                </React.Fragment>
-            ))}
-            {[...new Set(allAges)].sort((a, b) => a - b).map((age) => (
-                <text key={age} x={xFor(age)} y={CHART_H - PAD_B + 16} fill="var(--text-3)" fontSize="9" textAnchor="middle">
-                    Age {age}
-                </text>
-            ))}
+        <div style={{ position: 'relative' }}>
+            <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label={`Line chart of ${data.player_name}'s real career points per game by age, with a projected trajectory and comp-based ceiling/floor band for future ages, and any actual outcomes overlaid where already known`}>
+                <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
+                {yTicks.map((t, idx) => (
+                    <React.Fragment key={idx}>
+                        <line x1={PAD_L} y1={yFor(t)} x2={CHART_W - PAD_R} y2={yFor(t)} stroke="var(--hairline)" strokeWidth="1" />
+                        <text x={PAD_L - 8} y={yFor(t) + 3} fill="var(--text-3)" fontSize="10" textAnchor="end">{t.toFixed(0)}</text>
+                    </React.Fragment>
+                ))}
+                {[...new Set(allAges)].sort((a, b) => a - b).map((age) => (
+                    <text key={age} x={xFor(age)} y={CHART_H - PAD_B + 16} fill="var(--text-3)" fontSize="9" textAnchor="middle">
+                        Age {age}
+                    </text>
+                ))}
 
-            <path d={bandPath} fill="var(--text-3)" fillOpacity={0.15} stroke="none" />
-            <path d={actualPath} fill="none" stroke="var(--accent)" strokeWidth="2.5" />
-            <path d={projPath} fill="none" stroke="var(--text-3)" strokeWidth="2" strokeDasharray="5 4" />
+                <path d={bandPath} fill="var(--text-3)" fillOpacity={0.15} stroke="none" />
+                <path d={actualPath} fill="none" stroke={COLOR_ACTUAL} strokeWidth="2.5" />
+                <path d={projPath} fill="none" stroke={COLOR_PROJECTED} strokeWidth="2" strokeDasharray="5 4" />
 
-            {actual.map((p) => (
-                <circle key={`actual-${p.age}`} cx={xFor(p.age)} cy={yFor(p.pts)} r={3} fill="var(--accent)">
-                    <title>Age {p.age} (real): {p.pts.toFixed(1)} pts</title>
-                </circle>
-            ))}
-            {projected.map((p) => p.pts != null && (
-                <circle key={`proj-${p.age}`} cx={xFor(p.age)} cy={yFor(p.pts)} r={3.5} fill="var(--text-3)">
-                    <title>Age {p.age} (projected): {p.pts.toFixed(1)} pts (comp range {p.floor?.toFixed(1)}-{p.ceiling?.toFixed(1)})</title>
-                </circle>
-            ))}
-            {overlay.map((p) => (
-                <circle key={`overlay-${p.age}`} cx={xFor(p.age)} cy={yFor(p.pts)} r={4} fill="none" stroke="var(--text-3)" strokeWidth="2">
-                    <title>Age {p.age} (what actually happened): {p.pts.toFixed(1)} pts</title>
-                </circle>
-            ))}
-        </svg>
+                {actual.map((p) => (
+                    <circle
+                        key={`actual-${p.age}`} cx={xFor(p.age)} cy={yFor(p.pts)}
+                        r={hovered?.key === `actual-${p.age}` ? 5 : 3} fill={COLOR_ACTUAL}
+                        style={{ cursor: 'pointer' }}
+                        {...hoverProps(`actual-${p.age}`, p, 'Real')}
+                    >
+                        <title>Age {p.age} (real): {p.pts.toFixed(1)} pts</title>
+                    </circle>
+                ))}
+                {projected.map((p) => p.pts != null && (
+                    <circle
+                        key={`proj-${p.age}`} cx={xFor(p.age)} cy={yFor(p.pts)}
+                        r={hovered?.key === `proj-${p.age}` ? 5.5 : 3.5} fill={COLOR_PROJECTED}
+                        style={{ cursor: 'pointer' }}
+                        {...hoverProps(`proj-${p.age}`, p, 'Projected (comp-weighted)')}
+                    >
+                        <title>Age {p.age} (projected): {p.pts.toFixed(1)} pts (comp range {p.floor?.toFixed(1)}-{p.ceiling?.toFixed(1)})</title>
+                    </circle>
+                ))}
+                {overlay.map((p) => (
+                    <circle
+                        key={`overlay-${p.age}`} cx={xFor(p.age)} cy={yFor(p.pts)}
+                        r={hovered?.key === `overlay-${p.age}` ? 6 : 4} fill="none" stroke={COLOR_OVERLAY} strokeWidth="2"
+                        style={{ cursor: 'pointer' }}
+                        {...hoverProps(`overlay-${p.age}`, p, 'What actually happened')}
+                    >
+                        <title>Age {p.age} (what actually happened): {p.pts.toFixed(1)} pts</title>
+                    </circle>
+                ))}
+            </svg>
+            {hovered && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        left: `${(hovered.x / CHART_W) * 100}%`,
+                        top: `${(hovered.y / CHART_H) * 100}%`,
+                        transform: 'translate(-50%, -120%)',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--hairline)',
+                        borderRadius: 8,
+                        padding: '0.5rem 0.65rem',
+                        fontSize: '0.75rem',
+                        color: 'var(--text)',
+                        whiteSpace: 'nowrap',
+                        pointerEvents: 'none',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+                        zIndex: 5,
+                    }}
+                >
+                    <div style={{ fontWeight: 600 }}>{hovered.label}</div>
+                    <div>Age {hovered.age} &middot; {hovered.pts.toFixed(1)} pts</div>
+                    {hovered.floor != null && hovered.ceiling != null && (
+                        <div style={{ color: 'var(--text-3)' }}>Range {hovered.floor.toFixed(1)}–{hovered.ceiling.toFixed(1)}</div>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }
 
