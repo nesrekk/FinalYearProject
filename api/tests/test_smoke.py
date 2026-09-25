@@ -474,3 +474,37 @@ def test_meta_site_stats():
     assert data["n_college_seasons"] > 0
     assert data["season_max"] >= data["season_min"]
     _assert_has_source(data)
+
+
+def test_team_comparison_shape():
+    from impact_api import app
+    resp = TestClient(app).get("/teams/compare/LAL/BOS")
+    assert resp.status_code == 200
+    data = resp.json()
+    for side in ("team_a", "team_b"):
+        team = data[side]
+        assert team["advanced_stats"]["offRating"] > 80
+        assert len(team["roster"]) > 0
+        assert team["roster"][0]["pts"] >= team["roster"][-1]["pts"]
+    h2h = data["head_to_head"]
+    assert h2h["games_played"] == h2h["team_a_wins"] + h2h["team_b_wins"]
+    _assert_has_source(data)
+
+
+def test_team_comparison_unknown_team():
+    from impact_api import app
+    resp = TestClient(app).get("/teams/compare/ZZZ/BOS")
+    assert resp.status_code == 404
+
+
+def test_news_current_shape():
+    from impact_api import app
+    resp = TestClient(app).get("/news/current", params={"limit": 10})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "items" in data and isinstance(data["items"], list)
+    for item in data["items"]:
+        assert item["headline"]
+        assert item["category"] in (
+            "News", "Injuries", "Trade Rumors", "Game Recap", "Player Watch",
+        )

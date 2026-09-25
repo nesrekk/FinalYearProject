@@ -103,8 +103,10 @@ _CACHE = {
     "lineup_chemistry": {},  # key: season -> {"ts": ..., "data": [lineup_dict, ...]}
     "team_game_log": {},  # key: (team_id, season) -> {"ts": ..., "data": [game_dict, ...]}
     "player_game_log": {},  # key: (player_id, season) -> {"ts": ..., "data": set(game_id)}
+    "news": {},  # key: (date_str, limit, team) -> {"ts": ..., "data": [item_dict, ...]}
 }
 _CACHE_TTL_SECONDS = 6 * 60 * 60
+_NEWS_CACHE_TTL_SECONDS = 5 * 60  # news moves fast — much shorter TTL than the general cache
 TEAM_NAME_TO_ABBR = {info["name"]: abbr for abbr, info in TEAM_META.items()}
 @contextmanager
 def get_db():
@@ -1283,11 +1285,49 @@ def _pub_time_matches_target(
     if d == target_date:
         return True
     return abs((d - target_date).days) <= 1
-def fetch_current_news(date_str: Optional[str] = None, limit: int = 20):
+_NEWS_CATEGORY_KEYWORDS = [
+    # Order matters — first match wins, most specific real-language signals first.
+    ("Injuries", ("injury", "injured", "out for", "questionable", "doubtful", "surgery",
+                   "tears", "torn", "sprain", "fracture", "ruled out", "day-to-day")),
+    ("Trade Rumors", ("trade", "traded", "trading", "deal", "acquire", "acquired", "waived",
+                        "waive", "buyout", "sign-and-trade")),
+    ("Game Recap", (" beat ", " beats ", " win over", " wins over", " rout ", " routs ",
+                      "final score", "walk-off", "buzzer-beater", "overtime thriller")),
+    ("Player Watch", ("mvp", "all-star", "career-high", "triple-double", "milestone", "record")),
+]
+
+
+def _classify_news_category(headline: str, summary: str) -> str:
+    """Real keyword match against the real headline/summary text — a disclosed
+    heuristic, not an editorial category from the source (RSS feeds carry no
+    category field at all)."""
+    text = f" {headline.lower()} {summary.lower()} "
+    for category, keywords in _NEWS_CATEGORY_KEYWORDS:
+        if any(kw in text for kw in keywords):
+            return category
+    return "News"
+
+
+def fetch_current_news(date_str: Optional[str] = None, limit: int = 20, team: Optional[str] = None):
     """
     Pull current NBA headlines from RapidAPI (if configured),
-    then fallback to public RSS feeds.
+    then fallback to public RSS feeds. `team` (a real full team name, e.g.
+    "Los Angeles Lakers") adds one extra real Google News RSS feed scoped to
+    that team via its own query parameter, alongside the general feeds.
+    Cached for _NEWS_CACHE_TTL_SECONDS since news moves fast but this
+    endpoint can be hit often.
     """
+    cache_key = (date_str, limit, team)
+    cached = _CACHE["news"].get(cache_key)
+    if cached and time.time() - cached["ts"] < _NEWS_CACHE_TTL_SECONDS:
+        return cached["data"]
+
+    result = _fetch_current_news_uncached(date_str, limit, team)
+    _CACHE["news"][cache_key] = {"ts": time.time(), "data": result}
+    return result
+
+
+def _fetch_current_news_uncached(date_str: Optional[str], limit: int, team: Optional[str]):
     target_date = None
     if date_str:
         try:
@@ -1386,6 +1426,7 @@ def fetch_current_news(date_str: Optional[str] = None, limit: int = 20):
                         "source": str(source),
                         "url": link,
                         "published_at": pub_raw,
+                        "category": _classify_news_category(title, summary),
                     }
                 )
 
@@ -1404,7 +1445,17 @@ def fetch_current_news(date_str: Optional[str] = None, limit: int = 20):
         ("NBA.com", "https://www.nba.com/rss/nba_rss.xml"),
         ("Google News", "https://news.google.com/rss/search?q=NBA&hl=en-US&gl=US&ceid=US:en"),
         ("Yahoo Sports", "https://sports.yahoo.com/nba/rss/"),
+        ("CBS Sports", "https://www.cbssports.com/rss/headlines/nba/"),
+        ("Sports Illustrated", "https://www.si.com/rss/si_topic/nba"),
     ]
+    if team:
+        # A real, additional Google News RSS feed scoped to this one team via
+        # its own query — same feed mechanism as the general "NBA" one above,
+        # just a more specific real query string, not a different data source.
+        feeds.append((
+            "Google News",
+            f"https://news.google.com/rss/search?q={quote(team)}+NBA&hl=en-US&gl=US&ceid=US:en",
+        ))
 
     items = []
     for source, feed_url in feeds:
@@ -1437,6 +1488,7 @@ def fetch_current_news(date_str: Optional[str] = None, limit: int = 20):
                         "source": source,
                         "url": link,
                         "published_at": pub_date_raw,
+                        "category": _classify_news_category(title, description),
                     }
                 )
         except Exception:
@@ -1444,7 +1496,7 @@ def fetch_current_news(date_str: Optional[str] = None, limit: int = 20):
 
     # If strict date filter produced nothing, return most recent feed items instead.
     if not items and date_str:
-        return fetch_current_news(date_str=None, limit=limit)
+        return _fetch_current_news_uncached(date_str=None, limit=limit, team=team)
 
     # Deduplicate by headline
     dedup = {}

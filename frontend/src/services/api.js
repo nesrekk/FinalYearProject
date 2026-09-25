@@ -554,6 +554,14 @@ export async function fetchCurrentMeta() {
     });
 }
 
+export async function fetchTeamComparisonExtra(teamA, teamB, season) {
+    const params = season ? { season } : {};
+    return getWithCache(`team_compare_extra_${teamA}_${teamB}_${season || 'current'}`, 90 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/teams/compare/${teamA}/${teamB}`, { params });
+        return response.data;
+    });
+}
+
 export async function fetchPlayerImage(playerName) {
     const response = await axios.get(
         `${IMPACT_BASE}/media/player-image/${encodeURIComponent(playerName)}`
@@ -587,12 +595,12 @@ export async function fetchGamesByDate(date) {
     });
 }
 
-export async function fetchCurrentNews(date, limit = 20) {
-    const key = `news_current:${date || 'latest'}:${limit}`;
+export async function fetchCurrentNews(date, limit = 20, team = null) {
+    const key = `news_current:${date || 'latest'}:${limit}:${team || 'all'}`;
     return getWithCache(key, 120 * 1000, async () => {
         const response = await axios.get(
             `${IMPACT_BASE}/news/current`,
-            { params: { ...(date ? { date } : {}), limit } }
+            { params: { ...(date ? { date } : {}), limit, ...(team ? { team } : {}) } }
         );
         return response.data;
     });

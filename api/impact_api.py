@@ -47,6 +47,7 @@ from routers import (
     root,
     schedule_fatigue,
     shot_charts,
+    team_comparison,
     trade_analyzer,
     trend_analysis,
     trivia,
@@ -77,6 +78,7 @@ for _router_module in (
     higher_lower, blurred_player, trivia, trend_analysis, trade_analyzer,
     players_table, impact_rankings, draft_value, player_impact, meta, media,
     players_search_profile, leaders, games_misc, news, vegas_scanner,
+    team_comparison,
 ):
     app.include_router(_router_module.router)
 
