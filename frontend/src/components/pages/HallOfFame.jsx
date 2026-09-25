@@ -24,6 +24,21 @@ function seasonSpan(first, last) {
     return `${first - 1}-${String(first).slice(-2)} to ${last - 1}-${String(last).slice(-2)}`;
 }
 
+function Nba75Badge() {
+    return (
+        <span
+            title="NBA 75th Anniversary Team (announced 2021-10-21) — a real, official NBA honor, separate from this page's stat leaderboards"
+            style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 16, height: 16, borderRadius: '50%', background: '#facc15', color: '#1a1400',
+                fontSize: '0.55rem', fontWeight: 800, marginLeft: 6, flexShrink: 0,
+            }}
+        >
+            75
+        </span>
+    );
+}
+
 export default function HallOfFame() {
     const [tab, setTab] = useState('career');
     const [stat, setStat] = useState('pts');
@@ -63,7 +78,8 @@ export default function HallOfFame() {
                         records, and career-longevity leaders — computed from every real player-season on file,
                         1950 through the current season. This project has no real Naismith Hall of Fame induction
                         dataset (no API we use provides one), so this page is deliberately about real, verifiable
-                        stats rather than a claim about who was actually inducted.
+                        stats rather than a claim about who was actually inducted. The gold "75" badge is a
+                        separate, real, official honor — the NBA's own 75th Anniversary Team, announced 2021-10-21.
                     </InfoTooltip>
                     <SourceBadge source={data?._source} />
                 </h2>
@@ -122,6 +138,7 @@ export default function HallOfFame() {
                                                     <div className="entity-row">
                                                         <PlayerHeadshot playerId={l.player_id} playerName={l.player_name} size={26} />
                                                         {l.player_name}
+                                                        {l.is_nba75 && <Nba75Badge />}
                                                     </div>
                                                 </td>
                                                 <td>{l.career_total.toLocaleString()}</td>
@@ -150,6 +167,7 @@ export default function HallOfFame() {
                                                     <div className="entity-row">
                                                         <PlayerHeadshot playerId={s.player_id} playerName={s.player_name} size={26} />
                                                         {s.player_name}
+                                                        {s.is_nba75 && <Nba75Badge />}
                                                     </div>
                                                 </td>
                                                 <td>{s.season_label}</td>
@@ -176,6 +194,7 @@ export default function HallOfFame() {
                                                     <div className="entity-row">
                                                         <PlayerHeadshot playerId={l.player_id} playerName={l.player_name} size={26} />
                                                         {l.player_name}
+                                                        {l.is_nba75 && <Nba75Badge />}
                                                     </div>
                                                 </td>
                                                 <td>{l.seasons_played}</td>

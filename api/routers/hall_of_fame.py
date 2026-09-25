@@ -24,6 +24,14 @@ SEASON_STATS = {
 }
 
 
+def _load_nba75_ids(cursor) -> set:
+    cursor.execute("SELECT to_regclass('public.nba75_team');")
+    if cursor.fetchone()[0] is None:
+        return set()
+    cursor.execute("SELECT player_id FROM nba75_team;")
+    return {r[0] for r in cursor.fetchall()}
+
+
 @router.get("/hof/career-leaders")
 def get_career_leaders(stat: str = "pts", limit: int = 50):
     if stat not in CAREER_STATS:
@@ -49,6 +57,7 @@ def get_career_leaders(stat: str = "pts", limit: int = 50):
             (safe_limit,),
         )
         rows = cursor.fetchall()
+        nba75_ids = _load_nba75_ids(cursor)
 
     leaders = [
         {
@@ -61,6 +70,7 @@ def get_career_leaders(stat: str = "pts", limit: int = 50):
             "first_season": r[5],
             "last_season": r[6],
             "per_game": round(r[2] / r[3], 1) if r[3] else None,
+            "is_nba75": r[0] in nba75_ids,
         }
         for i, r in enumerate(rows)
     ]
@@ -69,7 +79,7 @@ def get_career_leaders(stat: str = "pts", limit: int = 50):
         "stat": stat,
         "stat_label": CAREER_STATS[stat],
         "leaders": leaders,
-        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Kaggle historical (Basketball-Reference)"),
+        "_source": make_source(["player_season_stats", "nba75_team"], "nba_api (stats.nba.com) + Kaggle historical (Basketball-Reference)"),
     }
 
 
@@ -93,6 +103,7 @@ def get_greatest_seasons(stat: str = "pts", limit: int = 50, min_gp: int = 50):
             (safe_min_gp, safe_limit),
         )
         rows = cursor.fetchall()
+        nba75_ids = _load_nba75_ids(cursor)
 
     seasons = [
         {
@@ -104,6 +115,7 @@ def get_greatest_seasons(stat: str = "pts", limit: int = 50, min_gp: int = 50):
             "age": r[3],
             "gp": r[4],
             "value": r[5],
+            "is_nba75": r[0] in nba75_ids,
         }
         for i, r in enumerate(rows)
     ]
@@ -112,7 +124,7 @@ def get_greatest_seasons(stat: str = "pts", limit: int = 50, min_gp: int = 50):
         "stat": stat,
         "min_gp": safe_min_gp,
         "seasons": seasons,
-        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Kaggle historical (Basketball-Reference)"),
+        "_source": make_source(["player_season_stats", "nba75_team"], "nba_api (stats.nba.com) + Kaggle historical (Basketball-Reference)"),
     }
 
 
@@ -138,6 +150,7 @@ def get_longevity_leaders(limit: int = 50):
             (safe_limit,),
         )
         rows = cursor.fetchall()
+        nba75_ids = _load_nba75_ids(cursor)
 
     leaders = [
         {
@@ -148,11 +161,12 @@ def get_longevity_leaders(limit: int = 50):
             "career_gp": r[3],
             "first_season": r[4],
             "last_season": r[5],
+            "is_nba75": r[0] in nba75_ids,
         }
         for i, r in enumerate(rows)
     ]
 
     return {
         "leaders": leaders,
-        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Kaggle historical (Basketball-Reference)"),
+        "_source": make_source(["player_season_stats", "nba75_team"], "nba_api (stats.nba.com) + Kaggle historical (Basketball-Reference)"),
     }

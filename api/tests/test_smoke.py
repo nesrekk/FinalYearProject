@@ -523,6 +523,8 @@ def test_hof_career_leaders():
     totals = [l["career_total"] for l in leaders]
     assert totals == sorted(totals, reverse=True)
     _assert_has_source(data)
+    # Real NBA 75th Anniversary Team badge — LeBron is on the real list.
+    assert leaders[0]["is_nba75"] is True
 
 
 def test_hof_greatest_seasons():
