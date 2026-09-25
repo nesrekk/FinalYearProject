@@ -64,6 +64,9 @@ FEATURES = ["pts", "reb", "ast", "stl", "blk", "tov", "fg3_pct", "ts_pct", "usg_
 
 MIN_MINUTES = 15
 MIN_GAMES = 20
+# nba_api-era seasons only: pre-2010 rows (load_kaggle_historical_seasons.py) are
+# Basketball-Reference-sourced and were never part of the archetype pool.
+MIN_SEASON = 2010
 
 N_CLUSTERS = 6
 
@@ -86,7 +89,7 @@ def load_data():
         SELECT player_id, player_name, team_abbreviation, season, min, gp,
                {', '.join(FEATURES)}
         FROM player_season_stats
-        WHERE min >= {MIN_MINUTES} AND gp >= {MIN_GAMES};
+        WHERE min >= {MIN_MINUTES} AND gp >= {MIN_GAMES} AND season >= {MIN_SEASON};
     """
     conn = psycopg2.connect(**DB_CONFIG)
     try:
