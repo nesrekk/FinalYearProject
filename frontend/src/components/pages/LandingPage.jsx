@@ -4,6 +4,7 @@ import CustomCursor from '../landing/CustomCursor';
 import CursorGlow from '../landing/CursorGlow';
 import LiveShotHero from '../landing/LiveShotHero';
 import WelcomeIntro from '../landing/WelcomeIntro';
+import IntroErrorBoundary from '../landing/IntroErrorBoundary';
 import FeatureChapters from '../landing/FeatureChapters';
 import TeamRibbons from '../landing/TeamRibbons';
 import BigStat from '../ui/BigStat';
@@ -64,7 +65,11 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
             <ParticleField ref={particleFieldRef} heroHeight={HERO_HEIGHT} />
             <div className="landing-film-grain" aria-hidden="true" />
             <CustomCursor scopeRef={heroRef} />
-            {!introDone && <WelcomeIntro onDone={() => setIntroDone(true)} />}
+            {!introDone && (
+                <IntroErrorBoundary onError={() => setIntroDone(true)}>
+                    <WelcomeIntro onDone={() => setIntroDone(true)} />
+                </IntroErrorBoundary>
+            )}
 
             <section className="landing-hero-wrap">
                 <div className="landing-hero" ref={heroRef}>

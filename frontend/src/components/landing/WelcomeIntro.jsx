@@ -86,14 +86,22 @@ export default function WelcomeIntro({ onDone }) {
             return undefined;
         }
 
+        // A hidden tab/pane or some embedded webviews report a 0-size viewport
+        // at load; getImageData throws on a 0-size canvas. The intro is purely
+        // decorative, so skip straight to the landing page instead.
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+        if (!(W > 0 && H > 0)) {
+            onDone();
+            return undefined;
+        }
+
         let active = true;
         fetchSiteStats().then((d) => { if (active) setTotalPlayerSeasons(d?.n_player_seasons ?? null); }).catch(() => {});
 
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const W = window.innerWidth;
-        const H = window.innerHeight;
         canvas.width = W * dpr;
         canvas.height = H * dpr;
         canvas.style.width = `${W}px`;
