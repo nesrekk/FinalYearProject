@@ -12,3 +12,4 @@ api/.env
 # Kaggle downloads, shouldn't bloat the repo)
 nba_data/kaggle_1947_present/
 shots_data/kaggle_shot_data_2000_2022/
+shots_data/pbp_shots_1997_2026/
