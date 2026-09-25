@@ -7,3 +7,8 @@ frontend/dist/
 venv/
 .env
 api/.env
+
+# Raw Kaggle datasets (large, not source — regenerable from the original
+# Kaggle downloads, shouldn't bloat the repo)
+nba_data/kaggle_1947_present/
+shots_data/kaggle_shot_data_2000_2022/
