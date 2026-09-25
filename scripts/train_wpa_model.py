@@ -24,6 +24,20 @@ real clutch-time events only — is stored in wpa_model_validation so the
 Model Validation tab can show it rather than it only ever being printed
 to a terminal and forgotten.
 
+Also trains and evaluates a Gradient Boosting alternative on the exact
+same held-out-by-game split (real comparison, not a separate uncontrolled
+experiment) — HistGradientBoostingClassifier specifically, not plain
+GradientBoostingClassifier: this table has 3.6M+ real events, and
+sklearn's non-histogram GB is impractically slow at that size, where the
+histogram-binned variant is built for exactly this scale. Evaluated and
+stored (wpa_model_validation.model_type) purely for comparison — it does
+NOT replace wpa_model.pkl, which stays the deployed Logistic Regression.
+Win probability is looked up one event at a time, scalar, in tight loops
+(wpa_lib.py's win_prob(), called per real play-by-play event when
+replaying a full game), where a fast closed-form sigmoid clearly beats a
+few hundred scalar calls into a boosted-tree ensemble — so this is a real,
+evaluated "should we switch" comparison, not a redeployment.
+
 Usage:
     cd scripts && python3 train_wpa_model.py
 """
@@ -37,6 +51,7 @@ import pandas as pd
 import psycopg2
 import psycopg2.extras
 from sklearn.calibration import CalibratedClassifierCV
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 from sklearn.model_selection import GroupKFold, GroupShuffleSplit
@@ -112,8 +127,9 @@ def reliability_bins(probs, y_true):
     return out
 
 
-def validation_row(scope, probs, y_true, roc_auc):
+def validation_row(model_type, scope, probs, y_true, roc_auc):
     return {
+        "model_type": model_type,
         "scope": scope,
         "n_events": int(len(y_true)),
         "roc_auc": float(roc_auc) if roc_auc is not None else None,
@@ -130,6 +146,7 @@ def save_validation(rows, n_games_train, n_games_test):
         CREATE TABLE IF NOT EXISTS wpa_model_validation (
             id SERIAL PRIMARY KEY,
             computed_at TIMESTAMPTZ NOT NULL,
+            model_type TEXT NOT NULL DEFAULT 'logreg_calibrated',
             scope TEXT NOT NULL,
             n_games_train INT,
             n_games_test INT,
@@ -140,11 +157,15 @@ def save_validation(rows, n_games_train, n_games_test):
             reliability_bins JSONB
         );
     """)
+    # Additive — rows created before model_type existed all get the deployed
+    # model's real label, same "never silently guess" pattern used elsewhere
+    # (e.g. player_shots.shot_zone_basic backfill in api/shots_lib.py).
+    cursor.execute("ALTER TABLE wpa_model_validation ADD COLUMN IF NOT EXISTS model_type TEXT NOT NULL DEFAULT 'logreg_calibrated';")
     cursor.execute("TRUNCATE TABLE wpa_model_validation;")
     computed_at = datetime.now(timezone.utc)
     values = [
         (
-            computed_at, r["scope"], n_games_train, n_games_test, r["n_events"],
+            computed_at, r["model_type"], r["scope"], n_games_train, n_games_test, r["n_events"],
             r["roc_auc"], r["brier_score"], r["log_loss"],
             psycopg2.extras.Json(r["reliability_bins"]),
         )
@@ -153,7 +174,7 @@ def save_validation(rows, n_games_train, n_games_test):
     psycopg2.extras.execute_values(
         cursor,
         """INSERT INTO wpa_model_validation
-           (computed_at, scope, n_games_train, n_games_test, n_events, roc_auc, brier_score, log_loss, reliability_bins)
+           (computed_at, model_type, scope, n_games_train, n_games_test, n_events, roc_auc, brier_score, log_loss, reliability_bins)
            VALUES %s;""",
         values,
     )
@@ -254,25 +275,43 @@ def main():
     test_df = df.iloc[test_idx]
     calibrated_probs = model.predict_proba(scaler.transform(X_test))[:, 1]
 
-    rows = [validation_row("all_events", calibrated_probs, y_test, auc)]
-
     clutch_mask = (
         (test_df["period"].values >= 4)
         & (test_df["seconds_remaining"].values <= CLUTCH_SECONDS)
         & (np.abs(test_df["score_margin_home"].values) <= CLUTCH_MARGIN)
     )
     n_clutch = int(clutch_mask.sum())
-    if n_clutch > 0:
-        clutch_y = y_test[clutch_mask]
-        clutch_probs = calibrated_probs[clutch_mask]
-        clutch_auc = roc_auc_score(clutch_y, clutch_probs) if len(set(clutch_y)) > 1 else None
-        rows.append(validation_row("clutch_only", clutch_probs, clutch_y, clutch_auc))
-        print(f"\n  Clutch-time-only test events: {n_clutch:,} (AUC {clutch_auc:.4f})" if clutch_auc else f"\n  Clutch-time-only test events: {n_clutch:,}")
+
+    def scored_rows(model_type, probs, label):
+        out = [validation_row(model_type, "all_events", probs, y_test, roc_auc_score(y_test, probs))]
+        if n_clutch > 0:
+            clutch_y = y_test[clutch_mask]
+            clutch_probs = probs[clutch_mask]
+            clutch_auc = roc_auc_score(clutch_y, clutch_probs) if len(set(clutch_y)) > 1 else None
+            out.append(validation_row(model_type, "clutch_only", clutch_probs, clutch_y, clutch_auc))
+            print(f"  [{label}] clutch-time-only test events: {n_clutch:,}" + (f" (AUC {clutch_auc:.4f})" if clutch_auc else ""))
+        return out
+
+    rows = scored_rows("logreg_calibrated", calibrated_probs, "Logistic Regression (deployed)")
+
+    # ─── Gradient Boosting alternative — evaluated, NOT deployed ───────────
+    # Same train/test rows and features as the deployed model above, for a
+    # real apples-to-apples comparison. HistGradientBoostingClassifier (not
+    # plain GradientBoostingClassifier) because this table has 3.6M+ real
+    # events, where sklearn's histogram-binned implementation is the one
+    # actually built to train at that scale in reasonable time.
+    print("\n  --- Gradient Boosting alternative (evaluated, not deployed) ---")
+    gb_model = HistGradientBoostingClassifier(max_iter=200, max_depth=6, random_state=42)
+    gb_model.fit(X_train_scaled, y_train)
+    gb_probs = gb_model.predict_proba(scaler.transform(X_test))[:, 1]
+    gb_auc = roc_auc_score(y_test, gb_probs)
+    print(f"  Gradient Boosting real held-out ROC-AUC: {gb_auc:.4f} (deployed Logistic Regression: {auc:.4f})")
+    rows += scored_rows("gradient_boosting", gb_probs, "Gradient Boosting")
 
     n_games_train = int(df["game_id"].iloc[train_idx].nunique())
     n_games_test = int(df["game_id"].iloc[test_idx].nunique())
     save_validation(rows, n_games_train, n_games_test)
-    print(f"✅ Saved calibration validation ({len(rows)} scope(s)) to wpa_model_validation")
+    print(f"✅ Saved calibration validation ({len(rows)} row(s), 2 models) to wpa_model_validation")
 
 
 if __name__ == "__main__":

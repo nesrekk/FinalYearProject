@@ -288,7 +288,9 @@ def get_wpa_validation():
         cursor.execute(
             """SELECT computed_at, scope, n_games_train, n_games_test, n_events,
                       roc_auc, brier_score, log_loss, reliability_bins
-               FROM wpa_model_validation ORDER BY scope;"""
+               FROM wpa_model_validation
+               WHERE model_type = 'logreg_calibrated'
+               ORDER BY scope;"""
         )
         rows = cursor.fetchall()
 
@@ -324,6 +326,67 @@ def get_wpa_validation():
             "observed win rate in each bucket — a well-calibrated model's points sit near the diagonal."
         ),
         "scopes": scopes,
+        "_source": make_source(
+            ["wpa_model_validation"], "nba_api + ESPN via sportsdataverse (play-by-play)",
+            as_of=computed_at.isoformat() if computed_at else None,
+        ),
+    }
+
+
+@app.get("/validation/wpa/compare")
+def get_wpa_model_compare():
+    """
+    Real model comparison for the win-probability model: the deployed
+    calibrated Logistic Regression vs. a Gradient Boosting alternative
+    (HistGradientBoostingClassifier), both evaluated on the exact same
+    held-out-by-game test split (scripts/train_wpa_model.py). Gradient
+    Boosting is evaluated only, not deployed — win_prob() is called one
+    event at a time in tight loops (replaying a full game), where a
+    closed-form sigmoid clearly beats scoring a boosted-tree ensemble
+    a few hundred times per request.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT to_regclass('public.wpa_model_validation');")
+        if cursor.fetchone()[0] is None:
+            raise HTTPException(
+                status_code=503,
+                detail="WPA validation hasn't been computed yet — run scripts/train_wpa_model.py.",
+            )
+        cursor.execute(
+            """SELECT computed_at, model_type, scope, n_games_train, n_games_test, n_events,
+                      roc_auc, brier_score, log_loss
+               FROM wpa_model_validation ORDER BY model_type, scope;"""
+        )
+        rows = cursor.fetchall()
+
+    if not rows:
+        raise HTTPException(
+            status_code=503,
+            detail="WPA validation hasn't been computed yet — run scripts/train_wpa_model.py.",
+        )
+
+    MODEL_LABELS = {"logreg_calibrated": "Logistic Regression (deployed)", "gradient_boosting": "Gradient Boosting"}
+    models = {}
+    computed_at = None
+    n_games_train = n_games_test = None
+    for r in rows:
+        computed_at, model_type, scope = r[0], r[1], r[2]
+        n_games_train, n_games_test = r[3], r[4]
+        models.setdefault(model_type, {
+            "model_type": model_type,
+            "model_label": MODEL_LABELS.get(model_type, model_type),
+            "scopes": {},
+        })
+        models[model_type]["scopes"][scope] = {
+            "n_events": r[5], "roc_auc": r[6], "brier_score": r[7], "log_loss": r[8],
+        }
+
+    return {
+        "computed_at": computed_at.isoformat() if computed_at else None,
+        "n_games_train": n_games_train,
+        "n_games_test": n_games_test,
+        "models": list(models.values()),
         "_source": make_source(
             ["wpa_model_validation"], "nba_api + ESPN via sportsdataverse (play-by-play)",
             as_of=computed_at.isoformat() if computed_at else None,

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchBacktestDetail, fetchBacktestComparison, fetchShapCandidates, fetchShapBreakdown, fetchAllNBABacktest, fetchWpaValidation } from '../services/api';
+import { fetchBacktestDetail, fetchBacktestComparison, fetchShapCandidates, fetchShapBreakdown, fetchAllNBABacktest, fetchWpaValidation, fetchWpaModelCompare } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
@@ -153,6 +153,7 @@ export default function ModelValidationSection() {
     const [allNbaSeason, setAllNbaSeason] = useState(null);
 
     const [wpaValidation, setWpaValidation] = useState(null);
+    const [wpaCompare, setWpaCompare] = useState(null);
 
     const isAllNba = award === 'allnba';
     const isWpa = award === 'wpa';
@@ -232,6 +233,18 @@ export default function ModelValidationSection() {
                 setError(e?.response?.data?.detail || 'No WPA validation found. Run scripts/train_wpa_model.py first.');
             })
             .finally(() => { if (active) setLoading(false); });
+        return () => { active = false; };
+    }, [isWpa]);
+
+    // WPA model comparison (deployed Logistic Regression vs. an evaluated
+    // Gradient Boosting alternative) — separate, non-critical fetch so a
+    // failure here doesn't block the main calibration view above.
+    useEffect(() => {
+        if (!isWpa) { setWpaCompare(null); return; }
+        let active = true;
+        fetchWpaModelCompare()
+            .then((data) => { if (active) setWpaCompare(data); })
+            .catch(() => { if (active) setWpaCompare(null); });
         return () => { active = false; };
     }, [isWpa]);
 
@@ -504,6 +517,39 @@ export default function ModelValidationSection() {
                         when the model says a team has a 70% chance to win, did that real team actually win
                         about 70% of the real time it said so?
                     </p>
+
+                    {wpaCompare && (
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <h3 className="section-heading" style={{ marginTop: 0 }}>Model Comparison</h3>
+                            <div className="table-wrapper">
+                                <table className="data-table">
+                                    <thead>
+                                        <tr><th>Model</th><th>ROC-AUC (all events)</th><th>ROC-AUC (clutch only)</th><th>Deployed</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {wpaCompare.models.map((m) => (
+                                            <tr key={m.model_type}>
+                                                <td>{m.model_label}</td>
+                                                <td>{m.scopes.all_events?.roc_auc?.toFixed(4) ?? '—'}</td>
+                                                <td>{m.scopes.clutch_only?.roc_auc?.toFixed(4) ?? '—'}</td>
+                                                <td>{m.model_type === 'logreg_calibrated' ? 'Yes' : 'No'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p className="page-subtitle" style={{ marginTop: '0.5rem' }}>
+                                Same real held-out-by-game test split for both. Gradient Boosting performs
+                                essentially identically here (not better) — the hand-engineered interaction
+                                feature (margin / √time-remaining) already captures the nonlinearity a tree
+                                model would otherwise need to learn on its own, so there's little real room
+                                left for a more complex model to improve on. The deployed model stays Logistic
+                                Regression: equal accuracy, and win probability is looked up one event at a
+                                time in tight loops when replaying a full game, where its closed-form sigmoid
+                                is meaningfully faster than scoring a boosted-tree ensemble per event.
+                            </p>
+                        </div>
+                    )}
                     <div className="stat-cards-row">
                         <div className="stat-card">
                             <div className="stat-card-label">Games Trained On</div>

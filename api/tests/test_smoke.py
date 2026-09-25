@@ -65,6 +65,18 @@ def test_mvp_wpa_validation():
         assert "all_events" in data["scopes"]
 
 
+def test_mvp_wpa_model_compare():
+    from mvp_api import app
+    resp = TestClient(app).get("/validation/wpa/compare")
+    assert resp.status_code in (200, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        model_types = {m["model_type"] for m in data["models"]}
+        assert model_types == {"logreg_calibrated", "gradient_boosting"}
+        for m in data["models"]:
+            assert 0 <= m["scopes"]["all_events"]["roc_auc"] <= 1
+
+
 def test_mvp_ledger_summary():
     from mvp_api import app
     resp = TestClient(app).get("/ledger/summary")

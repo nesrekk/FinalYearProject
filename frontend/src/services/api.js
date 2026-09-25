@@ -177,6 +177,11 @@ export async function fetchWpaValidation() {
     return response.data;
 }
 
+export async function fetchWpaModelCompare() {
+    const response = await axios.get(`${MVP_BASE}/validation/wpa/compare`);
+    return response.data;
+}
+
 export async function fetchLedgerSummary(season) {
     const response = await axios.get(
         `${MVP_BASE}/ledger/summary`,
