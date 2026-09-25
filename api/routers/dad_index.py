@@ -112,9 +112,6 @@ def get_dad_index(season: Optional[int] = None):
             "note": (
                 "Year-over-year r compares the same real defenders' DAD in consecutive seasons — how persistent "
                 "a defender's assignment difficulty is. DAD vs. DFG% differential r is descriptive only."
-            ) + (
-                " 2025-26 OBPM comes from an earlier snapshot of the 2025-26 season line (see README known gaps)."
-                if season == 2026 else ""
             ),
         }
 

@@ -34,6 +34,9 @@ FEATURES = [
 
 TOP_N = 10
 PROGRESS_INTERVAL = 200
+# nba_api-era seasons only: pre-2010 rows (load_kaggle_historical_seasons.py) are
+# Basketball-Reference-sourced and were never part of the career-similarity pool.
+MIN_SEASON = 2010
 
 
 # ─── Step 1: Load and aggregate data ────────────────────────────────────────
@@ -47,7 +50,7 @@ def load_data():
     print("Step 1: Loading and aggregating career stats")
     print("=" * 60)
 
-    query = """
+    query = f"""
         SELECT
             player_id,
             player_name,
@@ -61,7 +64,8 @@ def load_data():
             COUNT(season)   AS seasons_played,
             MAX(pts)        AS peak_pts
         FROM player_season_stats
-        WHERE pts IS NOT NULL
+        WHERE season >= {MIN_SEASON}
+          AND pts IS NOT NULL
           AND ts_pct IS NOT NULL
           AND usg_pct IS NOT NULL
           AND net_rating IS NOT NULL

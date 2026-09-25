@@ -72,12 +72,6 @@ def _validation(cursor, season: int):
     r = cursor.fetchone()
     if r is None:
         return None
-    note = None
-    if season == 2026:
-        note = ("The stored official 2025-26 line in player_season_stats is an earlier snapshot than the full real "
-                "season (checked live against stats.nba.com: e.g. Jeremiah Fears is stored at 80 GP / 13.7 PPG, the "
-                "real final line is 82 GP / 14.3 PPG, which is what the play-by-play rebuild gets), so this season's "
-                "error against it is larger than other seasons'.")
     return {
         "n_games": r[0],
         "n_events": r[1],
@@ -91,7 +85,7 @@ def _validation(cursor, season: int):
         "ppg_vs_official_r": r[14],
         "ppg_vs_official_mae": r[15],
         "three_pa_rule_accuracy": r[16],
-        "note": note,
+        "note": None,
     }
 
 
