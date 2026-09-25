@@ -556,3 +556,18 @@ def test_hof_longevity():
     # than anyone else in NBA history.
     assert any(l["player_name"] == "Robert Parish" for l in data["leaders"])
     _assert_has_source(data)
+
+
+def test_backtest_compare_has_three_models():
+    """Real 3-model LOSO comparison (scripts/backtest_models.py must have
+    been re-run for this to reflect all three — Gradient Boosting was added
+    2026-09; see that script's docstring)."""
+    from mvp_api import app
+    resp = TestClient(app).get("/backtest/MVP/compare")
+    assert resp.status_code == 200
+    data = resp.json()
+    model_types = {m["model_type"] for m in data["models"]}
+    assert model_types == {"logreg", "random_forest", "gradient_boosting"}
+    for m in data["models"]:
+        assert 0 <= m["roc_auc"] <= 1
+        assert 0 <= m["top1_accuracy"] <= 1

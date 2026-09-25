@@ -37,10 +37,11 @@ import numpy as np
 import pandas as pd
 import psycopg2
 import psycopg2.extras
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score, roc_auc_score, roc_curve
 from sklearn.preprocessing import StandardScaler
+from sklearn.utils.class_weight import compute_sample_weight
 
 warnings.filterwarnings("ignore")
 
@@ -54,16 +55,27 @@ DB_CONFIG = mvp_mod.DB_CONFIG
 TRAIN_SEASONS = mvp_mod.TRAIN_SEASONS  # 2010..2024
 
 # Each entry: (model_type key, display label, factory returning a fresh
-# unfitted estimator). class_weight="balanced" on both, same random_state,
-# so the comparison isolates the algorithm rather than imbalance handling.
+# unfitted estimator, needs_sample_weight). class_weight="balanced" on
+# LogReg/RF, same random_state, so the comparison isolates the algorithm
+# rather than imbalance handling. GradientBoostingClassifier has no
+# class_weight parameter at all, so it gets the same real balanced
+# weighting applied manually via sample_weight in run_loso() instead —
+# same effective imbalance handling, just a different sklearn API for it.
 MODEL_CONFIGS = [
     (
         "logreg", "Logistic Regression",
         lambda: LogisticRegression(class_weight="balanced", max_iter=1000, random_state=42, solver="lbfgs"),
+        False,
     ),
     (
         "random_forest", "Random Forest",
         lambda: RandomForestClassifier(n_estimators=200, class_weight="balanced", random_state=42, n_jobs=-1),
+        False,
+    ),
+    (
+        "gradient_boosting", "Gradient Boosting",
+        lambda: GradientBoostingClassifier(n_estimators=200, max_depth=3, random_state=42),
+        True,
     ),
 ]
 
@@ -164,7 +176,7 @@ def downsample_curve(fpr, tpr, max_points=60):
 
 # ─── LOSO backtest ───────────────────────────────────────────────────────────
 
-def run_loso(df, features, award_name, model_factory, eval_seasons=None):
+def run_loso(df, features, award_name, model_factory, eval_seasons=None, needs_sample_weight=False):
     eval_seasons = eval_seasons if eval_seasons is not None else TRAIN_SEASONS
     per_season = []
     oof_probs = []
@@ -183,7 +195,10 @@ def run_loso(df, features, award_name, model_factory, eval_seasons=None):
         X_test = scaler.transform(test[features].values)
 
         model = model_factory()
-        model.fit(X_train, y_train)
+        if needs_sample_weight:
+            model.fit(X_train, y_train, sample_weight=compute_sample_weight("balanced", y_train))
+        else:
+            model.fit(X_train, y_train)
         probs = model.predict_proba(X_test)[:, 1]
 
         oof_probs.extend(probs.tolist())
@@ -219,7 +234,10 @@ def run_loso(df, features, award_name, model_factory, eval_seasons=None):
     oof_preds = (oof_probs >= 0.5).astype(int)
 
     cm = confusion_matrix(oof_labels, oof_preds)
-    roc_auc = roc_auc_score(oof_labels, oof_probs) if len(set(oof_labels)) > 1 else None
+    # NumPy 2.0 changed np.float64's __repr__ to "np.float64(0.99...)" instead of
+    # just the number, which breaks psycopg2's adaptation fallback for anything
+    # left as a numpy scalar — cast to plain float before it ever reaches SQL.
+    roc_auc = float(roc_auc_score(oof_labels, oof_probs)) if len(set(oof_labels)) > 1 else None
     roc_curve_points = None
     if len(set(oof_labels)) > 1:
         fpr, tpr, _ = roc_curve(oof_labels, oof_probs)
@@ -251,7 +269,10 @@ def run_loso(df, features, award_name, model_factory, eval_seasons=None):
     X_full = scaler_full.fit_transform(df[df["season"].isin(eval_seasons)][features].values)
     y_full = df[df["season"].isin(eval_seasons)]["label"].values
     full_model = model_factory()
-    full_model.fit(X_full, y_full)
+    if needs_sample_weight:
+        full_model.fit(X_full, y_full, sample_weight=compute_sample_weight("balanced", y_full))
+    else:
+        full_model.fit(X_full, y_full)
     summary["feature_importance"] = extract_feature_importance(full_model, features)
 
     return per_season, summary
@@ -412,7 +433,7 @@ def save_results(conn, award_name, model_type, model_label, per_season, summary)
 def main():
     print("Model Backtesting — Leave-One-Season-Out validation")
     print(f"Seasons evaluated: {min(TRAIN_SEASONS)}-{max(TRAIN_SEASONS)} ({len(TRAIN_SEASONS)} seasons)")
-    print(f"Models compared: {', '.join(label for _, label, _ in MODEL_CONFIGS)}")
+    print(f"Models compared: {', '.join(label for _, label, _, _ in MODEL_CONFIGS)}")
 
     conn = psycopg2.connect(**DB_CONFIG)
     ensure_schema(conn)
@@ -425,8 +446,11 @@ def main():
 
     for award_name, df, features, eval_seasons in jobs:
         results_by_model = []
-        for model_type, model_label, model_factory in MODEL_CONFIGS:
-            per_season, summary = run_loso(df, features, award_name, model_factory, eval_seasons=eval_seasons)
+        for model_type, model_label, model_factory, needs_sample_weight in MODEL_CONFIGS:
+            per_season, summary = run_loso(
+                df, features, award_name, model_factory,
+                eval_seasons=eval_seasons, needs_sample_weight=needs_sample_weight,
+            )
             print_report(award_name, model_label, per_season, summary)
             save_results(conn, award_name, model_type, model_label, per_season, summary)
             results_by_model.append((model_type, model_label, summary))
