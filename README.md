@@ -301,3 +301,35 @@ Everything else in the original roadmap, including A6, is now shipped — B5 is 
 **Operational note on the Prediction Ledger:** `snapshot_predictions.py` only logs a real point-in-time snapshot when it's actually run — nothing runs it automatically. Run it daily or weekly (manually, or via a cron/launchd entry you set up yourself; see the script's own docstring for an example cron line — nothing is auto-installed) so real trajectory history builds up over the season, and run `resolve_predictions.py` periodically to grade any season that's actually finished.
 
 Throughout: update this README's "What's in it" and "Known real gaps" sections as each item ships, add a smoke test alongside each new endpoint rather than batching test-writing to the end, and keep screenshots reasonably current (not strictly required for every feature, but nice to have for the ones with real visual payoff).
+
+---
+
+## Advisor demo — status check (5-min read)
+
+*Last checked: 2026-09-25.*
+
+**Launch (3 backends + frontend), from repo root:**
+```bash
+cd api
+/Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m uvicorn mvp_api:app        --port 8000 --reload
+/Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m uvicorn similarity_api:app --port 8001 --reload
+/Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m uvicorn impact_api:app     --port 8002 --reload
+cd ../frontend && npm run dev
+```
+
+**Checked just now — all green:**
+- All 3 backends + frontend healthy (200 on every root endpoint).
+- Full smoke suite: **34/34 passing**.
+- `git status`: clean, pushed to `origin/main` (up to date through commit `5d44a25`).
+- No console errors on the pages exercised below.
+
+**Since the last demo, what changed:**
+- Historical depth: `player_season_stats` now spans **1950–2026** (was 2010–2026), via a verified Kaggle import — Trend Analysis, career pages, etc. now show real full-career/full-franchise history instead of stopping at 2010.
+- Shot charts: **6.3M real shots bulk-loaded** for 2,842 players (1996-97 through 2025-26). This was the fix for the recurring "impact_api freezes on a shot-chart search" bug from earlier — most real player searches now serve instantly from Postgres instead of a live, flaky stats.nba.com scrape.
+- Fixed today: a player-search dropdown that was visually clipping/overlapping content on Player Comparison, Career Trajectory Forecaster, and Playoff Forecaster; missing hover tooltips on the Career Trajectory band/projection line, Game Replay's win-probability line, and the Schedule Fatigue chart; two garbled rotated axis labels; and a real regression the historical import introduced (League Evolution's trend charts had silently drifted out of sync with its archetype chart — caught by the smoke suite, fixed, verified).
+
+**Safe to demo confidently:** MVP/DPOY/ROY prediction + backtesting, Season Similarity, Player Archetypes + League Evolution, Trend Analysis (player and team), Career Trajectory Forecaster, Game Replay (win-probability, now fully hoverable), Playoff Drop-off Forecaster, shot charts for any well-known player (LeBron, Jokić, Giannis, etc. — all bulk-cached).
+
+**One thing to avoid, same as last time:** a shot-chart search for an obscure player who isn't among the 2,842 bulk-loaded (rare now, but possible for a very marginal role player) can still fall back to a live stats.nba.com fetch and be slow. If in doubt, search a recognizable name first.
+
+**Not demoed/verified end-to-end:** the Supabase cloud DB path (`DB_TARGET=cloud` in `api/.env`) — wired and ready, but connection testing was blocked by network policy (university wifi blocks outbound Postgres ports 5432/6543). The demo should run on the local DB (`DB_TARGET=local`, the default) unless that's been separately verified since.
