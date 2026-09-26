@@ -93,7 +93,7 @@ export default function ScoutingReportCard({ playerName, season, titleClassName 
     return (
         <div>
             <div className={titleClassName} style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                Scouting Report{data ? ` (${seasonLabel(data.season)})` : ''}
+                Exploit Guide{data ? ` (${seasonLabel(data.season)})` : ''}
                 {data && (
                     <InfoTooltip label="How this works" title="Exploit Guide — real splits, significance-filtered">
                         {data.methodology}

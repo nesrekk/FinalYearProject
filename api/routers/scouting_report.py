@@ -207,6 +207,6 @@ def get_scouting_report(player_name: str, season: Optional[int] = None):
         "_source": make_source(
             ["scouting_splits", "scouting_validation", "player_shots", "player_playtypes", "player_matchups",
              "player_leverage_splits"],
-            "nba_api (shot charts, Synergy play types, LeagueSeasonMatchups) + ESPN play-by-play",
+            "nba_api + ESPN play-by-play",
         ),
     }
