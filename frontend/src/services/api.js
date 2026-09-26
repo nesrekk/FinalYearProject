@@ -592,6 +592,20 @@ export async function fetchLineupSpacing(playerIds, season) {
     return response.data;
 }
 
+// ─── Contract Value ──────────────────────────────────────────────
+export async function fetchContractValue(season, topN = 10) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/contracts/value`,
+        { params: { top_n: topN, ...(season ? { season } : {}) } }
+    );
+    return response.data;
+}
+
+export async function fetchPlayerContractValue(playerId, season) {
+    const response = await axios.get(`${IMPACT_BASE}/contracts/player/${playerId}`, { params: { season } });
+    return response.data;
+}
+
 // ─── Referee Tendencies ──────────────────────────────────────────
 export async function fetchRefereeTendencies(minGames = 10, sort = 'n_games') {
     const response = await axios.get(

@@ -735,3 +735,29 @@ def test_spacing_lineup_builder():
     assert ext["predicted_ortg_change"] is None and ext["no_effect_message"]
     assert client.get("/spacing/lineup", params={"player_ids": "1,2,3"}).status_code == 400
     assert client.get("/spacing/lineup", params={"season": 2025, "player_ids": "1626157,1626157,1628404,1628969,1628973"}).status_code == 400
+
+
+def test_contract_value_shape_and_sanity():
+    """Contract Surplus Value (scripts/load_salaries.py -> build_contract_value.py).
+    Needs the gitignored nba_data/salaries/ CSVs to have been loaded; skipped
+    cleanly if the tables were never built. Real sniff test: Stephen Curry's
+    2015-16 contract ($11.4M, the season he was unanimous MVP) is the
+    biggest bargain of that season."""
+    from impact_api import app
+    client = TestClient(app)
+    resp = client.get("/contracts/value", params={"season": 2016})
+    if resp.status_code == 503:
+        pytest.skip("contract_value not built on this machine (salary CSVs are local-only).")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["bargains"][0]["player_name"] == "Stephen Curry"
+    assert all(l["salary"] >= 25_000_000 for l in data["liabilities"])
+    s = data["summary"]
+    assert s["included"] and s["cost_per_win"] > 0 and s["minutes_coverage"] >= 0.9
+    # Calibrated WAR sums to the real wins above replacement by construction.
+    assert 0 < s["war_scale_k"] < 1
+    for p in data["bargains"]:
+        assert abs(p["fair_value"] - p["salary"] - p["surplus"]) < 1
+    _assert_has_source(data)
+    assert client.get("/contracts/value", params={"season": 2022}).status_code == 404
+    assert client.get("/contracts/player/201939", params={"season": 2022}).json()["available"] is False

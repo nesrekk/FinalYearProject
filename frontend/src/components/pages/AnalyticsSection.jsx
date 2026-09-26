@@ -26,6 +26,7 @@ import RefereeTendenciesSection from '../RefereeTendenciesSection';
 import GarbageTimeSection from '../GarbageTimeSection';
 import DadIndexSection from '../DadIndexSection';
 import SpacingLabSection from '../SpacingLabSection';
+import ContractValueSection from '../ContractValueSection';
 
 const TAB_GROUPS = [
     {
@@ -59,6 +60,7 @@ const TAB_GROUPS = [
             { id: 'playoffs', label: 'Playoff Forecaster', icon: 'military_tech' },
             { id: 'lineups', label: 'Lineup Chemistry', icon: 'diversity_3' },
             { id: 'spacing', label: 'Spacing Lab', icon: 'open_with' },
+            { id: 'contracts', label: 'Contract Value', icon: 'payments' },
             { id: 'replay', label: 'Game Replay', icon: 'movie' },
             { id: 'withwithout', label: 'With/Without a Star', icon: 'person_off' },
             { id: 'fatigue', label: 'Schedule Fatigue', icon: 'flight' },
@@ -215,6 +217,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'garbage' && <GarbageTimeSection />}
                 {activeTab === 'dad' && <DadIndexSection />}
                 {activeTab === 'spacing' && <SpacingLabSection />}
+                {activeTab === 'contracts' && <ContractValueSection />}
             </div>
         </div>
     );

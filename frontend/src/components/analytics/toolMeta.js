@@ -92,6 +92,12 @@ export const TOOL_META = {
         tagline: 'Shooting gravity, and what it adds up to for a five-man lineup.',
         about: 'Gravity is a disclosed composite proxy (not player-tracking gravity): the sum of three real z-scores — 3PA per 100 possessions, catch-and-shoot 3P%, and the share of 3PA with a defender within 6 ft — the last two shrunk toward players of similar 3-point volume. Lineup spacing sums the five players. Validated on real 5-man lineups with 100+ possessions: offensive rating vs. spacing plus the players’ summed OBPM, season fixed effects, standard errors clustered by team-season. A predicted ORtg change is shown only when that relationship is statistically significant.',
     },
+    contracts: {
+        group: 'Teams & Markets',
+        visual: 'scatter',
+        tagline: 'Real production priced in dollars vs. real salary — bargains and cap liabilities.',
+        about: 'Fair value = max(WAR, 0) × that season’s real cost per win + the league minimum; surplus = fair value − real salary. Cost per win comes from real salaries of players who played, the real CBA minimum salary and real team records (wins above what a .200 team would win). WAR is VORP × 2.7 on this project’s own BPM reproduction, rescaled each season to sum to the real wins above replacement. Salaries come from public Kaggle datasets built from HoopsHype and Basketball-Reference, checked against real contracts; inflation-adjusted and incomplete seasons are left out.',
+    },
     vegas: {
         group: 'Teams & Markets',
         visual: 'line',

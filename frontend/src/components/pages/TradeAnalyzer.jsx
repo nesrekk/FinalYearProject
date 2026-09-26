@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { fetchTradeTeams, fetchTradeRoster, simulateTrade } from '../../services/api';
+import TradeContractValue from '../common/TradeContractValue';
 import Loader from '../Loader';
 import InfoTooltip from '../common/InfoTooltip';
 import Icon from '../common/Icon';
@@ -277,6 +278,13 @@ export default function TradeAnalyzer() {
                         <TeamPanel side={panels.b} isAdvanced={isAdvanced} preset={preset} />
                     </div>
                     <p className="page-subtitle" style={{ marginTop: '1rem' }}>{result.caveat}</p>
+                    <TradeContractValue
+                        season={season}
+                        players={[
+                            { id: Number(playerAId), name: rosterA.find((p) => p.player_id === Number(playerAId))?.player_name || 'Player A' },
+                            { id: Number(playerBId), name: rosterB.find((p) => p.player_id === Number(playerBId))?.player_name || 'Player B' },
+                        ]}
+                    />
                 </>
             )}
         </div>
