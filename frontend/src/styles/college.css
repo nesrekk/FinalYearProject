@@ -158,9 +158,22 @@
 
 /* March Madness: round-probability heat cells */
 .cb-prob {
+  --heat-max: 85%;
+  background: color-mix(in srgb, var(--brand) calc(var(--p, 0) * var(--heat-max)), transparent);
   text-align: center;
   font-variant-numeric: tabular-nums;
   min-width: 56px;
+}
+
+/* Ink theme: cream text stays readable only on a lighter orange wash. */
+:root[data-theme='dark'] .cb-prob {
+  --heat-max: 55%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='system'] .cb-prob {
+    --heat-max: 55%;
+  }
 }
 
 .cb-hit {

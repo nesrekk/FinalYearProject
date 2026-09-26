@@ -822,3 +822,43 @@ def test_college_pipeline_shape_and_sanity():
     assert e["ci_low"] <= e["ws4_per_10_margin"] <= e["ci_high"]
     assert all(s["n"] >= data["min_school_picks"] for s in data["schools"])
     _assert_has_source(data)
+
+
+def test_march_madness_shape_and_sanity():
+    """March Madness model (scripts/fetch_cbb_games.py -> build_ncaa_model.py).
+    Skipped cleanly if never built. Real sniff tests: every backtest champion
+    agrees with the independent Torvik/Kaggle file's champions; 2026 is the
+    held-out test season; bracket odds are internally consistent."""
+    from impact_api import app
+    client = TestClient(app)
+    resp = client.get("/college/madness")
+    if resp.status_code == 503:
+        pytest.skip("March Madness model not built on this machine.")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["season"] == 2026 and data["season_summary"]["is_test"]
+    assert data["season_summary"]["champion"] == "Michigan"
+    assert [s["season"] for s in data["seasons"]] == [s for s in range(2013, 2027) if s != 2020]
+    assert data["backtest_summary"]["n_seasons"] == 12
+
+    import psycopg2 as _pg
+    conn = _pg.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    cur.execute("SELECT season, team FROM college_team_seasons WHERE postseason = 'Champions'")
+    torvik = dict(cur.fetchall())
+    conn.close()
+    same_school = {"UConn": "Connecticut"}
+    for s in data["seasons"]:
+        if s["season"] in torvik:
+            assert same_school.get(s["champion"], s["champion"]) == torvik[s["season"]]
+
+    teams = data["teams"]
+    assert len(teams) == 68
+    assert abs(sum(t["p_champ"] for t in teams) - 1) < 0.01
+    assert abs(sum(t["p_f4"] for t in teams) - 4) < 0.02
+    for t in teams:
+        assert t["p_r64"] >= t["p_r32"] >= t["p_s16"] >= t["p_e8"] >= t["p_f4"] >= t["p_final"] >= t["p_champ"]
+    assert len(data["games"]) == 67
+    assert data["chosen_feature_set"] in {v["feature_set"] for v in data["variants"]}
+    _assert_has_source(data)
+    assert client.get("/college/madness", params={"season": 2020}).status_code == 404

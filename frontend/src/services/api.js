@@ -781,3 +781,8 @@ export async function fetchCollegePipeline() {
     const response = await axios.get(`${IMPACT_BASE}/college/pipeline`);
     return response.data;
 }
+
+export async function fetchMarchMadness(season) {
+    const response = await axios.get(`${IMPACT_BASE}/college/madness`, { params: season ? { season } : {} });
+    return response.data;
+}

@@ -164,3 +164,97 @@ def get_college_pipeline():
     college team's strength that season (Torvik), and their first four NBA
     seasons of Win Shares against what their draft slot predicts."""
     return _pipeline()
+
+
+REACH_COLS = ["p_r64", "p_r32", "p_s16", "p_e8", "p_f4", "p_final", "p_champ"]
+
+
+@lru_cache(maxsize=1)
+def _madness_overview():
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM ncaa_model_seasons ORDER BY season")
+            cols = [d[0] for d in cur.description]
+            seasons = [dict(zip(cols, r)) for r in cur.fetchall()]
+            cur.execute(
+                """SELECT feature_set, bool_or(chosen), sum(n_games),
+                          sum(n_games * log_loss) / sum(n_games), sum(n_games * brier) / sum(n_games),
+                          sum(n_games * accuracy) / sum(n_games)
+                   FROM ncaa_model_backtest GROUP BY feature_set ORDER BY 4"""
+            )
+            variants = [
+                {"feature_set": r[0], "chosen": r[1], "n_games": int(r[2]), "log_loss": round(float(r[3]), 4),
+                 "brier": round(float(r[4]), 4), "accuracy": round(float(r[5]), 4)}
+                for r in cur.fetchall()
+            ]
+    except psycopg2.errors.UndefinedTable:
+        raise HTTPException(
+            status_code=503,
+            detail="March Madness model not built yet: run scripts/fetch_cbb_games.py then scripts/build_ncaa_model.py.",
+        )
+    for s in seasons:
+        for k, v in list(s.items()):
+            if isinstance(v, float):
+                s[k] = round(v, 4)
+    backtest = [s for s in seasons if not s["is_test"]]
+    return {
+        "chosen_feature_set": variants and next(v["feature_set"] for v in variants if v["chosen"]),
+        "variants": variants,
+        "seasons": seasons,
+        "backtest_summary": {
+            "n_seasons": len(backtest),
+            "champion_top1": sum(s["champion_rank"] == 1 for s in backtest),
+            "champion_top4": sum(s["champion_rank"] <= 4 for s in backtest),
+            # Seeds can't single out one team (four 1 seeds tie), so the seed
+            # comparison is "champion inside the top-4 seed group", ties counted whole.
+            "seed_champion_top4": sum(s["seed_champion_rank"] + s["seed_champion_tied"] - 1 <= 4 for s in backtest),
+            "reach_log_loss": round(sum(s["reach_log_loss"] for s in backtest) / len(backtest), 4) if backtest else None,
+            "seed_reach_log_loss": round(sum(s["seed_reach_log_loss"] for s in backtest) / len(backtest), 4) if backtest else None,
+        },
+    }
+
+
+@router.get("/college/madness")
+def get_march_madness(season: int = None):
+    """March Madness model: pre-tournament bracket odds for one season (the
+    test season by default), plus the model's backtest record."""
+    overview = _madness_overview()
+    seasons = [s["season"] for s in overview["seasons"]]
+    test = next((s["season"] for s in overview["seasons"] if s["is_test"]), seasons[-1])
+    season = season or test
+    if season not in seasons:
+        raise HTTPException(status_code=404, detail=f"No tournament for {season}. Available: {', '.join(map(str, seasons))}.")
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM ncaa_bracket_odds WHERE season = %s ORDER BY p_champ DESC, seed", (season,))
+        cols = [d[0] for d in cur.description]
+        teams = [dict(zip(cols, r)) for r in cur.fetchall()]
+        cur.execute(
+            """SELECT round_name, round, start_date, team_a, seed_a, points_a, team_b, seed_b, points_b, winner, p_a
+               FROM ncaa_tourney_games WHERE season = %s ORDER BY round, start_date""",
+            (season,),
+        )
+        cols = [d[0] for d in cur.description]
+        games = [dict(zip(cols, r)) for r in cur.fetchall()]
+    for g in games:
+        g["start_date"] = g["start_date"].isoformat()
+        fav_p = g["p_a"] if g["p_a"] >= 0.5 else 1 - g["p_a"]
+        fav = g["team_a"] if g["p_a"] >= 0.5 else g["team_b"]
+        g["favourite"], g["favourite_p"] = fav, round(float(fav_p), 4)
+        g["upset"] = g["winner"] is not None and g["winner"] != fav
+        g["seed_upset"] = (
+            g["winner"] is not None and g["seed_a"] != g["seed_b"]
+            and g["winner"] == (g["team_a"] if g["seed_a"] > g["seed_b"] else g["team_b"])
+        )
+    return {
+        **overview,
+        "season": season,
+        "season_summary": next(s for s in overview["seasons"] if s["season"] == season),
+        "teams": teams,
+        "games": games,
+        "_source": make_source(
+            ["cbb_games", "ncaa_bracket_odds", "ncaa_model_seasons", "ncaa_model_backtest", "ncaa_tourney_games"],
+            "CollegeBasketballData.com (every D1 game 2013-2026: scores, Elo at tip-off, NCAA seeds)",
+        ),
+    }

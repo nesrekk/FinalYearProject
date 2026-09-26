@@ -28,6 +28,7 @@ import DadIndexSection from '../DadIndexSection';
 import SpacingLabSection from '../SpacingLabSection';
 import ContractValueSection from '../ContractValueSection';
 import CollegePipelineSection from '../CollegePipelineSection';
+import MarchMadnessSection from '../MarchMadnessSection';
 
 const TAB_GROUPS = [
     {
@@ -73,6 +74,7 @@ const TAB_GROUPS = [
         tabs: [
             { id: 'prospects', label: 'Draft Prospects', icon: 'school' },
             { id: 'pipeline', label: 'College → NBA', icon: 'route' },
+            { id: 'madness', label: 'March Madness', icon: 'account_tree' },
         ],
     },
 ];
@@ -221,6 +223,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'spacing' && <SpacingLabSection />}
                 {activeTab === 'contracts' && <ContractValueSection />}
                 {activeTab === 'pipeline' && <CollegePipelineSection />}
+                {activeTab === 'madness' && <MarchMadnessSection />}
             </div>
         </div>
     );

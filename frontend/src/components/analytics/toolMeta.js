@@ -152,4 +152,10 @@ export const TOOL_META = {
         tagline: 'Does a strong college team mean a better NBA player than the pick suggests?',
         about: 'Every NBA pick 2013–2025 who came from a US college, linked to that college team’s season in Bart Torvik’s ratings (Kaggle "College Basketball Dataset"). NBA outcome: Basketball-Reference Win Shares in the first four seasons after the draft, compared with a draft-slot expectation fitted on every pick through 2022 (WS4 = a + b × ln(pick)). Only classes through 2022 have four NBA seasons, so they are the ones judged. Effects are shown with 95% bootstrap intervals. The last college season is checked against CollegeBasketballData.com player stats; one pick who never played a college game is left out.',
     },
+    madness: {
+        group: 'College & Draft',
+        visual: 'bar',
+        tagline: 'Pre-tournament title odds for every NCAA bracket since 2013, tested on seasons the model never saw.',
+        about: 'Inputs are all known before the first tip: CollegeBasketballData.com Elo going into the tournament, an opponent- and venue-adjusted scoring margin fitted on every D1-vs-D1 game before the tournament, and seed. A logistic regression on the difference between two teams gives each game’s win probability, and the real bracket is simulated 20,000 times. Five input sets were compared by leave-one-season-out backtest on 2013–2025 (the best held-out log loss was kept); 2026 was held back as the final test. Torvik’s end-of-season ratings are not used because they include the tournament games.',
+    },
 };
