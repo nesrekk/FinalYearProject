@@ -28,7 +28,7 @@ const advancedStatLabels = [
     { key: 'tov', label: 'Turnovers Per Game', max: 18, digits: 1 },
 ];
 
-function CompRow({ statKey, label, valA, valB, max, min = 0, abbrA, abbrB, delay, preset, higherIsBetter = true }) {
+function CompRow({ label, valA, valB, max, min = 0, abbrA, abbrB, delay, preset, higherIsBetter = true }) {
     const range = max - min;
     const pctA = ((valA - min) / range) * 100;
     const pctB = ((valB - min) / range) * 100;
@@ -90,7 +90,7 @@ function FormStreak({ form }) {
     );
 }
 
-function RosterTable({ roster, abbr }) {
+function RosterTable({ roster }) {
     if (!roster?.length) return null;
     return (
         <div className="table-wrapper">
@@ -145,8 +145,12 @@ export default function TeamComparison() {
                     const keys = Object.keys(incoming).sort();
                     setTeamStats(incoming);
                     setTeamKeys(keys);
-                    if (!incoming[teamA]) setTeamA(keys[0]);
-                    if (!incoming[teamB]) setTeamB(keys[1] || keys[0]);
+                    // Functional updates read the live pick instead of this
+                    // mount-time closure, so the effect stays mount-only (no
+                    // refetch of current meta on every team change) without
+                    // needing teamA/teamB as dependencies.
+                    setTeamA((cur) => (incoming[cur] ? cur : keys[0]));
+                    setTeamB((cur) => (incoming[cur] ? cur : keys[1] || keys[0]));
                 }
                 if (active && meta?.standings) {
                     const combined = [...(meta.standings.eastern || []), ...(meta.standings.western || [])];
@@ -321,7 +325,6 @@ export default function TeamComparison() {
                             {advancedStatLabels.map(({ key, label, max, min, digits }, i) => (
                                 <CompRow
                                     key={key}
-                                    statKey={key}
                                     label={label}
                                     valA={extra.team_a.advanced_stats[key]?.toFixed(digits)}
                                     valB={extra.team_b.advanced_stats[key]?.toFixed(digits)}
@@ -407,13 +410,13 @@ export default function TeamComparison() {
                                 <div className="entity-row" style={{ marginBottom: '0.5rem' }}>
                                     <TeamLogo abbreviation={statsA.abbr} size={20} /> <strong>{statsA.name}</strong>
                                 </div>
-                                <RosterTable roster={extra.team_a.roster} abbr={statsA.abbr} />
+                                <RosterTable roster={extra.team_a.roster} />
                             </div>
                             <div>
                                 <div className="entity-row" style={{ marginBottom: '0.5rem' }}>
                                     <TeamLogo abbreviation={statsB.abbr} size={20} /> <strong>{statsB.name}</strong>
                                 </div>
-                                <RosterTable roster={extra.team_b.roster} abbr={statsB.abbr} />
+                                <RosterTable roster={extra.team_b.roster} />
                             </div>
                         </div>
                     </div>
