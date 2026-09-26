@@ -4,6 +4,8 @@ import shots_lib
 
 from fastapi import APIRouter, HTTPException
 
+from source_badge import make_source
+
 from impact_core import (
     find_player,
     get_db,
@@ -128,12 +130,7 @@ def _league_sample(n: int):
         "n_sample": len(points),
         "sample_fg_pct": round(made / len(points), 4) if points else None,
         "points": points,
-        "_source": {
-            "tables": ["player_shots"],
-            "upstream_api": "stats.nba.com shotchartdetail, bulk-loaded into Postgres",
-            "live": False,
-            "as_of": None,
-        },
+        "_source": make_source(["player_shots"], "stats.nba.com shotchartdetail, bulk-loaded into Postgres"),
     }
 
 

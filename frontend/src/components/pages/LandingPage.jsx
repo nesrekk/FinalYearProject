@@ -144,6 +144,7 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
                         <button type="button" onClick={() => onNavigate('shotcharts')}>Shots</button>
                         <button type="button" onClick={() => onNavigate('analytics', 'wpa')}>Clutch</button>
                         <button type="button" onClick={() => onNavigate('games')}>Games</button>
+                        <button type="button" onClick={() => onNavigate('learn')}>Learn</button>
                     </span>
                     <button type="button" className="lp-cta" onClick={onOpenToday}>OPEN TODAY ↗</button>
                 </nav>
@@ -234,6 +235,12 @@ export default function LandingPage({ onOpenToday, onNavigate }) {
                     <p>Every predictive model is backtested on real held-out data, and its accuracy is shown alongside it.</p>
                 </div>
             </section>
+
+            <button type="button" className="lp-learn" onClick={() => onNavigate('learn')}>
+                <span className="lp-mono">New to basketball?</span>
+                <span className="lp-learn-title">Learn the game →</span>
+                <span className="lp-learn-sub">The court, the scoring and the math behind every shot, in five minutes.</span>
+            </button>
 
             <section className="lp-play">
                 <span className="lp-mono">Daily games · real stats</span>

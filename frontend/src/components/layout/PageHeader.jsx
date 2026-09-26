@@ -16,6 +16,7 @@ const pageTitles = {
     rookies: 'Rookie Class Tracker',
     hof: 'Hall of Fame',
     games: 'Games',
+    learn: 'Learn the Game',
 };
 
 const pageDescriptions = {
@@ -34,6 +35,7 @@ const pageDescriptions = {
     rookies: 'This season\'s rookie class, ranked by ROY probability, with historical comps',
     hof: 'Real all-time career leaders, single-season records, and longevity — 1950 to today',
     games: 'Daily player-guessing puzzles and a career-stats streak game, all built on real data',
+    learn: 'Basketball for first-time fans, measured from real league data',
 };
 
 export default function PageHeader({ activePage }) {

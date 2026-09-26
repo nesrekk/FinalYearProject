@@ -704,6 +704,25 @@ def test_league_shot_sample_shape_and_sanity():
     _assert_has_source(data)
 
 
+def test_learn_basics_shape_and_sanity():
+    """Learn the Game: real zone splits, pace, scoring and a real stat line."""
+    from impact_api import app
+    data = TestClient(app).get("/learn/basics").json()
+    zones = {z["zone"]: z for z in data["zones"]}
+    assert set(zones) == {"Restricted Area", "In The Paint (Non-RA)", "Mid-Range", "Corner 3", "Above the Break 3"}
+    assert sum(z["fga"] for z in data["zones"]) == data["n_shots"]
+    assert abs(sum(z["share_of_shots"] for z in data["zones"]) - 1) < 0.01
+    # Rim shots are the best shot in basketball; long twos the worst.
+    assert zones["Restricted Area"]["points_per_shot"] == max(z["points_per_shot"] for z in data["zones"])
+    assert zones["Mid-Range"]["points_per_shot"] < zones["Above the Break 3"]["points_per_shot"]
+    assert 0.30 < data["three_share"] < 0.50
+    assert data["zone_classifier_check"]["max_fga_error"] < 0.05
+    assert 90 < data["pace"]["possessions_per_team_game"] < 110
+    assert 100 < data["scoring"]["points_per_team_game"] < 125
+    assert data["example_player"]["pts"] > 20
+    _assert_has_source(data)
+
+
 def test_spacing_gravity_shape_and_sanity():
     """Gravity Index (scripts/build_gravity_index.py). Real sniff test:
     Stephen Curry is near the top of 2024-25 Gravity; Rudy Gobert (0 real

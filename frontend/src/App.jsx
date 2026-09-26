@@ -35,6 +35,7 @@ const DraftValueGuide = lazy(() => import('./components/pages/DraftValueGuide'))
 const HallOfFame = lazy(() => import('./components/pages/HallOfFame'));
 const RookieClassTracker = lazy(() => import('./components/pages/RookieClassTracker'));
 const GamesHub = lazy(() => import('./components/pages/GamesHub'));
+const LearnTheGame = lazy(() => import('./components/pages/LearnTheGame'));
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
@@ -67,6 +68,7 @@ export default function App() {
       case 'hof': return <HallOfFame />;
       case 'rookies': return <RookieClassTracker />;
       case 'games': return <GamesHub />;
+      case 'learn': return <LearnTheGame onNavigate={setActivePage} />;
       default: return <DashboardHome onNavigate={setActivePage} />;
     }
   };

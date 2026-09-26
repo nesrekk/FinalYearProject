@@ -674,6 +674,11 @@ export async function fetchSiteStats() {
     return response.data;
 }
 
+export async function fetchLearnBasics() {
+    const response = await axios.get(`${IMPACT_BASE}/learn/basics`);
+    return response.data;
+}
+
 export async function fetchLeagueShotSample(n = 6000) {
     const response = await axios.get(`${IMPACT_BASE}/shots/league-sample`, { params: { n } });
     return response.data;

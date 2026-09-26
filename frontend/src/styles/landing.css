@@ -338,6 +338,38 @@
   max-width: 32ch;
 }
 
+/* ── Learn band ──────────────────────────────────── */
+.lp .lp-learn {
+  display: grid;
+  width: 100%;
+  gap: 8px;
+  padding: 34px 28px 38px;
+  text-align: left;
+  background: #123a78;
+  color: #e8f0ff;
+  border-bottom: 2px solid var(--lp-ink);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.lp-learn-title {
+  font-family: 'Anton', sans-serif;
+  font-size: clamp(48px, 7vw, 110px);
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.lp-learn-sub {
+  font-size: 17px;
+  max-width: 52ch;
+}
+
+.lp .lp-learn:hover .lp-learn-title {
+  color: #ffd54a;
+}
+
 /* ── Play ────────────────────────────────────────── */
 .lp-play {
   padding: 36px 28px 44px;

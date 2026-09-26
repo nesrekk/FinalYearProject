@@ -50,6 +50,12 @@ export const NAV_GROUPS = [
         icon: 'stadium',
         items: [],
     },
+    {
+        id: 'learn',
+        label: 'Learn',
+        icon: 'menu_book',
+        items: [],
+    },
 ];
 
 export function groupForPage(pageId) {

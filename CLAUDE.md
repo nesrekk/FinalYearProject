@@ -8,13 +8,13 @@ Auto-loaded by every new Claude Code chat in this repo. **Keep it current:** at 
 
 ## Current state (updated 2026-09-26)
 - All five features of the owner's advanced-analytics plan are shipped, verified and pushed: Garbage-Time Deflator, DAD Index, Exploit Guide (Scouting Report) v1+v2, Gravity Index & Spacing Lab, Contract Value.
-- Smoke tests: **52/52** (`/Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pytest api/tests`). Frontend lint clean (`cd frontend && npx eslint src` exits 0); keep it that way.
+- Smoke tests: **53/53** (`/Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pytest api/tests`). Frontend lint clean (`cd frontend && npx eslint src` exits 0); keep it that way.
 - **Layerbase cloud mirror shipped this session:** full parity, all 62 tables including `player_shots`/`pbp_events`, 0 row-count mismatches vs. local, ~1,968MB of the 5GB free tier. `DB_TARGET=layerbase` verified end-to-end (shot-zone and Game Replay endpoints returned real data). `layerbase` is a new `DB_TARGET` value alongside `local` (still default) and `cloud`. Sync script: `scripts/migrate_to_layerbase.py`. Supabase mirror (`DB_TARGET=cloud`, missing the two big tables) is left in place, not retired.
 - **Landing page redesigned from scratch (owner's pick after 8 mockups):** B's loud-editorial style + C's cursor-reactive dithered ribbon (`DitherRibbon.jsx`, raw WebGL) + A's scroll-driven 3D court of real shots (`ShotCourtFlight.jsx`, three.js, lazy-loaded) + Lenis. Data from the new `GET /shots/league-sample` and existing endpoints; old landing components deleted (GamesHub still uses `ParticleField`/`CustomCursor`, CSS in `styles/effects.css`). Mockups are kept outside the repo (session scratchpad), not committed.
+- **Learn the Game page shipped:** blueprint-style beginner's guide (`LearnTheGame.jsx`, `GET /learn/basics`), top-nav group "Learn" plus a band on the landing. The top nav now collapses to the hamburger below 1024 px (it overflowed between 768 and ~1000 px).
 - Local Postgres (`nba_analytics`, ~2.15GB) is the source of truth.
 
 ## Open items
-- **Learn the Game page (owner-requested, next):** new app page in the blueprint style of mockup F (court drawn like an engineering sheet, annotated with real zone FG% from `player_shots`) explaining basketball to beginners; add to top nav and link from the landing.
 - **Suspicious BPM/VORP values (found, not investigated):** `player_season_stats` has SGA 2025-26 at BPM 22.0 / VORP 13.8, far above any realistic value; `scripts/build_bpm_vorp.py` may be off, and it feeds DAD Index and others. Check before trusting BPM anywhere.
 - **B5 — Ask the Database:** parked on purpose (costs Anthropic API money; needs owner buy-in).
 - Minor known issue: `/games/by-date` can still be slow for old historical dates (README Known real gaps).
