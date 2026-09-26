@@ -42,28 +42,32 @@ function Nba75Badge() {
 export default function HallOfFame() {
     const [tab, setTab] = useState('career');
     const [stat, setStat] = useState('pts');
-    const [data, setData] = useState(null);
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(true);
+    // Each result is tagged with the tab/stat it was fetched for; loading,
+    // data and error are derived from whether that tag matches the current
+    // selection. That clears the previous tab's data in the very same render
+    // the tab changes (its shape doesn't match the new tab) without calling
+    // setState synchronously inside the effect.
+    const requestKey = `${tab}|${stat}`;
+    const [result, setResult] = useState({ key: null, data: null, error: '' });
+    const isCurrent = result.key === requestKey;
+    const loading = !isCurrent;
+    const data = isCurrent ? result.data : null;
+    const error = isCurrent ? result.error : '';
 
     useEffect(() => {
         let active = true;
-        setLoading(true);
-        setError('');
-        setData(null); // clear the previous tab's data immediately — its shape doesn't match the new tab
+        const key = `${tab}|${stat}`;
         const load = tab === 'career'
             ? fetchHofCareerLeaders(stat, 50)
             : tab === 'seasons'
                 ? fetchHofGreatestSeasons(stat, 50, 50)
                 : fetchHofLongevity(50);
         load
-            .then((res) => { if (active) setData(res); })
+            .then((res) => { if (active) setResult({ key, data: res, error: '' }); })
             .catch((e) => {
                 if (!active) return;
-                setData(null);
-                setError(e?.response?.data?.detail || 'Could not load this real leaderboard.');
-            })
-            .finally(() => { if (active) setLoading(false); });
+                setResult({ key, data: null, error: e?.response?.data?.detail || 'Could not load this real leaderboard.' });
+            });
         return () => { active = false; };
     }, [tab, stat]);
 
@@ -91,7 +95,7 @@ export default function HallOfFame() {
                             key={t.key}
                             type="button"
                             className={`hb-rail-item ${tab === t.key ? 'hb-rail-item--active' : ''}`}
-                            onClick={() => { setData(null); setTab(t.key); }}
+                            onClick={() => setTab(t.key)}
                             style={{ display: 'inline-flex', width: 'auto', textAlign: 'center' }}
                         >
                             {t.label}

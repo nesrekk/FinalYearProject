@@ -8,14 +8,14 @@ import { createPortal } from 'react-dom';
 // list wherever the search box sat near a card's bottom edge. A portal with
 // fixed positioning escapes that ancestor clipping entirely.
 export default function AutocompleteDropdown({ anchorRef, items, onPick }) {
-    const [rect, setRect] = useState(null);
+    // The rect is stored alongside the items list it was measured for, so a
+    // rect from an earlier list is never used (render checks the match below)
+    // instead of resetting it to null synchronously inside the effect.
+    const [measured, setMeasured] = useState(null);
 
     useLayoutEffect(() => {
-        if (!anchorRef.current || !items?.length) {
-            setRect(null);
-            return;
-        }
-        const update = () => setRect(anchorRef.current.getBoundingClientRect());
+        if (!anchorRef.current || !items?.length) return;
+        const update = () => setMeasured({ items, rect: anchorRef.current.getBoundingClientRect() });
         update();
         window.addEventListener('scroll', update, true);
         window.addEventListener('resize', update);
@@ -25,6 +25,7 @@ export default function AutocompleteDropdown({ anchorRef, items, onPick }) {
         };
     }, [anchorRef, items]);
 
+    const rect = measured?.items === items ? measured.rect : null;
     if (!items?.length || !rect) return null;
 
     return createPortal(
