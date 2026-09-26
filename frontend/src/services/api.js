@@ -575,6 +575,23 @@ export async function fetchScoutingReport(playerName, season) {
     return response.data;
 }
 
+// ─── Gravity Index & Spacing Lab ─────────────────────────────────
+export async function fetchGravity(season, topN = 25) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/spacing/gravity`,
+        { params: { top_n: topN, ...(season ? { season } : {}) } }
+    );
+    return response.data;
+}
+
+export async function fetchLineupSpacing(playerIds, season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/spacing/lineup`,
+        { params: { player_ids: playerIds, ...(season ? { season } : {}) } }
+    );
+    return response.data;
+}
+
 // ─── Referee Tendencies ──────────────────────────────────────────
 export async function fetchRefereeTendencies(minGames = 10, sort = 'n_games') {
     const response = await axios.get(

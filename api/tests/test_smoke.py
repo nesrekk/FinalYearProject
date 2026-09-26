@@ -680,3 +680,51 @@ def test_classify_zone_real_geometry():
     assert classify_zone(0, 137, 14, "2PT Field Goal") == "In The Paint (Non-RA)"
     assert classify_zone(0, 150, 15, "2PT Field Goal") == "Mid-Range"
     assert classify_zone(-230, 50, 23, "3PT Field Goal") == "Corner 3"
+
+
+def test_spacing_gravity_shape_and_sanity():
+    """Gravity Index (scripts/build_gravity_index.py). Real sniff test:
+    Stephen Curry is near the top of 2024-25 Gravity; Rudy Gobert (0 real
+    3PA) is in the bottom decile."""
+    from impact_api import app
+    resp = TestClient(app).get("/spacing/gravity", params={"season": 2025, "top_n": 10})
+    assert resp.status_code == 200
+    data = resp.json()
+    board = data["leaderboard"]
+    assert len(board) == 10
+    assert [r["gravity"] for r in board] == sorted((r["gravity"] for r in board), reverse=True)
+    assert any(r["player_name"] == "Stephen Curry" for r in board)
+    gobert = next(p for p in data["players"] if p["player_name"] == "Rudy Gobert")
+    assert gobert["percentile"] < 10
+    assert data["tracking_coverage"]["share"] > 0.95
+    v = data["validation"]
+    assert v["n_lineups"] > 1000 and v["ci_low"] <= v["coef_spacing"] <= v["ci_high"]
+    assert v["significant"] == (v["p_spacing"] < 0.05)
+    _assert_has_source(data)
+
+
+def test_spacing_lineup_builder():
+    from impact_api import app
+    client = TestClient(app)
+    # Real 2024-25 Knicks starting five (their most-used real lineup).
+    five = "1626157,1628384,1628404,1628969,1628973"
+    resp = client.get("/spacing/lineup", params={"season": 2025, "player_ids": five})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["players"]) == 5
+    assert data["real_lineup"] is not None and data["real_lineup"]["poss"] >= 100
+    assert 0 <= data["percentile_vs_real_lineups"] <= 100
+    if data["validation"]["significant"]:
+        p = data["predicted_ortg_change"]
+        assert p["ci_low"] <= p["vs_median_lineup"] <= p["ci_high"]
+    else:
+        assert data["predicted_ortg_change"] is None and data["no_effect_message"]
+    assert data["within_real_range"] is True
+    # The five highest-Gravity players far exceed any real lineup's spacing:
+    # no extrapolated prediction may be shown.
+    top5 = [r["player_id"] for r in client.get("/spacing/gravity", params={"season": 2026, "top_n": 5}).json()["leaderboard"]]
+    ext = client.get("/spacing/lineup", params={"season": 2026, "player_ids": ",".join(map(str, top5))}).json()
+    assert ext["within_real_range"] is False
+    assert ext["predicted_ortg_change"] is None and ext["no_effect_message"]
+    assert client.get("/spacing/lineup", params={"player_ids": "1,2,3"}).status_code == 400
+    assert client.get("/spacing/lineup", params={"season": 2025, "player_ids": "1626157,1626157,1628404,1628969,1628973"}).status_code == 400

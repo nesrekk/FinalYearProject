@@ -86,6 +86,12 @@ export const TOOL_META = {
         tagline: 'How hard each defender’s real assignments actually were.',
         about: 'DAD Index (OBPM-weighted): for every defender, the share of their real tracked partial possessions spent on each offensive player, times that player’s OBPM (this project’s own Box Plus/Minus reproduction; players under 500 minutes count as replacement level, −2.0). Z-scored per season, and optionally within position. Plotted against the NBA’s own defended-FG% differential (defended FG% minus the shooters’ normal FG%). Descriptive only — no help defense, rebounding or scheme.',
     },
+    spacing: {
+        group: 'Teams & Markets',
+        visual: 'scatter',
+        tagline: 'Shooting gravity, and what it adds up to for a five-man lineup.',
+        about: 'Gravity is a disclosed composite proxy (not player-tracking gravity): the sum of three real z-scores — 3PA per 100 possessions, catch-and-shoot 3P%, and the share of 3PA with a defender within 6 ft — the last two shrunk toward players of similar 3-point volume. Lineup spacing sums the five players. Validated on real 5-man lineups with 100+ possessions: offensive rating vs. spacing plus the players’ summed OBPM, season fixed effects, standard errors clustered by team-season. A predicted ORtg change is shown only when that relationship is statistically significant.',
+    },
     vegas: {
         group: 'Teams & Markets',
         visual: 'line',
