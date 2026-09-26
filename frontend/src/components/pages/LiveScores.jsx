@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchGameBoxscore, fetchGamesByDate } from '../../services/api';
-import { mockLiveScores } from '../../services/mockData';
 import { TEAM_COLORS } from '../../utils/teamAssets';
 
 function toIsoDate(dateObj) {
@@ -32,8 +31,9 @@ function formatMinutes(value) {
 
 export default function LiveScores() {
     const [selectedDate, setSelectedDate] = useState(toIsoDate(new Date()));
-    const [games, setGames] = useState(mockLiveScores);
-    const [loading, setLoading] = useState(false);
+    const [games, setGames] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
     const [selectedGame, setSelectedGame] = useState(null);
     const [boxscore, setBoxscore] = useState(null);
     const [loadingBoxscore, setLoadingBoxscore] = useState(false);
@@ -56,6 +56,7 @@ export default function LiveScores() {
         let active = true;
         async function loadGames() {
             setLoading(true);
+            setLoadError(false);
             try {
                 const data = await fetchGamesByDate(selectedDate);
                 if (active && Array.isArray(data?.games) && data.games.length > 0) {
@@ -79,7 +80,8 @@ export default function LiveScores() {
                 }
             } catch {
                 if (active) {
-                    setGames(mockLiveScores);
+                    setGames([]);
+                    setLoadError(true);
                 }
             } finally {
                 if (active) setLoading(false);
@@ -195,7 +197,10 @@ export default function LiveScores() {
                     );
                 })}
             </div>
-            {!loading && games.length === 0 && (
+            {!loading && loadError && (
+                <p className="empty-message">Scores for {selectedDate} couldn&apos;t load right now.</p>
+            )}
+            {!loading && !loadError && games.length === 0 && (
                 <p className="empty-message">No games found for {selectedDate}.</p>
             )}
 

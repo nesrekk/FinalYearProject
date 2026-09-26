@@ -11,7 +11,6 @@ import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
 import { EmptyState } from '../ui/EmptyState';
 import { abbrFromTeamName } from '../../utils/teamAssets';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
-import { mockLiveScores } from '../../services/mockData';
 import {
     fetchCurrentMeta,
     fetchCurrentNews,
@@ -20,6 +19,7 @@ import {
     fetchDPOYPrediction,
     fetchROYPrediction,
     fetchAllNBAPrediction,
+    fetchWpReplayList,
 } from '../../services/api';
 import { localDateIso } from '../../utils/date';
 
@@ -59,7 +59,9 @@ const CARD_VARIANTS = {
 export default function DashboardHome({ onNavigate }) {
     const { isAdvanced } = useMotionMode();
     const preset = motionPreset(isAdvanced);
-    const [games, setGames] = useState(mockLiveScores);
+    const [games, setGames] = useState([]);
+    const [gamesState, setGamesState] = useState('loading');
+    const [recentFinals, setRecentFinals] = useState(null);
     const [news, setNews] = useState([]);
     const [meta, setMeta] = useState(null);
     const [awardsRace, setAwardsRace] = useState({ season: null, mvp: null, dpoy: null, roy: null, allnba: null });
@@ -69,15 +71,31 @@ export default function DashboardHome({ onNavigate }) {
         let active = true;
         const today = localDateIso();
 
+        async function loadGames() {
+            try {
+                const g = await fetchGamesByDate(today);
+                if (!active) return;
+                const list = Array.isArray(g?.games) ? g.games : [];
+                setGames(list);
+                setGamesState('done');
+                if (list.length === 0) {
+                    const replay = await fetchWpReplayList().catch(() => null);
+                    const all = replay?.games || [];
+                    const last = all.reduce((m, x) => (x.game_date > m ? x.game_date : m), '');
+                    if (active && last) setRecentFinals({ date: last, games: all.filter((x) => x.game_date === last).slice(0, 4) });
+                }
+            } catch {
+                if (active) setGamesState('error');
+            }
+        }
+
         async function loadDashboard() {
             try {
-                const [g, n, m] = await Promise.all([
-                    fetchGamesByDate(today),
+                const [n, m] = await Promise.all([
                     fetchCurrentNews(today, 10),
                     fetchCurrentMeta(),
                 ]);
                 if (!active) return;
-                if (Array.isArray(g?.games) && g.games.length > 0) setGames(g.games);
                 if (Array.isArray(n?.items) && n.items.length > 0) {
                     setNews(
                         n.items.map((item, idx) => ({
@@ -111,12 +129,13 @@ export default function DashboardHome({ onNavigate }) {
                     }
                 }
             } catch {
-                // keep existing mock fallback values
+                // news, meta and awards simply stay empty
             } finally {
                 if (active) setAwardsLoading(false);
             }
         }
 
+        loadGames();
         loadDashboard();
         return () => {
             active = false;
@@ -213,8 +232,37 @@ export default function DashboardHome({ onNavigate }) {
                         <p className="text-eyebrow">Today&apos;s Games</p>
                         <span className="dashboard-tile-meta">{liveGames} live · {finalGames} final · {scheduledGames} scheduled</span>
                     </div>
-                    {games.length === 0 ? (
-                        <EmptyState icon="sports_basketball" message="No games scheduled today." />
+                    {gamesState === 'loading' ? (
+                        <SkeletonGroup lines={3} />
+                    ) : gamesState === 'error' ? (
+                        <EmptyState icon="sports_basketball" message="Today's scores couldn't load right now." />
+                    ) : games.length === 0 ? (
+                        <div className="dashboard-no-games">
+                            <p className="dashboard-no-games-title">No NBA games today.</p>
+                            {recentFinals && (
+                                <>
+                                    <p className="text-eyebrow">Most recent real finals · {recentFinals.date}</p>
+                                    <div className="dashboard-game-list">
+                                        {recentFinals.games.map((g) => (
+                                            <div key={g.game_id} className="dashboard-game-row">
+                                                <span className="dashboard-game-team">
+                                                    <TeamLogo abbreviation={g.away_team} size={22} />
+                                                    {g.away_team}
+                                                </span>
+                                                <span className="dashboard-game-score">
+                                                    {g.final_score?.away} <em>–</em> {g.final_score?.home}
+                                                </span>
+                                                <span className="dashboard-game-team dashboard-game-team--home">
+                                                    {g.home_team}
+                                                    <TeamLogo abbreviation={g.home_team} size={22} />
+                                                </span>
+                                                <span className="dashboard-game-status">Final</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     ) : (
                         <div className="dashboard-game-list">
                             {games.slice(0, 4).map((g) => (

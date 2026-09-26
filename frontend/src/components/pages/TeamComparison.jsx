@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { mockTeamStats, allTeams } from '../../services/mockData';
 import { fetchCurrentMeta, fetchTeamComparisonExtra } from '../../services/api';
 import TeamLogo from '../common/TeamLogo';
 import PlayerHeadshot from '../common/PlayerHeadshot';
@@ -121,11 +120,12 @@ function RosterTable({ roster }) {
 }
 
 export default function TeamComparison() {
-    const [teamStats, setTeamStats] = useState(mockTeamStats);
-    const [teamKeys, setTeamKeys] = useState(allTeams);
+    const [teamStats, setTeamStats] = useState({});
+    const [teamKeys, setTeamKeys] = useState([]);
+    const [loadError, setLoadError] = useState(false);
     const [teamA, setTeamA] = useState('LAL');
     const [teamB, setTeamB] = useState('BOS');
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [standings, setStandings] = useState(null);
     const [extra, setExtra] = useState(null);
     const [extraError, setExtraError] = useState('');
@@ -158,8 +158,9 @@ export default function TeamComparison() {
                     combined.forEach((t) => { if (t.abbr) byAbbr[t.abbr] = t; });
                     setStandings(byAbbr);
                 }
+                if (active && !(incoming && Object.keys(incoming).length > 0)) setLoadError(true);
             } catch {
-                // keep fallback data
+                if (active) setLoadError(true);
             } finally {
                 if (active) setLoading(false);
             }
@@ -197,6 +198,7 @@ export default function TeamComparison() {
     return (
         <div className="page page-teams fade-in">
             {loading && <p className="page-subtitle" style={{ marginBottom: '0.75rem' }}>Loading current season team stats...</p>}
+            {!loading && loadError && <p className="empty-message">Current team stats couldn&apos;t load right now.</p>}
             {/* Team Selectors */}
             <div className="comparison-selectors">
                 <div className="selector-group">

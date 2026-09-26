@@ -2812,3 +2812,14 @@ body {
   }
 }
 
+
+.dashboard-no-games {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.dashboard-no-games-title {
+  font-size: var(--text-headline-size);
+  font-weight: var(--text-headline-weight);
+  margin: var(--space-2) 0 0;
+}
