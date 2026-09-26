@@ -795,3 +795,30 @@ def test_contract_value_shape_and_sanity():
     _assert_has_source(data)
     assert client.get("/contracts/value", params={"season": 2022}).status_code == 404
     assert client.get("/contracts/player/201939", params={"season": 2022}).json()["available"] is False
+
+
+def test_college_pipeline_shape_and_sanity():
+    """College-to-NBA pipeline (scripts/load_college_teams.py ->
+    build_college_pipeline.py). Needs the gitignored Kaggle CSVs; skipped
+    cleanly if the tables were never built. Real sniff tests: 2014-15
+    Kentucky (38-1, Final Four) was Torvik's No. 1 team and Karl-Anthony
+    Towns went first overall from it; the 2025 class is too new to judge."""
+    from impact_api import app
+    client = TestClient(app)
+    resp = client.get("/college/pipeline")
+    if resp.status_code == 503:
+        pytest.skip("college pipeline not built on this machine (Kaggle CSVs are local-only).")
+    assert resp.status_code == 200
+    data = resp.json()
+    kat = next(p for p in data["players"] if p["player_name"] == "Karl-Anthony Towns")
+    assert (kat["college_team"], kat["college_season"], kat["overall_pick"]) == ("Kentucky", 2015, 1)
+    assert kat["barthag_rank"] == 1 and kat["postseason"] == "F4" and kat["mature"]
+    flagg = next(p for p in data["players"] if p["player_name"] == "Cooper Flagg")
+    assert flagg["ws4_vs_expected"] is None and not flagg["mature"]
+    assert data["counts"]["analysed"] == sum(p["mature"] for p in data["players"])
+    assert sum(t["n"] for t in data["tiers"]) == data["counts"]["analysed"]
+    assert sum(r["n"] for r in data["runs"]) == data["counts"]["analysed"]
+    e = data["effect"]
+    assert e["ci_low"] <= e["ws4_per_10_margin"] <= e["ci_high"]
+    assert all(s["n"] >= data["min_school_picks"] for s in data["schools"])
+    _assert_has_source(data)

@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routers import (
     blurred_player,
     clutch_wpa,
+    college,
     contract_value,
     dad_index,
     draft_prospects,
@@ -86,7 +87,7 @@ for _router_module in (
     players_table, impact_rankings, draft_value, player_impact, meta, media,
     players_search_profile, leaders, games_misc, news, vegas_scanner,
     team_comparison, hall_of_fame, garbage_time, dad_index, scouting_report,
-    spacing_lab, contract_value, learn,
+    spacing_lab, contract_value, learn, college,
 ):
     app.include_router(_router_module.router)
 

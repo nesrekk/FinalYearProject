@@ -27,6 +27,7 @@ import GarbageTimeSection from '../GarbageTimeSection';
 import DadIndexSection from '../DadIndexSection';
 import SpacingLabSection from '../SpacingLabSection';
 import ContractValueSection from '../ContractValueSection';
+import CollegePipelineSection from '../CollegePipelineSection';
 
 const TAB_GROUPS = [
     {
@@ -68,9 +69,10 @@ const TAB_GROUPS = [
         ],
     },
     {
-        name: 'Prospects',
+        name: 'College & Draft',
         tabs: [
             { id: 'prospects', label: 'Draft Prospects', icon: 'school' },
+            { id: 'pipeline', label: 'College → NBA', icon: 'route' },
         ],
     },
 ];
@@ -218,6 +220,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'dad' && <DadIndexSection />}
                 {activeTab === 'spacing' && <SpacingLabSection />}
                 {activeTab === 'contracts' && <ContractValueSection />}
+                {activeTab === 'pipeline' && <CollegePipelineSection />}
             </div>
         </div>
     );

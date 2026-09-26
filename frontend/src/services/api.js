@@ -775,3 +775,9 @@ export async function prefetchCoreData() {
         fetchStatLeaders('pts', undefined, 10),
     ]);
 }
+
+// ─── College → NBA pipeline / March Madness ──────────────────────
+export async function fetchCollegePipeline() {
+    const response = await axios.get(`${IMPACT_BASE}/college/pipeline`);
+    return response.data;
+}

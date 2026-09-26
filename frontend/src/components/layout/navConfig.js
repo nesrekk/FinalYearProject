@@ -41,7 +41,7 @@ export const NAV_GROUPS = [
             { id: 'analytics', label: 'Models', icon: 'model_training', hash: 'mvp' },
             { id: 'analytics', label: 'Player Analysis', icon: 'query_stats', hash: 'similarity' },
             { id: 'analytics', label: 'Teams & Markets', icon: 'storefront', hash: 'vegas' },
-            { id: 'analytics', label: 'Prospects', icon: 'auto_awesome', hash: 'prospects' },
+            { id: 'analytics', label: 'College & Draft', icon: 'school', hash: 'prospects' },
         ],
     },
     {

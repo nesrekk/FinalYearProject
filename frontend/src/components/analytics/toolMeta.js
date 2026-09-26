@@ -141,9 +141,15 @@ export const TOOL_META = {
         about: 'For each real NBA official, shows real total fouls called and real free throws attempted in games they worked, compared against the real league average with a 95% confidence interval on the difference. This is a descriptive comparison of real totals — it cannot account for which teams’ games an official was assigned to, and is not a claim about intent or bias. Officials below 25 games worked are flagged as a small sample.',
     },
     prospects: {
-        group: 'Prospects',
+        group: 'College & Draft',
         visual: 'scatter',
         tagline: 'Real college production, matched to real NBA rookie outcomes.',
         about: 'Uses real D1 college season stats (~105,000 player-seasons, 2014–2025), era-normalized the same way the project normalizes NBA seasons elsewhere. Comps are real players whose college season can be matched to a real NBA rookie season (~55% of NBA rookies since 2015 — international and G-League/draft-and-stash players are a disclosed gap). The projected outcome is a similarity-weighted average of comps’ real rookie numbers, never a trained/predicted model.',
+    },
+    pipeline: {
+        group: 'College & Draft',
+        visual: 'scatter',
+        tagline: 'Does a strong college team mean a better NBA player than the pick suggests?',
+        about: 'Every NBA pick 2013–2025 who came from a US college, linked to that college team’s season in Bart Torvik’s ratings (Kaggle "College Basketball Dataset"). NBA outcome: Basketball-Reference Win Shares in the first four seasons after the draft, compared with a draft-slot expectation fitted on every pick through 2022 (WS4 = a + b × ln(pick)). Only classes through 2022 have four NBA seasons, so they are the ones judged. Effects are shown with 95% bootstrap intervals. The last college season is checked against CollegeBasketballData.com player stats; one pick who never played a college game is left out.',
     },
 };
