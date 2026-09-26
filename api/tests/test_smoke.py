@@ -644,3 +644,39 @@ def test_dad_index_shape_and_sanity():
     assert dort["quadrant"] in data["quadrants"]
     _assert_has_source(data)
     assert client.get("/defense/dad", params={"season": 2010}).status_code == 404
+
+
+def test_scouting_report_shape_and_sanity():
+    """Scouting Report v1 (scripts/build_scouting_reports.py). Real sniff
+    test: 2024-25 Giannis Antetokounmpo's finishing at the rim is a real,
+    significant strength."""
+    from impact_api import app
+    client = TestClient(app)
+    resp = client.get("/players/scouting-report/Giannis Antetokounmpo", params={"season": 2025})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["qualified"] is True and data["minutes"] >= 1500
+    assert data["expected_by_chance"] == round(data["n_tested"] * 0.05, 1)
+    for side in ("strengths", "weaknesses"):
+        assert len(data[side]) <= 3
+        for f in data[side]:
+            assert f["significant"] and f["p"] < 0.05 and f["category"] != "leverage"
+            assert f["n"] >= 50
+    assert any(f["split"] == "Restricted Area" for f in data["strengths"])
+    assert all(s["category"] != "leverage" for s in data["all_tested"])
+    assert data["cant_tell"]
+    assert data["validation"]["persistence"]["zone"]["same_direction_rate"] > 0.6
+    assert data["validation"]["zone_classifier_max_fga_error"] < 0.05
+    _assert_has_source(data)
+    assert client.get("/players/scouting-report/Stephen Curry", params={"season": 2012}).status_code == 404
+
+
+def test_classify_zone_real_geometry():
+    """Restricted area = 4 ft radius from the hoop; the lane ends 13.75 ft in
+    front of the hoop (19 ft from the baseline)."""
+    from shots_lib import classify_zone
+    assert classify_zone(0, 39, 4, "2PT Field Goal") == "Restricted Area"
+    assert classify_zone(30, 30, 4, "2PT Field Goal") == "In The Paint (Non-RA)"
+    assert classify_zone(0, 137, 14, "2PT Field Goal") == "In The Paint (Non-RA)"
+    assert classify_zone(0, 150, 15, "2PT Field Goal") == "Mid-Range"
+    assert classify_zone(-230, 50, 23, "3PT Field Goal") == "Corner 3"

@@ -546,6 +546,15 @@ export async function fetchDadIndex(season) {
     return response.data;
 }
 
+// ─── Scouting Report ("Exploit Guide") ───────────────────────────
+export async function fetchScoutingReport(playerName, season) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/players/scouting-report/${encodeURIComponent(playerName)}`,
+        { params: season ? { season } : {} }
+    );
+    return response.data;
+}
+
 // ─── Referee Tendencies ──────────────────────────────────────────
 export async function fetchRefereeTendencies(minGames = 10, sort = 'n_games') {
     const response = await axios.get(

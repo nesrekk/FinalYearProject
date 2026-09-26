@@ -6,6 +6,7 @@ import Loader from '../Loader';
 import Icon from './Icon';
 import TeamLogo from './TeamLogo';
 import PlayerHeadshot from './PlayerHeadshot';
+import ScoutingReportCard from './ScoutingReportCard';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 
 function fmt(v, digits = 1) {
@@ -166,6 +167,8 @@ export default function PlayerDetailModal({ player, onClose }) {
                             </p>
                         </div>
                     )}
+
+                    <ScoutingReportCard playerName={player.player_name} />
 
                     <div>
                         <div className="player-modal-section-title">Year-by-Year Stats</div>

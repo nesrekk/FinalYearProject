@@ -6,6 +6,7 @@ import TeamLogo from '../common/TeamLogo';
 import Icon from '../common/Icon';
 import InfoTooltip from '../common/InfoTooltip';
 import AutocompleteDropdown from '../common/AutocompleteDropdown';
+import ScoutingReportCard from '../common/ScoutingReportCard';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 
@@ -531,6 +532,17 @@ export default function PlayerComparison() {
                                 </div>
                             );
                         })()}
+                    </div>
+
+                    <div className="dashboard-card" style={{ marginTop: '1rem' }}>
+                        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                            {[[profileA, COLOR_A], [profileB, COLOR_B]].map(([p, color]) => (
+                                <div key={p.player_id} style={{ flex: '1 1 320px', minWidth: 0, borderTop: `3px solid ${color}`, paddingTop: '0.75rem' }}>
+                                    <div style={{ fontWeight: 700, marginBottom: 4 }}>{p.player_name}</div>
+                                    <ScoutingReportCard playerName={p.player_name} season={season} titleClassName="section-heading" />
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </motion.div>
             )}
