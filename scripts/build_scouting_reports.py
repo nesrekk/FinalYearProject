@@ -31,16 +31,31 @@ Splits tested per qualified player-season (each one a real comparison):
     real FG% in high-leverage moments vs. the player's own real FG% in all
     other moments. Two-proportion z-test. Min 50 real high-leverage FGA.
 
+  * Shot context (player_shot_context, v2, 2013-14+; fetch_shot_context.py,
+    NBA tracking): real 3PT FG% in each closest-defender band (0-2 / 2-4 /
+    4-6 / 6+ ft), touch-time band (< 2 / 2-6 / 6+ s) and dribble band (0 / 1
+    / 2 / 3-6 / 7+), vs. the rest of the league's 3PT FG% in the same band.
+    Two-proportion z-test. Min 50 real attempts. 3PT only, deliberately:
+    a first run also tested 2PT FG% per band, but 2PT bands mix layups with
+    mid-range jumpers, so those "findings" mostly restated where a player
+    shoots (2024-25 Giannis Antetokounmpo came out "strong" in every
+    tight-defense, short-touch and 0-dribble 2PT band — his rim finishing,
+    already covered by the Restricted Area zone test). They persisted
+    year to year because shot location does, not because they isolate a
+    skill, so they're not tested.
+
 A split is a finding when p < 0.05 (two-sided). Every tested split is
 stored — not just findings — so the API can say how many were tested and
 how many would be expected to clear p < 0.05 by chance alone.
 
-Leverage findings are stored but the API does NOT list them among
-strengths/weaknesses: this script's own persistence check found them no
-better than chance (first real run: 54% same direction next season,
-5.7% significant again — i.e. the false-positive rate), the well-known
-"clutch isn't a stable skill" result. They're shown separately, with that
-caveat, instead.
+Which categories count as scouting keys is decided by this script's own
+persistence check, not hand-picked: a category is "reliable" only when the
+lower bound of the 95% (Wilson) interval on its next-season same-direction
+rate is above 50%. Leverage fails it (first real run: 54% same direction,
+n = 35, 5.7% significant again — the false-positive rate; the well-known
+"clutch isn't a stable skill" result), so the API shows it separately as
+reference only. Any category that fails the same test is treated the same
+way automatically.
 
 Validation (scouting_validation): persistence — of the real findings in
 season s for a player who is qualified again in s+1 with the same split
@@ -70,6 +85,7 @@ MIN_MINUTES = 1500
 MIN_ZONE_FGA = 50
 MIN_PLAYTYPE_POSS = 50
 MIN_LEVERAGE_FGA = 50
+MIN_CONTEXT_FGA = 50
 ALPHA = 0.05
 
 
@@ -189,6 +205,23 @@ def main():
         tests.append((r.season, r.player_id, "playtype", r.play_type, r.ppp, rest, r.own_ppp,
                       int(r.poss), "possessions", float(zz), float(2 * norm.sf(abs(zz)))))
 
+    # ---- shot context (v2) ----
+    cur.execute("SELECT to_regclass('public.player_shot_context');")
+    if cur.fetchone()[0] is not None:
+        cur.execute("SELECT season, player_id, dimension, bucket, fg2m, fg2a, fg3m, fg3a FROM player_shot_context;")
+        sc = pd.DataFrame(cur.fetchall(), columns=["season", "player_id", "dimension", "bucket", "fg2m", "fg2a", "fg3m", "fg3a"])
+        long = sc[["season", "player_id", "dimension", "bucket"]].assign(shot="3PT", m=sc["fg3m"], a=sc["fg3a"])
+        lgc = long.groupby(["season", "dimension", "bucket", "shot"])[["m", "a"]].sum().rename(columns={"m": "lg_m", "a": "lg_a"})
+        ownc = long.groupby(["season", "player_id", "dimension", "shot"])[["m", "a"]].sum()
+        ownc = (ownc["m"] / ownc["a"].where(ownc["a"] > 0)).rename("own_pct")
+        long = long.join(lgc, on=["season", "dimension", "bucket", "shot"]).join(ownc, on=["season", "player_id", "dimension", "shot"])
+        long = long[np.array([k in qual_keys for k in zip(long["season"], long["player_id"])]) & (long["a"] >= MIN_CONTEXT_FGA)]
+        rest_m, rest_n = long["lg_m"] - long["m"], long["lg_a"] - long["a"]
+        z, p = two_prop(long["m"].values.astype(float), long["a"].values.astype(float), rest_m.values.astype(float), rest_n.values.astype(float))
+        for r, zz, pp, rm, rn in zip(long.itertuples(), z, p, rest_m, rest_n):
+            tests.append((r.season, r.player_id, r.dimension, f"{r.bucket}|{r.shot}", r.m / r.a, rm / rn, r.own_pct,
+                          int(r.a), "FGA", float(zz), float(pp)))
+
     # ---- leverage (Garbage-Time Deflator splits) ----
     cur.execute("SELECT to_regclass('public.player_leverage_splits');")
     if cur.fetchone()[0] is not None:
@@ -218,9 +251,15 @@ def main():
     val = []
     for cat, g in list(f.groupby("category")) + [("all", f)]:
         n_findings = int(t[t["significant"] & ((t["category"] == cat) if cat != "all" else True)].shape[0])
-        val.append((cat, n_findings, int(len(g)),
-                    float((np.sign(g["z"]) == np.sign(g["z_next"])).mean()) if len(g) else None,
-                    float(g["significant_next"].mean()) if len(g) else None))
+        n = len(g)
+        same = float((np.sign(g["z"]) == np.sign(g["z_next"])).mean()) if n else None
+        # Wilson 95% lower bound on the same-direction rate.
+        lower = None
+        if n:
+            zc = 1.96
+            lower = float((same + zc**2 / (2 * n) - zc * np.sqrt(same * (1 - same) / n + zc**2 / (4 * n * n))) / (1 + zc**2 / n))
+        val.append((cat, n_findings, int(n), same, float(g["significant_next"].mean()) if n else None,
+                    lower, bool(lower is not None and lower > 0.5)))
 
     cur.execute("""
         DROP TABLE IF EXISTS scouting_splits;
@@ -246,7 +285,9 @@ def main():
             n_findings INTEGER,
             n_followed INTEGER,
             same_direction_rate DOUBLE PRECISION,
-            significant_again_rate DOUBLE PRECISION
+            significant_again_rate DOUBLE PRECISION,
+            same_direction_lower95 DOUBLE PRECISION,
+            reliable BOOLEAN
         );
         DROP TABLE IF EXISTS zone_classifier_check;
         CREATE TABLE zone_classifier_check (
@@ -276,7 +317,8 @@ def main():
     print(check[["label", "zone", "our_fga", "nba_fga", "fga_err_pct", "pct_err_pts"]].round(2).to_string())
     print("\nPersistence of real findings into the next season:")
     for v in val:
-        print(f"  {v[0]}: {v[1]} findings, {v[2]} followed; same direction {v[3]:.3f}, significant again {v[4]:.3f}")
+        print(f"  {v[0]}: {v[1]} findings, {v[2]} followed; same direction {v[3]:.3f} (95% lower {v[5]:.3f}, "
+              f"reliable={v[6]}), significant again {v[4]:.3f}")
     names = dict(zip(zip(qual["season"], qual["player_id"]), qual["player_name"]))
     for name in ["Jalen Brunson", "Stephen Curry", "Giannis Antetokounmpo"]:
         pid = qual[(qual["player_name"] == name) & (qual["season"] == 2025)]["player_id"]

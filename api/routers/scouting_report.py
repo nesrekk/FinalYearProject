@@ -31,10 +31,18 @@ PLAYTYPE_LABELS = {
     "Transition": "Transition",
 }
 
+CONTEXT_LABELS = {
+    "close_def": {"0-2 ft": "Defender 0-2 ft (very tight)", "2-4 ft": "Defender 2-4 ft (tight)",
+                  "4-6 ft": "Defender 4-6 ft (open)", "6+ ft": "Defender 6+ ft (wide open)"},
+    "touch": {"< 2 s": "Touch under 2 s", "2-6 s": "Touch 2-6 s", "6+ s": "Touch 6+ s"},
+    "dribbles": {"0": "0 dribbles", "1": "1 dribble", "2": "2 dribbles", "3-6": "3-6 dribbles", "7+": "7+ dribbles"},
+}
+
 CANT_TELL = [
     "Pick-and-roll coverage type (drop, blitz, switch, hedge) — no real coverage-level data is available to this project.",
     "Drive direction (left vs. right) — not in any real dataset this project uses.",
-    "How closely he was guarded on each shot (closest-defender distance, touch time, dribbles) — planned for v2.",
+    "How a player's two-pointers change with defender distance, touch time or dribbles — 2PT bands mix layups with "
+    "mid-range jumpers, so only 3PT is tested in those contexts.",
     "Help defense, off-ball movement, or scheme — every split here is a box-score or tracking total, not film.",
 ]
 
@@ -43,12 +51,17 @@ METHODOLOGY = (
     "baseline: FG% in each of 5 shot zones vs. the rest of the league's FG% in that zone (two-proportion z-test, 50+ "
     "FGA), and points per possession in each NBA Synergy play type vs. the rest of the league (z-test, 50+ "
     "possessions; the per-possession SD is estimated from the real spread of player PPPs, since Synergy doesn't "
-    "publish per-possession outcomes). A split is listed only when p < 0.05; the strongest 3 each way are shown. "
+    "publish per-possession outcomes), and — from 2013-14 — 3PT FG% by closest-defender distance, touch time and "
+    "dribbles vs. the rest of the league in the same band (50+ attempts; 3PT only, because 2PT bands mix layups with "
+    "mid-range jumpers and mostly restate where a player shoots). A split is listed only when p < 0.05; up to 3 each "
+    "way are shown, "
+    "taking the strongest from each category first so one skill isn't repeated three ways. "
     "At p < 0.05, about 1 in 20 tested splits would clear the bar by chance alone, so the expected number of chance "
-    "findings for this player is shown too. Real check: across every player, these findings point the same way the "
-    "following season 83-87% of the time (50% would be chance). High-leverage FG% (from the Garbage-Time Deflator) is "
-    "tested too, but shown separately: the same check found it no better than chance. Shot zones come from the same "
-    "coordinate classifier as the shot charts, verified against the NBA's own league zone totals."
+    "findings for this player is shown too. Real check: across every player, each category's findings point the same "
+    "way the following season 83-87% of the time (50% would be chance); a category only counts as a scouting key when "
+    "that rate is reliably above 50%. High-leverage FG% (from the Garbage-Time Deflator) fails that check, so it's shown "
+    "separately for reference. Shot zones come from the same coordinate classifier as the shot charts, verified "
+    "against the NBA's own league zone totals."
 )
 
 
@@ -57,7 +70,30 @@ def _fmt(category, value):
 
 
 def _label(category, split):
-    return PLAYTYPE_LABELS.get(split, split) if category == "playtype" else split
+    if category == "playtype":
+        return PLAYTYPE_LABELS.get(split, split)
+    if category in CONTEXT_LABELS:
+        bucket, shot = split.split("|")
+        return f"{CONTEXT_LABELS[category].get(bucket, bucket)} · {shot}"
+    return split
+
+
+def _pick(findings, k):
+    """Up to k findings: the strongest (by |z|) from each category first,
+    then the next strongest overall — so one skill isn't listed three ways."""
+    picked, seen = [], set()
+    for f in findings:
+        if f["category"] not in seen:
+            picked.append(f)
+            seen.add(f["category"])
+        if len(picked) == k:
+            return picked
+    for f in findings:
+        if f not in picked:
+            picked.append(f)
+        if len(picked) == k:
+            break
+    return picked
 
 
 def _finding(row):
@@ -122,11 +158,12 @@ def get_scouting_report(player_name: str, season: Optional[int] = None):
         splits = [_finding(r) for r in cursor.fetchall()]
 
         cursor.execute(
-            """SELECT category, n_findings, n_followed, same_direction_rate, significant_again_rate
+            """SELECT category, n_findings, n_followed, same_direction_rate, significant_again_rate,
+                      same_direction_lower95, reliable
                FROM scouting_validation;""")
         validation = {
             r[0]: {"n_findings": r[1], "n_followed_next_season": r[2], "same_direction_rate": r[3],
-                   "significant_again_rate": r[4]}
+                   "significant_again_rate": r[4], "same_direction_lower95": r[5], "reliable": r[6]}
             for r in cursor.fetchall()
         }
         cursor.execute(
@@ -166,11 +203,13 @@ def get_scouting_report(player_name: str, season: Optional[int] = None):
                 "p": p_val,
             })
 
-    tested = [s for s in splits if s["category"] != "leverage"]
+    reliable = {c for c, v in validation.items() if c != "all" and v["reliable"]}
+    tested = [s for s in splits if s["category"] in reliable]
     found = [s for s in tested if s["significant"]]
-    strengths = [s for s in found if s["direction"] == "strength"][:MAX_PER_SIDE]
-    weaknesses = [s for s in found if s["direction"] == "weakness"][:MAX_PER_SIDE]
-    leverage = next((s for s in splits if s["category"] == "leverage"), None)
+    strengths = _pick([s for s in found if s["direction"] == "strength"], MAX_PER_SIDE)
+    weaknesses = _pick([s for s in found if s["direction"] == "weakness"], MAX_PER_SIDE)
+    reference = [s for s in splits if s["category"] not in reliable]
+    leverage = next((s for s in reference if s["category"] == "leverage"), None)
 
     return {
         "player_id": player_id,
@@ -187,10 +226,15 @@ def get_scouting_report(player_name: str, season: Optional[int] = None):
         "strengths": strengths,
         "weaknesses": weaknesses,
         "all_tested": tested,
+        "reliable_categories": sorted(reliable),
+        "reference_only": reference,
         "leverage": leverage,
         "leverage_caveat": (
             "Shown for reference only: across every player, high-leverage FG% splits point the same way the next "
             "season only about as often as a coin flip, so they aren't treated as a scouting key."
+        ),
+        "context_note": (
+            "Defender-distance, touch-time and dribble splits (2013-14 onward) cover 3-point shooting only."
         ),
         "best_defenders": defenders,
         "best_defenders_note": (
@@ -205,8 +249,8 @@ def get_scouting_report(player_name: str, season: Optional[int] = None):
             "zone_classifier_max_fg_pct_error": zc[1],
         },
         "_source": make_source(
-            ["scouting_splits", "scouting_validation", "player_shots", "player_playtypes", "player_matchups",
-             "player_leverage_splits"],
+            ["scouting_splits", "scouting_validation", "player_shots", "player_playtypes", "player_shot_context",
+             "player_matchups", "player_leverage_splits"],
             "nba_api + ESPN play-by-play",
         ),
     }

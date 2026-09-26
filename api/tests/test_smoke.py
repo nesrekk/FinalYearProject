@@ -664,6 +664,13 @@ def test_scouting_report_shape_and_sanity():
             assert f["n"] >= 50
     assert any(f["split"] == "Restricted Area" for f in data["strengths"])
     assert all(s["category"] != "leverage" for s in data["all_tested"])
+    # Categories are scouting keys only when their own next-season
+    # persistence check passes; leverage fails it, shot context (v2) passes.
+    assert "leverage" not in data["reliable_categories"]
+    assert {"zone", "playtype", "close_def", "touch", "dribbles"} <= set(data["reliable_categories"])
+    assert all(s["category"] in data["reliable_categories"] for s in data["all_tested"])
+    assert all(s["split"].endswith("|3PT") for s in data["all_tested"]
+               if s["category"] in ("close_def", "touch", "dribbles"))
     assert data["cant_tell"]
     assert data["validation"]["persistence"]["zone"]["same_direction_rate"] > 0.6
     assert data["validation"]["zone_classifier_max_fga_error"] < 0.05
