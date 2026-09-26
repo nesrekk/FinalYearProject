@@ -689,6 +689,21 @@ def test_classify_zone_real_geometry():
     assert classify_zone(-230, 50, 23, "3PT Field Goal") == "Corner 3"
 
 
+def test_league_shot_sample_shape_and_sanity():
+    """Landing-page court: a fixed random sample of real latest-season shots,
+    with the season's own totals alongside."""
+    from impact_api import app
+    data = TestClient(app).get("/shots/league-sample", params={"n": 2000}).json()
+    assert data["n_sample"] == len(data["points"]) == 2000
+    assert data["n_season_shots"] > data["n_sample"]
+    for x, y, made in data["points"]:
+        assert -250 <= x <= 250 and -50 <= y <= 420 and made in (0, 1)
+    # Real NBA field-goal percentages sit in the 0.40s.
+    assert 0.40 < data["season_fg_pct"] < 0.52
+    assert abs(data["sample_fg_pct"] - data["season_fg_pct"]) < 0.04
+    _assert_has_source(data)
+
+
 def test_spacing_gravity_shape_and_sanity():
     """Gravity Index (scripts/build_gravity_index.py). Real sniff test:
     Stephen Curry is near the top of 2024-25 Gravity; Rudy Gobert (0 real

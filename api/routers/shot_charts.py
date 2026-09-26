@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Optional
 import shots_lib
 
@@ -99,6 +100,50 @@ def get_player_shot_zones(player_name: str, season: int):
         raise HTTPException(status_code=404, detail=f"No shot data for {resolved_name} in {season_label}.")
     zones = shots_lib.compute_zone_stats(shots)
     return {"player_id": player_id, "player_name": resolved_name, "season": season_label, "zones": zones}
+
+@lru_cache(maxsize=8)
+def _league_sample(n: int):
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT max(season) FROM player_shots")
+        season = cur.fetchone()[0]
+        cur.execute(
+            "SELECT count(*), avg(shot_made_flag) FROM player_shots WHERE season = %s",
+            (season,),
+        )
+        n_total, fg = cur.fetchone()
+        # md5(id) ordering gives a fixed, reproducible random sample.
+        cur.execute(
+            """SELECT loc_x, loc_y, shot_made_flag FROM player_shots
+               WHERE season = %s AND loc_x BETWEEN -250 AND 250 AND loc_y BETWEEN -50 AND 420
+               ORDER BY md5(id::text) LIMIT %s""",
+            (season, n),
+        )
+        points = [[int(x), int(y), int(m)] for x, y, m in cur.fetchall()]
+    made = sum(p[2] for p in points)
+    return {
+        "season": season,
+        "n_season_shots": int(n_total),
+        "season_fg_pct": round(float(fg), 4),
+        "n_sample": len(points),
+        "sample_fg_pct": round(made / len(points), 4) if points else None,
+        "points": points,
+        "_source": {
+            "tables": ["player_shots"],
+            "upstream_api": "stats.nba.com shotchartdetail, bulk-loaded into Postgres",
+            "live": False,
+            "as_of": None,
+        },
+    }
+
+
+@router.get("/shots/league-sample")
+def get_league_shot_sample(n: int = 6000):
+    """A fixed random sample of real shots (x, y, made) from the latest
+    season in player_shots, for the landing page's shot court. Half-court
+    locations only; the season totals cover every shot that season."""
+    return _league_sample(max(100, min(n, 20000)))
+
 
 @router.get("/shots/league-zones/{season}")
 def get_league_shot_zones(season: int):

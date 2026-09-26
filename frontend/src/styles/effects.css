@@ -1,0 +1,42 @@
+/* Shared visual effects: ParticleField and CustomCursor (used by GamesHub). */
+
+.particle-field-fixed {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.particle-field-fixed canvas {
+  display: block;
+}
+
+.custom-cursor-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: var(--brand);
+  pointer-events: none;
+  z-index: 9000;
+  transition: opacity 0.2s;
+}
+
+.custom-cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--brand);
+  pointer-events: none;
+  z-index: 8999;
+  transition: width 0.25s var(--ease-standard), height 0.25s var(--ease-standard), margin 0.25s var(--ease-standard), background 0.25s var(--ease-standard), opacity 0.2s;
+}
+
+.custom-cursor-ring--magnetic {
+  background: rgba(255, 107, 26, 0.12);
+}

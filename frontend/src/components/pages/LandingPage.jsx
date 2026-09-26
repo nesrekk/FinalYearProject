@@ -1,25 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import Lenis from 'lenis';
 import 'lenis/dist/lenis.css';
-import ParticleField from '../landing/ParticleField';
-import CustomCursor from '../landing/CustomCursor';
-import CursorGlow from '../landing/CursorGlow';
-import LiveShotHero from '../landing/LiveShotHero';
-import WelcomeIntro from '../landing/WelcomeIntro';
-import IntroErrorBoundary from '../landing/IntroErrorBoundary';
-import FeatureChapters from '../landing/FeatureChapters';
-import TeamRibbons from '../landing/TeamRibbons';
-import BigStat from '../ui/BigStat';
-import Section from '../ui/Section';
-import Skeleton from '../ui/Skeleton';
-import { fetchSiteStats, fetchGamesByDate, fetchWpaValidation } from '../../services/api';
-import { localDateIso } from '../../utils/date';
-import TeamLogo from '../common/TeamLogo';
+import DitherRibbon from '../landing/DitherRibbon';
+import DitherBall from '../landing/DitherBall';
 import Footer from '../layout/Footer';
+import {
+    fetchSiteStats, fetchLeagueShotSample, fetchGamesByDate, fetchWpReplayList,
+    fetchCurrentMeta, fetchMVPPrediction, fetchBacktestOverview, fetchWpaValidation,
+} from '../../services/api';
+import { localDateIso } from '../../utils/date';
 
-function useHeroCursorScope() {
-    return useRef(null);
-}
+const ShotCourtFlight = lazy(() => import('../landing/ShotCourtFlight'));
+
+const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString());
+const pct = (v, digits = 0) => (v == null ? null : `${(v * 100).toFixed(digits)}%`);
+const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 
 // Scoped to the landing page: destroyed on unmount so the app shell keeps native scroll.
 function useSmoothScroll() {
@@ -30,196 +25,228 @@ function useSmoothScroll() {
     }, []);
 }
 
-const HERO_HEIGHT = 720;
-
-export default function LandingPage({ onOpenToday, onNavigate }) {
-    const heroRef = useHeroCursorScope();
-    useSmoothScroll();
-    const particleFieldRef = useRef(null);
-    const [stats, setStats] = useState(null);
-    const [statsError, setStatsError] = useState(false);
-    const [games, setGames] = useState(null);
-    const [introDone, setIntroDone] = useState(false);
-    const [wpaValidation, setWpaValidation] = useState(null);
-    const ctaRef = useRef(null);
-
+function useLandingData() {
+    const [data, setData] = useState({});
     useEffect(() => {
         let active = true;
-        Promise.resolve().then(() => {
-            fetchSiteStats().then((d) => { if (active) setStats(d); }).catch(() => { if (active) setStatsError(true); });
-            fetchGamesByDate(localDateIso()).then((d) => { if (active) setGames(d?.games || []); }).catch(() => { if (active) setGames([]); });
-            fetchWpaValidation().then((d) => {
-                if (!active) return;
-                const row = d?.scopes?.all_events || Object.values(d?.scopes || {})[0];
-                if (row) setWpaValidation(row);
-            }).catch(() => {});
-        });
+        const patch = (fields) => { if (active) setData((d) => ({ ...d, ...fields })); };
+
+        fetchSiteStats().then((stats) => patch({ stats })).catch(() => patch({ statsError: true }));
+        fetchLeagueShotSample().then((shots) => patch({ shots })).catch(() => {});
+        fetchWpaValidation().then((res) => {
+            const scopes = res?.scopes || {};
+            patch({ wpa: scopes.all_events || Object.values(scopes)[0] || null });
+        }).catch(() => {});
+        fetchBacktestOverview().then((bt) => {
+            const row = bt?.awards?.find((a) => a.award?.toLowerCase() === 'mvp' && a.model_type === 'logreg');
+            if (row) patch({ mvpBacktest: { hits: Math.round(row.top1_accuracy * row.n_seasons_evaluated), n: row.n_seasons_evaluated } });
+        }).catch(() => {});
+
+        (async () => {
+            const meta = await fetchCurrentMeta().catch(() => null);
+            const start = meta?.season ?? new Date().getFullYear();
+            // /meta/current can run ahead of the loaded data, so walk back to a season the model covers.
+            for (let s = start; s >= start - 3; s--) {
+                const res = await fetchMVPPrediction(s).catch(() => null);
+                if (res?.results?.length) { patch({ mvpSeason: s, mvpFavorite: res.results[0].player_name }); break; }
+            }
+        })();
+
+        (async () => {
+            const today = await fetchGamesByDate(localDateIso()).catch(() => null);
+            const live = (today?.games || []).map((g) => ({
+                key: g.game_id || `${g.away?.abbr}-${g.home?.abbr}`,
+                away: g.away?.abbr, home: g.home?.abbr,
+                awayScore: g.away?.score, homeScore: g.home?.score,
+                status: g.status_text || g.status,
+            }));
+            if (live.length) { patch({ ticker: { label: 'Today', games: live } }); return; }
+            const list = await fetchWpReplayList().catch(() => null);
+            const games = list?.games || [];
+            const lastDate = games.reduce((m, g) => (g.game_date > m ? g.game_date : m), '');
+            const finals = games.filter((g) => g.game_date === lastDate).map((g) => ({
+                key: g.game_id, away: g.away_team, home: g.home_team,
+                awayScore: g.final_score?.away, homeScore: g.final_score?.home, status: 'Final',
+            }));
+            if (finals.length) patch({ ticker: { label: `Real finals · ${lastDate}`, games: finals } });
+        })();
+
         return () => { active = false; };
     }, []);
+    return data;
+}
 
-    function onCtaEnter() {
-        const el = ctaRef.current;
-        if (!el || !particleFieldRef.current) return;
-        const r = el.getBoundingClientRect();
-        particleFieldRef.current.setAttractor({
-            x: r.left + r.width / 2,
-            y: r.top + r.height / 2 + (window.scrollY || 0),
-        });
-    }
-    function onCtaLeave() {
-        particleFieldRef.current?.setAttractor(null);
-    }
+function Sticker({ label, value, className = '' }) {
+    return (
+        <div className={`lp-sticker ${className}`}>
+            <span className="lp-mono">{label}</span>
+            <b>{value}</b>
+        </div>
+    );
+}
 
-    const seasonLabel = stats ? `${stats.season_min}–${stats.season_max}` : '…';
+function Ticker({ ticker }) {
+    if (!ticker) return <div className="lp-ticker lp-ticker--empty" />;
+    const items = ticker.games.map((g) => {
+        const homeWon = g.homeScore != null && g.awayScore != null && g.homeScore > g.awayScore;
+        return (
+            <span key={g.key} className="lp-ticker-item">
+                {g.away} {homeWon ? g.awayScore : <em>{g.awayScore}</em>}
+                {' — '}
+                {homeWon ? <em>{g.homeScore}</em> : g.homeScore} {g.home}
+                <small>{g.status}</small>
+            </span>
+        );
+    });
+    return (
+        <div className="lp-ticker" aria-label={`${ticker.label} scores`}>
+            <div className="lp-ticker-track">
+                <span className="lp-ticker-item lp-ticker-label">{ticker.label}</span>
+                {items}
+                <span className="lp-ticker-item lp-ticker-label" aria-hidden="true">{ticker.label}</span>
+                {items}
+            </div>
+        </div>
+    );
+}
+
+function Chapter({ index, eyebrow, title, copy, action, onAction, side }) {
+    return (
+        <div className={`lp-chapter lp-chapter--${side}`}>
+            <div className="lp-chapter-card">
+                <span className="lp-mono">{String(index).padStart(2, '0')} / {eyebrow}</span>
+                <h2>{title}</h2>
+                <p>{copy}</p>
+                {onAction && (
+                    <button type="button" className="lp-link" onClick={onAction}>{action} →</button>
+                )}
+            </div>
+        </div>
+    );
+}
+
+export default function LandingPage({ onOpenToday, onNavigate }) {
+    useSmoothScroll();
+    const d = useLandingData();
+    const flightRef = useRef(null);
+    const stats = d.stats;
+    const shots = d.shots;
+
+    const range = stats ? `${stats.season_min}–${stats.season_max}` : '';
 
     return (
-        <div className="landing-page">
-            <ParticleField ref={particleFieldRef} heroHeight={HERO_HEIGHT} />
-            <div className="landing-film-grain" aria-hidden="true" />
-            <CustomCursor scopeRef={heroRef} />
-            {!introDone && (
-                <IntroErrorBoundary onError={() => setIntroDone(true)}>
-                    <WelcomeIntro onDone={() => setIntroDone(true)} />
-                </IntroErrorBoundary>
-            )}
+        <div className="lp">
+            <div className="lp-top">
+                <nav className="lp-nav">
+                    <span className="lp-logo">NBA HUB®</span>
+                    <span className="lp-nav-links lp-mono">
+                        <button type="button" onClick={() => onNavigate('analytics', 'mvp')}>Awards</button>
+                        <button type="button" onClick={() => onNavigate('shotcharts')}>Shots</button>
+                        <button type="button" onClick={() => onNavigate('analytics', 'wpa')}>Clutch</button>
+                        <button type="button" onClick={() => onNavigate('games')}>Games</button>
+                    </span>
+                    <button type="button" className="lp-cta" onClick={onOpenToday}>OPEN TODAY ↗</button>
+                </nav>
 
-            <section className="landing-hero-wrap">
-                <div className="landing-hero" ref={heroRef}>
-                    <CursorGlow scopeRef={heroRef} />
-                    <button
-                        type="button"
-                        className="landing-hero-menu"
-                        onClick={onOpenToday}
-                        aria-label="More"
-                    >
-                        <span className="material-symbols-outlined icon">more_horiz</span>
-                    </button>
-                    <LiveShotHero />
-                    <div className="landing-hero-content">
-                        <p className="text-eyebrow">NBA HUB &middot; {seasonLabel}</p>
-                        <h1 className="text-display-xl landing-hero-title">
-                            Every number. <span className="text-gradient">Real.</span>
-                        </h1>
-                        <p className="landing-hero-subtitle">
-                            Models, comps, and forecasts built only on data you can trace back to its source.
-                        </p>
-                        <div className="landing-hero-actions">
-                            <button type="button" className="landing-btn landing-btn--primary" data-magnetic onClick={onOpenToday}>
-                                Open Today
-                            </button>
-                            <a href="#how-it-works" className="landing-btn landing-btn--secondary" data-magnetic>
-                                See how it works
-                            </a>
-                        </div>
+                <header className="lp-hero">
+                    <DitherRibbon className="lp-hero-ribbon" />
+                    <DitherBall className="lp-hero-ball" />
+                    <div className="lp-stickers">
+                        <Sticker className="lp-sticker--a" label="Seasons" value={d.statsError ? '—' : fmt(stats?.n_seasons)} />
+                        <Sticker className="lp-sticker--b" label="Player-seasons" value={d.statsError ? '—' : fmt(stats?.n_player_seasons)} />
+                        <Sticker className="lp-sticker--c" label="College seasons" value={d.statsError ? '—' : fmt(stats?.n_college_seasons)} />
+                    </div>
+                    <h1 className="lp-title">
+                        <span>Every</span>
+                        <span className="lp-outline">number.</span>
+                        <span>Real.</span>
+                    </h1>
+                    <div className="lp-side lp-mono">{range ? `${range} · ` : ''}Nothing made up</div>
+                </header>
+            </div>
+
+            <Ticker ticker={d.ticker} />
+
+            <section className="lp-flight" ref={flightRef}>
+                <div className="lp-flight-stage">
+                    {shots?.points?.length > 0 && (
+                        <Suspense fallback={null}>
+                            <ShotCourtFlight points={shots.points} sectionRef={flightRef} />
+                        </Suspense>
+                    )}
+                    <div className="lp-flight-legend lp-mono">
+                        <span><i className="lp-dot lp-dot--made" />Made</span>
+                        <span><i className="lp-dot lp-dot--missed" />Missed</span>
+                        {shots && <span>{fmt(shots.n_sample)} real {shots.season} shots</span>}
                     </div>
                 </div>
-
-                <div className="landing-stats-row">
-                    <div className="landing-stat-tile">
-                        <p className="text-eyebrow">Seasons</p>
-                        {!stats && !statsError ? (
-                            <Skeleton variant="text" width="4rem" height="2.5rem" className="landing-stat-skeleton" />
-                        ) : (
-                            <BigStat label="" value={statsError ? '—' : stats.n_seasons} className="landing-stat-value landing-stat-value--brand" />
-                        )}
-                    </div>
-                    <div className="landing-stat-tile">
-                        <p className="text-eyebrow">Player-Seasons</p>
-                        {!stats && !statsError ? (
-                            <Skeleton variant="text" width="6rem" height="2.5rem" className="landing-stat-skeleton" />
-                        ) : (
-                            <BigStat label="" value={statsError ? '—' : stats.n_player_seasons} compact className="landing-stat-value" />
-                        )}
-                    </div>
-                    <div className="landing-stat-tile landing-stat-tile--gradient-border">
-                        <p className="text-eyebrow">College Seasons</p>
-                        {!stats && !statsError ? (
-                            <Skeleton variant="text" width="6rem" height="2.5rem" className="landing-stat-skeleton" />
-                        ) : (
-                            <BigStat label="" value={statsError ? '—' : stats.n_college_seasons} compact className="landing-stat-value" />
-                        )}
-                    </div>
+                <div className="lp-flight-chapters">
+                    <Chapter
+                        index={1}
+                        side="left"
+                        eyebrow="Shots"
+                        title="Sees every shot."
+                        copy={shots
+                            ? `${fmt(shots.n_sample)} real ${shots.season} shots, a fixed random sample of all ${fmt(shots.n_season_shots)} taken that season, placed where they were taken. The league shot ${pct(shots.season_fg_pct, 1)} from the field.`
+                            : 'Real shots from the latest season, each placed where it was taken. Made in black, missed in cream.'}
+                        action="Shot charts"
+                        onAction={() => onNavigate('shotcharts')}
+                    />
+                    <Chapter
+                        index={2}
+                        side="right"
+                        eyebrow="Models"
+                        title="Predicts the awards."
+                        copy={d.mvpFavorite
+                            ? `The MVP model's ${seasonLabel(d.mvpSeason)} favourite is ${d.mvpFavorite}.${d.mvpBacktest ? ` Backtested on real past seasons, its top pick was the actual winner in ${d.mvpBacktest.hits} of ${d.mvpBacktest.n}.` : ''}`
+                            : 'Logistic-regression award models, backtested against every real past season, with the accuracy shown next to every pick.'}
+                        action="Awards race"
+                        onAction={() => onNavigate('analytics', 'mvp')}
+                    />
+                    <Chapter
+                        index={3}
+                        side="left"
+                        eyebrow="Clutch"
+                        title="Feels the pressure."
+                        copy={d.wpa
+                            ? `Every play of a real game run through a win-probability model, checked on ${fmt(d.wpa.n_events)} held-out real plays: ROC-AUC ${d.wpa.roc_auc?.toFixed(2)}.`
+                            : 'Every play of a real game run through a validated win-probability model.'}
+                        action="Game replay"
+                        onAction={() => onNavigate('analytics', 'replay')}
+                    />
                 </div>
             </section>
 
-            {games && games.length > 0 && (
-                <div className="landing-live-strip">
-                    <div className="landing-live-strip-track">
-                        {[...games, ...games].map((g, i) => (
-                            <span key={i} className="landing-live-strip-item">
-                                <TeamLogo abbreviation={g.away?.abbr} size={18} />
-                                {g.away?.abbr} {g.away?.score ?? ''} — {g.home?.score ?? ''} {g.home?.abbr}
-                                <TeamLogo abbreviation={g.home?.abbr} size={18} />
-                                <span className="landing-live-strip-status">{g.status_text || g.status}</span>
-                            </span>
-                        ))}
-                    </div>
+            <section className="lp-grid">
+                <div className="lp-cell">
+                    <span className="lp-mono">Rule 01</span>
+                    <h3>Real sources.</h3>
+                    <p>Every endpoint names the Postgres table and upstream source behind it, shown as a chip on every main page.</p>
                 </div>
-            )}
-
-            <div id="how-it-works" className="chapters-intro">
-                <p className="text-eyebrow">How it works</p>
-                <h2 className="text-display-lg">
-                    Built to be <span className="text-gradient">checked.</span>
-                </h2>
-                <p className="chapters-intro-subtitle">
-                    Six of the roughly thirty tools inside — every one backed by a real Postgres table you can trace to a real upstream source. Scroll, and the particles become the real data.
-                </p>
-            </div>
-            <FeatureChapters onNavigate={onNavigate} />
-
-            <TeamRibbons />
-
-            <Section
-                className="landing-section"
-                title="Nothing is made up."
-                subtitle="The guiding rule behind every feature on this site."
-            >
-                <div className="landing-trust-grid">
-                    <div className="landing-trust-item">
-                        <span className="material-symbols-outlined icon">verified</span>
-                        <h3 className="text-headline">Real sources</h3>
-                        <p>Every endpoint discloses which real Postgres table and which real upstream API or dataset backed it — a small chip on every main page.</p>
-                    </div>
-                    <div className="landing-trust-item">
-                        <span className="material-symbols-outlined icon">visibility</span>
-                        <h3 className="text-headline">Disclosed gaps</h3>
-                        <p>Where real data doesn&apos;t exist for something, that gap is stated outright instead of filled in with a guess.</p>
-                    </div>
-                    <div className="landing-trust-item">
-                        <span className="material-symbols-outlined icon">science</span>
-                        <h3 className="text-headline">Validated models</h3>
-                        <p>
-                            Every predictive model is backtested against real held-out seasons, with the real accuracy shown alongside the prediction
-                            {wpaValidation ? ` — the win-probability model's real held-out ROC-AUC is ${wpaValidation.roc_auc.toFixed(2)}, Brier score ${wpaValidation.brier_score.toFixed(3)}.` : '.'}
-                        </p>
-                    </div>
+                <div className="lp-cell lp-cell--acid">
+                    <span className="lp-mono">Rule 02</span>
+                    <h3>Gaps disclosed.</h3>
+                    <p>Where real data doesn&apos;t exist, the page says so instead of filling it with a guess.</p>
                 </div>
-            </Section>
+                <div className="lp-cell">
+                    <span className="lp-mono">Rule 03</span>
+                    <h3>Models graded.</h3>
+                    <p>Every predictive model is backtested on real held-out data, and its accuracy is shown alongside it.</p>
+                </div>
+            </section>
 
-            <Section className="landing-section" eyebrow="Play" title="Daily games, real stats.">
-                <div className="landing-games-teaser">
+            <section className="lp-play">
+                <span className="lp-mono">Daily games · real stats</span>
+                <div className="lp-play-tiles">
                     {['Guess the Player', 'Blurred Player', 'Higher or Lower', 'Guess the Game'].map((g) => (
-                        <button type="button" key={g} className="landing-game-tile" onClick={() => onNavigate('games')}>
-                            {g}
-                        </button>
+                        <button type="button" key={g} className="lp-play-tile" onClick={() => onNavigate('games')}>{g}</button>
                     ))}
                 </div>
-            </Section>
-
-            <section className="landing-final-cta">
-                <button
-                    type="button"
-                    ref={ctaRef}
-                    className="landing-final-cta-btn"
-                    data-magnetic
-                    onClick={onOpenToday}
-                    onMouseEnter={onCtaEnter}
-                    onMouseLeave={onCtaLeave}
-                >
-                    Open NBA Hub
-                </button>
             </section>
+
+            <button type="button" className="lp-final" onClick={onOpenToday}>
+                <span>Open NBA Hub</span><span aria-hidden="true">↗</span>
+            </button>
 
             <Footer />
         </div>
