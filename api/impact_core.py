@@ -104,9 +104,26 @@ _CACHE = {
     "team_game_log": {},  # key: (team_id, season) -> {"ts": ..., "data": [game_dict, ...]}
     "player_game_log": {},  # key: (player_id, season) -> {"ts": ..., "data": set(game_id)}
     "news": {},  # key: (date_str, limit, team) -> {"ts": ..., "data": [item_dict, ...]}
+    "standings_nba_api": {},  # key: season -> {"ts": ..., "data": ...}
+    "standings_cdn": {"ts": 0, "data": None},
+    "team_stats_nba_api": {},  # key: season -> {"ts": ..., "data": ...}
+    "player_leaders_nba_api": {},  # key: (stat_key, season) -> {"ts": ..., "data": ...}
+    "games_by_date": {},  # key: date_str -> {"ts": ..., "data": [game_dict, ...]}
 }
 _CACHE_TTL_SECONDS = 6 * 60 * 60
 _NEWS_CACHE_TTL_SECONDS = 5 * 60  # news moves fast — much shorter TTL than the general cache
+# Live stats.nba.com endpoints (standings/leaders/team-stats/scoreboard) are
+# the slowest, flakiest calls in the app — during the offseason a single one
+# of these has been observed taking 45-136 real seconds to time out, and
+# since browsers cap concurrent connections per host, that stalls every other
+# request the frontend fires. Two mitigations, both real (no fabricated
+# data — a failed live call still falls back to the DB or returns nothing,
+# never an invented value): (1) a short request timeout so a stalled call
+# fails fast instead of hanging for tens of seconds, (2) a short cache TTL so
+# repeat page loads/components don't re-pay that cost — scores/standings
+# still refresh often enough to feel live once the game season is active.
+_LIVE_REQUEST_TIMEOUT_SECONDS = 6
+_LIVE_CACHE_TTL_SECONDS = 5 * 60
 TEAM_NAME_TO_ABBR = {info["name"]: abbr for abbr, info in TEAM_META.items()}
 @contextmanager
 def get_db():
@@ -302,7 +319,21 @@ def fetch_nba_api_standings(season: int):
     """
     Fetch accurate conference standings using nba_api endpoint.
     Returns {'eastern': [...], 'western': [...]} or None on failure.
+
+    Cached (short TTL) and given a short request timeout — see the
+    _LIVE_REQUEST_TIMEOUT_SECONDS / _LIVE_CACHE_TTL_SECONDS comment above
+    _CACHE's definition.
     """
+    now = time.time()
+    cached = _CACHE["standings_nba_api"].get(season)
+    if cached and (now - cached["ts"] < _LIVE_CACHE_TTL_SECONDS):
+        return cached["data"]
+
+    result = _fetch_nba_api_standings_uncached(season)
+    if result is not None:
+        _CACHE["standings_nba_api"][season] = {"ts": now, "data": result}
+    return result
+def _fetch_nba_api_standings_uncached(season: int):
     try:
         from nba_api.stats.endpoints import leaguestandingsv3
 
@@ -311,7 +342,7 @@ def fetch_nba_api_standings(season: int):
             league_id="00",
             season=season_label,
             season_type="Regular Season",
-            timeout=45,
+            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
         )
         data = endpoint.get_dict()
         result_sets = data.get("resultSets", []) or []
@@ -371,13 +402,24 @@ def fetch_nba_api_standings(season: int):
         return None
 def fetch_nba_cdn_standings():
     """
-    Fallback live standings source from NBA CDN.
+    Fallback live standings source from NBA CDN. Cached (short TTL) and
+    given a short request timeout — see the comment above _CACHE.
     """
+    now = time.time()
+    cached = _CACHE["standings_cdn"]
+    if cached["data"] and (now - cached["ts"] < _LIVE_CACHE_TTL_SECONDS):
+        return cached["data"]
+
+    result = _fetch_nba_cdn_standings_uncached()
+    if result is not None:
+        _CACHE["standings_cdn"] = {"ts": now, "data": result}
+    return result
+def _fetch_nba_cdn_standings_uncached():
     try:
         data = fetch_json(
             "https://cdn.nba.com/static/json/liveData/standings/leagueStandings.json",
             headers={"User-Agent": "Mozilla/5.0"},
-            timeout=30,
+            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
         )
         rows = (((data or {}).get("leagueStandings") or {}).get("teams") or [])
         if not rows:
@@ -422,8 +464,28 @@ def fetch_nba_cdn_standings():
         return None
 def fetch_nba_api_player_leaders(stat_key: str, season: int, top_n: int = 10):
     """
-    Live leaders from nba_api leaguedashplayerstats (per-game regular season).
+    Live leaders from nba_api leaguedashplayerstats (per-game regular
+    season). Cached per (stat_key, season) — independent of top_n, since the
+    underlying live call always fetches the full league and we just slice —
+    with a short TTL and request timeout (see the comment above _CACHE).
     """
+    now = time.time()
+    cache_key = (stat_key, season)
+    cached = _CACHE["player_leaders_nba_api"].get(cache_key)
+    if cached and (now - cached["ts"] < _LIVE_CACHE_TTL_SECONDS):
+        full = cached["data"]
+    else:
+        full = _fetch_nba_api_player_leaders_uncached(stat_key, season, top_n=500)
+        if full is not None:
+            _CACHE["player_leaders_nba_api"][cache_key] = {"ts": now, "data": full}
+
+    if full is None:
+        return None
+
+    safe_top_n = max(1, min(int(top_n), 50))
+    results = full.get("results", [])[:safe_top_n]
+    return {**full, "results": [{**r, "rank": i + 1} for i, r in enumerate(results)]}
+def _fetch_nba_api_player_leaders_uncached(stat_key: str, season: int, top_n: int = 10):
     stat_map = {
         "pts": ("PTS", "PTS", False),
         "reb": ("REB", "REB", False),
@@ -450,7 +512,7 @@ def fetch_nba_api_player_leaders(stat_key: str, season: int, top_n: int = 10):
             season=season_label,
             season_type_all_star="Regular Season",
             per_mode_detailed="PerGame",
-            timeout=45,
+            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
         )
         data = endpoint.get_dict()
         result_sets = data.get("resultSets", []) or []
@@ -505,8 +567,19 @@ def fetch_nba_api_player_leaders(stat_key: str, season: int, top_n: int = 10):
         return None
 def fetch_nba_api_team_stats(season: int):
     """
-    Live team per-game stats for team comparison.
+    Live team per-game stats for team comparison. Cached (short TTL) and
+    given a short request timeout — see the comment above _CACHE.
     """
+    now = time.time()
+    cached = _CACHE["team_stats_nba_api"].get(season)
+    if cached and (now - cached["ts"] < _LIVE_CACHE_TTL_SECONDS):
+        return cached["data"]
+
+    result = _fetch_nba_api_team_stats_uncached(season)
+    if result is not None:
+        _CACHE["team_stats_nba_api"][season] = {"ts": now, "data": result}
+    return result
+def _fetch_nba_api_team_stats_uncached(season: int):
     try:
         from nba_api.stats.endpoints import leaguedashteamstats
 
@@ -515,7 +588,7 @@ def fetch_nba_api_team_stats(season: int):
             season=season_label,
             season_type_all_star="Regular Season",
             per_mode_detailed="PerGame",
-            timeout=45,
+            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
         )
         data = endpoint.get_dict()
         result_sets = data.get("resultSets", []) or []
@@ -962,7 +1035,20 @@ def _player_synergy_features(cursor, player_id: int, season: int):
 def fetch_nba_games_by_date(date_str: str):
     """
     Fetch NBA games for a specific date (YYYY-MM-DD) using nba_api scoreboard.
+    Cached per date (short TTL) and given a short request timeout — see the
+    comment above _CACHE. A cache hit on today's date can occasionally hand
+    back a live score that's a few minutes stale; a short TTL keeps that
+    real and bounded rather than serving something invented.
     """
+    now = time.time()
+    cached = _CACHE["games_by_date"].get(date_str)
+    if cached and (now - cached["ts"] < _LIVE_CACHE_TTL_SECONDS):
+        return cached["data"]
+
+    result = _fetch_nba_games_by_date_uncached(date_str)
+    _CACHE["games_by_date"][date_str] = {"ts": now, "data": result}
+    return result
+def _fetch_nba_games_by_date_uncached(date_str: str):
     try:
         from nba_api.stats.endpoints import scoreboardv2
 
@@ -973,7 +1059,7 @@ def fetch_nba_games_by_date(date_str: str):
             game_date=game_date,
             league_id="00",
             day_offset=0,
-            timeout=45,
+            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
         )
         data = endpoint.get_dict()
         result_sets = data.get("resultSets", []) or []
@@ -1108,7 +1194,7 @@ def fetch_nba_cdn_games_by_date(date_str: str):
         data = fetch_json(
             f"https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_{ymd}.json",
             headers={"User-Agent": "Mozilla/5.0"},
-            timeout=30,
+            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
         )
         games = (((data or {}).get("scoreboard") or {}).get("games") or [])
         out = []

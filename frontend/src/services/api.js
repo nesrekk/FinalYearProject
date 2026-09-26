@@ -40,12 +40,32 @@ function writeCache(key, data) {
     }
 }
 
+// Requests already in flight for a given cache key, keyed by that key.
+// Without this, several components mounting in the same render pass (e.g.
+// every section that needs /meta/current) each see a cache miss before the
+// first one's response has come back and land, and all fire their own
+// duplicate network request. Sharing the in-flight promise collapses those
+// into one real request per key per TTL window instead.
+const _inFlightRequests = new Map();
+
 async function getWithCache(key, ttlMs, fetcher) {
     const cached = readCache(key, ttlMs);
     if (cached) return cached;
-    const fresh = await fetcher();
-    writeCache(key, fresh);
-    return fresh;
+
+    const pending = _inFlightRequests.get(key);
+    if (pending) return pending;
+
+    const request = (async () => {
+        try {
+            const fresh = await fetcher();
+            writeCache(key, fresh);
+            return fresh;
+        } finally {
+            _inFlightRequests.delete(key);
+        }
+    })();
+    _inFlightRequests.set(key, request);
+    return request;
 }
 
 // ─── Similarity ────────────────────────────────────────────────
