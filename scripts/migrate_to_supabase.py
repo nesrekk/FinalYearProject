@@ -57,6 +57,7 @@ TYPE_MAP = {
     "bool": "BOOLEAN", "varchar": "TEXT", "text": "TEXT", "bpchar": "TEXT",
     "timestamp": "TIMESTAMP", "timestamptz": "TIMESTAMPTZ", "date": "DATE",
     "jsonb": "JSONB", "json": "JSON",
+    "_int8": "BIGINT[]",  # lineup_stats.player_ids
 }
 
 
