@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter
 
@@ -54,7 +55,17 @@ def get_site_stats():
 @router.get("/meta/current")
 def get_current_meta():
     """
-    Current-season standings + team comparison stats from local DB.
+    Current-season standings + team comparison stats from local DB, layered
+    with live data from stats.nba.com when it's available and fast.
+
+    The four live lookups below (standings x2, external standings, team
+    stats) are each independently cached with a short TTL and a short
+    request timeout (see the comment above `_CACHE` in impact_core.py) and
+    are fired concurrently rather than one after another — previously they
+    ran in series and a cold cache could take 100+ real seconds (each of the
+    four live calls paying its own worst-case timeout back to back). Every
+    one of them still falls back to real local-DB data below if it fails or
+    times out; nothing here is ever invented.
     """
     with get_db() as conn:
         cursor = conn.cursor()
@@ -62,10 +73,19 @@ def get_current_meta():
         current_live_season = get_current_nba_season()
         season = max(db_latest_season, current_live_season)
         badges = get_team_badges()
-        nba_api_standings = fetch_nba_api_standings(season)
-        cdn_standings = fetch_nba_cdn_standings()
-        external_standings = fetch_balldontlie_standings(season)
-        live_team_stats = fetch_nba_api_team_stats(season)
+
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            standings_future = pool.submit(fetch_nba_api_standings, season)
+            cdn_future = pool.submit(fetch_nba_cdn_standings)
+            external_future = pool.submit(fetch_balldontlie_standings, season)
+            team_stats_future = pool.submit(fetch_nba_api_team_stats, season)
+            leaders_future = pool.submit(fetch_nba_api_player_leaders, "pts", season, 1)
+
+            nba_api_standings = standings_future.result()
+            cdn_standings = cdn_future.result()
+            external_standings = external_future.result()
+            live_team_stats = team_stats_future.result()
+            live_pts_leaders = leaders_future.result()
 
         cursor.execute(
             """
@@ -206,7 +226,6 @@ def get_current_meta():
             for item in external_standings.get(conf, []):
                 item["logo"] = badges.get(item["abbr"])
 
-    live_pts_leaders = fetch_nba_api_player_leaders("pts", season, 1)
     live_top_scorer = None
     if live_pts_leaders and live_pts_leaders.get("results"):
         p0 = live_pts_leaders["results"][0]
