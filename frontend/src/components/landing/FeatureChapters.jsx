@@ -126,12 +126,12 @@ export default function FeatureChapters({ onNavigate }) {
                 exploreLabel="Explore Awards Race"
                 onExplore={() => onNavigate('analytics', 'mvp')}
                 copy={
-                    d.status === 'done' && d.top5.length
+                    d.status === 'done' && d.top5?.length
                         ? `Real logistic-regression MVP probability for ${d.season}${d.mvpAccuracy != null ? ` — the model's real top-1 backtest accuracy is ${pct(d.mvpAccuracy)}` : ''}.`
                         : 'Real logistic-regression probability for MVP, DPOY, ROY and All-NBA — validated against every real past season, not eyeballed.'
                 }
             >
-                {d.status === 'done' && d.top5.length > 0 && (
+                {d.status === 'done' && d.top5?.length > 0 && (
                     <ol className="chapter-legend">
                         {d.top5.map((r) => (
                             <li key={r.player_id}>

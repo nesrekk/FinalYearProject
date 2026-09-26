@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import Lenis from 'lenis';
+import 'lenis/dist/lenis.css';
 import ParticleField from '../landing/ParticleField';
 import CustomCursor from '../landing/CustomCursor';
 import CursorGlow from '../landing/CursorGlow';
@@ -19,10 +21,20 @@ function useHeroCursorScope() {
     return useRef(null);
 }
 
+// Scoped to the landing page: destroyed on unmount so the app shell keeps native scroll.
+function useSmoothScroll() {
+    useEffect(() => {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+        const lenis = new Lenis({ autoRaf: true, anchors: true });
+        return () => lenis.destroy();
+    }, []);
+}
+
 const HERO_HEIGHT = 720;
 
 export default function LandingPage({ onOpenToday, onNavigate }) {
     const heroRef = useHeroCursorScope();
+    useSmoothScroll();
     const particleFieldRef = useRef(null);
     const [stats, setStats] = useState(null);
     const [statsError, setStatsError] = useState(false);
