@@ -26,7 +26,7 @@ Auto-loaded by every new Claude Code chat in this repo. **Keep it current:** at 
 
 ## Environment gotchas
 - Always use `/Library/Frameworks/Python.framework/Versions/3.14/bin/python3` (plain `python3` is an Anaconda without the deps).
-- Backends: `cd api` then `uvicorn mvp_api:app --port 8000`, `similarity_api:app --port 8001`, `impact_api:app --port 8002` (always pass `--port`; add `--reload` for dev). Frontend: `preview_start` name `nba-frontend` — `.claude/launch.json` has `autoPort`, so if 5173 is taken (e.g. by another worktree session) it picks another port; read the port from the result.
+- Whole app in one terminal: `./start.sh` (3 backends + frontend, Ctrl+C stops all; skips backend ports already in use). Or individually — backends: `cd api` then `uvicorn mvp_api:app --port 8000`, `similarity_api:app --port 8001`, `impact_api:app --port 8002` (always pass `--port`; add `--reload` for dev). Frontend: `preview_start` name `nba-frontend` — `.claude/launch.json` has `autoPort`, so if 5173 is taken (e.g. by another worktree session) it picks another port; read the port from the result.
 - `DB_TARGET` in `api/.env`: `local` (default) or `cloud` (Supabase). An env var overrides it for one command, e.g. `DB_TARGET=cloud python3 -c ...` — handy for read-only checks.
 - Gitignored local-only data: `nba_data/kaggle_1947_present/` (Basketball-Reference-derived export) and `nba_data/salaries/` (third-party salary CSVs, no license — see README Known real gaps for where to get them). Contract Value's smoke test skips if the salary tables were never built.
 - Season ints are **end year** (`2026` = 2025-26). Label: `f"{season - 1}-{str(season)[-2:]}"`.

@@ -231,7 +231,13 @@ ODDS_API_KEY=your_odds_api_key_here
 CBBD_API_KEY=your_cbbd_api_key_here
 ```
 
-### Start the three backend services
+### One command: start everything
+```bash
+./start.sh
+```
+Starts all three backends (8000/8001/8002) and the frontend in one terminal, each output line prefixed with its server (`[impact_api] …`, `[frontend] …`); **Ctrl+C stops everything it started**. Any backend port already in use is skipped (assumed already running). Tested in a real terminal: all four come up and respond, and Ctrl+C stops all of them with nothing left behind. Local Postgres still has to be running.
+
+### Start the three backend services (manually)
 Always pass `--port` explicitly:
 ```bash
 cd api
