@@ -95,7 +95,7 @@ function ShapBar({ feature, featureValue, shapValue, maxAbs }) {
         <div style={{ marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
                 <span className="page-subtitle" style={{ fontSize: '0.8rem' }}>{feature} ({featureValue})</span>
-                <span style={{ fontSize: '0.8rem', color: positive ? '#34d399' : '#f87171', flexShrink: 0 }}>
+                <span style={{ fontSize: '0.8rem', color: positive ? 'var(--positive)' : 'var(--negative)', flexShrink: 0 }}>
                     {positive ? '+' : ''}{(shapValue * 100).toFixed(1)}pp
                 </span>
             </div>
@@ -125,7 +125,7 @@ const AWARDS = [
 
 const WPA_SCOPE_META = {
     all_events: { label: 'All Held-Out Events', color: '#38bdf8' },
-    clutch_only: { label: 'Real Clutch Time Only', color: '#facc15' },
+    clutch_only: { label: 'Real Clutch Time Only', color: 'var(--streak)' },
 };
 
 function pct(v) {
@@ -737,7 +737,7 @@ export default function ModelValidationSection() {
                             {shapError && <p className="error-message">{shapError}</p>}
 
                             {shapDetail && (
-                                <div style={{ background: '#1a2332', border: '1px solid #334155', borderRadius: 8, padding: '1rem' }}>
+                                <div style={{ background: 'var(--surface-2)', border: '2px solid var(--line)', borderRadius: 0, padding: '1rem' }}>
                                     <p className="page-subtitle" style={{ marginBottom: '0.75rem' }}>
                                         {shapDetail.player_name}: base rate {(shapDetail.base_value * 100).toFixed(1)}%
                                         {' '}→ predicted {(shapDetail.predicted_probability * 100).toFixed(1)}%

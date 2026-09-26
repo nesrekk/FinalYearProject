@@ -29,7 +29,7 @@ def get_bpm_leaderboard(season: int, top_n: int = 20, min_minutes: float = 20.0,
 
         cursor.execute(
             """
-            SELECT player_name, team_abbreviation, pts, min, bpm, obpm, dbpm, vorp
+            SELECT player_name, team_abbreviation, pts, min, bpm, obpm, dbpm, vorp, player_id
             FROM player_season_stats
             WHERE season = %s AND bpm IS NOT NULL AND min >= %s AND gp >= %s
             ORDER BY bpm DESC
@@ -53,6 +53,7 @@ def get_bpm_leaderboard(season: int, top_n: int = 20, min_minutes: float = 20.0,
         "results": [
             {
                 "rank": i + 1,
+                "player_id": int(r[-1]),
                 "player_name": r[0],
                 "team_abbreviation": r[1],
                 "pts": round(float(r[2]), 1),
@@ -76,7 +77,7 @@ def get_raw_impact(season: int, top_n: int = 20):
 
         cursor.execute(
             """
-            SELECT player_name, pts, w_pct, impact_score_raw
+            SELECT player_name, pts, w_pct, impact_score_raw, player_id
             FROM player_season_stats
             WHERE season = %s AND impact_score_raw IS NOT NULL
             ORDER BY impact_score_raw DESC
@@ -92,6 +93,7 @@ def get_raw_impact(season: int, top_n: int = 20):
         "results": [
             {
                 "rank": i + 1,
+                "player_id": int(r[-1]),
                 "player_name": r[0],
                 "pts": round(float(r[1]), 1),
                 "w_pct": round(float(r[2]), 3),
@@ -111,7 +113,7 @@ def get_star_impact(season: int, top_n: int = 20):
 
         cursor.execute(
             """
-            SELECT player_name, pts, w_pct, impact_score_star
+            SELECT player_name, pts, w_pct, impact_score_star, player_id
             FROM player_season_stats
             WHERE season = %s AND impact_score_star IS NOT NULL
             ORDER BY impact_score_star DESC
@@ -127,6 +129,7 @@ def get_star_impact(season: int, top_n: int = 20):
         "results": [
             {
                 "rank": i + 1,
+                "player_id": int(r[-1]),
                 "player_name": r[0],
                 "pts": round(float(r[1]), 1),
                 "w_pct": round(float(r[2]), 3),

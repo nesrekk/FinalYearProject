@@ -66,7 +66,7 @@ export default function ZoneCourtMap({ zones, leagueZones, size = 280 }) {
     const colorFor = (zoneName) => heatColor(byZone[zoneName]?.fg_pct, leagueByZone[zoneName]?.fg_pct);
 
     return (
-        <svg viewBox="0 0 500 460" style={{ width: '100%', maxWidth: size, height: 'auto', display: 'block' }} role="img" aria-label="Half-court shot chart colored by zone, showing this player's field goal percentage in each court zone relative to league average — red zones are hotter than league average, blue zones are colder">
+        <svg viewBox="0 0 500 460" style={{ width: '100%', maxWidth: size, height: 'auto', display: 'block', color: 'var(--text)' }} role="img" aria-label="Half-court shot chart colored by zone, showing this player's field goal percentage in each court zone relative to league average — red zones are hotter than league average, blue zones are colder">
             <rect x={FULL_RECT.x} y={FULL_RECT.y} width={FULL_RECT.width} height={FULL_RECT.height} fill="var(--surface-2)" rx="6" />
             {/* Above the Break 3 wash covers the whole court; everything below layers on top */}
             <rect x={FULL_RECT.x} y={FULL_RECT.y} width={FULL_RECT.width} height={FULL_RECT.height} fill={colorFor('Above the Break 3')} />
@@ -77,11 +77,11 @@ export default function ZoneCourtMap({ zones, leagueZones, size = 280 }) {
             <rect {...CORNER_RIGHT} fill={colorFor('Corner 3')} />
 
             {/* Court lines on top for legibility */}
-            <path d={THREE_ARC} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
-            <line x1={CORNER_LEFT.x + CORNER_LEFT.width} y1={toSvgY(-47.5)} x2={CORNER_LEFT.x + CORNER_LEFT.width} y2={toSvgY(92.5)} stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
-            <line x1={CORNER_RIGHT.x} y1={toSvgY(-47.5)} x2={CORNER_RIGHT.x} y2={toSvgY(92.5)} stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
-            <rect x={PAINT_RECT.x} y={PAINT_RECT.y} width={PAINT_RECT.width} height={PAINT_RECT.height} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
-            <line x1={BACKBOARD.x1} y1={BACKBOARD.y} x2={BACKBOARD.x2} y2={BACKBOARD.y} stroke="rgba(255,255,255,0.6)" strokeWidth="2" />
+            <path d={THREE_ARC} fill="none" stroke="currentColor" strokeOpacity="0.55" strokeWidth="1.5" />
+            <line x1={CORNER_LEFT.x + CORNER_LEFT.width} y1={toSvgY(-47.5)} x2={CORNER_LEFT.x + CORNER_LEFT.width} y2={toSvgY(92.5)} stroke="currentColor" strokeOpacity="0.55" strokeWidth="1.5" />
+            <line x1={CORNER_RIGHT.x} y1={toSvgY(-47.5)} x2={CORNER_RIGHT.x} y2={toSvgY(92.5)} stroke="currentColor" strokeOpacity="0.55" strokeWidth="1.5" />
+            <rect x={PAINT_RECT.x} y={PAINT_RECT.y} width={PAINT_RECT.width} height={PAINT_RECT.height} fill="none" stroke="currentColor" strokeOpacity="0.55" strokeWidth="1.5" />
+            <line x1={BACKBOARD.x1} y1={BACKBOARD.y} x2={BACKBOARD.x2} y2={BACKBOARD.y} stroke="currentColor" strokeOpacity="0.85" strokeWidth="2" />
             <circle cx={HOOP.cx} cy={HOOP.cy} r={HOOP.r} fill="none" stroke="var(--brand)" strokeWidth="2" />
         </svg>
     );

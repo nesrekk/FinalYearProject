@@ -364,6 +364,18 @@
   font-size: 14px;
 }
 
+.lg-player {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.lg-player .player-headshot-img,
+.lg-player .player-headshot-fallback {
+  border: 2px solid var(--lg-line);
+  background: var(--lg-yellow);
+}
+
 .lg-statline {
   display: grid;
   grid-template-columns: repeat(5, 1fr);

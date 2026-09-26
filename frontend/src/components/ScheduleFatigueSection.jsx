@@ -145,7 +145,7 @@ export default function ScheduleFatigueSection() {
                                             <td>{b.bucket_label}</td>
                                             <td>{b.n.toLocaleString()}</td>
                                             <td>{(b.win_pct * 100).toFixed(1)}%</td>
-                                            <td style={{ color: b.avg_point_diff >= 0 ? '#34d399' : '#f87171' }}>
+                                            <td style={{ color: b.avg_point_diff >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
                                                 {b.avg_point_diff >= 0 ? '+' : ''}{b.avg_point_diff}
                                             </td>
                                         </tr>

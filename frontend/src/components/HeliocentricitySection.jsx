@@ -9,8 +9,8 @@ import SourceBadge from './common/SourceBadge';
 
 function indexColor(v) {
     if (v == null) return 'var(--text-muted)';
-    if (v >= 90) return '#f87171';
-    if (v >= 75) return '#facc15';
+    if (v >= 90) return 'var(--negative)';
+    if (v >= 75) return 'var(--streak)';
     return 'var(--text-secondary)';
 }
 

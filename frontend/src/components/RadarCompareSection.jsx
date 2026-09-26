@@ -87,7 +87,7 @@ function PlayerSlot({ index, color, entry, onSearch, onPick, onRemove, suggestio
                     {suggestions?.length > 0 && (
                         <ul className="autocomplete-list" style={{
                             position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                            background: '#1e293b', border: '1px solid #334155', borderRadius: 6,
+                            background: 'var(--surface)', border: '2px solid var(--line)', borderRadius: 0, boxShadow: 'var(--shadow-card)',
                             marginTop: 4, maxHeight: 200, overflowY: 'auto', listStyle: 'none', padding: 0,
                         }}>
                             {suggestions.map((name) => (
@@ -95,7 +95,7 @@ function PlayerSlot({ index, color, entry, onSearch, onPick, onRemove, suggestio
                                     <button
                                         type="button"
                                         onClick={() => onPick(name)}
-                                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.7rem', background: 'transparent', border: 'none', color: '#e2e8f0', cursor: 'pointer' }}
+                                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.7rem', background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer' }}
                                     >
                                         {name}
                                     </button>

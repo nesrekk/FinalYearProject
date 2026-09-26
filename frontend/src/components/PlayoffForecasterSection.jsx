@@ -23,8 +23,8 @@ function fmt(v, pct, digits = 1) {
 
 function deltaColor(v) {
     if (v == null) return 'var(--text-muted)';
-    if (v > 0.005) return '#34d399';
-    if (v < -0.005) return '#f87171';
+    if (v > 0.005) return 'var(--positive)';
+    if (v < -0.005) return 'var(--negative)';
     return 'var(--text-secondary)';
 }
 
@@ -145,7 +145,7 @@ export default function PlayoffForecasterSection() {
                     ) : (
                         <>
                             {data.small_sample_warning && (
-                                <p className="page-subtitle" style={{ color: '#facc15', marginTop: 0 }}>
+                                <p className="page-subtitle" style={{ color: 'var(--streak)', marginTop: 0 }}>
                                     <Icon name="warning" size="0.9em" style={{ verticalAlign: 'middle', marginRight: 4 }} />
                                     Only {data.playoffs.gp} real playoff games this season — treat this comparison as noisy.
                                 </p>

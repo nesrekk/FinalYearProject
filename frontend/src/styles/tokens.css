@@ -5,54 +5,62 @@
    ═══════════════════════════════════════════════════ */
 
 :root {
-  /* ── Color: dark (default) ─────────────────────── */
-  --bg: #0b0b0d;
-  --surface: #141416;
-  --surface-2: #1c1c1f;
-  --text: #f5f5f7;
-  --text-2: #a1a1a6;
-  --text-3: #86868c;
-  --hairline: rgba(255, 255, 255, 0.08);
-  --accent: #2997ff;
-  --brand: #ff6b1a;
-  --brand-2: #ff3d7f;
-  --brand-3: #2997ff;
-  --positive: #30d158;
-  --negative: #ff453a;
-  --brand-gradient: linear-gradient(90deg, #ff6b1a, #ff3d7f 45%, #2997ff);
+  /* ── Color: Paper (light, default) ─────────────── */
+  --bg: #f1ece1;
+  --surface: #fbf8f1;
+  --surface-2: #e8e1d3;
+  --text: #0d0d0d;
+  --text-2: #4a443a;
+  --text-3: #6b6458;
+  --hairline: rgba(13, 13, 13, 0.13);
+  --line: #0d0d0d;
+  --accent: #a93a0a;
+  --brand: #ff5b14;
+  --brand-2: #d7ff3a;
+  --brand-3: #0d0d0d;
+  --positive: #15692f;
+  --negative: #b02323;
+  --hi: #d7ff3a;
+  --hi-text: #0d0d0d;
+  --on-brand: #0d0d0d;
+  --brand-text: var(--accent);
+  --streak: #7a5a00;
+  --brand-gradient: linear-gradient(90deg, #a93a0a, #a93a0a);
 
-  /* ── Depth: dark uses hairlines, not shadows ───── */
-  --shadow-card: none;
+  /* ── Depth: hard offset "sticker" shadows ──────── */
+  --shadow-card: 4px 4px 0 var(--line);
 
   /* ── Font ───────────────────────────────────────── */
-  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+  --font: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-display: 'Anton', 'Impact', sans-serif;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
 
   /* ── Type scale ─────────────────────────────────── */
-  --text-display-xl-size: clamp(48px, 8vw, 96px);
-  --text-display-xl-weight: 700;
-  --text-display-xl-tracking: -0.03em;
-  --text-display-xl-leading: 1.05;
+  --text-display-xl-size: clamp(56px, 9vw, 120px);
+  --text-display-xl-weight: 400;
+  --text-display-xl-tracking: 0;
+  --text-display-xl-leading: 0.9;
 
-  --text-display-size: clamp(36px, 5vw, 56px);
-  --text-display-weight: 700;
+  --text-display-size: clamp(40px, 5.5vw, 72px);
+  --text-display-weight: 400;
 
   --text-title-size: 28px;
-  --text-title-weight: 600;
+  --text-title-weight: 500;
 
   --text-headline-size: 21px;
-  --text-headline-weight: 600;
+  --text-headline-weight: 500;
 
   --text-body-size: 17px;
   --text-body-leading: 1.5;
 
   --text-callout-size: 15px;
 
-  --text-eyebrow-size: 13px;
-  --text-eyebrow-weight: 500;
+  --text-eyebrow-size: 11.5px;
+  --text-eyebrow-weight: 400;
   --text-eyebrow-tracking: 0.08em;
 
   --text-stat-size: 56px;
-  --text-stat-weight: 600;
+  --text-stat-weight: 400;
 
   /* ── Spacing (4px scale) ────────────────────────── */
   --space-1: 4px;
@@ -71,10 +79,10 @@
   --gutter: 16px;
   --section-padding: clamp(64px, 12vh, 140px);
 
-  /* ── Radius ─────────────────────────────────────── */
-  --radius-control: 12px;
-  --radius-card: 18px;
-  --radius-hero: 28px;
+  /* ── Radius: hard edges everywhere except true pills/dots ── */
+  --radius-control: 0;
+  --radius-card: 0;
+  --radius-hero: 0;
   --radius-pill: 999px;
 
   /* ── Motion ─────────────────────────────────────── */
@@ -86,30 +94,45 @@
   --motion-count-up: 900ms;
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) {
-    --bg: #fbfbfd;
-    --surface: #ffffff;
-    --surface-2: #f5f5f7;
-    --text: #1d1d1f;
-    --text-2: #6e6e73;
-    --text-3: #707075;
-    --hairline: rgba(0, 0, 0, 0.08);
-    --accent: #0071e3;
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
-  }
+/* Ink (dark): explicit choice, or "System" on a dark OS. */
+:root[data-theme='dark'] {
+  --bg: #0c0c0b;
+  --surface: #161513;
+  --surface-2: #211f1b;
+  --text: #f6f0e4;
+  --text-2: #bdb6a8;
+  --text-3: #948d80;
+  --hairline: rgba(246, 240, 228, 0.12);
+  --line: rgba(246, 240, 228, 0.78);
+  --accent: #ff7a3d;
+  --brand-3: #f6f0e4;
+  --positive: #4ade80;
+  --negative: #ff6b5b;
+  --hi: #ff5b14;
+  --brand-gradient: linear-gradient(90deg, #ff7a3d, #ff7a3d);
+  --shadow-card: 4px 4px 0 #ff5b14;
+  --streak: #facc15;
 }
 
-:root[data-theme='light'] {
-  --bg: #fbfbfd;
-  --surface: #ffffff;
-  --surface-2: #f5f5f7;
-  --text: #1d1d1f;
-  --text-2: #6e6e73;
-  --text-3: #707075;
-  --hairline: rgba(0, 0, 0, 0.08);
-  --accent: #0071e3;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='system'] {
+    --bg: #0c0c0b;
+    --surface: #161513;
+    --surface-2: #211f1b;
+    --text: #f6f0e4;
+    --text-2: #bdb6a8;
+    --text-3: #948d80;
+    --hairline: rgba(246, 240, 228, 0.12);
+    --line: rgba(246, 240, 228, 0.78);
+    --accent: #ff7a3d;
+    --brand-3: #f6f0e4;
+    --positive: #4ade80;
+    --negative: #ff6b5b;
+    --hi: #ff5b14;
+    --brand-gradient: linear-gradient(90deg, #ff7a3d, #ff7a3d);
+    --shadow-card: 4px 4px 0 #ff5b14;
+    --streak: #facc15;
+  }
 }
 
 * {
@@ -123,6 +146,8 @@ body {
 }
 
 .text-display-xl {
+  font-family: var(--font-display);
+  text-transform: uppercase;
   font-size: var(--text-display-xl-size);
   font-weight: var(--text-display-xl-weight);
   letter-spacing: var(--text-display-xl-tracking);
@@ -130,10 +155,12 @@ body {
 }
 
 .text-display {
+  font-family: var(--font-display);
+  text-transform: uppercase;
   font-size: var(--text-display-size);
   font-weight: var(--text-display-weight);
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+  letter-spacing: 0;
+  line-height: 0.92;
 }
 
 .text-title {
@@ -156,6 +183,7 @@ body {
 }
 
 .text-eyebrow {
+  font-family: var(--font-mono);
   font-size: var(--text-eyebrow-size);
   font-weight: var(--text-eyebrow-weight);
   text-transform: uppercase;
@@ -164,6 +192,7 @@ body {
 }
 
 .text-stat {
+  font-family: var(--font-display);
   font-size: var(--text-stat-size);
   font-weight: var(--text-stat-weight);
 }

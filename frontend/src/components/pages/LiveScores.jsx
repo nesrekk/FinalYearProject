@@ -158,10 +158,10 @@ export default function LiveScores() {
                                     )}
                                     <span className="team-name">{game.away.name}</span>
                                     {game.away.rest?.is_b2b && (
-                                        <span className="badge" title="Back-to-back — no real rest day before this game" style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>B2B</span>
+                                        <span className="badge" title="Back-to-back — no real rest day before this game" style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--negative)', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>B2B</span>
                                     )}
                                     {!game.away.rest?.is_b2b && game.away.rest?.rest_disadvantage && (
-                                        <span className="badge" title={`${game.away.rest.rest_days} real rest days vs. the other team's more`} style={{ background: 'rgba(250,204,21,0.15)', color: '#facc15', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>REST DISADV.</span>
+                                        <span className="badge" title={`${game.away.rest.rest_days} real rest days vs. the other team's more`} style={{ background: 'rgba(250,204,21,0.15)', color: 'var(--streak)', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>REST DISADV.</span>
                                     )}
                                     <span className={`team-score ${!isScheduled ? '' : 'team-score--dim'}`}>
                                         {isScheduled ? '-' : game.away.score}
@@ -183,10 +183,10 @@ export default function LiveScores() {
                                     )}
                                     <span className="team-name">{game.home.name}</span>
                                     {game.home.rest?.is_b2b && (
-                                        <span className="badge" title="Back-to-back — no real rest day before this game" style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>B2B</span>
+                                        <span className="badge" title="Back-to-back — no real rest day before this game" style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--negative)', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>B2B</span>
                                     )}
                                     {!game.home.rest?.is_b2b && game.home.rest?.rest_disadvantage && (
-                                        <span className="badge" title={`${game.home.rest.rest_days} real rest days vs. the other team's more`} style={{ background: 'rgba(250,204,21,0.15)', color: '#facc15', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>REST DISADV.</span>
+                                        <span className="badge" title={`${game.home.rest.rest_days} real rest days vs. the other team's more`} style={{ background: 'rgba(250,204,21,0.15)', color: 'var(--streak)', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>REST DISADV.</span>
                                     )}
                                     <span className={`team-score ${!isScheduled ? '' : 'team-score--dim'}`}>
                                         {isScheduled ? '-' : game.home.score}

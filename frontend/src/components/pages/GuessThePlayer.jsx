@@ -40,14 +40,14 @@ function fmtStat(key, guess) {
 }
 
 function DirectionIcon({ direction }) {
-    if (direction === 'same') return <Icon name="check" size="1.1em" style={{ color: '#34d399' }} />;
-    if (direction === 'higher') return <Icon name="arrow_upward" size="1.1em" style={{ color: '#facc15' }} />;
-    if (direction === 'lower') return <Icon name="arrow_downward" size="1.1em" style={{ color: '#facc15' }} />;
+    if (direction === 'same') return <Icon name="check" size="1.1em" style={{ color: 'var(--positive)' }} />;
+    if (direction === 'higher') return <Icon name="arrow_upward" size="1.1em" style={{ color: 'var(--streak)' }} />;
+    if (direction === 'lower') return <Icon name="arrow_downward" size="1.1em" style={{ color: 'var(--streak)' }} />;
     return <span style={{ color: 'var(--text-muted)' }}>—</span>;
 }
 
 function MatchIcon({ status }) {
-    if (status === 'match') return <Icon name="check" size="1.1em" style={{ color: '#34d399' }} />;
+    if (status === 'match') return <Icon name="check" size="1.1em" style={{ color: 'var(--positive)' }} />;
     return <Icon name="close" size="1.1em" style={{ color: 'var(--text-muted)' }} />;
 }
 
@@ -276,7 +276,7 @@ export default function GuessThePlayer() {
                                                 <div className="entity-row">
                                                     <PlayerHeadshot playerId={g.guess.player_id} playerName={g.guess.player_name} size={28} />
                                                     {g.guess.player_name}
-                                                    {g.correct && <Icon name="celebration" size="1em" style={{ color: '#34d399', marginLeft: 4 }} />}
+                                                    {g.correct && <Icon name="celebration" size="1em" style={{ color: 'var(--positive)', marginLeft: 4 }} />}
                                                 </div>
                                             </td>
                                             {FIELD_COLUMNS.map((col) => (

@@ -12,8 +12,8 @@ function fmtPct(v) {
 
 function valueColor(v) {
     if (v == null) return 'var(--text-muted)';
-    if (v > 0.03) return '#34d399';
-    if (v < -0.03) return '#f87171';
+    if (v > 0.03) return 'var(--positive)';
+    if (v < -0.03) return 'var(--negative)';
     return 'var(--text-secondary)';
 }
 
@@ -26,9 +26,9 @@ function valueColor(v) {
 function consensusInfo(spread, marketProb) {
     if (spread == null || !marketProb) return { label: 'N/A', color: 'var(--text-muted)' };
     const cv = spread / marketProb;
-    if (cv < 0.05) return { label: 'Strong Consensus', color: '#34d399', cv };
-    if (cv < 0.15) return { label: 'Some Disagreement', color: '#facc15', cv };
-    return { label: 'Books Disagree', color: '#f87171', cv };
+    if (cv < 0.05) return { label: 'Strong Consensus', color: 'var(--positive)', cv };
+    if (cv < 0.15) return { label: 'Some Disagreement', color: 'var(--streak)', cv };
+    return { label: 'Books Disagree', color: 'var(--negative)', cv };
 }
 
 function BookBreakdown({ books }) {

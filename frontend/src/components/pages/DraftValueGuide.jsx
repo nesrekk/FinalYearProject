@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchDraftClass, fetchDraftValueCurve, fetchDraftBestValue } from '../../services/api';
 import Loader from '../Loader';
 import InfoTooltip from '../common/InfoTooltip';
+import PlayerName from '../common/PlayerName';
 import Icon from '../common/Icon';
 
 const CHART_W = 640, CHART_H = 260, PAD_L = 56, PAD_R = 16, PAD_T = 16, PAD_B = 40;
@@ -156,13 +157,13 @@ export default function DraftValueGuide() {
                             <tbody>
                                 {leaderboard.results.map((r) => (
                                     <tr key={r.player_id}>
-                                        <td>{r.player_name}</td>
+                                        <td><PlayerName playerId={r.player_id} name={r.player_name} /></td>
                                         <td>{r.draft_year}</td>
                                         <td>#{r.overall_pick}</td>
                                         <td>{r.team_abbreviation}</td>
                                         <td>{fmt(r.career_impact_raw)}</td>
                                         <td>{fmt(r.expected_impact_raw)}</td>
-                                        <td style={{ color: r.value_over_expectation >= 0 ? '#34d399' : '#f87171' }}>
+                                        <td style={{ color: r.value_over_expectation >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
                                             {r.value_over_expectation >= 0 ? '+' : ''}{fmt(r.value_over_expectation)}
                                         </td>
                                     </tr>
@@ -211,7 +212,7 @@ export default function DraftValueGuide() {
                                     {draftClass.results.map((p) => (
                                         <tr key={p.player_id}>
                                             <td>{p.overall_pick != null ? `#${p.overall_pick}` : '—'}</td>
-                                            <td>{p.player_name}</td>
+                                            <td><PlayerName playerId={p.player_id} name={p.player_name} /></td>
                                             <td>{p.organization || '—'}</td>
                                             <td>{p.team_abbreviation || '—'}</td>
                                             <td>{p.seasons_played}</td>

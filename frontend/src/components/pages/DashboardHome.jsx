@@ -185,18 +185,6 @@ export default function DashboardHome({ onNavigate }) {
         return west.length > 0 ? west[0] : null;
     }, [meta]);
 
-    const greeting = useMemo(() => {
-        const hour = new Date().getHours();
-        if (hour < 12) return 'Good morning.';
-        if (hour < 18) return 'Good afternoon.';
-        return 'Good evening.';
-    }, []);
-
-    const todayLabel = useMemo(
-        () => new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
-        []
-    );
-
     const standingsPreview = useMemo(() => {
         const east = (meta?.standings?.eastern || []).slice(0, 3);
         const west = (meta?.standings?.western || []).slice(0, 3);
@@ -219,11 +207,6 @@ export default function DashboardHome({ onNavigate }) {
 
     return (
         <div className="page page-dashboard fade-in">
-            {/* Greeting */}
-            <div className="dashboard-greeting">
-                <p className="text-eyebrow">{todayLabel}</p>
-                <h2 className="text-display dashboard-greeting-title">{greeting}</h2>
-            </div>
 
             {/* Bento overview */}
             <BentoGrid className="dashboard-bento">

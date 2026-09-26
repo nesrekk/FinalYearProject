@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { fetchLearnBasics } from '../../services/api';
+import PlayerHeadshot from '../common/PlayerHeadshot';
 import '../../styles/learn.css';
 
 // Court coordinates follow player_shots: tenths of a foot, hoop at (0, 0),
@@ -260,7 +261,10 @@ export default function LearnTheGame({ onNavigate }) {
                 {p && (
                     <section className="lg-sec">
                         <span className="lg-k">05 · Reading a stat line</span>
-                        <h2>{p.player_name}, {season}.</h2>
+                        <div className="lg-player">
+                            <PlayerHeadshot playerId={p.player_id} playerName={p.player_name} size={96} />
+                            <h2>{p.player_name}, {season}.</h2>
+                        </div>
                         <p className="lg-sub">The league&apos;s top scorer ({p.team}, {p.gp} games). Here&apos;s what each number means.</p>
                         <div className="lg-statline">
                             <div><b>{p.pts.toFixed(1)}</b><dt>PTS</dt><dd>Points per game.</dd></div>

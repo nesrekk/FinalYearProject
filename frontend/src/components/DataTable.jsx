@@ -1,4 +1,7 @@
 import React from 'react';
+import PlayerName from './common/PlayerName';
+
+const PLAYER_KEYS = new Set(['player', 'player_name']);
 
 /**
  * Reusable data table component.
@@ -29,7 +32,9 @@ export default function DataTable({ columns, keys, rows, emptyMessage = 'No data
                         <tr key={rowIdx}>
                             {keys.map((key, colIdx) => (
                                 <td key={colIdx}>
-                                    {typeof row[key] === 'number'
+                                    {PLAYER_KEYS.has(key) && row.player_id ? (
+                                        <PlayerName playerId={row.player_id} name={row[key]} />
+                                    ) : typeof row[key] === 'number'
                                         ? Number.isInteger(row[key])
                                             ? row[key]
                                             : row[key].toFixed(3)

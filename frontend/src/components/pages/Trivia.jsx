@@ -131,9 +131,9 @@ export default function Trivia() {
                             let style = {};
                             if (pendingResult) {
                                 if (opt.id === pendingResult.correct_option_id) {
-                                    style = { borderColor: '#34d399', color: '#34d399' };
+                                    style = { borderColor: '#34d399', color: 'var(--positive)' };
                                 } else if (opt.id === pendingResult.option_id) {
-                                    style = { borderColor: '#f87171', color: '#f87171' };
+                                    style = { borderColor: '#f87171', color: 'var(--negative)' };
                                 }
                             }
                             return (
@@ -146,10 +146,10 @@ export default function Trivia() {
                                     disabled={!!pendingResult || submitting}
                                 >
                                     {pendingResult && opt.id === pendingResult.correct_option_id && (
-                                        <Icon name="check" size="1em" style={{ verticalAlign: 'middle', marginRight: 6, color: '#34d399' }} />
+                                        <Icon name="check" size="1em" style={{ verticalAlign: 'middle', marginRight: 6, color: 'var(--positive)' }} />
                                     )}
                                     {pendingResult && opt.id === pendingResult.option_id && opt.id !== pendingResult.correct_option_id && (
-                                        <Icon name="close" size="1em" style={{ verticalAlign: 'middle', marginRight: 6, color: '#f87171' }} />
+                                        <Icon name="close" size="1em" style={{ verticalAlign: 'middle', marginRight: 6, color: 'var(--negative)' }} />
                                     )}
                                     {opt.label}
                                 </button>

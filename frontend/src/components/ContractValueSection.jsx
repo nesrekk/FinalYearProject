@@ -126,7 +126,7 @@ function ValueTable({ title, tooltip, rows }) {
                                     <span className="page-subtitle" style={{ display: 'block', fontSize: '0.68rem' }}>VORP {r.vorp?.toFixed(1)}</span>
                                 </td>
                                 <td>{money(r.fair_value)}</td>
-                                <td style={{ fontWeight: 700, color: r.surplus >= 0 ? '#34d399' : '#f87171' }}>{signedMoney(r.surplus)}</td>
+                                <td style={{ fontWeight: 700, color: r.surplus >= 0 ? 'var(--positive)' : 'var(--negative)' }}>{signedMoney(r.surplus)}</td>
                                 <td>{Math.round(r.minutes).toLocaleString()}</td>
                             </tr>
                         ))}

@@ -228,16 +228,16 @@ export default function HigherOrLower() {
                             {status === 'playing' ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                     <button type="button" className="input-field" data-magnetic style={{ cursor: 'pointer' }} onClick={() => guess('higher')}>
-                                        <Icon name="arrow_upward" size="1em" style={{ verticalAlign: 'middle', marginRight: 4, color: '#facc15' }} /> Higher
+                                        <Icon name="arrow_upward" size="1em" style={{ verticalAlign: 'middle', marginRight: 4, color: 'var(--streak)' }} /> Higher
                                     </button>
                                     <button type="button" className="input-field" data-magnetic style={{ cursor: 'pointer' }} onClick={() => guess('lower')}>
-                                        <Icon name="arrow_downward" size="1em" style={{ verticalAlign: 'middle', marginRight: 4, color: '#facc15' }} /> Lower
+                                        <Icon name="arrow_downward" size="1em" style={{ verticalAlign: 'middle', marginRight: 4, color: 'var(--streak)' }} /> Lower
                                     </button>
                                 </div>
                             ) : (
                                 lastCorrect && (
                                     <button type="button" className="input-field" data-magnetic style={{ cursor: 'pointer' }} onClick={advance}>
-                                        <Icon name="check" size="1em" style={{ verticalAlign: 'middle', marginRight: 4, color: '#34d399' }} /> Next
+                                        <Icon name="check" size="1em" style={{ verticalAlign: 'middle', marginRight: 4, color: 'var(--positive)' }} /> Next
                                     </button>
                                 )
                             )}

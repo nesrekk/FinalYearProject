@@ -9,8 +9,8 @@ import SourceBadge from './common/SourceBadge';
 
 function wpaColor(v) {
     if (v == null) return 'var(--text-muted)';
-    if (v > 0) return '#34d399';
-    if (v < 0) return '#f87171';
+    if (v > 0) return 'var(--positive)';
+    if (v < 0) return 'var(--negative)';
     return 'var(--text-secondary)';
 }
 

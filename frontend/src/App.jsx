@@ -15,6 +15,7 @@ import LandingPage from './components/pages/LandingPage';
 import Loader from './components/Loader';
 import { prefetchCoreData } from './services/api';
 import './styles/dashboard.css';
+import './styles/theme.css';
 
 // Code-split: only the landing page + Today dashboard (the two views
 // everyone hits first) are in the main bundle. Every other page is its

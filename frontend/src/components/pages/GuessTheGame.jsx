@@ -250,7 +250,7 @@ export default function GuessTheGame() {
                                 <TeamLogo abbreviation={a.team} size={20} />
                                 <span>{a.team}</span>
                                 {a.correct
-                                    ? <Icon name="celebration" size="1em" style={{ color: '#34d399' }} />
+                                    ? <Icon name="celebration" size="1em" style={{ color: 'var(--positive)' }} />
                                     : <Icon name="close" size="1em" style={{ color: 'var(--text-muted)' }} />}
                                 {!a.correct && a.clue && (
                                     <span className="page-subtitle" style={{ margin: 0 }}>

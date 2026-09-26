@@ -11,7 +11,7 @@ const BUCKET_META = {
     garbage: { label: 'Garbage time', color: '#94a3b8' },
     low: { label: 'Low leverage', color: '#64748b' },
     medium: { label: 'Medium leverage', color: '#38bdf8' },
-    high: { label: 'High leverage / clutch', color: '#f59e0b' },
+    high: { label: 'High leverage / clutch', color: 'var(--streak)' },
 };
 
 const MIN_PPG_OPTIONS = [0, 10, 15, 20];
@@ -170,7 +170,7 @@ function LeaderTable({ title, tooltip, rows, valueKey, valueLabel, onSelect, sho
                                         <TeamLogo abbreviation={r.team_abbreviation} size={14} style={{ marginLeft: 6 }} />
                                     </div>
                                     {showBadge && r.padding_risk && (
-                                        <span className="page-subtitle" style={{ display: 'block', fontSize: '0.68rem', color: '#f87171' }}>
+                                        <span className="page-subtitle" style={{ display: 'block', fontSize: '0.68rem', color: 'var(--negative)' }}>
                                             high stat-padding risk
                                         </span>
                                     )}
@@ -222,7 +222,7 @@ function PlayerCard({ detail, loading, error }) {
                 </p>
             )}
             {p.padding_risk && (
-                <p style={{ color: '#f87171', fontWeight: 700, margin: '0.25rem 0 0.75rem' }}>
+                <p style={{ color: 'var(--negative)', fontWeight: 700, margin: '0.25rem 0 0.75rem' }}>
                     High stat-padding risk: {pct(p.garbage_share)} of real points came in garbage time, the{' '}
                     {ordinal(p.garbage_share_pctile)} percentile among {detail.n_qualified_in_season} qualified players.
                 </p>

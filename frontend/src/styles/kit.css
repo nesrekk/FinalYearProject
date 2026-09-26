@@ -540,7 +540,7 @@
   height: 34px;
   border-radius: var(--radius-control);
   background: var(--surface-2);
-  color: var(--brand);
+  color: var(--brand-text);
 }
 
 .analytics-tile-title {
@@ -664,7 +664,7 @@
   height: 40px;
   border-radius: var(--radius-control);
   background: var(--surface-2);
-  color: var(--brand);
+  color: var(--brand-text);
   font-size: 1.3em;
 }
 

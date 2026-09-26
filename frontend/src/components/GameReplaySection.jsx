@@ -268,7 +268,7 @@ export default function GameReplaySection() {
                             </p>
                         )}
                         {!hovered && whatif && (
-                            <p className="page-subtitle" style={{ margin: 0, color: '#facc15' }}>
+                            <p className="page-subtitle" style={{ margin: 0, color: 'var(--streak)' }}>
                                 <Icon name="undo" size="0.9em" style={{ verticalAlign: 'middle', marginRight: 4 }} />
                                 {whatif.counterfactual_label} — {whatif.disclaimer}
                             </p>
@@ -312,7 +312,7 @@ export default function GameReplaySection() {
                                         <td>{formatClock(p.seconds_elapsed)}</td>
                                         <td>{p.description}</td>
                                         <td>{Math.round(p.home_wp * 100)}%</td>
-                                        <td style={{ color: wpColor(0.5 + p.wpa) }}>
+                                        <td style={{ color: p.wpa >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
                                             {p.wpa >= 0 ? '+' : ''}{(p.wpa * 100).toFixed(1)}pp
                                         </td>
                                     </tr>

@@ -76,8 +76,8 @@ function FormStreak({ form }) {
                         key={i}
                         title={`${g.win ? 'W' : 'L'} vs ${g.opponent} (${g.point_diff >= 0 ? '+' : ''}${g.point_diff}) — ${g.date}`}
                         style={{
-                            width: 18, height: 18, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '0.6rem', fontWeight: 700, color: '#fff',
+                            width: 18, height: 18, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.6rem', fontWeight: 700, color: '#0d0d0d', border: '1.5px solid var(--line)',
                             background: g.win ? '#34d399' : '#f87171',
                         }}
                     >

@@ -246,7 +246,7 @@ export default function BlurredPlayer() {
                                     transition={preset.spring}
                                     style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                                 >
-                                    <Icon name={g.correct ? 'check' : 'close'} size="1.1em" style={{ color: g.correct ? '#34d399' : 'var(--text-muted)' }} />
+                                    <Icon name={g.correct ? 'check' : 'close'} size="1.1em" style={{ color: g.correct ? 'var(--positive)' : 'var(--text-muted)' }} />
                                     {g.guess_player_name}
                                 </motion.div>
                             ))}

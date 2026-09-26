@@ -3,9 +3,9 @@ const STORAGE_KEY = 'nba-hub-theme';
 export function getStoredTheme() {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    return v === 'light' || v === 'dark' || v === 'system' ? v : 'system';
+    return v === 'light' || v === 'dark' || v === 'system' ? v : 'light';
   } catch {
-    return 'system';
+    return 'light';
   }
 }
 
@@ -19,13 +19,7 @@ export function setStoredTheme(theme) {
 
 export function applyTheme(theme) {
   const root = document.documentElement;
-  if (theme === 'light') {
-    root.setAttribute('data-theme', 'light');
-  } else if (theme === 'dark') {
-    root.setAttribute('data-theme', 'dark');
-  } else {
-    root.removeAttribute('data-theme');
-  }
+  root.setAttribute('data-theme', theme === 'dark' || theme === 'system' ? theme : 'light');
 }
 
 export function initTheme() {

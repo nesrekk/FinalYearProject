@@ -1,4 +1,7 @@
 import React from 'react';
+import { NAV_GROUPS, groupForPage } from './navConfig';
+
+const POSTER_PAGES = new Set(['dashboard', 'analytics', 'shotcharts', 'games', 'hof']);
 
 const pageTitles = {
     dashboard: 'Dashboard',
@@ -38,10 +41,24 @@ const pageDescriptions = {
     learn: 'Basketball for first-time fans, measured from real league data',
 };
 
+function greeting() {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning.';
+    if (hour < 18) return 'Good afternoon.';
+    return 'Good evening.';
+}
+
 export default function PageHeader({ activePage }) {
+    const group = NAV_GROUPS.find((g) => g.id === groupForPage(activePage));
+    const poster = POSTER_PAGES.has(activePage);
+    const isDashboard = activePage === 'dashboard' || !pageTitles[activePage];
+    const eyebrow = isDashboard
+        ? new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+        : group && `NBA Hub · ${group.label}`;
     return (
-        <header className="page-header">
-            <h1 className="page-title">{pageTitles[activePage] || 'Dashboard'}</h1>
+        <header className={`page-header${poster ? ' page-header--poster' : ''}`}>
+            {eyebrow && <span className="page-eyebrow">{eyebrow}</span>}
+            <h1 className="page-title">{isDashboard ? greeting() : pageTitles[activePage]}</h1>
             <p className="page-subtitle">{pageDescriptions[activePage] || ''}</p>
         </header>
     );

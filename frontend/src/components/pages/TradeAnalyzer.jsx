@@ -33,7 +33,7 @@ function DeltaValue({ before, after, digits = 1, higherIsBetter = true }) {
     const delta = after - before;
     const improved = higherIsBetter ? delta > 0 : delta < 0;
     const flat = Math.abs(delta) < 0.005;
-    const color = flat ? '#94a3b8' : (improved ? '#34d399' : '#f87171');
+    const color = flat ? 'var(--text-3)' : (improved ? 'var(--positive)' : 'var(--negative)');
     const sign = delta >= 0 ? '+' : '';
     return (
         <span className="hb-delta">

@@ -47,7 +47,7 @@ export default function TradeContractValue({ season, players }) {
                                             <td>{money(r.player.salary)}</td>
                                             <td>{r.player.war?.toFixed(1)}</td>
                                             <td>{money(r.player.fair_value)}</td>
-                                            <td style={{ fontWeight: 700, color: r.player.surplus >= 0 ? '#34d399' : '#f87171' }}>
+                                            <td style={{ fontWeight: 700, color: r.player.surplus >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
                                                 {r.player.surplus > 0 ? '+' : ''}{money(r.player.surplus)}
                                             </td>
                                         </>

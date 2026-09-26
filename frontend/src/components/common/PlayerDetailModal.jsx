@@ -156,7 +156,7 @@ export default function PlayerDetailModal({ player, onClose }) {
                                             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(100, pt.freq * 100 * 3)}%`, background: '#38bdf8', borderRadius: 4 }} />
                                         </div>
                                         <span style={{ width: 40, fontSize: '0.75rem', textAlign: 'right', color: 'var(--text-secondary)' }}>{(pt.freq * 100).toFixed(0)}%</span>
-                                        <span style={{ width: 48, fontSize: '0.75rem', textAlign: 'right', color: pt.percentile >= 0.6 ? '#34d399' : pt.percentile <= 0.4 ? '#f87171' : 'var(--text-muted)' }}>
+                                        <span style={{ width: 48, fontSize: '0.75rem', textAlign: 'right', color: pt.percentile >= 0.6 ? 'var(--positive)' : pt.percentile <= 0.4 ? 'var(--negative)' : 'var(--text-muted)' }}>
                                             {pt.ppp.toFixed(2)} PPP
                                         </span>
                                     </div>

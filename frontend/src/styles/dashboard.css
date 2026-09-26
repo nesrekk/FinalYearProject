@@ -411,7 +411,7 @@ body {
 }
 
 .dashboard-game-status--live {
-  color: var(--brand);
+  color: var(--brand-text);
 }
 
 .dashboard-mvp-stat .big-stat-value {
@@ -2610,7 +2610,7 @@ body {
 }
 
 .hb-cell-accent {
-  color: var(--brand) !important;
+  color: var(--brand-text) !important;
   font-weight: 700;
 }
 

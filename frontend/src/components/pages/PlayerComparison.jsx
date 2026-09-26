@@ -42,9 +42,9 @@ function barFraction(value, min, max) {
 
 function tierColor(percentile) {
     if (percentile == null) return null;
-    if (percentile < 33) return '#f87171';
-    if (percentile < 66) return '#facc15';
-    return '#34d399';
+    if (percentile < 33) return 'var(--negative)';
+    if (percentile < 66) return 'var(--streak)';
+    return 'var(--positive)';
 }
 
 function findDetailStat(profile, key) {
@@ -472,7 +472,7 @@ export default function PlayerComparison() {
                                 </div>
                                 <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginBottom: 6 }}>
                                     <span className="page-subtitle" style={{ margin: 0 }}>
-                                        Predicted synergy <strong style={{ color: synergy.predicted_synergy >= 0 ? '#34d399' : '#f87171' }}>
+                                        Predicted synergy <strong style={{ color: synergy.predicted_synergy >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
                                             {synergy.predicted_synergy >= 0 ? '+' : ''}{synergy.predicted_synergy}
                                         </strong>
                                     </span>
@@ -523,7 +523,7 @@ export default function PlayerComparison() {
                                             }}
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, marginBottom: 4 }}>
-                                                <Icon name={f.kind === 'overlap' ? 'warning' : 'check_circle'} size="1em" style={{ color: f.kind === 'overlap' ? '#f87171' : '#34d399' }} />
+                                                <Icon name={f.kind === 'overlap' ? 'warning' : 'check_circle'} size="1em" style={{ color: f.kind === 'overlap' ? 'var(--negative)' : 'var(--positive)' }} />
                                                 {f.label}
                                             </div>
                                             <p className="page-subtitle" style={{ margin: 0 }}>{f.detail}</p>

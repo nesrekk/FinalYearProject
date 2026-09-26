@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchLivePlayerSuggestions, fetchPlayerShots } from '../../services/api';
 import Icon from '../common/Icon';
+import PlayerName from '../common/PlayerName';
 
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
@@ -167,6 +168,7 @@ export default function ShotCharts() {
   const [searchingSuggestions, setSearchingSuggestions] = useState(false);
 
   const [resolvedPlayer, setResolvedPlayer] = useState('');
+  const [resolvedPlayerId, setResolvedPlayerId] = useState(null);
   const [shots, setShots] = useState([]);
   const [seasons, setSeasons] = useState([]);
   const [season, setSeason] = useState('');
@@ -209,6 +211,7 @@ export default function ShotCharts() {
     try {
       const data = await fetchPlayerShots(target, seasonOverride || undefined);
       setResolvedPlayer(data.player_name);
+      setResolvedPlayerId(data.player_id ?? null);
       setSeasons(data.seasons || []);
       setSeason(data.season || '');
       setShots(data.shots || []);
@@ -282,7 +285,7 @@ export default function ShotCharts() {
             {suggestions.length > 0 && (
               <ul className="autocomplete-list" style={{
                 position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                background: '#1e293b', border: '1px solid #334155', borderRadius: 6,
+                background: 'var(--surface)', border: '2px solid var(--line)', borderRadius: 0, boxShadow: 'var(--shadow-card)',
                 marginTop: 4, maxHeight: 220, overflowY: 'auto', listStyle: 'none', padding: 0,
               }}>
                 {suggestions.map((name) => (
@@ -292,7 +295,7 @@ export default function ShotCharts() {
                       onClick={() => loadPlayer(name)}
                       style={{
                         display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem',
-                        background: 'transparent', border: 'none', color: '#e2e8f0', cursor: 'pointer',
+                        background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer',
                       }}
                     >
                       {name}
@@ -325,9 +328,14 @@ export default function ShotCharts() {
           </select>
         </div>
 
-        <p className="page-subtitle" style={{ marginTop: '0.5rem' }}>
-          {resolvedPlayer ? `${resolvedPlayer} · ${shots.length.toLocaleString()} shots · ${seasons.length} seasons` : 'Search a player to load their shot chart'}
-          {source === 'live' && ' · fetched live just now'}
+        <p className="page-subtitle" style={{ marginTop: '0.75rem' }}>
+          {resolvedPlayer ? (
+            <PlayerName playerId={resolvedPlayerId} name={resolvedPlayer} size={40}>
+              <span className="text-eyebrow" style={{ display: 'block', marginTop: 2 }}>
+                {shots.length.toLocaleString()} shots · {seasons.length} seasons{source === 'live' ? ' · fetched live just now' : ''}
+              </span>
+            </PlayerName>
+          ) : 'Search a player to load their shot chart'}
         </p>
 
         {loading && (

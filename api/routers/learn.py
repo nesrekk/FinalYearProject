@@ -57,7 +57,7 @@ def _basics():
         total_pts, n_players = cur.fetchone()
 
         cur.execute(
-            """SELECT player_name, team_abbreviation, gp, pts, reb, ast, ts_pct, fg3_pct
+            """SELECT player_name, team_abbreviation, gp, pts, reb, ast, ts_pct, fg3_pct, player_id
                FROM player_season_stats WHERE season = %s AND gp >= 50
                ORDER BY pts DESC LIMIT 1""",
             (season,),
@@ -102,6 +102,7 @@ def _basics():
             "n_players": n_players,
         },
         "example_player": None if top is None else {
+            "player_id": int(top[8]),
             "player_name": top[0],
             "team": top[1],
             "gp": top[2],

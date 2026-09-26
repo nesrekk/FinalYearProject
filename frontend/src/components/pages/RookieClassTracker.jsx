@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchROYPrediction, fetchSeasonSimilarity } from '../../services/api';
 import Loader from '../Loader';
 import InfoTooltip from '../common/InfoTooltip';
+import PlayerName from '../common/PlayerName';
 import Icon from '../common/Icon';
 
 function fmt(v, digits = 1) {
@@ -107,7 +108,7 @@ export default function RookieClassTracker() {
                                             className={r.player_name === selected ? 'text-accent' : ''}
                                         >
                                             <td>{r.player_name === selected ? '▶ ' : ''}{r.rank}</td>
-                                            <td>{r.player_name}</td>
+                                            <td><PlayerName playerId={r.player_id} name={r.player_name} /></td>
                                             <td>{fmt(r.pts)}</td>
                                             <td>{fmt(r.ts_pct, 3)}</td>
                                             <td>{fmt(r.usg_pct, 3)}</td>
@@ -142,7 +143,7 @@ export default function RookieClassTracker() {
                                     )}
                                     {comps.results.slice(0, 5).map((c) => (
                                         <tr key={`${c.player_id}-${c.season}`}>
-                                            <td>{c.player_name}</td>
+                                            <td><PlayerName playerId={c.player_id} name={c.player_name} /></td>
                                             <td>{c.season - 1}-{String(c.season).slice(-2)}</td>
                                             <td>{(c.similarity_score * 100).toFixed(1)}%</td>
                                         </tr>
