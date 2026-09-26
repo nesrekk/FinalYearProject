@@ -7,13 +7,12 @@ Auto-loaded by every new Claude Code chat in this repo. **Keep it current:** at 
 - Owner's Obsidian vault (planning/navigation layer, **read-only for coding chats — never write there**): `/Users/kersenjonathan/Desktop/Second Brain/FinalYearProject/` — `Home.md`, `Roadmap.md`, `Known-Gaps.md`, `Session-Log.md`, `Ideas (unshipped)/`, `Landing Rehaul/Plan.md`. The owner maintains it in a separate chat. If the vault and README disagree, the README (and the code) win.
 
 ## Current state (updated 2026-09-26)
-- All five features of the owner's advanced-analytics plan are shipped, verified and pushed: Garbage-Time Deflator, DAD Index, Exploit Guide (Scouting Report) v1+v2, Gravity Index & Spacing Lab, Contract Value. Latest commits: `6dc2708` (Supabase re-sync), `efdbb52` (plan wrap-up docs).
-- Smoke tests: **51/51** (`/Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pytest api/tests`).
+- All five features of the owner's advanced-analytics plan are shipped, verified and pushed: Garbage-Time Deflator, DAD Index, Exploit Guide (Scouting Report) v1+v2, Gravity Index & Spacing Lab, Contract Value. Latest commits: `e8ac394` (lint fix), `9c4064b` (this handoff file), `6dc2708` (Supabase re-sync).
+- Smoke tests: **51/51** (`/Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pytest api/tests`). Frontend lint clean (`cd frontend && npx eslint src` exits 0 — the 4 old errors were fixed in `e8ac394`); keep it that way.
 - Supabase cloud mirror re-synced 2026-09-26: 60 tables (all but `player_shots`/`pbp_events`), row counts match local.
 - Local Postgres (`nba_analytics`, ~2.15GB) is the source of truth.
 
 ## Open items
-- **Lint fix (worktree task, may already be merged):** 4 pre-existing ESLint errors in `AutocompleteDropdown.jsx`, `HallOfFame.jsx`, `TeamComparison.jsx`. If merged on `origin/main`, pull it and check `npx eslint src` is clean.
 - **Layerbase move (idea, owner-gated):** move the cloud mirror from Supabase (500MB free, missing the two big tables) to Layerbase (real Postgres, 5GB free). The owner creates the DB and adds `LAYERBASE_DB_*` vars to `api/.env` themselves — never ask for or echo the password. Then: add a `layerbase` DB_TARGET (local stays default), make the sync copy ALL tables (stream the 6.3M/3.6M-row tables in chunks, recreate their indexes), verify endpoints match local, update README. Vault note: `Ideas (unshipped)/Layerbase-Cloud-DB-Migration.md`.
 - **Landing rehaul (idea):** plan in the vault at `Landing Rehaul/Plan.md` (Lenis smooth scroll + one WebGL accent, layered onto existing landing components, not a rewrite). Not started.
 - **B5 — Ask the Database:** parked on purpose (costs Anthropic API money; needs owner buy-in).
