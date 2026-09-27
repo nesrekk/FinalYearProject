@@ -23,6 +23,7 @@ const pageTitles = {
     greats: 'Greats of the Game',
     games: 'Games',
     learn: 'Learn the Game',
+    methodology: 'Methodology',
 };
 
 const pageDescriptions = {
@@ -42,6 +43,7 @@ const pageDescriptions = {
     hof: 'Real all-time career leaders, single-season records, and longevity — 1950 to today',
     games: 'Daily player-guessing puzzles and a career-stats streak game, all built on real data',
     learn: 'Basketball for first-time fans, measured from real league data',
+    methodology: 'How every model works, how it was checked, and where it falls short',
 };
 
 function greeting() {

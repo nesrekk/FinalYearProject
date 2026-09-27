@@ -1,0 +1,144 @@
+/* Methodology page (pages/Methodology.jsx) */
+.meth-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+.meth-principles {
+  margin: var(--space-4) 0 0;
+  padding-left: 1.1rem;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.meth-principles strong { color: var(--text); }
+.meth-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+.meth-jump button {
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.meth-jump button:hover,
+.meth-jump button:focus-visible {
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+.meth-section { scroll-margin-top: 90px; }
+.meth-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr));
+  gap: var(--space-5);
+  margin-top: var(--space-4);
+}
+.meth-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-5);
+  min-width: 0;
+}
+.meth-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.meth-card h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.3;
+  color: var(--text);
+}
+.meth-open {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--brand-text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.meth-open:hover,
+.meth-open:focus-visible { border-color: var(--brand); }
+.meth-answers {
+  margin: var(--space-2) 0 var(--space-3);
+  color: var(--text-2);
+  font-style: italic;
+}
+.meth-dl { margin: 0; }
+.meth-dl dt {
+  margin-top: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.meth-dl dd {
+  margin: 4px 0 0;
+  color: var(--text);
+  line-height: 1.5;
+  font-size: 0.92rem;
+}
+.meth-dl ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.meth-dl li + li { margin-top: 4px; }
+.meth-live-note {
+  margin: var(--space-3) 0 0;
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+.meth-table { margin-top: var(--space-2); }
+.meth-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+.meth-stats > div {
+  display: flex;
+  flex-direction: column;
+}
+.meth-stats > div > span {
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+.meth-stats > div > strong {
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.meth-stats .meth-live-note { flex-basis: 100%; }
+.meth-issue h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.meth-issue p {
+  margin: var(--space-2) 0 0;
+  color: var(--text);
+  line-height: 1.5;
+  font-size: 0.92rem;
+}
