@@ -9,6 +9,7 @@ import InfoTooltip from '../common/InfoTooltip';
 import PlayerDetailModal from '../common/PlayerDetailModal';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
+import TableExport from '../common/TableExport';
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'];
 
@@ -271,6 +272,7 @@ export default function PlayerStats() {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={preset.tableTransition}
                             >
+                                <TableExport />
                                 <table className="data-table">
                                     <thead>
                                         <tr>

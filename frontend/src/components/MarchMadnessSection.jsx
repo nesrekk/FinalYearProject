@@ -4,6 +4,7 @@ import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import '../styles/college.css';
+import TableExport from './common/TableExport';
 
 // Columns of ncaa_bracket_odds shown in the table; index into REACH (1 = won a Round of 64 game).
 const ROUNDS = [
@@ -139,6 +140,7 @@ export default function MarchMadnessSection() {
 
             <div className="dashboard-card" style={{ marginTop: '1rem' }}>
                 <h3 className="section-heading" style={{ marginTop: 0 }}>Pre-tournament odds, {data.season}</h3>
+                <TableExport />
                 <div className="hb-table-wrapper table-wrapper">
                     <table className="data-table">
                         <thead>
@@ -177,31 +179,35 @@ export default function MarchMadnessSection() {
                 <div className="dashboard-card">
                     <h3 className="section-heading" style={{ marginTop: 0 }}>Biggest upsets, by the model</h3>
                     {upsets.length === 0 ? <p className="cb-note">The model&apos;s favourite won every game.</p> : (
-                        <div className="hb-table-wrapper table-wrapper">
-                            <table className="data-table">
-                                <thead><tr><th>Round</th><th>Winner</th><th>Beat</th><th>Favourite&apos;s odds</th></tr></thead>
-                                <tbody>
-                                    {upsets.map((g) => {
-                                        const aWon = g.winner === g.team_a;
-                                        const [w, ws, wp, l, ls, lp] = aWon
-                                            ? [g.team_a, g.seed_a, g.points_a, g.team_b, g.seed_b, g.points_b]
-                                            : [g.team_b, g.seed_b, g.points_b, g.team_a, g.seed_a, g.points_a];
-                                        return (
-                                            <tr key={`${g.round}-${w}`}>
-                                                <td>{g.round_name}</td>
-                                                <td>({ws}) {w}<span className="cb-sub cb-num">{wp}–{lp}</span></td>
-                                                <td>({ls}) {l}</td>
-                                                <td className="cb-num">{pct(g.favourite_p, 0)}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                        <>
+                            <TableExport />
+                            <div className="hb-table-wrapper table-wrapper">
+                                <table className="data-table">
+                                    <thead><tr><th>Round</th><th>Winner</th><th>Beat</th><th>Favourite&apos;s odds</th></tr></thead>
+                                    <tbody>
+                                        {upsets.map((g) => {
+                                            const aWon = g.winner === g.team_a;
+                                            const [w, ws, wp, l, ls, lp] = aWon
+                                                ? [g.team_a, g.seed_a, g.points_a, g.team_b, g.seed_b, g.points_b]
+                                                : [g.team_b, g.seed_b, g.points_b, g.team_a, g.seed_a, g.points_a];
+                                            return (
+                                                <tr key={`${g.round}-${w}`}>
+                                                    <td>{g.round_name}</td>
+                                                    <td>({ws}) {w}<span className="cb-sub cb-num">{wp}–{lp}</span></td>
+                                                    <td>({ls}) {l}</td>
+                                                    <td className="cb-num">{pct(g.favourite_p, 0)}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
                     )}
                 </div>
                 <div className="dashboard-card">
                     <h3 className="section-heading" style={{ marginTop: 0 }}>Which inputs won</h3>
+                    <TableExport />
                     <div className="hb-table-wrapper table-wrapper">
                         <table className="data-table">
                             <thead><tr><th>Inputs</th><th>Log loss</th><th>Accuracy</th></tr></thead>
@@ -225,6 +231,7 @@ export default function MarchMadnessSection() {
 
             <div className="dashboard-card" style={{ marginTop: '1rem' }}>
                 <h3 className="section-heading" style={{ marginTop: 0 }}>Every season</h3>
+                <TableExport />
                 <div className="hb-table-wrapper table-wrapper">
                     <table className="data-table">
                         <thead>

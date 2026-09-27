@@ -5,6 +5,7 @@ import InfoTooltip from '../common/InfoTooltip';
 import SourceBadge from '../common/SourceBadge';
 import Icon from '../common/Icon';
 import PlayerHeadshot from '../common/PlayerHeadshot';
+import TableExport from '../common/TableExport';
 
 const STAT_OPTIONS = [
     { key: 'pts', label: 'Points' },
@@ -27,6 +28,7 @@ function seasonSpan(first, last) {
 function Nba75Badge() {
     return (
         <span
+            data-export-as="(NBA 75th Anniversary Team)"
             title="NBA 75th Anniversary Team (announced 2021-10-21) — a real, official NBA honor, separate from this page's stat leaderboards"
             style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -124,6 +126,7 @@ export default function HallOfFame() {
 
             {!loading && !error && data && (
                 <div className="dashboard-card" style={{ marginTop: '1rem' }}>
+                    <TableExport />
                     <div className="hb-table-wrapper table-wrapper">
                         <table className="data-table">
                             {tab === 'career' && (

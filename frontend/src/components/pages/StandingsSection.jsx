@@ -4,6 +4,7 @@ import { fetchCurrentMeta } from '../../services/api';
 import TeamLogo from '../common/TeamLogo';
 import { abbrFromTeamName } from '../../utils/teamAssets';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
+import TableExport from '../common/TableExport';
 
 const CONFERENCES = [
     { id: 'eastern', label: 'Eastern' },
@@ -86,6 +87,7 @@ export default function StandingsSection() {
                 </motion.div>
             )}
 
+            <TableExport />
             <div className="hb-table-wrapper table-wrapper">
                 <table className="data-table standings-table">
                     <thead>

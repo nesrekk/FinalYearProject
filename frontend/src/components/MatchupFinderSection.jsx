@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import SourceBadge from './common/SourceBadge';
+import TableExport from './common/TableExport';
 
 function MatchupRow({ row, highlight }) {
     return (
@@ -147,6 +148,7 @@ export default function MatchupFinderSection() {
                             <h3 className="section-heading" style={{ fontSize: '0.95rem' }}>
                                 {result.role === 'scorer' ? 'Toughest matchups' : 'Shuts down best'}
                             </h3>
+                            <TableExport />
                             <div className="table-wrapper">
                                 <table className="data-table">
                                     <thead>
@@ -172,6 +174,7 @@ export default function MatchupFinderSection() {
                             <h3 className="section-heading" style={{ fontSize: '0.95rem' }}>
                                 {result.role === 'scorer' ? 'Easiest matchups' : 'Torched by'}
                             </h3>
+                            <TableExport />
                             <div className="table-wrapper">
                                 <table className="data-table">
                                     <thead>

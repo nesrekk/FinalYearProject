@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchLivePlayerSuggestions, fetchPlayerShots } from '../../services/api';
 import Icon from '../common/Icon';
 import PlayerName from '../common/PlayerName';
+import TableExport from '../common/TableExport';
 
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
@@ -457,6 +458,7 @@ export default function ShotCharts() {
           </div>
         </div>
 
+        <TableExport />
         <div className="table-wrapper" style={{ marginTop: '1rem' }}>
           <table className="data-table">
             <thead>

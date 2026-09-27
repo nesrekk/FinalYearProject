@@ -9,6 +9,7 @@ import AutocompleteDropdown from '../common/AutocompleteDropdown';
 import ScoutingReportCard from '../common/ScoutingReportCard';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
+import TableExport from '../common/TableExport';
 
 const COLOR_A = '#f87171';
 const COLOR_B = '#38bdf8';
@@ -401,6 +402,7 @@ export default function PlayerComparison() {
 
                     <div className="dashboard-card" style={{ marginTop: '1rem' }}>
                         <h3 className="section-heading" style={{ marginTop: 0 }}>Scouting Report</h3>
+                        <TableExport />
                         <div className="hb-table-wrapper table-wrapper">
                             <table className="data-table">
                                 <thead>

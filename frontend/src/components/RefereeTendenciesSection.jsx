@@ -3,6 +3,7 @@ import { fetchRefereeTendencies } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
+import TableExport from './common/TableExport';
 
 const SORT_OPTIONS = [
     { value: 'n_games', label: 'Games Worked' },
@@ -96,44 +97,47 @@ export default function RefereeTendenciesSection() {
                 {error && <p className="error-message">{error}</p>}
 
                 {data && !loading && (
-                    <div className="table-wrapper">
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Official</th>
-                                    <th>Games</th>
-                                    <th>Avg Fouls/G</th>
-                                    <th>Fouls vs League</th>
-                                    <th>Avg FTA/G</th>
-                                    <th>FTA vs League</th>
-                                    <th>Pace vs League</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.officials.map((o) => (
-                                    <tr key={o.official_id} style={{ opacity: o.small_n_warning ? 0.55 : 1 }}>
-                                        <td>
-                                            {o.official_name}
-                                            {o.small_n_warning && (
-                                                <span className="page-subtitle" style={{ display: 'block', fontSize: '0.68rem' }}>
-                                                    small sample
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td>{o.n_games}</td>
-                                        <td>{o.avg_total_fouls?.toFixed(1)}</td>
-                                        <DiffCell diffPct={o.fouls_diff_pct} ciLow={o.fouls_ci_low} ciHigh={o.fouls_ci_high} />
-                                        <td>{o.avg_total_fta?.toFixed(1)}</td>
-                                        <DiffCell diffPct={o.fta_diff_pct} ciLow={o.fta_ci_low} ciHigh={o.fta_ci_high} />
-                                        <td>{o.pace_diff_pct > 0 ? '+' : ''}{o.pace_diff_pct?.toFixed(1)}%</td>
+                    <>
+                        <TableExport />
+                        <div className="table-wrapper">
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Official</th>
+                                        <th>Games</th>
+                                        <th>Avg Fouls/G</th>
+                                        <th>Fouls vs League</th>
+                                        <th>Avg FTA/G</th>
+                                        <th>FTA vs League</th>
+                                        <th>Pace vs League</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {data.officials.length === 0 && (
-                            <p className="empty-message">No officials meet that minimum-games threshold yet.</p>
-                        )}
-                    </div>
+                                </thead>
+                                <tbody>
+                                    {data.officials.map((o) => (
+                                        <tr key={o.official_id} style={{ opacity: o.small_n_warning ? 0.55 : 1 }}>
+                                            <td>
+                                                {o.official_name}
+                                                {o.small_n_warning && (
+                                                    <span className="page-subtitle" style={{ display: 'block', fontSize: '0.68rem' }}>
+                                                        small sample
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td>{o.n_games}</td>
+                                            <td>{o.avg_total_fouls?.toFixed(1)}</td>
+                                            <DiffCell diffPct={o.fouls_diff_pct} ciLow={o.fouls_ci_low} ciHigh={o.fouls_ci_high} />
+                                            <td>{o.avg_total_fta?.toFixed(1)}</td>
+                                            <DiffCell diffPct={o.fta_diff_pct} ciLow={o.fta_ci_low} ciHigh={o.fta_ci_high} />
+                                            <td>{o.pace_diff_pct > 0 ? '+' : ''}{o.pace_diff_pct?.toFixed(1)}%</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {data.officials.length === 0 && (
+                                <p className="empty-message">No officials meet that minimum-games threshold yet.</p>
+                            )}
+                        </div>
+                    </>
                 )}
             </div>
         </div>

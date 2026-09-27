@@ -6,6 +6,7 @@ import PlayerHeadshot from './common/PlayerHeadshot';
 import TeamLogo from './common/TeamLogo';
 import SourceBadge from './common/SourceBadge';
 import AboutModelDrawer from './ui/AboutModelDrawer';
+import TableExport from './common/TableExport';
 
 const POS_COLORS = { G: '#38bdf8', F: '#a78bfa', C: '#f59e0b' };
 const POS_LABELS = { G: 'Guards', F: 'Forwards', C: 'Centers' };
@@ -147,6 +148,7 @@ function DefenderDetail({ d, zKey, quadrants }) {
                 {d.small_dfg_sample && ' — small sample'}
                 {' · '}{(d.replacement_share * 100).toFixed(1)}% of possessions vs. replacement-level players
             </div>
+            <TableExport />
             <table className="data-table">
                 <thead>
                     <tr><th>Top assignment</th><th>Share of possessions</th><th>Partial poss.</th><th>OBPM used</th></tr>
@@ -321,6 +323,7 @@ export default function DadIndexSection() {
                                 Show {sortDesc ? 'easiest' : 'hardest'} first
                             </button>
                         </h4>
+                        <TableExport />
                         <div className="table-wrapper" style={{ maxHeight: 460, overflowY: 'auto' }}>
                             <table className="data-table">
                                 <thead>

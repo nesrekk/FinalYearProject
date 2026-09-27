@@ -8,6 +8,7 @@ import Icon from '../common/Icon';
 import PlayerDetailModal from '../common/PlayerDetailModal';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
+import TableExport from '../common/TableExport';
 
 const STAT_OPTIONS = [
   { key: 'pts', label: 'Points' },
@@ -160,6 +161,7 @@ export default function StatLeaders() {
               animate={{ opacity: 1, y: 0 }}
               transition={preset.tableTransition}
             >
+              <TableExport />
               <table className="data-table">
                 <thead>
                   <tr>

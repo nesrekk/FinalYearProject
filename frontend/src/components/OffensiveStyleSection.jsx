@@ -3,6 +3,7 @@ import { fetchPlaytypeArchetypes, fetchPlaytypeSeasonClusters } from '../service
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
+import TableExport from './common/TableExport';
 
 const PALETTE = ['#facc15', '#fb923c', '#38bdf8', '#a78bfa', '#34d399', '#f87171'];
 
@@ -139,30 +140,33 @@ export default function OffensiveStyleSection() {
             )}
 
             {!loading && players.length > 0 && (
-                <div className="table-wrapper" style={{ marginTop: '1rem' }}>
-                    <table className="data-table">
-                        <thead>
-                            <tr><th>Player</th><th>Team</th><th>Offensive Style</th></tr>
-                        </thead>
-                        <tbody>
-                            {visiblePlayers.slice(0, 60).map((p) => (
-                                <tr key={p.player_id}>
-                                    <td>{p.player_name}</td>
-                                    <td>{p.team_abbreviation}</td>
-                                    <td>
-                                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: colorByStyle[p.style], marginRight: 6 }} />
-                                        {p.style}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    {visiblePlayers.length > 60 && (
-                        <p className="page-subtitle" style={{ marginTop: '0.5rem' }}>
-                            Showing 60 of {visiblePlayers.length} players.
-                        </p>
-                    )}
-                </div>
+                <>
+                    <TableExport />
+                    <div className="table-wrapper" style={{ marginTop: '1rem' }}>
+                        <table className="data-table">
+                            <thead>
+                                <tr><th>Player</th><th>Team</th><th>Offensive Style</th></tr>
+                            </thead>
+                            <tbody>
+                                {visiblePlayers.slice(0, 60).map((p) => (
+                                    <tr key={p.player_id}>
+                                        <td>{p.player_name}</td>
+                                        <td>{p.team_abbreviation}</td>
+                                        <td>
+                                            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: colorByStyle[p.style], marginRight: 6 }} />
+                                            {p.style}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {visiblePlayers.length > 60 && (
+                            <p className="page-subtitle" style={{ marginTop: '0.5rem' }}>
+                                Showing 60 of {visiblePlayers.length} players.
+                            </p>
+                        )}
+                    </div>
+                </>
             )}
         </section>
     );

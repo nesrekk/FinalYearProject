@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { fetchPlayerContractValue } from '../../services/api';
+import TableExport from './TableExport';
 
 function money(v) {
     if (v == null) return '—';
@@ -33,36 +34,39 @@ export default function TradeContractValue({ season, players }) {
                     {rows.find((r) => r && r.reason)?.reason || 'No contract value on file for these players.'}
                 </p>
             ) : (
-                <div className="table-wrapper">
-                    <table className="data-table">
-                        <thead>
-                            <tr><th>Player</th><th>Real salary</th><th>WAR</th><th>Fair value</th><th>Surplus</th></tr>
-                        </thead>
-                        <tbody>
-                            {rows.map((r, i) => (
-                                <tr key={players[i].id}>
-                                    <td>{players[i].name}</td>
-                                    {r && r.available ? (
-                                        <>
-                                            <td>{money(r.player.salary)}</td>
-                                            <td>{r.player.war?.toFixed(1)}</td>
-                                            <td>{money(r.player.fair_value)}</td>
-                                            <td style={{ fontWeight: 700, color: r.player.surplus >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
-                                                {r.player.surplus > 0 ? '+' : ''}{money(r.player.surplus)}
-                                            </td>
-                                        </>
-                                    ) : (
-                                        <td colSpan={4} className="page-subtitle">{r?.reason || 'Not available.'}</td>
-                                    )}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    <p className="page-subtitle" style={{ fontSize: '0.75rem', marginTop: 6 }}>
-                        From the Contract Value tool (Analytics → Teams &amp; Markets): real salary vs. real production priced at that
-                        season's real cost per win. See that tool for sources and caveats.
-                    </p>
-                </div>
+                <>
+                    <TableExport />
+                    <div className="table-wrapper">
+                        <table className="data-table">
+                            <thead>
+                                <tr><th>Player</th><th>Real salary</th><th>WAR</th><th>Fair value</th><th>Surplus</th></tr>
+                            </thead>
+                            <tbody>
+                                {rows.map((r, i) => (
+                                    <tr key={players[i].id}>
+                                        <td>{players[i].name}</td>
+                                        {r && r.available ? (
+                                            <>
+                                                <td>{money(r.player.salary)}</td>
+                                                <td>{r.player.war?.toFixed(1)}</td>
+                                                <td>{money(r.player.fair_value)}</td>
+                                                <td style={{ fontWeight: 700, color: r.player.surplus >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
+                                                    {r.player.surplus > 0 ? '+' : ''}{money(r.player.surplus)}
+                                                </td>
+                                            </>
+                                        ) : (
+                                            <td colSpan={4} className="page-subtitle">{r?.reason || 'Not available.'}</td>
+                                        )}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        <p className="page-subtitle" style={{ fontSize: '0.75rem', marginTop: 6 }}>
+                            From the Contract Value tool (Analytics → Teams &amp; Markets): real salary vs. real production priced at that
+                            season's real cost per win. See that tool for sources and caveats.
+                        </p>
+                    </div>
+                </>
             )}
         </div>
     );

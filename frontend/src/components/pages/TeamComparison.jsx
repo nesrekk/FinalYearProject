@@ -8,6 +8,7 @@ import InfoTooltip from '../common/InfoTooltip';
 import SourceBadge from '../common/SourceBadge';
 import { TEAM_COLORS } from '../../utils/teamAssets';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
+import TableExport from '../common/TableExport';
 
 const statLabels = [
     { key: 'ppg', label: 'Points Per Game', max: 130 },
@@ -92,30 +93,33 @@ function FormStreak({ form }) {
 function RosterTable({ roster }) {
     if (!roster?.length) return null;
     return (
-        <div className="table-wrapper">
-            <table className="data-table">
-                <thead>
-                    <tr><th>Player</th><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th></tr>
-                </thead>
-                <tbody>
-                    {roster.map((p) => (
-                        <tr key={p.player_id}>
-                            <td>
-                                <div className="entity-row">
-                                    <PlayerHeadshot playerId={p.player_id} playerName={p.player_name} size={24} />
-                                    {p.player_name}
-                                </div>
-                            </td>
-                            <td>{p.gp}</td>
-                            <td>{p.min?.toFixed(1)}</td>
-                            <td>{p.pts?.toFixed(1)}</td>
-                            <td>{p.reb?.toFixed(1)}</td>
-                            <td>{p.ast?.toFixed(1)}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+        <>
+            <TableExport />
+            <div className="table-wrapper">
+                <table className="data-table">
+                    <thead>
+                        <tr><th>Player</th><th>GP</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th></tr>
+                    </thead>
+                    <tbody>
+                        {roster.map((p) => (
+                            <tr key={p.player_id}>
+                                <td>
+                                    <div className="entity-row">
+                                        <PlayerHeadshot playerId={p.player_id} playerName={p.player_name} size={24} />
+                                        {p.player_name}
+                                    </div>
+                                </td>
+                                <td>{p.gp}</td>
+                                <td>{p.min?.toFixed(1)}</td>
+                                <td>{p.pts?.toFixed(1)}</td>
+                                <td>{p.reb?.toFixed(1)}</td>
+                                <td>{p.ast?.toFixed(1)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </>
     );
 }
 
@@ -357,6 +361,7 @@ export default function TeamComparison() {
                                 <p style={{ fontWeight: 600, marginBottom: '0.75rem' }}>
                                     {extra.head_to_head.games_played} real meetings &middot; {statsA.abbr} {extra.head_to_head.team_a_wins} — {extra.head_to_head.team_b_wins} {statsB.abbr}
                                 </p>
+                                <TableExport />
                                 <div className="table-wrapper">
                                     <table className="data-table">
                                         <thead>

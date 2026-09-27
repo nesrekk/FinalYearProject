@@ -9,6 +9,7 @@ import TeamLogo from '../common/TeamLogo';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
+import TableExport from '../common/TableExport';
 
 function StatLabel({ statKey, children }) {
     const def = STAT_GLOSSARY[statKey];
@@ -103,6 +104,7 @@ function TeamPanel({ side, isAdvanced, preset }) {
                     </div>
                 </div>
             )}
+            <TableExport />
             <div className="hb-table-wrapper table-wrapper">
                 <table className="data-table">
                     <thead>

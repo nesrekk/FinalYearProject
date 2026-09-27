@@ -7,6 +7,7 @@ import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import AutocompleteDropdown from './common/AutocompleteDropdown';
 import { STAT_GLOSSARY } from '../utils/statGlossary';
+import TableExport from './common/TableExport';
 
 const ROWS = [
     { key: 'ts_pct', label: 'True Shooting %', pct: true },
@@ -150,6 +151,7 @@ export default function PlayoffForecasterSection() {
                                     Only {data.playoffs.gp} real playoff games this season — treat this comparison as noisy.
                                 </p>
                             )}
+                            <TableExport />
                             <div className="hb-table-wrapper table-wrapper">
                                 <table className="data-table">
                                     <thead>

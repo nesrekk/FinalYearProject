@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
+import TableExport from './common/TableExport';
 
 const CHART_W = 760;
 const CHART_H = 300;
@@ -301,6 +302,7 @@ export default function GameReplaySection() {
                         ))}
                     </svg>
 
+                    <TableExport />
                     <div className="table-wrapper" style={{ marginTop: '1rem' }}>
                         <table className="data-table">
                             <thead>

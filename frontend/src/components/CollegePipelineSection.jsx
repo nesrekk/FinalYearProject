@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import PlayerName from './common/PlayerName';
 import '../styles/college.css';
+import TableExport from './common/TableExport';
 
 const RUN_LABEL = {
     Champions: 'Won title', '2ND': 'Runner-up', F4: 'Final Four', E8: 'Elite 8', S16: 'Sweet 16',
@@ -220,6 +221,7 @@ export default function CollegePipelineSection() {
                     Schools with at least {data.min_school_picks} picks through {data.mature_class}. With {data.schools.length} schools compared,
                     a couple will clear zero by chance alone, so read the ranges, not just the order.
                 </p>
+                <TableExport />
                 <div className="hb-table-wrapper table-wrapper cb-scroll">
                     <table className="data-table">
                         <thead>
@@ -261,6 +263,7 @@ export default function CollegePipelineSection() {
                         <option value="strength">Strongest college team</option>
                     </select>
                 </div>
+                <TableExport />
                 <div className="hb-table-wrapper table-wrapper">
                     <table className="data-table">
                         <thead>

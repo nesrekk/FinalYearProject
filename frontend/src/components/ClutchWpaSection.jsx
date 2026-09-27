@@ -6,6 +6,7 @@ import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import TeamLogo from './common/TeamLogo';
 import SourceBadge from './common/SourceBadge';
+import TableExport from './common/TableExport';
 
 function wpaColor(v) {
     if (v == null) return 'var(--text-muted)';
@@ -63,6 +64,7 @@ export default function ClutchWpaSection() {
 
             {!loading && data && (
                 <div className="dashboard-card" style={{ marginTop: '1rem' }}>
+                    <TableExport />
                     <div className="hb-table-wrapper table-wrapper">
                         <table className="data-table">
                             <thead>

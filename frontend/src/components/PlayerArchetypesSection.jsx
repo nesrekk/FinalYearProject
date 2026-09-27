@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import OffensiveStyleSection from './OffensiveStyleSection';
+import TableExport from './common/TableExport';
 
 // Ten distinct hues for the ten roles; fills only (never text), readable on Paper and Ink.
 const PALETTE = ['#ff5b14', '#2e86de', '#f5b700', '#8e5bd6', '#12a4a0', '#e0245e', '#6ab04c', '#9aa5b1', '#c97c3a', '#4dc9f6'];
@@ -291,44 +292,47 @@ export default function PlayerArchetypesSection() {
             )}
 
             {!loading && players.length > 0 && (
-                <div className="table-wrapper" style={{ marginTop: '1rem' }}>
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Player</th><th>Team</th><th>Role</th><th>Family</th><th>PTS</th><th>REB</th><th>AST</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {visiblePlayers.slice(0, 60).map((p) => (
-                                <tr key={p.player_id}>
-                                    <td>
-                                        <button
-                                            type="button"
-                                            onClick={() => loadHistory(p.player_name)}
-                                            style={{ background: 'none', border: 'none', color: 'var(--brand-text)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}
-                                        >
-                                            {p.player_name}
-                                        </button>
-                                    </td>
-                                    <td>{p.team_abbreviation}</td>
-                                    <td>
-                                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: colorByArchetype[p.archetype], marginRight: 6 }} />
-                                        {p.archetype}
-                                    </td>
-                                    <td>{p.family || '—'}</td>
-                                    <td>{p.pts}</td>
-                                    <td>{p.reb}</td>
-                                    <td>{p.ast}</td>
+                <>
+                    <TableExport />
+                    <div className="table-wrapper" style={{ marginTop: '1rem' }}>
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Player</th><th>Team</th><th>Role</th><th>Family</th><th>PTS</th><th>REB</th><th>AST</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    {visiblePlayers.length > 60 && (
-                        <p className="page-subtitle" style={{ marginTop: '0.5rem' }}>
-                            Showing 60 of {visiblePlayers.length} players.
-                        </p>
-                    )}
-                </div>
+                            </thead>
+                            <tbody>
+                                {visiblePlayers.slice(0, 60).map((p) => (
+                                    <tr key={p.player_id}>
+                                        <td>
+                                            <button
+                                                type="button"
+                                                onClick={() => loadHistory(p.player_name)}
+                                                style={{ background: 'none', border: 'none', color: 'var(--brand-text)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}
+                                            >
+                                                {p.player_name}
+                                            </button>
+                                        </td>
+                                        <td>{p.team_abbreviation}</td>
+                                        <td>
+                                            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: colorByArchetype[p.archetype], marginRight: 6 }} />
+                                            {p.archetype}
+                                        </td>
+                                        <td>{p.family || '—'}</td>
+                                        <td>{p.pts}</td>
+                                        <td>{p.reb}</td>
+                                        <td>{p.ast}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {visiblePlayers.length > 60 && (
+                            <p className="page-subtitle" style={{ marginTop: '0.5rem' }}>
+                                Showing 60 of {visiblePlayers.length} players.
+                            </p>
+                        )}
+                    </div>
+                </>
             )}
 
             <h3 className="section-heading" style={{ marginTop: '1.5rem' }}>Career Role History</h3>
@@ -366,29 +370,32 @@ export default function PlayerArchetypesSection() {
 
             {historyError && <p className="error-message" style={{ marginTop: '0.75rem' }}>{historyError}</p>}
             {history && (
-                <div className="table-wrapper" style={{ marginTop: '1rem' }}>
-                    <table className="data-table">
-                        <thead>
-                            <tr><th>Season</th><th>Role</th><th>Family</th><th>PTS</th><th>REB</th><th>AST</th><th>USG%</th></tr>
-                        </thead>
-                        <tbody>
-                            {history.seasons.map((s) => (
-                                <tr key={s.season}>
-                                    <td>{s.season - 1}-{String(s.season).slice(-2)}</td>
-                                    <td>
-                                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: colorByArchetype[s.archetype], marginRight: 6 }} />
-                                        {s.archetype}
-                                    </td>
-                                    <td>{s.family || '—'}</td>
-                                    <td>{s.pts}</td>
-                                    <td>{s.reb}</td>
-                                    <td>{s.ast}</td>
-                                    <td>{(s.usg_pct * 100).toFixed(1)}%</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                <>
+                    <TableExport />
+                    <div className="table-wrapper" style={{ marginTop: '1rem' }}>
+                        <table className="data-table">
+                            <thead>
+                                <tr><th>Season</th><th>Role</th><th>Family</th><th>PTS</th><th>REB</th><th>AST</th><th>USG%</th></tr>
+                            </thead>
+                            <tbody>
+                                {history.seasons.map((s) => (
+                                    <tr key={s.season}>
+                                        <td>{s.season - 1}-{String(s.season).slice(-2)}</td>
+                                        <td>
+                                            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: colorByArchetype[s.archetype], marginRight: 6 }} />
+                                            {s.archetype}
+                                        </td>
+                                        <td>{s.family || '—'}</td>
+                                        <td>{s.pts}</td>
+                                        <td>{s.reb}</td>
+                                        <td>{s.ast}</td>
+                                        <td>{(s.usg_pct * 100).toFixed(1)}%</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
             )}
 
             <h3 className="section-heading" style={{ marginTop: '1.5rem' }}>

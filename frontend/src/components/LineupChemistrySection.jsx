@@ -6,6 +6,7 @@ import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import TeamLogo from './common/TeamLogo';
+import TableExport from './common/TableExport';
 
 function netRatingColor(v) {
     if (v == null) return 'var(--text-secondary)';
@@ -79,6 +80,7 @@ export default function LineupChemistrySection() {
 
             {!loading && data && (
                 <div className="dashboard-card" style={{ marginTop: '1rem' }}>
+                    <TableExport />
                     <div className="hb-table-wrapper table-wrapper">
                         <table className="data-table">
                             <thead>

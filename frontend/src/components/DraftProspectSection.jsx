@@ -6,6 +6,7 @@ import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import LengthMattersCard from './LengthMattersCard';
+import TableExport from './common/TableExport';
 
 function fmt(v, digits = 1) {
     return v == null ? '—' : v.toFixed(digits);
@@ -195,6 +196,7 @@ export default function DraftProspectSection() {
                     <div className="dashboard-card" style={{ marginTop: '1rem' }}>
                         <h3 className="section-heading" style={{ marginTop: 0 }}>Real College Comps</h3>
                         <p className="page-subtitle" style={{ marginTop: '-0.5rem', marginBottom: '0.75rem' }}>{data.measurements_note}</p>
+                        <TableExport />
                         <div className="hb-table-wrapper table-wrapper">
                             <table className="data-table">
                                 <thead>

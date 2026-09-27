@@ -3,6 +3,7 @@ import { fetchRadarProfile, fetchLivePlayerSuggestions } from '../services/api';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
+import TableExport from './common/TableExport';
 
 // Debounced suggestion fetch for one search slot, with a cancellation guard
 // so an earlier keystroke's response can't resolve after a later one and
@@ -279,6 +280,7 @@ export default function RadarCompareSection() {
                         </svg>
                     </div>
 
+                    <TableExport />
                     <div className="table-wrapper" style={{ marginTop: '1rem' }}>
                         <table className="data-table">
                             <thead>

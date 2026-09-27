@@ -1,5 +1,6 @@
 import React from 'react';
 import PlayerName from './common/PlayerName';
+import TableExport from './common/TableExport';
 
 const PLAYER_KEYS = new Set(['player', 'player_name']);
 
@@ -18,33 +19,36 @@ export default function DataTable({ columns, keys, rows, emptyMessage = 'No data
     }
 
     return (
-        <div className="table-wrapper">
-            <table className="data-table">
-                <thead>
-                    <tr>
-                        {columns.map((col, i) => (
-                            <th key={i}>{col}</th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((row, rowIdx) => (
-                        <tr key={rowIdx}>
-                            {keys.map((key, colIdx) => (
-                                <td key={colIdx}>
-                                    {PLAYER_KEYS.has(key) && row.player_id ? (
-                                        <PlayerName playerId={row.player_id} name={row[key]} />
-                                    ) : typeof row[key] === 'number'
-                                        ? Number.isInteger(row[key])
-                                            ? row[key]
-                                            : row[key].toFixed(3)
-                                        : row[key]}
-                                </td>
+        <>
+            <TableExport />
+            <div className="table-wrapper">
+                <table className="data-table">
+                    <thead>
+                        <tr>
+                            {columns.map((col, i) => (
+                                <th key={i}>{col}</th>
                             ))}
                         </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                        {rows.map((row, rowIdx) => (
+                            <tr key={rowIdx}>
+                                {keys.map((key, colIdx) => (
+                                    <td key={colIdx}>
+                                        {PLAYER_KEYS.has(key) && row.player_id ? (
+                                            <PlayerName playerId={row.player_id} name={row[key]} />
+                                        ) : typeof row[key] === 'number'
+                                            ? Number.isInteger(row[key])
+                                                ? row[key]
+                                                : row[key].toFixed(3)
+                                            : row[key]}
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </>
     );
 }

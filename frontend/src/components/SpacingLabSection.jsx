@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import TeamLogo from './common/TeamLogo';
 import SourceBadge from './common/SourceBadge';
+import TableExport from './common/TableExport';
 
 const WARM = [249, 115, 22]; // congested
 const COOL = [56, 189, 248]; // open
@@ -224,6 +225,7 @@ export default function SpacingLabSection() {
                         <h4 className="section-heading" style={{ marginTop: 0 }}>
                             Gravity leaders — {seasonLabel(data.season)} ({data.n_pool} players with 500+ minutes)
                         </h4>
+                        <TableExport />
                         <div className="table-wrapper">
                             <table className="data-table">
                                 <thead>

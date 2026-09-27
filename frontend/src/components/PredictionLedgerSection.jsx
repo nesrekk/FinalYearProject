@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
+import TableExport from './common/TableExport';
 
 const MODELS = [
     { id: 'mvp', label: 'MVP' },
@@ -173,23 +174,26 @@ export default function PredictionLedgerSection() {
                             season's real winner/selections are recorded and scripts/resolve_predictions.py runs.
                         </p>
                     ) : (
-                        <div className="table-wrapper">
-                            <table className="data-table">
-                                <thead>
-                                    <tr><th>Season</th><th>Candidates</th><th>Mean Brier Score</th><th>Resolved</th></tr>
-                                </thead>
-                                <tbody>
-                                    {resolvedByModel[model].map((r) => (
-                                        <tr key={`${r.model}-${r.season}`}>
-                                            <td>{r.season - 1}-{String(r.season).slice(-2)}</td>
-                                            <td>{r.n_candidates}</td>
-                                            <td>{r.mean_brier_score?.toFixed(4) ?? '—'}</td>
-                                            <td>{r.resolved_at ? new Date(r.resolved_at).toLocaleDateString() : '—'}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                        <>
+                            <TableExport />
+                            <div className="table-wrapper">
+                                <table className="data-table">
+                                    <thead>
+                                        <tr><th>Season</th><th>Candidates</th><th>Mean Brier Score</th><th>Resolved</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {resolvedByModel[model].map((r) => (
+                                            <tr key={`${r.model}-${r.season}`}>
+                                                <td>{r.season - 1}-{String(r.season).slice(-2)}</td>
+                                                <td>{r.n_candidates}</td>
+                                                <td>{r.mean_brier_score?.toFixed(4) ?? '—'}</td>
+                                                <td>{r.resolved_at ? new Date(r.resolved_at).toLocaleDateString() : '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
                     )}
                 </>
             )}

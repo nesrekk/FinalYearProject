@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
+import TableExport from './common/TableExport';
 
 function fmtPct(v) {
     return v == null ? '—' : `${(v * 100).toFixed(1)}%`;
@@ -98,6 +99,7 @@ export default function VegasScannerSection() {
 
             {!loading && data && (
                 <div className="dashboard-card" style={{ marginTop: '1rem' }}>
+                    <TableExport />
                     <div className="hb-table-wrapper table-wrapper">
                         <table className="data-table">
                             <thead>

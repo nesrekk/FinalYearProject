@@ -4,6 +4,7 @@ import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
+import TableExport from './common/TableExport';
 
 const ROC_SIZE = 320;
 const ROC_PAD = 36;
@@ -343,40 +344,43 @@ export default function ModelValidationSection() {
             </div>
 
             {models.length > 0 && (
-                <div className="table-wrapper" style={{ marginBottom: '1.25rem' }}>
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Model</th>
-                                <th>Top-1</th>
-                                <th>Top-3</th>
-                                <th>Top-5</th>
-                                <th>MRR</th>
-                                <th>ROC-AUC</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {models.map((m) => (
-                                <tr
-                                    key={m.model_type}
-                                    onClick={() => setModel(m.model_type)}
-                                    style={{ cursor: 'pointer' }}
-                                    className={m.model_type === model ? 'text-accent' : ''}
-                                >
-                                    <td>
-                                        {m.model_type === model ? '▶ ' : ''}{m.model_label}
-                                        {m.model_type === bestModelType ? <Icon name="military_tech" size="0.9em" style={{ marginLeft: 4 }} /> : ''}
-                                    </td>
-                                    <td>{pct(m.top1_accuracy)}</td>
-                                    <td>{pct(m.top3_accuracy)}</td>
-                                    <td>{pct(m.top5_accuracy)}</td>
-                                    <td>{m.mean_reciprocal_rank?.toFixed(3) ?? '—'}</td>
-                                    <td>{m.roc_auc?.toFixed(3) ?? '—'}</td>
+                <>
+                    <TableExport />
+                    <div className="table-wrapper" style={{ marginBottom: '1.25rem' }}>
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Model</th>
+                                    <th>Top-1</th>
+                                    <th>Top-3</th>
+                                    <th>Top-5</th>
+                                    <th>MRR</th>
+                                    <th>ROC-AUC</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {models.map((m) => (
+                                    <tr
+                                        key={m.model_type}
+                                        onClick={() => setModel(m.model_type)}
+                                        style={{ cursor: 'pointer' }}
+                                        className={m.model_type === model ? 'text-accent' : ''}
+                                    >
+                                        <td>
+                                            {m.model_type === model ? '▶ ' : ''}{m.model_label}
+                                            {m.model_type === bestModelType ? <Icon name="military_tech" size="0.9em" style={{ marginLeft: 4 }} /> : ''}
+                                        </td>
+                                        <td>{pct(m.top1_accuracy)}</td>
+                                        <td>{pct(m.top3_accuracy)}</td>
+                                        <td>{pct(m.top5_accuracy)}</td>
+                                        <td>{m.mean_reciprocal_rank?.toFixed(3) ?? '—'}</td>
+                                        <td>{m.roc_auc?.toFixed(3) ?? '—'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
             )}
             {!isAllNba && !isWpa && (
                 <p className="page-subtitle" style={{ marginTop: '-0.75rem', marginBottom: '1rem' }}>
@@ -431,6 +435,7 @@ export default function ModelValidationSection() {
                     <p className="page-subtitle" style={{ marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
                         Click a season to see its predicted top 15 below. ✓ marks a player who was actually selected that season.
                     </p>
+                    <TableExport />
                     <div className="table-wrapper" style={{ marginBottom: '1rem' }}>
                         <table className="data-table">
                             <thead>
@@ -464,6 +469,7 @@ export default function ModelValidationSection() {
                                     {_season_label_client(selected.season)} Predicted Top 15
                                     {allNbaDetail.summary.holdout_season?.season === selected.season ? ' (real holdout — never trained on)' : ''}
                                 </h3>
+                                <TableExport />
                                 <div className="table-wrapper" style={{ marginBottom: '1rem' }}>
                                     <table className="data-table">
                                         <thead>
@@ -489,6 +495,7 @@ export default function ModelValidationSection() {
                     <p className="page-subtitle" style={{ marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
                         Standardized logistic regression coefficients from the full-data model — sign shows direction, magnitude shows influence.
                     </p>
+                    <TableExport />
                     <div className="table-wrapper">
                         <table className="data-table">
                             <thead>
@@ -521,6 +528,7 @@ export default function ModelValidationSection() {
                     {wpaCompare && (
                         <div style={{ marginBottom: '1.5rem' }}>
                             <h3 className="section-heading" style={{ marginTop: 0 }}>Model Comparison</h3>
+                            <TableExport />
                             <div className="table-wrapper">
                                 <table className="data-table">
                                     <thead>
@@ -652,6 +660,7 @@ export default function ModelValidationSection() {
                         </>
                     )}
 
+                    <TableExport name={`${detail.summary.model_label} per-season detail`} />
                     <div className="table-wrapper" style={{ marginTop: '1rem' }}>
                         <table className="data-table">
                             <thead>
@@ -688,6 +697,7 @@ export default function ModelValidationSection() {
                             ? 'Standardized logistic regression coefficients from the full-data model — sign shows direction, magnitude shows influence.'
                             : "Random Forest feature importances from the full-data model (always positive — trees don't have a notion of direction, just how much a feature helps split the data)."}
                     </p>
+                    <TableExport />
                     <div className="table-wrapper">
                         <table className="data-table">
                             <thead>

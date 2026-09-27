@@ -4,6 +4,7 @@ import Loader from '../Loader';
 import InfoTooltip from '../common/InfoTooltip';
 import PlayerName from '../common/PlayerName';
 import Icon from '../common/Icon';
+import TableExport from '../common/TableExport';
 
 function fmt(v, digits = 1) {
     return v == null ? '—' : Number(v).toFixed(digits);
@@ -91,6 +92,7 @@ export default function RookieClassTracker() {
                             {rookies.candidate_pool_size} rookies this season, sorted by ROY probability.
                             Click a row to see their closest historical season comp.
                         </p>
+                        <TableExport />
                         <div className="table-wrapper">
                             <table className="data-table">
                                 <thead>
@@ -132,25 +134,28 @@ export default function RookieClassTracker() {
                     {compsLoading && <Loader />}
                     {compsError && <p className="error-message">{compsError}</p>}
                     {comps && (
-                        <div className="table-wrapper">
-                            <table className="data-table">
-                                <thead>
-                                    <tr><th>Player</th><th>Season</th><th>Similarity</th></tr>
-                                </thead>
-                                <tbody>
-                                    {comps.results.length === 0 && (
-                                        <tr><td colSpan={3} className="empty-message">No comps found yet — needs more games played this season.</td></tr>
-                                    )}
-                                    {comps.results.slice(0, 5).map((c) => (
-                                        <tr key={`${c.player_id}-${c.season}`}>
-                                            <td><PlayerName playerId={c.player_id} name={c.player_name} /></td>
-                                            <td>{c.season - 1}-{String(c.season).slice(-2)}</td>
-                                            <td>{(c.similarity_score * 100).toFixed(1)}%</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                        <>
+                            <TableExport />
+                            <div className="table-wrapper">
+                                <table className="data-table">
+                                    <thead>
+                                        <tr><th>Player</th><th>Season</th><th>Similarity</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {comps.results.length === 0 && (
+                                            <tr><td colSpan={3} className="empty-message">No comps found yet — needs more games played this season.</td></tr>
+                                        )}
+                                        {comps.results.slice(0, 5).map((c) => (
+                                            <tr key={`${c.player_id}-${c.season}`}>
+                                                <td><PlayerName playerId={c.player_id} name={c.player_name} /></td>
+                                                <td>{c.season - 1}-{String(c.season).slice(-2)}</td>
+                                                <td>{(c.similarity_score * 100).toFixed(1)}%</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
                     )}
                 </div>
             )}

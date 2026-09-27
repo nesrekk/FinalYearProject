@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
+import TableExport from './common/TableExport';
 
 const CHART_W = 480;
 const CHART_H = 220;
@@ -134,6 +135,7 @@ export default function ScheduleFatigueSection() {
                             Dot size = real sample size.
                         </p>
                         <RestBucketChart buckets={restStudy.buckets} />
+                        <TableExport />
                         <div className="table-wrapper" style={{ marginTop: '1rem' }}>
                             <table className="data-table">
                                 <thead>
@@ -163,33 +165,36 @@ export default function ScheduleFatigueSection() {
                 </h3>
                 {difficultyError && <p className="error-message">{difficultyError}</p>}
                 {difficulty && (
-                    <div className="table-wrapper">
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Rank</th><th>Team</th><th>Games</th>
-                                    <th>Total Travel Miles</th><th>B2Bs</th><th>4+ Games in 7 Days</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {difficulty.results.map((r) => (
-                                    <tr key={r.team_abbreviation}>
-                                        <td>{r.rank}</td>
-                                        <td>
-                                            <div className="entity-row">
-                                                <TeamLogo abbreviation={r.team_abbreviation} size={20} />
-                                                {r.team_abbreviation}
-                                            </div>
-                                        </td>
-                                        <td>{r.n_games}</td>
-                                        <td>{r.total_travel_miles?.toLocaleString() ?? '—'}</td>
-                                        <td>{r.b2b_count}</td>
-                                        <td>{r.games_with_4plus_in_7days}</td>
+                    <>
+                        <TableExport />
+                        <div className="table-wrapper">
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Rank</th><th>Team</th><th>Games</th>
+                                        <th>Total Travel Miles</th><th>B2Bs</th><th>4+ Games in 7 Days</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody>
+                                    {difficulty.results.map((r) => (
+                                        <tr key={r.team_abbreviation}>
+                                            <td>{r.rank}</td>
+                                            <td>
+                                                <div className="entity-row">
+                                                    <TeamLogo abbreviation={r.team_abbreviation} size={20} />
+                                                    {r.team_abbreviation}
+                                                </div>
+                                            </td>
+                                            <td>{r.n_games}</td>
+                                            <td>{r.total_travel_miles?.toLocaleString() ?? '—'}</td>
+                                            <td>{r.b2b_count}</td>
+                                            <td>{r.games_with_4plus_in_7days}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
                 )}
             </div>
         </div>

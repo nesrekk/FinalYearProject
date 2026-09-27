@@ -5,6 +5,7 @@ import InfoTooltip from '../common/InfoTooltip';
 import PlayerName from '../common/PlayerName';
 import Icon from '../common/Icon';
 import SourceBadge from '../common/SourceBadge';
+import TableExport from '../common/TableExport';
 
 const CHART_W = 640, CHART_H = 260, PAD_L = 56, PAD_R = 16, PAD_T = 16, PAD_B = 40;
 
@@ -150,31 +151,34 @@ export default function DraftValueGuide() {
                 </div>
                 {leaderboardError && <p className="error-message">{leaderboardError}</p>}
                 {leaderboard && (
-                    <div className="table-wrapper">
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Player</th><th>Draft</th><th>Pick</th><th>Team</th>
-                                    <th>WS, first 5 seasons</th><th>Slot average</th><th>vs Slot</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {leaderboard.results.map((r) => (
-                                    <tr key={`${r.draft_year}-${r.overall_pick}`}>
-                                        <td><PlayerName playerId={r.player_id} name={r.player_name} /></td>
-                                        <td>{r.draft_year}</td>
-                                        <td>#{r.overall_pick}</td>
-                                        <td>{r.team_abbreviation}</td>
-                                        <td>{fmt(r.ws_first5)}</td>
-                                        <td>{fmt(r.expected_ws_first5)}</td>
-                                        <td style={{ color: r.value_over_expectation >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
-                                            {r.value_over_expectation >= 0 ? '+' : ''}{fmt(r.value_over_expectation)}
-                                        </td>
+                    <>
+                        <TableExport />
+                        <div className="table-wrapper">
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Player</th><th>Draft</th><th>Pick</th><th>Team</th>
+                                        <th>WS, first 5 seasons</th><th>Slot average</th><th>vs Slot</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody>
+                                    {leaderboard.results.map((r) => (
+                                        <tr key={`${r.draft_year}-${r.overall_pick}`}>
+                                            <td><PlayerName playerId={r.player_id} name={r.player_name} /></td>
+                                            <td>{r.draft_year}</td>
+                                            <td>#{r.overall_pick}</td>
+                                            <td>{r.team_abbreviation}</td>
+                                            <td>{fmt(r.ws_first5)}</td>
+                                            <td>{fmt(r.expected_ws_first5)}</td>
+                                            <td style={{ color: r.value_over_expectation >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
+                                                {r.value_over_expectation >= 0 ? '+' : ''}{fmt(r.value_over_expectation)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
                 )}
             </div>
 
@@ -205,6 +209,7 @@ export default function DraftValueGuide() {
                             {' '}rookie season {draftClass.rookie_season_int - 1}-{String(draftClass.rookie_season_int).slice(-2)}
                             {!draftClass.five_seasons_played && ' · * fewer than five seasons played so far'}
                         </p>
+                        <TableExport />
                         <div className="table-wrapper">
                             <table className="data-table">
                                 <thead>

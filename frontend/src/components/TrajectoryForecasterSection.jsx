@@ -6,6 +6,7 @@ import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import AutocompleteDropdown from './common/AutocompleteDropdown';
+import TableExport from './common/TableExport';
 
 const CHART_W = 720, CHART_H = 320, PAD_L = 56, PAD_R = 20, PAD_T = 20, PAD_B = 36;
 
@@ -305,6 +306,7 @@ export default function TrajectoryForecasterSection() {
 
                     <div className="dashboard-card" style={{ marginTop: '1rem' }}>
                         <h3 className="section-heading" style={{ marginTop: 0 }}>Comps Used</h3>
+                        <TableExport />
                         <div className="hb-table-wrapper table-wrapper">
                             <table className="data-table">
                                 <thead>

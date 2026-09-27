@@ -6,6 +6,7 @@ import PlayerHeadshot from './common/PlayerHeadshot';
 import TeamLogo from './common/TeamLogo';
 import SourceBadge from './common/SourceBadge';
 import AboutModelDrawer from './ui/AboutModelDrawer';
+import TableExport from './common/TableExport';
 
 function seasonLabel(season) {
     return `${season - 1}-${String(season).slice(-2)}`;
@@ -99,6 +100,7 @@ function ValueTable({ title, tooltip, rows }) {
                 {title}
                 <InfoTooltip label="What this ranks" title={title}>{tooltip}</InfoTooltip>
             </h4>
+            <TableExport />
             <div className="table-wrapper">
                 <table className="data-table">
                     <thead>
