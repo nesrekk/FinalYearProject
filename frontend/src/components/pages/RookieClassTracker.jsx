@@ -62,8 +62,8 @@ export default function RookieClassTracker() {
                     Rookie Class Tracker
                     <InfoTooltip label="How this works" title="Every rookie, tracked live">
                         "Rookie" here means the player's first season anywhere in this database — the
-                        same definition the ROY model already uses, no separate draft data needed. ROY
-                        probability comes straight from that model. Clicking a rookie shows their closest
+                        same definition the ROY model already uses, no separate draft data needed. The ROY
+                        chance is that model's score calibrated so the whole rookie class adds up to 100%. Clicking a rookie shows their closest
                         historical season comp (any player, any season) from the season-similarity engine —
                         useful for "who does this rookie's season actually resemble so far," not a
                         guarantee of a similar career.
@@ -89,7 +89,7 @@ export default function RookieClassTracker() {
                 {rookies && !loading && (
                     <>
                         <p className="page-subtitle" style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
-                            {rookies.candidate_pool_size} rookies this season, sorted by ROY probability.
+                            {rookies.candidate_pool_size} rookies this season, sorted by chance to win ROY.
                             Click a row to see their closest historical season comp.
                         </p>
                         <TableExport />
@@ -98,7 +98,7 @@ export default function RookieClassTracker() {
                                 <thead>
                                     <tr>
                                         <th>Rank</th><th>Player</th><th>PTS</th><th>TS%</th>
-                                        <th>USG%</th><th>MIN</th><th>Net Rtg</th><th>ROY Prob</th>
+                                        <th>USG%</th><th>MIN</th><th>Net Rtg</th><th>ROY chance</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -116,7 +116,7 @@ export default function RookieClassTracker() {
                                             <td>{fmt(r.usg_pct, 3)}</td>
                                             <td>{fmt(r.min)}</td>
                                             <td>{fmt(r.net_rating)}</td>
-                                            <td>{fmt(r.roy_probability * 100)}%</td>
+                                            <td>{r.roy_chance != null ? `${fmt(r.roy_chance * 100)}%` : '—'}</td>
                                         </tr>
                                     ))}
                                 </tbody>

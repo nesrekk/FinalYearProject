@@ -114,7 +114,10 @@ export default function PredictionLedgerSection() {
                     grades every logged prediction for it with a real Brier score. This is separate from Model
                     Validation's leave-one-season-out backtests above — those are honest historical re-runs, this
                     is a real, growing record of what the live model actually said, checked against what actually
-                    happened. It starts sparse and gets more useful the longer it runs.
+                    happened. It starts sparse and gets more useful the longer it runs. The numbers here are the raw
+                    model probabilities as they were logged, which run high (several players near 100%); Awards Race
+                    shows calibrated chances instead (see the Methodology page). Snapshots since 2026-09-27 also
+                    store the calibrated chance.
                 </InfoTooltip>
                 <SourceBadge source={data?._source} />
             </h2>

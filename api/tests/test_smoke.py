@@ -1072,3 +1072,29 @@ def test_raw_impact_has_games_floor():
     data = TestClient(app).get("/impact/raw/2026", params={"top_n": 20}).json()
     assert data["min_games"] == 30 and data["min_minutes"] == 20.0
     assert data["results"] and all(r["player_name"] != "Colby Jones" for r in data["results"])
+
+
+def test_award_chances_are_calibrated():
+    from mvp_api import app
+    client = TestClient(app)
+    cal = client.get("/awards/calibration")
+    if cal.status_code == 503:
+        pytest.skip("award_chance_calibration not built (run scripts/calibrate_award_chances.py)")
+    data = cal.json()
+    _assert_has_source(data)
+    by = {r["award"]: r for r in data["awards"]}
+    assert set(by) == {"MVP", "DPOY", "ROY", "ALL_NBA"}
+    for award in ("MVP", "DPOY", "ROY"):
+        r = by[award]
+        # Raw probabilities over-count (several "certain" winners); calibration must beat plain shares.
+        assert r["raw_sum_mean"] > 2 and r["logloss_calibrated"] < r["logloss_before"] < r["logloss_uniform"]
+    assert abs(by["ALL_NBA"]["chance_sum_mean"] - 15) < 0.5
+
+    # Over the whole field the MVP chances add up to 100%, in the model's order.
+    res = client.get("/mvp/predict/2026", params={"top_n": 2000}).json()["results"]
+    assert abs(sum(r["mvp_chance"] for r in res) - 1) < 0.01
+    chances = [r["mvp_chance"] for r in res]
+    assert chances == sorted(chances, reverse=True) and chances[0] < 0.99
+
+    allnba = client.get("/allnba/predict/2026").json()["results"]
+    assert all(0 < r["all_nba_chance"] < 1 for r in allnba)

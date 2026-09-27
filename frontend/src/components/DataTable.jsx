@@ -38,9 +38,10 @@ export default function DataTable({ columns, keys, rows, emptyMessage = 'No data
                                         {PLAYER_KEYS.has(key) && row.player_id ? (
                                             <PlayerName playerId={row.player_id} name={row[key]} />
                                         ) : typeof row[key] === 'number'
+                                            // Up to three decimals, without padding (27.7, not 27.700).
                                             ? Number.isInteger(row[key])
                                                 ? row[key]
-                                                : row[key].toFixed(3)
+                                                : String(Number(row[key].toFixed(3)))
                                             : row[key]}
                                     </td>
                                 ))}

@@ -142,3 +142,9 @@
   line-height: 1.5;
   font-size: 0.92rem;
 }
+.meth-subhead {
+  margin: var(--space-5) 0 0;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.meth-muted { color: var(--text-2); font-size: 0.85em; }

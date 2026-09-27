@@ -26,11 +26,11 @@ export const SECTIONS = [
                 name: 'Award models (MVP, DPOY, ROY, All-NBA)',
                 open: { page: 'analytics', hash: 'mvp', label: 'Awards Race' },
                 answers: 'Who is on course to win each award this season?',
-                method: 'One logistic regression per award on season stats, standardised. The served models are the logistic ones; random forest and gradient boosting are backtested alongside for comparison.',
-                checked: 'Leave-one-season-out: each past season is predicted by a model trained without it, then compared with the real winner (live table below; Model Validation has the ROC curves).',
+                method: 'One logistic regression per award on season stats, standardised; random forest and gradient boosting are backtested alongside for comparison. The models are trained with balanced class weights, so their raw outputs run far too high (several players at 99%+ at once). The app shows a calibrated chance instead: for MVP, DPOY and ROY the scores are turned into chances that add up to 100% across the field; for All-NBA (15 selections) they are Platt-scaled to add up to about 15.',
+                checked: 'Leave-one-season-out: each past season is predicted by a model trained without it, then compared with the real winner (live table below; Model Validation has the ROC curves). The calibration is fitted on those held-out scores and checked in a nested loop, so no season is scored by a calibration that saw it (live table below).',
                 limits: [
-                    'Each player gets an independent probability, not a share of one award, so several players can read close to 100% at once (see Open issues).',
-                    'They rank candidates better than they measure certainty: read the order, not the percentage.',
+                    'The calibration rests on 14 to 16 seasons, so the percentages are approximate; the MVP favourite averaged a 55% chance and won 7 of 15.',
+                    'The Prediction Ledger keeps the raw probabilities that were logged before 2026-09-27.',
                     'Voter narrative and the league\'s 65-game eligibility rule are not modelled; DPOY and All-NBA only apply a minutes floor to who counts as a candidate.',
                 ],
                 live: 'awards',
@@ -254,9 +254,8 @@ export const SECTIONS = [
 // Problems found and not yet fixed. Remove an entry in the commit that fixes it.
 export const OPEN_ISSUES = [
     {
-        title: 'Award probabilities saturate',
-        body: 'The MVP model gives several players 99%+ at once because each probability is computed on its own, not as a share of one award. The order is meaningful; the percentages overstate certainty.',
-        live: 'mvpTop',
+        title: 'Some non-rookies are in the ROY pool',
+        body: 'A rookie is a player whose first season in this database is the current one, but some short earlier stints are missing from the database: 53 players in 2025-26\'s pool (e.g. Bronny James, Daniss Jenkins) had played before, and 240 across 2010-11 to 2025-26. This affects the ROY list and the pool its model was trained on.',
     },
     {
         title: 'Some models can\'t be retrained right now',

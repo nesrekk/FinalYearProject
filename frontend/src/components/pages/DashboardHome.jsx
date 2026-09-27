@@ -170,11 +170,13 @@ export default function DashboardHome({ onNavigate }) {
     function awardCardLine(award, row) {
         if (!row) return 'No prediction available';
         if (award === 'allnba') {
-            return `${row.predicted_team} · ${(row.all_nba_probability * 100).toFixed(1)}%`;
+            const c = row.all_nba_chance;
+            return c != null ? `${row.predicted_team} · ${(c * 100).toFixed(1)}% chance of a team` : row.predicted_team;
         }
-        const probKey = `${award}_probability`;
-        const prob = row[probKey];
-        return prob != null ? `${(prob * 100).toFixed(1)}% probability` : 'Top model pick';
+        // Calibrated chance (adds up to 100% across the field); the raw model
+        // probabilities saturate near 100% and are not shown.
+        const chance = row[`${award}_chance`];
+        return chance != null ? `${(chance * 100).toFixed(1)}% chance to win` : 'Top model pick';
     }
 
     const liveGames = useMemo(() => games.filter((g) => g.status === 'LIVE').length, [games]);
@@ -289,15 +291,15 @@ export default function DashboardHome({ onNavigate }) {
                                 </div>
                             </div>
                             <BigStat
-                                label="Win probability"
-                                value={awardsRace.mvp.mvp_probability != null ? awardsRace.mvp.mvp_probability * 100 : null}
+                                label="Chance to win"
+                                value={awardsRace.mvp.mvp_chance != null ? awardsRace.mvp.mvp_chance * 100 : null}
                                 digits={1}
                                 className="dashboard-mvp-stat"
                             />
                             <div className="probability-bar">
                                 <div
                                     className="probability-bar-fill"
-                                    style={{ width: `${Math.min(100, (awardsRace.mvp.mvp_probability || 0) * 100)}%` }}
+                                    style={{ width: `${Math.min(100, (awardsRace.mvp.mvp_chance || 0) * 100)}%` }}
                                 />
                             </div>
                         </>
@@ -413,7 +415,7 @@ export default function DashboardHome({ onNavigate }) {
                     {['mvp', 'dpoy', 'roy', 'allnba'].map((award) => {
                         const row = awardsRace[award];
                         const prob = row
-                            ? (award === 'allnba' ? row.all_nba_probability : row[`${award}_probability`])
+                            ? (award === 'allnba' ? row.all_nba_chance : row[`${award}_chance`])
                             : null;
                         return (
                             <motion.button

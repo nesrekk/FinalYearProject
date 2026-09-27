@@ -11,51 +11,56 @@ const AWARDS = {
         label: 'MVP',
         icon: 'emoji_events',
         fetch: fetchMVPPrediction,
-        probKey: 'mvp_probability',
-        columns: ['Rank', 'Player', 'Probability %', 'PTS', 'TS%', 'Net Rtg'],
+        probKey: 'mvp_chance',
+        columns: ['Rank', 'Player', 'Chance to win %', 'PTS', 'TS%', 'Net Rtg'],
         keys: ['rank', 'player', 'probability', 'pts', 'ts_pct', 'net_rating'],
-        blurb: `MVP probabilities come from a logistic regression model trained on
-            historical player-season data (pts, TS%, usage%, off/def rating, net rating,
-            win%, minutes, age). No candidate-pool restriction — the model ranks the
-            entire league, same as the real MVP conversation does.`,
+        blurb: `A logistic regression on season stats (points, TS%, usage, off/def rating,
+            net rating, win %, minutes, age), ranking the whole league. Its raw outputs
+            run far too high (several players at 99%+), so they're calibrated into a
+            chance of winning that adds up to 100% across the field, checked on 15
+            held-out seasons. Backtest: the favourite won 7 of 15.`,
     },
     dpoy: {
         label: 'DPOY',
         icon: 'shield',
         fetch: fetchDPOYPrediction,
-        probKey: 'dpoy_probability',
-        columns: ['Rank', 'Player', 'Probability %', 'Def Rtg', 'Net Rtg', 'STL', 'BLK', 'REB%'],
+        probKey: 'dpoy_chance',
+        columns: ['Rank', 'Player', 'Chance to win %', 'Def Rtg', 'Net Rtg', 'STL', 'BLK', 'REB%'],
         keys: ['rank', 'player', 'probability', 'def_rating', 'net_rating', 'stl', 'blk', 'reb_pct'],
         blurb: `Restricted to players averaging at least 24 minutes across 40+ games
             that season — without this floor the model has to rank hundreds of
             low-minute players it never saw a real DPOY candidate look like, which
-            just adds noise near the top. Backtested top-5 accuracy: 80% (15 seasons).`,
+            just adds noise near the top. Chances are calibrated to add up to 100%
+            across the pool. Backtest (15 seasons): favourite won 7, winner in the top 5
+            in 12.`,
     },
     roy: {
         label: 'ROY',
         icon: 'eco',
         fetch: fetchROYPrediction,
-        probKey: 'roy_probability',
-        columns: ['Rank', 'Player', 'Probability %', 'PTS', 'TS%', 'USG%', 'Net Rtg', 'MIN'],
+        probKey: 'roy_chance',
+        columns: ['Rank', 'Player', 'Chance to win %', 'PTS', 'TS%', 'USG%', 'Net Rtg', 'MIN'],
         keys: ['rank', 'player', 'probability', 'pts', 'ts_pct', 'usg_pct', 'net_rating', 'min'],
         blurb: `Restricted to each player's rookie season only (their first season
             anywhere in this database) — a 21 PPG rookie year doesn't look special
-            next to prime LeBron unless it's compared against other rookies.
-            Backtested top-5 accuracy: 100% (14 seasons); top-1: 64%.`,
+            next to prime LeBron unless it's compared against other rookies. Chances
+            are calibrated to add up to 100% across the rookie pool. Backtest (14
+            seasons): favourite won 8, winner always in the top 5.`,
     },
     allnba: {
         label: 'All-NBA',
         icon: 'star',
         fetch: fetchAllNBAPrediction,
-        probKey: 'all_nba_probability',
-        columns: ['Rank', 'Team', 'Player', 'Probability %', 'PTS', 'REB', 'AST', 'Net Rtg'],
+        probKey: 'all_nba_chance',
+        columns: ['Rank', 'Team', 'Player', 'Chance of a team %', 'PTS', 'REB', 'AST', 'Net Rtg'],
         keys: ['rank', 'predicted_team', 'player', 'probability', 'pts', 'reb', 'ast', 'net_rating'],
         blurb: `Predicts the 15-player All-NBA pool (min>=24, gp>=40), trained on 240
             real historical selections (2009-10 through 2024-25). "Team" (First/Second/
             Third) is reconstructed by simple rank cutoff — top 5/10/15 — not modeled
             per tier, so treat it as an ordering, not real voting behavior. Leave-one-
             season-out backtest: 78% precision@15 (11.7/15 correct on average, 16
-            seasons); ROC-AUC 0.98. The real, held-out 2024-25 season: 10/15 correct.`,
+            seasons); ROC-AUC 0.98. The real, held-out 2024-25 season: 10/15 correct.
+            Chances are calibrated (Platt scaling) so they add up to about 15 a season.`,
     },
 };
 
@@ -85,7 +90,8 @@ export default function AwardsRaceSection() {
                 ...row,
                 rank: row.rank ?? i + 1,
                 player: row.player ?? row.player_name,
-                probability: row[cfg.probKey] != null ? row[cfg.probKey] * 100 : null,
+                // One decimal as text; DataTable would print a float with three.
+                probability: row[cfg.probKey] != null ? (row[cfg.probKey] * 100).toFixed(1) : '—',
             }));
             setResults(ranked);
             setSource(data._source ?? null);

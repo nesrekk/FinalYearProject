@@ -108,7 +108,11 @@ def snapshot(season: int):
         rows = [
             (
                 model, season, r["player_name"], r["player_id"],
-                psycopg2.extras.Json({"probability": r[prob_field], "rank": r["rank"]}),
+                # "probability" stays the raw model output (the ledger's history and
+                # Brier grading use it); "chance" is the calibrated value the app
+                # shows since 2026-09-27 (calibrate_award_chances.py), None if absent.
+                psycopg2.extras.Json({"probability": r[prob_field], "rank": r["rank"],
+                                      "chance": r.get(prob_field.replace("_probability", "_chance"))}),
                 now,
             )
             for r in results

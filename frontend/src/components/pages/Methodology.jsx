@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-    fetchAllNBABacktest, fetchBacktestOverview, fetchCurrentMeta, fetchMVPPrediction, fetchWpaValidation,
+    fetchAllNBABacktest, fetchAwardCalibration, fetchBacktestOverview, fetchWpaValidation,
 } from '../../services/api';
 import Icon from '../common/Icon';
 import SourceBadge from '../common/SourceBadge';
@@ -79,15 +79,49 @@ function WpValidation({ data }) {
     );
 }
 
-function MvpTop({ data }) {
-    const top = (data?.results || []).slice(0, 4);
-    if (!top.length) return null;
+const AWARD_LABEL = { MVP: 'MVP', DPOY: 'DPOY', ROY: 'ROY', ALL_NBA: 'All-NBA' };
+
+function CalibrationTable({ data }) {
+    if (!data) return null;
+    const rows = data.awards || [];
+    if (!rows.length) return <p className="meth-live-note">Calibration results couldn&apos;t be loaded.</p>;
     return (
-        <p className="meth-live-note">
-            Right now: {top.map((r, i) => (
-                <span key={r.player_name}>{i ? ', ' : ''}{r.player_name} {pct(r.mvp_probability, 2)}</span>
-            ))} (live, {data.season - 1}-{String(data.season).slice(-2)}).
-        </p>
+        <>
+            <h4 className="meth-subhead">How the chances were calibrated</h4>
+            <TableExport name="award chance calibration" />
+            <div className="table-wrapper">
+                <table className="data-table meth-table">
+                    <thead>
+                        <tr>
+                            <th>Award</th>
+                            <th>Raw sum per season</th>
+                            <th>Calibrated sum</th>
+                            <th>Held-out log loss (before → after)</th>
+                            <th>Favourite</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((r) => (
+                            <tr key={r.award}>
+                                <td>{AWARD_LABEL[r.award] ?? r.award}</td>
+                                <td>{r.raw_sum_mean.toFixed(1)}</td>
+                                <td>{r.chance_sum_mean.toFixed(1)}</td>
+                                <td>{r.logloss_before} → {r.logloss_calibrated} <span className="meth-muted">(vs {r.before_label})</span></td>
+                                <td>
+                                    {r.favourite_won != null
+                                        ? `won ${r.favourite_won} of ${r.n_seasons}; average chance ${pct(r.favourite_mean_chance)}`
+                                        : '—'}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <p className="meth-live-note">
+                One winner a season, yet the raw probabilities add up to the &ldquo;raw sum&rdquo;. Live from{' '}
+                <code>/awards/calibration</code> (scripts/calibrate_award_chances.py). <SourceBadge source={data._source} />
+            </p>
+        </>
     );
 }
 
@@ -123,13 +157,14 @@ function ModelCard({ item, live, onNavigate }) {
                 </dd>
             </dl>
             {item.live === 'awards' && <AwardsBacktest data={live.backtest} allNba={live.allNba} />}
+            {item.live === 'awards' && <CalibrationTable data={live.calibration} />}
             {item.live === 'wp' && <WpValidation data={live.wp} />}
         </article>
     );
 }
 
 export default function Methodology({ onNavigate }) {
-    const [live, setLive] = useState({ backtest: null, allNba: null, wp: null, mvp: null });
+    const [live, setLive] = useState({ backtest: null, allNba: null, calibration: null, wp: null });
 
     useEffect(() => {
         let alive = true;
@@ -138,15 +173,7 @@ export default function Methodology({ onNavigate }) {
         fetchBacktestOverview().then(put('backtest')).catch(() => put('backtest')({}));
         fetchAllNBABacktest().then(put('allNba')).catch(() => put('allNba')(null));
         fetchWpaValidation().then(put('wp')).catch(() => put('wp')({}));
-        (async () => {
-            const meta = await fetchCurrentMeta().catch(() => null);
-            const start = meta?.season ?? new Date().getFullYear();
-            // /meta/current can run ahead of the loaded data (same walk-back as the landing page).
-            for (let s = start; s >= start - 3; s -= 1) {
-                const res = await fetchMVPPrediction(s).catch(() => null);
-                if (res?.results?.length) { put('mvp')(res); break; }
-            }
-        })();
+        fetchAwardCalibration().then(put('calibration')).catch(() => put('calibration')({}));
         return () => { alive = false; };
     }, []);
 
@@ -189,7 +216,6 @@ export default function Methodology({ onNavigate }) {
                         <article key={o.title} className="meth-card meth-issue">
                             <h3><Icon name="report" size={18} /> {o.title}</h3>
                             <p>{o.body}</p>
-                            {o.live === 'mvpTop' && <MvpTop data={live.mvp} />}
                         </article>
                     ))}
                 </div>

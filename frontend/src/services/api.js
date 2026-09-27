@@ -202,6 +202,11 @@ export async function fetchAllNBABacktest() {
     return response.data;
 }
 
+export async function fetchAwardCalibration() {
+    const response = await axios.get(`${MVP_BASE}/awards/calibration`);
+    return response.data;
+}
+
 export async function fetchWpaValidation() {
     const response = await axios.get(`${MVP_BASE}/validation/wpa`);
     return response.data;

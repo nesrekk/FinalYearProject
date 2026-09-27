@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 import psycopg2
+import psycopg2.errors
 from psycopg2 import pool
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -146,6 +147,77 @@ def get_db():
 
 
 # ─── Endpoints ──────────────────────────────────────────────────────────────
+
+# ─── Calibrated chances ─────────────────────────────────────────────────────
+# The award models are logistic regressions trained with balanced class
+# weights, so their raw probabilities run far too high (held-out seasons'
+# raw MVP probabilities summed to ~6.5 when exactly one player wins).
+# scripts/calibrate_award_chances.py fits, per award, either a field
+# calibration (MVP/DPOY/ROY: chance_i = exp(a*z_i) / sum_j exp(a*z_j) over the
+# season's candidate pool, adds up to 100%) or Platt scaling (All-NBA:
+# 1 / (1 + exp(-(a*z + b))), adds up to about 15). The fit and its
+# out-of-sample checks are in award_chance_calibration. Read once per
+# process: restart after a rerun.
+_AWARD_CAL = {}
+
+
+def _award_calibration(award: str):
+    if award not in _AWARD_CAL:
+        with get_db() as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT kind, a, b FROM award_chance_calibration WHERE award = %s;", (award,))
+                _AWARD_CAL[award] = cur.fetchone()
+            except psycopg2.errors.UndefinedTable:
+                conn.rollback()  # don't hand an aborted transaction back to the pool
+                _AWARD_CAL[award] = None
+    return _AWARD_CAL[award]
+
+
+def award_chances(award: str, fitted_model, X_scaled):
+    """Calibrated chance for every candidate in the pool, or None if
+    calibrate_award_chances.py hasn't been run."""
+    cal = _award_calibration(award)
+    if cal is None:
+        return None
+    kind, a, b = cal
+    z = fitted_model.decision_function(X_scaled)
+    if kind == "platt":
+        return 1 / (1 + np.exp(-(a * z + b)))
+    x = a * z
+    e = np.exp(x - x.max())
+    return e / e.sum()
+
+
+@app.get("/awards/calibration")
+def get_award_calibration():
+    """How the award chances were calibrated and checked (out of sample)."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("""SELECT award, kind, a, b, n_seasons, season_from, season_to, raw_sum_mean,
+                                  chance_sum_mean, logloss_calibrated, logloss_before, before_label,
+                                  logloss_uniform, favourite_won, favourite_mean_chance, buckets, computed_at
+                           FROM award_chance_calibration ORDER BY award;""")
+        except psycopg2.errors.UndefinedTable:
+            conn.rollback()
+            raise HTTPException(status_code=503, detail="Run scripts/calibrate_award_chances.py first.")
+        cols = [d[0] for d in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    for r in rows:
+        r["computed_at"] = r["computed_at"].isoformat()
+    return {
+        "awards": rows,
+        "method": (
+            "MVP, DPOY and ROY: each model's log-odds score z becomes a chance of winning, exp(a*z) divided by the "
+            "sum of exp(a*z) over that season's candidate pool, so the field adds up to 100%. All-NBA: Platt "
+            "scaling, 1 / (1 + exp(-(a*z + b))), so the chances add up to about 15. The calibration is fitted on "
+            "leave-one-season-out scores; the log losses, favourite record and reliability buckets come from a "
+            "nested version where it is also refitted without the season being scored."
+        ),
+        "_source": make_source(["award_chance_calibration", "player_season_stats"], "nba_api (stats.nba.com)"),
+    }
+
 
 @app.get("/")
 def root():
@@ -734,9 +806,11 @@ def predict_mvp(season: int, top_n: int = 15):
     X = df[FEATURES].values
     X_scaled = scaler.transform(X)
     probabilities = model.predict_proba(X_scaled)[:, 1]
+    chances = award_chances("MVP", model, X_scaled)
 
     # Build results
     df["mvp_probability"] = probabilities
+    df["mvp_chance"] = chances if chances is not None else np.nan
     df = df.sort_values("mvp_probability", ascending=False).head(top_n)
 
     return {
@@ -749,6 +823,7 @@ def predict_mvp(season: int, top_n: int = 15):
                 "player_name": row["player_name"],
                 "team_abbreviation": row["team_abbreviation"],
                 "mvp_probability": round(float(row["mvp_probability"]), 4),
+                "mvp_chance": None if pd.isna(row["mvp_chance"]) else round(float(row["mvp_chance"]), 4),
                 "pts": round(float(row["pts"]), 1),
                 "ts_pct": round(float(row["ts_pct"]), 3),
                 "w_pct": round(float(row["w_pct"]), 3),
@@ -812,6 +887,8 @@ def predict_dpoy(season: int, top_n: int = 15):
 
     X_scaled = dpoy_scaler.transform(df[DPOY_FEATURES].values)
     df["dpoy_probability"] = dpoy_model.predict_proba(X_scaled)[:, 1]
+    chances = award_chances("DPOY", dpoy_model, X_scaled)
+    df["dpoy_chance"] = chances if chances is not None else np.nan
     df = df.sort_values("dpoy_probability", ascending=False).head(top_n)
 
     return {
@@ -825,6 +902,7 @@ def predict_dpoy(season: int, top_n: int = 15):
                 "player_name": row["player_name"],
                 "team_abbreviation": row["team_abbreviation"],
                 "dpoy_probability": round(float(row["dpoy_probability"]), 4),
+                "dpoy_chance": None if pd.isna(row["dpoy_chance"]) else round(float(row["dpoy_chance"]), 4),
                 "def_rating": round(float(row["def_rating"]), 1),
                 "net_rating": round(float(row["net_rating"]), 1),
                 "stl": round(float(row["stl"]), 1),
@@ -895,6 +973,8 @@ def predict_roy(season: int, top_n: int = 15):
 
     X_scaled = roy_scaler.transform(df[ROY_FEATURES].values)
     df["roy_probability"] = roy_model.predict_proba(X_scaled)[:, 1]
+    chances = award_chances("ROY", roy_model, X_scaled)
+    df["roy_chance"] = chances if chances is not None else np.nan
     df = df.sort_values("roy_probability", ascending=False).head(top_n)
 
     return {
@@ -908,6 +988,7 @@ def predict_roy(season: int, top_n: int = 15):
                 "player_name": row["player_name"],
                 "team_abbreviation": row["team_abbreviation"],
                 "roy_probability": round(float(row["roy_probability"]), 4),
+                "roy_chance": None if pd.isna(row["roy_chance"]) else round(float(row["roy_chance"]), 4),
                 "pts": round(float(row["pts"]), 1),
                 "ts_pct": round(float(row["ts_pct"]), 3),
                 "usg_pct": round(float(row["usg_pct"]), 3),
@@ -968,6 +1049,8 @@ def predict_all_nba(season: int):
 
     X_scaled = allnba_scaler.transform(df[ALLNBA_FEATURES].values)
     df["all_nba_probability"] = allnba_model.predict_proba(X_scaled)[:, 1]
+    chances = award_chances("ALL_NBA", allnba_model, X_scaled)
+    df["all_nba_chance"] = chances if chances is not None else np.nan
     df = df.sort_values("all_nba_probability", ascending=False).head(ALLNBA_SELECTIONS)
 
     def tier_for_rank(rank):
@@ -990,6 +1073,7 @@ def predict_all_nba(season: int):
                 "player_name": row["player_name"],
                 "team_abbreviation": row["team_abbreviation"],
                 "all_nba_probability": round(float(row["all_nba_probability"]), 4),
+                "all_nba_chance": None if pd.isna(row["all_nba_chance"]) else round(float(row["all_nba_chance"]), 4),
                 "pts": round(float(row["pts"]), 1),
                 "reb": round(float(row["reb"]), 1),
                 "ast": round(float(row["ast"]), 1),
