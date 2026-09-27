@@ -239,8 +239,8 @@ export default function DadIndexSection() {
                         <input type="checkbox" checked={withinPosition} onChange={(e) => setWithinPosition(e.target.checked)} />
                         Compare within position (G/F/C)
                         <InfoTooltip label="Why" title="Within-position view">
-                            Qualified centers average about +0.95 on the plain DAD z-score: they guard other starting bigs, and
-                            this project's own BPM reproduction runs hot for productive bigs. The within-position z-score
+                            Qualified centers average about +0.65 on the plain DAD z-score, mostly because they guard other
+                            starting bigs, who post high OBPMs. The within-position z-score
                             compares each defender only to others at the same listed position that season.
                         </InfoTooltip>
                     </label>
@@ -265,8 +265,8 @@ export default function DadIndexSection() {
                     <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>
                         <li><strong>DAD</strong> = Σ (share of the defender's real partial possessions vs. player i × OBPM of player i).</li>
                         <li>
-                            <strong>OBPM</strong> is this project's reproduction of Box Plus/Minus 2.0, not Basketball-Reference's
-                            published numbers. EPM is proprietary and not used.
+                            <strong>OBPM</strong> is Basketball-Reference&apos;s published Offensive Box Plus/Minus. EPM is
+                            proprietary and not used.
                         </li>
                         <li>
                             <strong>Replacement level:</strong> offensive players under {data.thresholds.replacement_min_minutes} real

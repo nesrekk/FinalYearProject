@@ -197,7 +197,12 @@ export default function SpacingLabSection() {
                         {signed(v.coef_spacing, 3)} ORtg (95% CI {v.ci_low.toFixed(3)} to {v.ci_high.toFixed(3)},{' '}
                         {v.p_spacing < 0.001 ? 'p < 0.001' : `p = ${v.p_spacing.toFixed(3)}`}), holding the five players' summed OBPM and the season fixed;
                         standard errors clustered by team-season ({v.n_clusters} clusters). R² {v.r2.toFixed(3)} vs.{' '}
-                        {v.r2_without_spacing.toFixed(3)} without spacing — a real but modest effect.
+                        {v.r2_without_spacing.toFixed(3)} without spacing —{' '}
+                        {v.p_spacing >= 0.05
+                            ? 'no clear effect once lineup quality is accounted for.'
+                            : v.r2 - v.r2_without_spacing < 0.005
+                                ? 'a small effect: spacing adds little to what the five players’ OBPM already explains.'
+                                : 'a real but modest effect.'}
                         {data.tracking_coverage?.share != null && (
                             <> Tracking covers {(data.tracking_coverage.share * 100).toFixed(1)}% of this season's real 3PA.</>
                         )}

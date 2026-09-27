@@ -15,8 +15,8 @@ BARGAIN_MIN_MINUTES = 500
 
 METHODOLOGY = (
     "Fair value = max(WAR, 0) x cost per win + that season's league minimum; surplus = fair value - real salary. "
-    "WAR starts from VORP x 2.7 (Basketball-Reference's documented conversion), using this project's own BPM/VORP "
-    "reproduction — which runs hot (the league's positive WAR sums to 1.3-2.0x the real wins above replacement), so "
+    "WAR starts from VORP x 2.7 (Basketball-Reference's documented conversion), using Basketball-Reference's "
+    "published VORP. The league's positive WAR sums to 1.25-1.31x the real wins above replacement, so "
     "each season's WAR is scaled so that sum equals the real wins above replacement, keeping WAR and cost per win on "
     "the same real-win scale. Cost per win = (real salaries of players who actually played that season - players x "
     "league minimum) / (real league wins - wins a .200 team would get), from real salaries, real team records and "

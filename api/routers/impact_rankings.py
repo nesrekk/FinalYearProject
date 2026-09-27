@@ -14,11 +14,9 @@ router = APIRouter()
 def get_bpm_leaderboard(season: int, top_n: int = 20, min_minutes: float = 20.0, min_games: int = 30):
     """
     Top players by BPM (Box Plus/Minus) for a season — see
-    scripts/build_bpm_vorp.py's module docstring for the full methodology
-    and honesty caveats (this is an independent reproduction of the
-    published BPM 2.0 formula, not Basketball-Reference's own numbers;
-    relative ranking is verified sound, absolute scale runs somewhat
-    hotter than the real thing at the top of the leaderboard). A modest
+    Basketball-Reference's published BPM/OBPM/DBPM/VORP
+    (scripts/load_bref_bpm_vorp.py; this project's own reproduction ran
+    hot and is kept only in *_repro columns). A modest
     minutes/games floor is applied by default — like every other rate-stat
     leaderboard in this project, unfiltered per-100-possession numbers are
     dominated by small-sample noise from low-minute players.

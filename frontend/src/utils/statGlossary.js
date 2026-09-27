@@ -122,15 +122,15 @@ export const STAT_GLOSSARY = {
     },
     bpm: {
         title: 'Box Plus/Minus',
-        body: "Estimates a player's total contribution in points per 100 possessions above a league-average player, derived entirely from box-score stats. This project reproduces the public BPM 2.0 formula independently (not Basketball-Reference's own code, which blocks automated access) — rankings are verified sound against real results, but the absolute scale runs somewhat hotter than basketball-reference.com's own numbers.",
+        body: "Estimates a player's total contribution in points per 100 possessions above a league-average player, derived entirely from box-score stats. The values shown are Basketball-Reference's published BPM (BPM 2.0), for every season.",
     },
     obpm: {
         title: 'Offensive BPM',
-        body: 'The offensive half of Box Plus/Minus — points per 100 possessions contributed above league-average on offense only. Same independent reproduction as BPM.',
+        body: 'The offensive half of Box Plus/Minus — points per 100 possessions contributed above league-average on offense only. Basketball-Reference\'s published values.',
     },
     dbpm: {
         title: 'Defensive BPM',
-        body: 'The defensive half of Box Plus/Minus — points per 100 possessions contributed above league-average on defense only. Same independent reproduction as BPM.',
+        body: 'The defensive half of Box Plus/Minus — points per 100 possessions contributed above league-average on defense only. Basketball-Reference\'s published values.',
     },
     impact_score: {
         title: 'Impact Score (Raw)',

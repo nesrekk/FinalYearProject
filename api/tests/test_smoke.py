@@ -946,3 +946,26 @@ def test_player_id_map_fixes():
                    WHERE NOT EXISTS (SELECT 1 FROM player_season_stats p WHERE p.player_id = n.player_id)""")
     assert cur.fetchone()[0] == 0
     conn.close()
+
+
+def test_bpm_is_basketball_reference_published():
+    """BPM/VORP come from Basketball-Reference (scripts/load_bref_bpm_vorp.py).
+    Real sniff tests against the published 2025-26 lines: SGA BPM 11.7 /
+    VORP 7.8, Jokic 14.2 / 9.2 (the in-house reproduction had SGA at 22.0);
+    the reproduction survives in dbpm_repro for Pair Synergy; the BPM
+    leaderboard's top value is in a realistic range."""
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    cur.execute("""SELECT player_name, bpm, vorp, bpm_repro FROM player_season_stats
+                   WHERE season = 2026 AND player_name IN ('Shai Gilgeous-Alexander', 'Nikola Jokić')""")
+    rows = {r[0]: r[1:] for r in cur.fetchall()}
+    conn.close()
+    if not rows or rows["Shai Gilgeous-Alexander"][2] is None:
+        pytest.skip("published BPM not loaded on this machine.")
+    assert rows["Shai Gilgeous-Alexander"][:2] == (11.7, 7.8)
+    assert rows["Nikola Jokić"][:2] == (14.2, 9.2)
+    assert rows["Shai Gilgeous-Alexander"][2] > 15  # the old reproduction, kept aside
+    from impact_api import app
+    top = TestClient(app).get("/impact/bpm/2026").json()
+    best = max(r["bpm"] for r in (top.get("results") or top.get("leaderboard") or []))
+    assert 8 < best < 16

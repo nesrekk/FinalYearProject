@@ -4,6 +4,15 @@ build_bpm_vorp.py
 Computes BPM, OBPM, DBPM, and VORP for every player-season in
 player_season_stats and stores them as new additive columns.
 
+SUPERSEDED 2026-09-27 for the main columns: player_season_stats.bpm/obpm/
+dbpm/vorp now hold Basketball-Reference's published values for every
+season (load_bref_bpm_vorp.py), and this script writes its reproduction to
+*_repro columns instead. Checked against the published 2024-25 values:
+correlation only 0.76 and SGA 22.0 vs 11.7, too loose to call a
+reproduction. It is still run for bpm_position (estimated position, used
+for position labels) and for dbpm_repro, which Pair Synergy's trained model
+was fitted on. Run order: build_bpm_vorp.py, then load_bref_bpm_vorp.py.
+
 HONESTY NOTE (read before trusting these numbers): this is an independent
 REPRODUCTION of the published Box Plus/Minus 2.0 methodology (Daniel Myers,
 via Basketball-Reference), not Basketball-Reference's own code — their site
@@ -320,8 +329,14 @@ def compute_bpm(df, team_agg, position_df, role_df):
 
 
 def save(conn, result):
+    """Writes this reproduction to bpm_repro/obpm_repro/dbpm_repro/vorp_repro
+    (and bpm_position). Since 2026-09-27 the main bpm/obpm/dbpm/vorp columns
+    hold Basketball-Reference's published values (load_bref_bpm_vorp.py);
+    the reproduction ran hot (SGA 2025-26 BPM 22.0 vs the published 11.7)
+    and is kept only because Pair Synergy's trained model was fitted on its
+    DBPM."""
     cur = conn.cursor()
-    for col in ["bpm", "obpm", "dbpm", "vorp", "bpm_position"]:
+    for col in ["bpm_repro", "obpm_repro", "dbpm_repro", "vorp_repro", "bpm_position"]:
         cur.execute(f"ALTER TABLE player_season_stats ADD COLUMN IF NOT EXISTS {col} DOUBLE PRECISION;")
     conn.commit()
 
@@ -334,7 +349,8 @@ def save(conn, result):
         cur,
         """
         UPDATE player_season_stats AS p SET
-            bpm = v.bpm, obpm = v.obpm, dbpm = v.dbpm, vorp = v.vorp, bpm_position = v.bpm_position
+            bpm_repro = v.bpm, obpm_repro = v.obpm, dbpm_repro = v.dbpm, vorp_repro = v.vorp,
+            bpm_position = v.bpm_position
         FROM (VALUES %s) AS v (player_id, season, bpm, obpm, dbpm, vorp, bpm_position)
         WHERE p.player_id = v.player_id AND p.season = v.season;
         """,
@@ -372,7 +388,7 @@ if __name__ == "__main__":
     for r in top.itertuples():
         print(f"  {r.player_name:<28} BPM={r.bpm:>6.2f}  OBPM={r.obpm:>6.2f}  DBPM={r.dbpm:>6.2f}  VORP={r.vorp:>5.2f}")
 
-    print("\nSaving to player_season_stats (bpm, obpm, dbpm, vorp, bpm_position columns)...")
+    print("\nSaving to player_season_stats (bpm_repro, obpm_repro, dbpm_repro, vorp_repro, bpm_position)...")
     save(conn, result)
     conn.close()
     print("Done.")

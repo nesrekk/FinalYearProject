@@ -53,6 +53,10 @@ defender bands) vs. real box-score 3PA, per season.
 
 Usage:
     cd scripts && python3 build_gravity_index.py
+
+NOTE 2026-09-27: player_season_stats.bpm/obpm/dbpm/vorp now hold Basketball-Reference's published
+values (load_bref_bpm_vorp.py). Mentions below of "this project's own BPM reproduction" describe the
+original build; the reproduction is kept only in *_repro columns.
 """
 
 import numpy as np

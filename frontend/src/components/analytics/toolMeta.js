@@ -18,7 +18,7 @@ export const TOOL_META = {
         group: 'Models',
         visual: 'bar',
         tagline: 'A single blended score for ranking player value.',
-        about: 'Impact scores are computed from a weighted blend of player stats (Raw vs. Star variants), normalized so seasons are comparable. BPM/VORP is an independent reproduction of the published Box Plus/Minus 2.0 methodology, verified sound on relative ranking against real 2024-25 results but running somewhat hotter than basketball-reference.com’s own absolute scale — treat it as "who’s better than whom, roughly by how much."',
+        about: 'Impact scores are computed from a weighted blend of player stats (Raw vs. Star variants), normalized so seasons are comparable. BPM/VORP are Basketball-Reference’s published Box Plus/Minus values, linked to each player through this project’s player-id map.',
     },
     validation: {
         group: 'Models',
@@ -84,7 +84,7 @@ export const TOOL_META = {
         group: 'Player Analysis',
         visual: 'scatter',
         tagline: 'How hard each defender’s real assignments actually were.',
-        about: 'DAD Index (OBPM-weighted): for every defender, the share of their real tracked partial possessions spent on each offensive player, times that player’s OBPM (this project’s own Box Plus/Minus reproduction; players under 500 minutes count as replacement level, −2.0). Z-scored per season, and optionally within position. Plotted against the NBA’s own defended-FG% differential (defended FG% minus the shooters’ normal FG%). Descriptive only — no help defense, rebounding or scheme.',
+        about: 'DAD Index (OBPM-weighted): for every defender, the share of their real tracked partial possessions spent on each offensive player, times that player’s OBPM (Basketball-Reference’s published Offensive Box Plus/Minus; players under 500 minutes count as replacement level, −2.0). Z-scored per season, and optionally within position. Plotted against the NBA’s own defended-FG% differential (defended FG% minus the shooters’ normal FG%). Descriptive only — no help defense, rebounding or scheme.',
     },
     spacing: {
         group: 'Teams & Markets',
@@ -96,7 +96,7 @@ export const TOOL_META = {
         group: 'Teams & Markets',
         visual: 'scatter',
         tagline: 'Real production priced in dollars vs. real salary — bargains and cap liabilities.',
-        about: 'Fair value = max(WAR, 0) × that season’s real cost per win + the league minimum; surplus = fair value − real salary. Cost per win comes from real salaries of players who played, the real CBA minimum salary and real team records (wins above what a .200 team would win). WAR is VORP × 2.7 on this project’s own BPM reproduction, rescaled each season to sum to the real wins above replacement. Salaries come from public Kaggle datasets built from HoopsHype and Basketball-Reference, checked against real contracts; inflation-adjusted and incomplete seasons are left out.',
+        about: 'Fair value = max(WAR, 0) × that season’s real cost per win + the league minimum; surplus = fair value − real salary. Cost per win comes from real salaries of players who played, the real CBA minimum salary and real team records (wins above what a .200 team would win). WAR is VORP × 2.7 on Basketball-Reference’s published VORP, rescaled each season (by about 0.77-0.80) so the league’s positive WAR sums to the real wins above replacement. Salaries come from public Kaggle datasets built from HoopsHype and Basketball-Reference, checked against real contracts; inflation-adjusted and incomplete seasons are left out.',
     },
     vegas: {
         group: 'Teams & Markets',

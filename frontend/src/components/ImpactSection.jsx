@@ -68,13 +68,9 @@ export default function ImpactSection() {
                     then normalized so seasons are comparable. The API mainly reads the precomputed scores from the
                     database and returns the top-ranked players for the selected season.
                     <br /><br />
-                    BPM/VORP is an independent reproduction of the published Box Plus/Minus 2.0 methodology
-                    (Basketball-Reference blocks automated access to their own page, so this is built from a
-                    verified open-source reimplementation of the same public formula, not their proprietary
-                    code). Relative ranking is verified sound against real 2024-25 results — recognizable stars
-                    land at the top, players correctly outrank weaker teammates — but the absolute scale runs
-                    somewhat hotter than basketball-reference.com's own numbers. Treat it as "who's better than
-                    whom, roughly by how much," not as numerically identical to the official site.
+                    BPM and VORP are Basketball-Reference&apos;s published values (Box Plus/Minus 2.0), linked to
+                    each player through this project&apos;s player-id map. An earlier in-house reproduction of the
+                    formula ran hot (2025-26 SGA at 22.0 against the published 11.7) and was replaced.
                 </InfoTooltip>
                 <SourceBadge source={source} />
             </h2>

@@ -54,6 +54,9 @@ ARCHETYPES = [
     "3-and-D Wing", "Bench Role Player", "Elite Two-Way Big",
     "Playmaker", "Primary Scorer", "Rim Protector",
 ]
+# "dbpm" is this project's BPM reproduction (dbpm_repro), which the saved model
+# was trained on; switching to the published dbpm means retraining (needs
+# stats.nba.com for the pair data) and changing impact_core in the same step.
 NUMERIC_FEATURES = ["usg_pct", "tpar", "ast_pct", "reb_pct", "dbpm"]
 RIDGE_ALPHA = 5.0
 
@@ -88,7 +91,7 @@ def load_player_features(cursor, season: int):
     within that season's real pool, plus a one-hot real archetype."""
     cursor.execute(
         """SELECT p.player_id, p.net_rating, p.min, p.gp, p.usg_pct, p.fg3a, p.fga,
-                  p.ast_pct, p.reb_pct, p.dbpm, c.archetype
+                  p.ast_pct, p.reb_pct, p.dbpm_repro AS dbpm, c.archetype
            FROM player_season_stats p
            LEFT JOIN player_clusters c ON c.player_id = p.player_id AND c.season = p.season
            WHERE p.season = %s;""",

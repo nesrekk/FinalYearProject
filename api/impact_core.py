@@ -994,9 +994,12 @@ def _fetch_lineup_stats_season(season: int, group_quantity: int = 5):
     _CACHE["lineup_chemistry"][cache_key] = {"ts": time.time(), "data": lineups}
     return lineups
 def _player_synergy_features(cursor, player_id: int, season: int):
+    # dbpm_repro, not dbpm: the trained Pair Synergy model was fitted on this
+    # project's own BPM reproduction (build_bpm_vorp.py); the main dbpm column
+    # now holds Basketball-Reference's published values, on a different scale.
     cursor.execute(
         """SELECT p.net_rating, p.min, p.gp, p.usg_pct, p.fg3a, p.fga,
-                  p.ast_pct, p.reb_pct, p.dbpm, c.archetype
+                  p.ast_pct, p.reb_pct, p.dbpm_repro, c.archetype
            FROM player_season_stats p
            LEFT JOIN player_clusters c ON c.player_id = p.player_id AND c.season = p.season
            WHERE p.player_id = %s AND p.season = %s;""",
@@ -1014,7 +1017,7 @@ def _player_synergy_features(cursor, player_id: int, season: int):
         return None
 
     cursor.execute(
-        """SELECT p.usg_pct, (p.fg3a::float / NULLIF(p.fga, 0)) AS tpar, p.ast_pct, p.reb_pct, p.dbpm
+        """SELECT p.usg_pct, (p.fg3a::float / NULLIF(p.fga, 0)) AS tpar, p.ast_pct, p.reb_pct, p.dbpm_repro
            FROM player_season_stats p WHERE p.season = %s;""",
         (season,),
     )

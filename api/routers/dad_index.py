@@ -17,13 +17,13 @@ MIN_DFGA_RELIABLE = 300
 METHODOLOGY = (
     "DAD Index (OBPM-weighted) = the sum, over every real offensive player a defender was matched up with, of that "
     "player's share of the defender's real partial possessions (NBA tracking, LeagueSeasonMatchups) times that "
-    "player's OBPM. OBPM is this project's own reproduction of Box Plus/Minus 2.0 (build_bpm_vorp.py), not "
-    "Basketball-Reference's numbers; EPM is proprietary and not used. Offensive players with under 500 real minutes "
+    "player's OBPM. OBPM is Basketball-Reference's published Offensive Box Plus/Minus (load_bref_bpm_vorp.py); "
+    "EPM is proprietary and not used. Offensive players with under 500 real minutes "
     "that season (or no stored season line) count as replacement level, OBPM -2.0. Only matchup pairs of 5+ real "
     "partial possessions are stored, so shares are over those. Qualified defenders have 1,000+ real partial "
     "possessions; DAD is z-scored within each season's qualified pool, and also within the defender's position group "
-    "(G/F/C) — qualified centers average about +0.95 on the plain z-score, partly because they guard other starting "
-    "bigs and partly because this BPM reproduction runs hot for productive bigs, so the position view is the fairer "
+    "(G/F/C) — qualified centers average about +0.65 on the plain z-score, mostly because they guard other starting "
+    "bigs, who post high OBPMs, so the position view is the fairer "
     "wing-vs-big comparison. The DFG% differential is the NBA's own real defended FG% minus the same shooters' real "
     "normal FG% (LeagueDashPtDefend); negative = shooters made fewer shots than usual. It has a real sampling margin "
     "(95% interval shown); defenders under 300 real defended shots are greyed out. This describes who a defender "
@@ -131,6 +131,6 @@ def get_dad_index(season: Optional[int] = None):
         "defenders": defenders,
         "_source": make_source(
             ["defender_dad", "dad_validation", "player_matchups", "defender_dfg", "player_season_stats"],
-            "nba_api (LeagueSeasonMatchups, LeagueDashPtDefend) + this project's BPM reproduction",
+            "nba_api (LeagueSeasonMatchups, LeagueDashPtDefend) + Basketball-Reference OBPM",
         ),
     }

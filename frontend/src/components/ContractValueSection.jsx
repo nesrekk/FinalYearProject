@@ -201,7 +201,7 @@ export default function ContractValueSection() {
                     <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>
                         <li><strong>Surplus</strong> = fair value − real salary; <strong>fair value</strong> = max(WAR, 0) × cost per win + league minimum.</li>
                         <li>
-                            <strong>WAR</strong> = VORP × 2.7 (Basketball-Reference's conversion) on this project's own BPM/VORP reproduction,
+                            <strong>WAR</strong> = VORP × 2.7 (Basketball-Reference's conversion) on Basketball-Reference's published VORP,
                             then scaled by {s.war_scale_k.toFixed(3)} this season: raw positive WAR summed to {s.war_to_real_wins_ratio.toFixed(2)}×
                             the real {Math.round(s.wins_above_replacement)} league wins above replacement, so it's rescaled to match them.
                         </li>
