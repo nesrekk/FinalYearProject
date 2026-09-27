@@ -125,21 +125,23 @@ def root():
     }
 
 
-# ─── Player Archetype Clusters ──────────────────────────────────────────────
-# Reads results written by scripts/cluster_players.py (K-Means on style
-# stats — see that script for methodology and why the labels are trustworthy
-# despite being hand-named).
+# ─── Player Archetypes (roles) ──────────────────────────────────────────────
+# Reads scripts/build_player_roles.py's 10 roles (K-Means on rate stats and
+# shot locations; see that script). The six broader archetypes from
+# scripts/cluster_players.py stay in player_clusters for Pair Synergy and
+# Trivia, and come back here as each player's "family".
 
 @app.get("/clusters/archetypes")
 def get_archetypes():
-    """All 6 discovered archetypes: size, centroid stats, representative players."""
+    """All discovered player roles: size, centroid (per-season z-scores),
+    description, most typical players and top scorers."""
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT cluster_id, archetype, n_player_seasons, silhouette_score,
-                   centroid, representative_players
-            FROM cluster_archetypes
+            SELECT role_id, role, n_player_seasons, silhouette_score, centroid,
+                   representative_players, description, stability_ari, top_scorers
+            FROM role_archetypes
             ORDER BY n_player_seasons DESC;
             """
         )
@@ -148,7 +150,7 @@ def get_archetypes():
     if not rows:
         raise HTTPException(
             status_code=404,
-            detail="No cluster results found. Run scripts/cluster_players.py first.",
+            detail="No player roles found. Run scripts/build_player_roles.py first.",
         )
 
     return {
@@ -160,10 +162,13 @@ def get_archetypes():
                 "silhouette_score": r[3],
                 "centroid": r[4],
                 "representative_players": r[5],
+                "description": r[6],
+                "stability_ari": r[7],
+                "top_scorers": r[8],
             }
             for r in rows
         ],
-        "_source": make_source(["cluster_archetypes"], "nba_api (stats.nba.com)"),
+        "_source": make_source(["role_archetypes", "player_roles"], "nba_api (stats.nba.com): season stats and shot locations"),
     }
 
 
@@ -177,10 +182,10 @@ def get_season_clusters(season: int):
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT player_id, player_name, team_abbreviation, archetype,
+            SELECT player_id, player_name, team_abbreviation, role,
                    pca_x, pca_y, pts, reb, ast, stl, blk, tov,
-                   fg3_pct, ts_pct, usg_pct, ast_pct, reb_pct
-            FROM player_clusters
+                   fg3_pct, ts_pct, usg_pct, ast_pct, reb_pct, family
+            FROM player_roles
             WHERE season = %s
             ORDER BY player_name ASC;
             """,
@@ -192,14 +197,15 @@ def get_season_clusters(season: int):
         raise HTTPException(
             status_code=404,
             detail=f"No cluster results for season {season}. "
-                   f"Run scripts/cluster_players.py first, or check the season has data.",
+                   f"Run scripts/build_player_roles.py first, or check the season has data.",
         )
 
     cols = ["player_id", "player_name", "team_abbreviation", "archetype", "pca_x", "pca_y",
-            "pts", "reb", "ast", "stl", "blk", "tov", "fg3_pct", "ts_pct", "usg_pct", "ast_pct", "reb_pct"]
+            "pts", "reb", "ast", "stl", "blk", "tov", "fg3_pct", "ts_pct", "usg_pct", "ast_pct", "reb_pct",
+            "family"]
     return {
         "season": season, "players": [dict(zip(cols, row)) for row in rows],
-        "_source": make_source(["player_clusters"], "nba_api (stats.nba.com)"),
+        "_source": make_source(["player_roles"], "nba_api (stats.nba.com): season stats and shot locations"),
     }
 
 
@@ -212,8 +218,8 @@ def get_player_cluster_history(player_name: str):
 
         cursor.execute(
             """
-            SELECT season, archetype, pts, reb, ast, usg_pct
-            FROM player_clusters
+            SELECT season, role, pts, reb, ast, usg_pct, family
+            FROM player_roles
             WHERE player_id = %s
             ORDER BY season ASC;
             """,
@@ -224,15 +230,16 @@ def get_player_cluster_history(player_name: str):
     if not rows:
         raise HTTPException(
             status_code=404,
-            detail=f"No cluster results for this player (may not meet the min>=15mpg / gp>=20 filter "
-                   f"in any season). Run scripts/cluster_players.py first.",
+            detail=f"No role for this player (may not meet the 15+ minutes / 20+ games filter "
+                   f"in any season since 2009-10). Run scripts/build_player_roles.py first.",
         )
 
     return {
         "player_id": player_id,
         "player_name": resolved_name,
         "seasons": [
-            {"season": r[0], "archetype": r[1], "pts": r[2], "reb": r[3], "ast": r[4], "usg_pct": r[5]}
+            {"season": r[0], "archetype": r[1], "pts": r[2], "reb": r[3], "ast": r[4], "usg_pct": r[5],
+             "family": r[6]}
             for r in rows
         ],
     }
@@ -293,7 +300,7 @@ def get_playtype_season_clusters(season: int):
 # ─── League Evolution ────────────────────────────────────────────────────────
 #
 # How the real league has changed: each real statistical archetype's real
-# share of the qualified-player pool per season (player_clusters, already
+# share of the qualified-player pool per season (player_roles, already
 # populated for every season 2009-10–present), plus three real league-average
 # trends per season computed straight from player_season_stats, each a
 # minutes-weighted average across every real player that season (so a
@@ -305,20 +312,20 @@ def get_league_evolution():
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """SELECT season, archetype, COUNT(*) AS n
-               FROM player_clusters
-               GROUP BY season, archetype
-               ORDER BY season, archetype;"""
+            """SELECT season, role, COUNT(*) AS n
+               FROM player_roles
+               GROUP BY season, role
+               ORDER BY season, role;"""
         )
         archetype_rows = cursor.fetchall()
 
         if not archetype_rows:
             raise HTTPException(
                 status_code=404,
-                detail="No cluster results found. Run scripts/cluster_players.py first.",
+                detail="No player roles found. Run scripts/build_player_roles.py first.",
             )
 
-        # Scoped to exactly the seasons player_clusters actually covers, so
+        # Scoped to exactly the seasons player_roles actually covers, so
         # these league-average trends never silently outrun the archetype
         # data displayed right alongside them (player_season_stats now goes
         # back to 1950 via the Kaggle historical import, well before
@@ -372,8 +379,8 @@ def get_league_evolution():
         "archetype_shares": archetype_shares,
         "trends": trends,
         "methodology": (
-            "Archetype share = real count of qualified player-seasons in that archetype (K-Means clustering, "
-            "scripts/cluster_players.py) divided by the real total qualified pool that season. three_pt_rate is "
+            "Role share = count of qualified player-seasons in that role (K-Means clustering, "
+            "scripts/build_player_roles.py) divided by the real total qualified pool that season. three_pt_rate is "
             "a minutes-weighted league average of each real player's own 3PA/FGA that season (the share of shot "
             "attempts taken from three, not raw makes or attempts per game, which pace changes would confound). "
             "ts_pct is a minutes-weighted league average of real True Shooting %. pace_proxy is SUM(real season "
@@ -382,7 +389,7 @@ def get_league_evolution():
             "this project doesn't have a historical source for), disclosed as an approximation rather than "
             "presented as the official number."
         ),
-        "_source": make_source(["player_clusters", "player_season_stats"], "nba_api (stats.nba.com)"),
+        "_source": make_source(["player_roles", "player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 

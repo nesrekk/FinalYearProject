@@ -6,7 +6,8 @@ import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import OffensiveStyleSection from './OffensiveStyleSection';
 
-const PALETTE = ['#38bdf8', '#f87171', '#facc15', '#a78bfa', '#34d399', '#fb923c'];
+// Ten distinct hues for the ten roles; fills only (never text), readable on Paper and Ink.
+const PALETTE = ['#ff5b14', '#2e86de', '#f5b700', '#8e5bd6', '#12a4a0', '#e0245e', '#6ab04c', '#9aa5b1', '#c97c3a', '#4dc9f6'];
 
 const EVO_W = 640, EVO_H = 260, EVO_PAD_L = 42, EVO_PAD_R = 12, EVO_PAD_T = 10, EVO_PAD_B = 22;
 const EVO_PLOT_W = EVO_W - EVO_PAD_L - EVO_PAD_R;
@@ -77,8 +78,8 @@ function TrendMiniChart({ label, data, valueKey, format, color }) {
                 <path d={path} fill="none" stroke={color} strokeWidth="2" />
                 <text x={padL} y={h - 3} fill="var(--text-3)" fontSize="8">{data[0].season}</text>
                 <text x={w - padR} y={h - 3} fill="var(--text-3)" fontSize="8" textAnchor="end">{data[data.length - 1].season}</text>
-                <text x={padL} y={padT + 8} fill={color} fontSize="9" fontWeight="700">{format(vMax)}</text>
-                <text x={padL} y={h - padB + 4} fill={color} fontSize="9" fontWeight="700">{format(vMin)}</text>
+                <text x={padL} y={padT + 8} fill="var(--text-2)" fontSize="9" fontWeight="700">{format(vMax)}</text>
+                <text x={padL} y={h - padB + 4} fill="var(--text-2)" fontSize="9" fontWeight="700">{format(vMin)}</text>
             </svg>
         </div>
     );
@@ -201,21 +202,28 @@ export default function PlayerArchetypesSection() {
             <h2 className="card-title hb-page-title">
                 <span className="card-icon"><Icon name="biotech" /></span>
                 Player Archetypes
-                <InfoTooltip label="How this clustering works" title="Unsupervised K-Means clustering">
-                    Unlike MVP/DPOY/ROY (trained to predict a known label) this has no "correct answer" fed
-                    in advance. K-Means looks at 11 style stats (scoring, playmaking, rebounding, defense,
-                    efficiency) for every player-season and groups players who are statistically similar —
-                    the groupings emerge from the data itself, not from box-score categories a human
-                    predefined. Only the NAME given to each already-discovered group ("Rim Protector",
-                    "Playmaker"...) uses basketball knowledge; the grouping itself is 100% data-driven.
+                <InfoTooltip label="How these roles were found" title="Unsupervised K-Means clustering">
+                    No labels are fed in. For every player-season since 2009-10 (15+ minutes a game, 20+ games),
+                    K-Means groups players by what they do with their minutes: usage, assist, turnover and
+                    rebounding rates, steals and blocks per 36, free-throw rate, true shooting, and where their
+                    shots come from (rim, paint, mid-range, corner three, above-the-break three). Each stat is
+                    compared within its own season, so league-wide changes like the three-point boom aren&apos;t
+                    mistaken for role changes. Ten roles is the most the data supports reliably: refitting on
+                    different 80% samples reproduces them (stability{' '}
+                    {archetypes[0]?.stability_ari != null ? archetypes[0].stability_ari.toFixed(2) : '—'}), while 11 or more
+                    roles don&apos;t. Styles are a continuum, not clean boxes (silhouette{' '}
+                    {archetypes[0]?.silhouette_score != null ? archetypes[0].silhouette_score.toFixed(2) : '—'}), so players near a
+                    border could fit either side. Only the names use basketball knowledge; the grouping is
+                    entirely data-driven. The &quot;family&quot; column is the older six-way grouping, which other
+                    tools still use.
                 </InfoTooltip>
                 <SourceBadge source={seasonData?._source} />
             </h2>
             <p className="page-subtitle">
-                Every dot below is one player-season, positioned by a 2D projection of their stat profile —
-                players who play similarly sit near each other regardless of team or era. Hover a legend
-                entry to isolate one archetype; click a dot's player name in the table to see their whole
-                career's archetype history.
+                {archetypes.length || 'Ten'} roles found in the data. Every dot below is one player-season, placed by a 2D
+                projection of its style profile, so players who play alike sit near each other regardless of team
+                or era. Hover a role to isolate it; click a player&apos;s name in the table to see their whole
+                career&apos;s role history.
             </p>
 
             {archetypes.length > 0 && (
@@ -232,8 +240,15 @@ export default function PlayerArchetypesSection() {
                             <div>
                                 <div className="stat-card-label">{a.archetype}</div>
                                 <div className="stat-card-value" style={{ fontSize: '1.1rem' }}>{a.n_player_seasons.toLocaleString()}</div>
+                                {a.description && (
+                                    <div className="page-subtitle" style={{ marginTop: 2, fontSize: '0.75rem' }}>
+                                        {a.description}
+                                    </div>
+                                )}
                                 <div className="page-subtitle" style={{ marginTop: 2, fontSize: '0.75rem' }}>
-                                    e.g. {a.representative_players.slice(0, 2).map((p) => p.player_name).join(', ')}
+                                    e.g. {(a.top_scorers || a.representative_players).slice(0, 3)
+                                        .map((p) => `${p.player_name} ${p.season - 1}-${String(p.season).slice(-2)}`)
+                                        .filter((v, i, arr) => arr.indexOf(v) === i).join(', ')}
                                 </div>
                             </div>
                         </div>
@@ -280,7 +295,7 @@ export default function PlayerArchetypesSection() {
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th>Player</th><th>Team</th><th>Archetype</th><th>PTS</th><th>REB</th><th>AST</th>
+                                <th>Player</th><th>Team</th><th>Role</th><th>Family</th><th>PTS</th><th>REB</th><th>AST</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -290,7 +305,7 @@ export default function PlayerArchetypesSection() {
                                         <button
                                             type="button"
                                             onClick={() => loadHistory(p.player_name)}
-                                            style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', padding: 0, font: 'inherit' }}
+                                            style={{ background: 'none', border: 'none', color: 'var(--brand-text)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}
                                         >
                                             {p.player_name}
                                         </button>
@@ -300,6 +315,7 @@ export default function PlayerArchetypesSection() {
                                         <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: colorByArchetype[p.archetype], marginRight: 6 }} />
                                         {p.archetype}
                                     </td>
+                                    <td>{p.family || '—'}</td>
                                     <td>{p.pts}</td>
                                     <td>{p.reb}</td>
                                     <td>{p.ast}</td>
@@ -315,7 +331,7 @@ export default function PlayerArchetypesSection() {
                 </div>
             )}
 
-            <h3 className="section-heading" style={{ marginTop: '1.5rem' }}>Career Archetype History</h3>
+            <h3 className="section-heading" style={{ marginTop: '1.5rem' }}>Career Role History</h3>
             <div className="input-row" style={{ marginBottom: 0 }}>
                 <div style={{ position: 'relative', flex: 1 }}>
                     <input
@@ -353,7 +369,7 @@ export default function PlayerArchetypesSection() {
                 <div className="table-wrapper" style={{ marginTop: '1rem' }}>
                     <table className="data-table">
                         <thead>
-                            <tr><th>Season</th><th>Archetype</th><th>PTS</th><th>REB</th><th>AST</th><th>USG%</th></tr>
+                            <tr><th>Season</th><th>Role</th><th>Family</th><th>PTS</th><th>REB</th><th>AST</th><th>USG%</th></tr>
                         </thead>
                         <tbody>
                             {history.seasons.map((s) => (
@@ -363,6 +379,7 @@ export default function PlayerArchetypesSection() {
                                         <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: colorByArchetype[s.archetype], marginRight: 6 }} />
                                         {s.archetype}
                                     </td>
+                                    <td>{s.family || '—'}</td>
                                     <td>{s.pts}</td>
                                     <td>{s.reb}</td>
                                     <td>{s.ast}</td>
@@ -377,8 +394,8 @@ export default function PlayerArchetypesSection() {
             <h3 className="section-heading" style={{ marginTop: '1.5rem' }}>
                 League Evolution
                 <InfoTooltip label="How this works" title="Real historical aggregation, not a model">
-                    Archetype share is the real fraction of each season's qualified player pool sorted into
-                    each statistical archetype by the same K-Means clustering above — nothing modeled or
+                    Role share is the fraction of each season&apos;s qualified player pool in each role found by the
+                    same K-Means clustering above — nothing modeled or
                     projected. The three trend charts are minutes-weighted league averages of real per-player
                     stats each season: 3PA rate is 3PA/FGA (shot-selection share, not raw attempts, which pace
                     would confound), TS% is real True Shooting%, and Pace is a real minutes-weighted
@@ -390,7 +407,7 @@ export default function PlayerArchetypesSection() {
             {evolution && (
                 <>
                     <p className="page-subtitle" style={{ marginTop: '-0.5rem', marginBottom: '0.75rem' }}>
-                        Real archetype share of the qualified player pool, {seasonLabel(evolution.seasons[0])} through {seasonLabel(evolution.seasons[evolution.seasons.length - 1])}.
+                        Share of the qualified player pool in each role, {seasonLabel(evolution.seasons[0])} through {seasonLabel(evolution.seasons[evolution.seasons.length - 1])}.
                     </p>
                     <StackedArchetypeChart evolution={evolution} colorByArchetype={colorByArchetype} />
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem 1.25rem', marginTop: '0.6rem' }}>

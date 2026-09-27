@@ -896,3 +896,25 @@ def test_draft_value_shape_and_sanity():
     shared = cur.fetchone()[0]
     conn.close()
     assert shared == 0
+
+
+def test_player_roles_shape_and_sanity():
+    """Player roles (scripts/build_player_roles.py). Real sniff tests: 2018-19
+    James Harden is a Lead Creator, 2012-13 DeAndre Jordan a Rim-Running Big,
+    2016-17 Klay Thompson an Above-the-Break Shooter; every role is stable
+    under resampling; the six-way family survives for Pair Synergy/Trivia."""
+    from similarity_api import app
+    client = TestClient(app)
+    resp = client.get("/clusters/archetypes")
+    if resp.status_code == 404:
+        pytest.skip("player roles not built on this machine.")
+    roles = resp.json()["archetypes"]
+    assert len(roles) == 10 and len({r["archetype"] for r in roles}) == 10
+    assert all(r["stability_ari"] >= 0.8 and r["description"] for r in roles)
+    for season, name, role in [(2019, "James Harden", "Lead Creator"),
+                               (2013, "DeAndre Jordan", "Rim-Running Big"),
+                               (2017, "Klay Thompson", "Above-the-Break Shooter")]:
+        players = client.get(f"/clusters/season/{season}").json()["players"]
+        assert next(p for p in players if p["player_name"] == name)["archetype"] == role
+    assert all(p["family"] for p in client.get("/clusters/season/2026").json()["players"])
+    _assert_has_source(resp.json())

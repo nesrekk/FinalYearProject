@@ -35,8 +35,8 @@ export const TOOL_META = {
     archetypes: {
         group: 'Player Analysis',
         visual: 'scatter',
-        tagline: 'Statistical player styles, discovered not assigned.',
-        about: 'Unlike the award models, this has no "correct answer" fed in advance — K-Means clustering groups players by 11 style stats (scoring, playmaking, rebounding, defense, efficiency) into statistically similar groups, with only the archetype names using human basketball knowledge. League Evolution aggregates real historical archetype shares and league-average trends, no modeling or projection involved.',
+        tagline: 'Ten player roles, from Lead Creator to Rim-Running Big, discovered from the data.',
+        about: 'Ten player roles found by K-Means clustering, with no labels fed in: every player-season since 2009-10 (15+ minutes, 20+ games) grouped by usage, assist, turnover and rebounding rates, steals and blocks per 36, free-throw rate, true shooting and where their shots come from (rim, paint, mid-range, corner three, above-the-break three), each compared within its own season. Ten is the most roles that stay stable when the data is resampled; only the names use basketball knowledge. Each player also keeps their broader six-way archetype (the "family"). League Evolution shows each role\'s share of the league over time.',
     },
     radar: {
         group: 'Player Analysis',
