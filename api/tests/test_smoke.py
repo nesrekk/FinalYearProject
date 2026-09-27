@@ -862,3 +862,37 @@ def test_march_madness_shape_and_sanity():
     assert data["chosen_feature_set"] in {v["feature_set"] for v in data["variants"]}
     _assert_has_source(data)
     assert client.get("/college/madness", params={"season": 2020}).status_code == 404
+
+
+def test_draft_value_shape_and_sanity():
+    """Draft Value Guide (scripts/load_draft_history_bref.py). Real sniff
+    tests: Michael Jordan went 3rd in 1984 and made 14 All-Star teams; 1985's
+    first pick is Patrick Ewing with his own NBA id (not his son's); value
+    falls with the pick; nobody's NBA id is used for two different people."""
+    from impact_api import app
+    client = TestClient(app)
+    resp = client.get("/draft/value-curve")
+    if resp.status_code == 404:
+        pytest.skip("draft_history not built on this machine.")
+    assert resp.status_code == 200
+    avgs = [b["avg_ws_first5"] for b in resp.json()["buckets"]]
+    assert avgs == sorted(avgs, reverse=True)
+    _assert_has_source(resp.json())
+
+    c1984 = client.get("/draft/1984").json()["results"]
+    mj = next(p for p in c1984 if p["player_name"] == "Michael Jordan")
+    assert mj["overall_pick"] == 3 and mj["all_star_selections"] == 14 and mj["player_id"] == 893
+    ewing = client.get("/draft/1985").json()["results"][0]
+    assert ewing["player_name"] == "Patrick Ewing" and ewing["player_id"] == 121
+
+    best = client.get("/draft/best-value", params={"limit": 5}).json()
+    assert all(r["value_over_expectation"] > 0 for r in best["results"])
+
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    cur.execute("""SELECT count(*) FROM (SELECT d.player_id FROM draft_history d
+                   JOIN draft_pick_outcomes o USING (player_id, draft_year)
+                   WHERE d.player_id > 0 GROUP BY d.player_id HAVING count(DISTINCT o.bref_id) > 1) x""")
+    shared = cur.fetchone()[0]
+    conn.close()
+    assert shared == 0

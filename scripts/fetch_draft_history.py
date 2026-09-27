@@ -113,6 +113,8 @@ def ensure_schema(conn):
             PRIMARY KEY (player_id, draft_year)
         );
     """)
+    # Shared with load_draft_history_bref.py (the fallback when stats.nba.com is down).
+    cur.execute("ALTER TABLE draft_history ADD COLUMN IF NOT EXISTS nba_id_status TEXT NOT NULL DEFAULT 'nba_api';")
     conn.commit()
 
 

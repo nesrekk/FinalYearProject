@@ -1980,7 +1980,12 @@ def _position_label(bpm_position):
     if bpm_position is None:
         return None
     return ESTIMATED_POSITION_LABELS[max(1, min(5, round(bpm_position)))]
-DRAFT_MATURITY_CUTOFF = 2020  # rookie_season_int 2021 -> up to 5 seasons possible by our 2025 max
+# Draft Value measures each pick by Basketball-Reference Win Shares in the
+# first five NBA seasons after the draft (draft_pick_outcomes). Classes
+# 1980-2021: every one has had five seasons (2021 -> 2021-22..2025-26), and
+# 1980 starts the three-point era and near-modern draft lengths.
+DRAFT_FIRST_CLASS = 1980
+DRAFT_MATURITY_CUTOFF = 2021
 DRAFT_PICK_BUCKETS = [
     (1, 5, "1-5"), (6, 14, "6-14"), (15, 30, "15-30"), (31, 45, "31-45"), (46, 60, "46-60"),
 ]
