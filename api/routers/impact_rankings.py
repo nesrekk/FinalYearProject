@@ -67,8 +67,12 @@ def get_bpm_leaderboard(season: int, top_n: int = 20, min_minutes: float = 20.0,
     }
 
 @router.get("/impact/raw/{season}")
-def get_raw_impact(season: int, top_n: int = 20):
-    """Top players by raw impact score for a given season."""
+def get_raw_impact(season: int, top_n: int = 20, min_minutes: float = 20.0, min_games: int = 30):
+    """
+    Top players by raw impact score for a given season, with the same default
+    minutes/games floor as the BPM leaderboard. Without it the list was topped
+    by players with a handful of games (2025-26: Colby Jones, 1 game, 2.0 PPG).
+    """
     with get_db() as conn:
         cursor = conn.cursor()
         check_season_exists(cursor, season)
@@ -77,17 +81,19 @@ def get_raw_impact(season: int, top_n: int = 20):
             """
             SELECT player_name, pts, w_pct, impact_score_raw, player_id
             FROM player_season_stats
-            WHERE season = %s AND impact_score_raw IS NOT NULL
+            WHERE season = %s AND impact_score_raw IS NOT NULL AND min >= %s AND gp >= %s
             ORDER BY impact_score_raw DESC
             LIMIT %s;
             """,
-            (season, top_n),
+            (season, min_minutes, min_games, top_n),
         )
         rows = cursor.fetchall()
 
     return {
         "season": season,
         "type": "raw",
+        "min_minutes": min_minutes,
+        "min_games": min_games,
         "results": [
             {
                 "rank": i + 1,

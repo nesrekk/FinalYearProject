@@ -1,0 +1,191 @@
+"""
+Custom leaderboards: rank player-seasons by any stat in player_season_stats,
+with the filters an analyst needs to keep small samples out.
+
+    GET /leaderboard/options  — the stat catalogue, season range, team codes
+    GET /leaderboard/custom   — the ranked player-seasons
+
+Every stat is per game unless it's a rate. Each stat has the first season it
+is recorded for at least 90% of player-seasons (checked in the data: steals
+and blocks start in 1973-74, threes in 1979-80, net rating/plus-minus/impact
+in 2009-10); ranges are clipped to it rather than ranking a half-empty pool.
+Shooting percentages need a minimum number of attempts per game, so a
+1-for-1 season can't top 3P%.
+"""
+
+from fastapi import APIRouter, HTTPException, Query
+
+from impact_core import get_db
+from source_badge import make_source
+
+router = APIRouter()
+
+# key -> (label, group, format, first_season, higher_is_better, attempts_column)
+STATS = {
+    "pts": ("Points", "Per game", "num1", 1950, True, None),
+    "reb": ("Rebounds", "Per game", "num1", 1951, True, None),
+    "ast": ("Assists", "Per game", "num1", 1950, True, None),
+    "stl": ("Steals", "Per game", "num1", 1974, True, None),
+    "blk": ("Blocks", "Per game", "num1", 1974, True, None),
+    "tov": ("Turnovers", "Per game", "num1", 1978, False, None),
+    "fg3m": ("3-pointers made", "Per game", "num1", 1980, True, None),
+    "fg3a": ("3-point attempts", "Per game", "num1", 1980, True, None),
+    "fta": ("Free-throw attempts", "Per game", "num1", 1950, True, None),
+    "oreb": ("Offensive rebounds", "Per game", "num1", 1974, True, None),
+    "min": ("Minutes", "Per game", "num1", 1952, True, None),
+    "fg_pct": ("Field-goal %", "Shooting", "pct", 1950, True, "fga"),
+    "fg3_pct": ("3-point %", "Shooting", "pct", 1980, True, "fg3a"),
+    "ft_pct": ("Free-throw %", "Shooting", "pct", 1950, True, "fta"),
+    "ts_pct": ("True shooting %", "Shooting", "pct", 1950, True, "fga"),
+    "efg_pct": ("Effective FG %", "Shooting", "pct", 1980, True, "fga"),
+    "usg_pct": ("Usage %", "Rates", "pct", 1978, True, None),
+    "ast_pct": ("Assist %", "Rates", "pct", 1965, True, None),
+    "reb_pct": ("Rebound %", "Rates", "pct", 1971, True, None),
+    "oreb_pct": ("Offensive rebound %", "Rates", "pct", 1974, True, None),
+    "tov_pct": ("Turnover %", "Rates", "pct", 1978, False, None),
+    "off_rating": ("Offensive rating", "Impact", "num1", 2010, True, None),
+    "def_rating": ("Defensive rating", "Impact", "num1", 2010, False, None),
+    "net_rating": ("Net rating", "Impact", "signed1", 2010, True, None),
+    "plus_minus": ("Plus-minus", "Impact", "signed1", 2010, True, None),
+    "bpm": ("BPM", "Impact", "signed1", 1974, True, None),
+    "obpm": ("Offensive BPM", "Impact", "signed1", 1974, True, None),
+    "dbpm": ("Defensive BPM", "Impact", "signed1", 1974, True, None),
+    "vorp": ("VORP", "Impact", "num1", 1974, True, None),
+    "impact_score_raw": ("Impact score (raw)", "Impact", "num2", 2010, True, None),
+    "age": ("Age", "Other", "int", 1950, True, None),
+}
+
+# Default minimum attempts per game for shooting percentages (overridable,
+# including to 0): without one, 2025-26's top 3P% was 100% on 0.0 3PA a game.
+ATTEMPT_DEFAULTS = {"fga": 5.0, "fg3a": 2.0, "fta": 2.0}
+
+# Shown on every row for context, alongside the ranked stat.
+CONTEXT = ["gp", "min", "pts", "reb", "ast", "ts_pct"]
+
+
+def _bounds(cursor):
+    cursor.execute("SELECT MIN(season), MAX(season) FROM player_season_stats;")
+    return cursor.fetchone()
+
+
+@router.get("/leaderboard/options")
+def leaderboard_options():
+    with get_db() as conn:
+        cur = conn.cursor()
+        first, last = _bounds(cur)
+        cur.execute("""SELECT team_abbreviation, MIN(season), MAX(season), COUNT(*)
+                       FROM player_season_stats WHERE team_abbreviation IS NOT NULL
+                       GROUP BY 1 ORDER BY 1;""")
+        teams = [{"team": t, "from": a, "to": b, "rows": n} for t, a, b, n in cur.fetchall()]
+    return {
+        "seasons": {"from": first, "to": last},
+        "stats": [
+            {"key": k, "label": v[0], "group": v[1], "format": v[2], "first_season": v[3],
+             "higher_is_better": v[4], "attempts": v[5],
+             "default_min_attempts": ATTEMPT_DEFAULTS.get(v[5])}
+            for k, v in STATS.items()
+        ],
+        "teams": teams,
+        "notes": [
+            "Traded players are listed under their last team from 2009-10 on, and as 2TM/3TM before that.",
+            "Team codes follow the franchise's name at the time (e.g. SEA, NJN, PHO).",
+        ],
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Basketball-Reference"),
+    }
+
+
+@router.get("/leaderboard/custom")
+def custom_leaderboard(
+    stat: str = "pts",
+    season_from: int | None = None,
+    season_to: int | None = None,
+    min_gp: int = Query(30, ge=0),
+    min_mpg: float = Query(20.0, ge=0),
+    min_attempts: float | None = Query(None, ge=0),
+    team: str | None = None,
+    order: str | None = None,
+    top_n: int = Query(25, ge=1, le=100),
+):
+    """
+    Player-seasons ranked by one stat. order = high | low; by default the
+    stat's better end comes first (low for turnovers, defensive rating and
+    turnover %; high for everything else, and for age). min_attempts applies
+    per game to the stat's attempts column (FGA, 3PA or FTA) and only to
+    shooting percentages.
+    """
+    if stat not in STATS:
+        raise HTTPException(status_code=400, detail=f"Unknown stat '{stat}'. See /leaderboard/options.")
+    label, _group, _fmt, first_season, higher_is_better, attempts = STATS[stat]
+    if order is None:
+        order = "high" if higher_is_better else "low"
+    if order not in ("high", "low"):
+        raise HTTPException(status_code=400, detail="order must be 'high' or 'low'.")
+    if attempts and min_attempts is None:
+        min_attempts = ATTEMPT_DEFAULTS[attempts]
+
+    with get_db() as conn:
+        cur = conn.cursor()
+        lo, hi = _bounds(cur)
+        season_to = hi if season_to is None else season_to
+        season_from = season_to if season_from is None else season_from
+        if season_from > season_to:
+            season_from, season_to = season_to, season_from
+        clipped_from = max(season_from, first_season, lo)
+        notes = []
+        if clipped_from > season_from:
+            notes.append(f"{label} is recorded from {first_season - 1}-{str(first_season)[-2:]} on; "
+                         f"earlier seasons were left out.")
+        if season_to < clipped_from:
+            raise HTTPException(status_code=404,
+                                detail=f"{label} isn't recorded before {first_season - 1}-{str(first_season)[-2:]}.")
+
+        where = [f"{stat} IS NOT NULL", "season BETWEEN %s AND %s", "gp >= %s", "min >= %s"]
+        params = [clipped_from, season_to, min_gp, min_mpg]
+        if attempts and min_attempts > 0:
+            where.append(f"{attempts} >= %s")
+            params.append(min_attempts)
+        if team:
+            where.append("team_abbreviation = %s")
+            params.append(team.upper())
+        direction = "DESC" if order == "high" else "ASC"
+        cols = ["player_id", "player_name", "team_abbreviation", "season", stat] + \
+            [c for c in CONTEXT + ([attempts] if attempts else []) if c != stat]
+
+        cur.execute(f"SELECT COUNT(*) FROM player_season_stats WHERE {' AND '.join(where)};", params)
+        qualified = cur.fetchone()[0]
+        cur.execute(
+            f"""SELECT {', '.join(cols)} FROM player_season_stats
+                WHERE {' AND '.join(where)}
+                ORDER BY {stat} {direction}, gp DESC, player_name
+                LIMIT %s;""",
+            params + [top_n],
+        )
+        rows = cur.fetchall()
+
+    def val(v):
+        return None if v is None else round(float(v), 4)
+
+    results = []
+    for rank, r in enumerate(rows, start=1):
+        row = dict(zip(cols, r))
+        results.append({
+            "rank": rank,
+            "player_id": int(row.pop("player_id")),
+            "player_name": row.pop("player_name"),
+            "team": row.pop("team_abbreviation"),
+            "season": row.pop("season"),
+            "value": val(row.pop(stat)),
+            "context": {k: val(v) for k, v in row.items()},
+        })
+
+    return {
+        "stat": {"key": stat, "label": label, "format": _fmt, "higher_is_better": higher_is_better,
+                 "attempts": attempts},
+        "filters": {"season_from": clipped_from, "season_to": season_to, "min_gp": min_gp, "min_mpg": min_mpg,
+                    "min_attempts": min_attempts if attempts else None, "team": team.upper() if team else None,
+                    "order": order, "top_n": top_n},
+        "qualified": qualified,
+        "notes": notes,
+        "results": results,
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Basketball-Reference"),
+    }

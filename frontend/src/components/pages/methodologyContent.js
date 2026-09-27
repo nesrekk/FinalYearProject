@@ -259,10 +259,6 @@ export const OPEN_ISSUES = [
         live: 'mvpTop',
     },
     {
-        title: 'Raw Impact has no minimum games',
-        body: 'The Raw Impact leaderboard can be topped by a player with a handful of games. BPM / VORP already filters by minutes and games.',
-    },
-    {
         title: 'Some models can\'t be retrained right now',
         body: 'stats.nba.com has been unreachable from the build machine since 2026-09-26, so Pair Synergy still uses the old in-house defensive BPM it was trained on.',
     },

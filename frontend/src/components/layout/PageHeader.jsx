@@ -24,6 +24,7 @@ const pageTitles = {
     games: 'Games',
     learn: 'Learn the Game',
     methodology: 'Methodology',
+    builder: 'Leaderboard Builder',
 };
 
 const pageDescriptions = {
@@ -44,6 +45,7 @@ const pageDescriptions = {
     games: 'Daily player-guessing puzzles and a career-stats streak game, all built on real data',
     learn: 'Basketball for first-time fans, measured from real league data',
     methodology: 'How every model works, how it was checked, and where it falls short',
+    builder: 'Rank any player-season by any stat, 1949-50 to today, with your own filters',
 };
 
 function greeting() {

@@ -33,6 +33,7 @@ from routers import (
     hall_of_fame,
     heliocentricity,
     learn,
+    leaderboard,
     higher_lower,
     impact_rankings,
     leaders,
@@ -88,7 +89,7 @@ for _router_module in (
     players_table, impact_rankings, draft_value, player_impact, meta, media,
     players_search_profile, leaders, games_misc, news, vegas_scanner,
     team_comparison, hall_of_fame, garbage_time, dad_index, scouting_report,
-    spacing_lab, contract_value, learn, college, greats,
+    spacing_lab, contract_value, learn, college, greats, leaderboard,
 ):
     app.include_router(_router_module.router)
 

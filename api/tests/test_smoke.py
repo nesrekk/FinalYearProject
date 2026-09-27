@@ -1033,3 +1033,42 @@ def test_greats_shape_and_sanity():
     assert any(t["basis"] == "source" and t["url"].startswith("https://en.wikipedia.org/") for t in curry)
     assert all(g["facts"] for g in data["greats"])
     _assert_has_source(data)
+
+
+def test_custom_leaderboard_known_records_and_guards():
+    from impact_api import app
+    client = TestClient(app)
+    opts = client.get("/leaderboard/options").json()
+    assert {s["key"] for s in opts["stats"]} >= {"pts", "fg3_pct", "bpm", "net_rating"}
+    _assert_has_source(opts)
+
+    # Wilt's 50.4 in 1961-62 is the best scoring season on record.
+    data = client.get("/leaderboard/custom", params={
+        "stat": "pts", "season_from": 1950, "season_to": 2026, "min_gp": 40, "top_n": 3}).json()
+    top = data["results"][0]
+    assert (top["player_name"], top["season"], top["value"]) == ("Wilt Chamberlain", 1962, 50.4)
+    _assert_has_source(data)
+
+    # Steals start in 1973-74: an earlier range is clipped and says so.
+    data = client.get("/leaderboard/custom", params={"stat": "stl", "season_from": 1960, "season_to": 2026}).json()
+    assert data["filters"]["season_from"] == 1974 and data["notes"]
+    assert data["results"][0]["player_name"] == "Alvin Robertson"
+
+    # Shooting percentages get an attempts floor by default.
+    data = client.get("/leaderboard/custom", params={"stat": "fg3_pct", "season_from": 2026}).json()
+    assert data["filters"]["min_attempts"] == 2.0
+    assert all(r["context"]["fg3a"] >= 2.0 for r in data["results"])
+    assert data["results"][0]["value"] < 0.6
+
+    # Lower is better for turnovers; unknown stats and impossible ranges fail clearly.
+    assert client.get("/leaderboard/custom", params={"stat": "tov"}).json()["filters"]["order"] == "low"
+    assert client.get("/leaderboard/custom", params={"stat": "nope"}).status_code == 400
+    assert client.get("/leaderboard/custom", params={
+        "stat": "net_rating", "season_from": 1990, "season_to": 2000}).status_code == 404
+
+
+def test_raw_impact_has_games_floor():
+    from impact_api import app
+    data = TestClient(app).get("/impact/raw/2026", params={"top_n": 20}).json()
+    assert data["min_games"] == 30 and data["min_minutes"] == 20.0
+    assert data["results"] and all(r["player_name"] != "Colby Jones" for r in data["results"])

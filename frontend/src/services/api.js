@@ -643,6 +643,19 @@ export async function fetchStarImpact(season) {
     return response.data;
 }
 
+export async function fetchLeaderboardOptions() {
+    return getWithCache('leaderboard_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/leaderboard/options`);
+        return response.data;
+    });
+}
+
+// params: { stat, season_from, season_to, min_gp, min_mpg, min_attempts, team, order, top_n }
+export async function fetchCustomLeaderboard(params) {
+    const response = await axios.get(`${IMPACT_BASE}/leaderboard/custom`, { params });
+    return response.data;
+}
+
 export async function fetchBpmLeaderboard(season) {
     const response = await axios.get(`${IMPACT_BASE}/impact/bpm/${season}`);
     return response.data;

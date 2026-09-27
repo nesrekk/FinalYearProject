@@ -13,6 +13,7 @@ export default function ImpactSection() {
     const [activeTab, setActiveTab] = useState(null); // 'raw' | 'star'
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [floor, setFloor] = useState(null);
 
     const FETCHERS = { raw: fetchRawImpact, star: fetchStarImpact, bpm: fetchBpmLeaderboard };
 
@@ -22,6 +23,7 @@ export default function ImpactSection() {
         setError('');
         setResults(null);
         setSource(null);
+        setFloor(null);
         setActiveTab(type);
 
         try {
@@ -36,6 +38,7 @@ export default function ImpactSection() {
             }));
             setResults(ranked);
             setSource(Array.isArray(data) ? null : data._source ?? null);
+            if (data?.min_games != null) setFloor({ games: data.min_games, minutes: data.min_minutes });
         } catch (err) {
             setError(err.response?.data?.detail || 'Failed to fetch impact rankings.');
         } finally {
@@ -110,6 +113,11 @@ export default function ImpactSection() {
 
             {loading && <Loader />}
             {error && <p className="error-message">{error}</p>}
+            {results && floor && (
+                <p className="page-subtitle" style={{ marginTop: '0.75rem' }}>
+                    Players with {floor.games}+ games and {floor.minutes}+ minutes a game.
+                </p>
+            )}
             {results && (
                 <DataTable
                     columns={table.columns}
