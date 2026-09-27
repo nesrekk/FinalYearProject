@@ -8,7 +8,10 @@ Hall of Fame page and anywhere else a real, official accolade is useful.
 This is real, publicly documented data (sourced from Wikipedia's "NBA 75th
 Anniversary Team" article, cross-checked name-for-name against nba_api's
 own static player list — all 76 names resolved to a real nba_api player_id
-with an exact match, no fuzzy guessing needed). It is NOT the same as real
+with an exact match, no fuzzy guessing needed). One name is shared with
+another player (Patrick Ewing and his son); fixed 2026-09-27 to take the one
+with the long career instead of whichever id the name lookup kept last,
+which had put the son on the team. It is NOT the same as real
 Naismith Basketball Hall of Fame induction, which this project has no
 dataset for from any source it uses — kept as a clearly separate, smaller,
 real, sourced list rather than conflated with "Hall of Fame."
@@ -46,14 +49,29 @@ NBA75_NAMES = [
 
 
 def resolve_player_ids():
-    static = {p["full_name"]: p["id"] for p in nba_static_players.get_players()}
+    static = {}
+    for p in nba_static_players.get_players():
+        static.setdefault(p["full_name"], []).append(p["id"])
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    cur.execute("SELECT player_id, SUM(gp) FROM player_season_stats GROUP BY 1;")
+    career_gp = dict(cur.fetchall())
+    conn.close()
     resolved, unmatched = [], []
     for name in NBA75_NAMES:
-        pid = static.get(name)
-        if pid is None:
+        ids = static.get(name, [])
+        if len(ids) > 1:
+            # A shared name (Patrick Ewing and his son): the 75th-team member
+            # is the one with the long career. Fails loudly if that's unclear.
+            ranked = sorted(ids, key=lambda i: career_gp.get(i) or 0, reverse=True)
+            top, second = (career_gp.get(i) or 0 for i in ranked[:2])
+            if top < 500 or second > top / 4:
+                raise RuntimeError(f"Can't tell which {name} ({ids}) is on the team: career games {top} vs {second}")
+            ids = ranked[:1]
+        if not ids:
             unmatched.append(name)
         else:
-            resolved.append((pid, name))
+            resolved.append((ids[0], name))
     if unmatched:
         raise RuntimeError(f"Could not resolve {len(unmatched)} real NBA75 names to a player_id: {unmatched}")
     return resolved

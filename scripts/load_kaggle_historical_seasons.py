@@ -18,13 +18,14 @@ loaders (load_2025_26_into_db.py etc.) never had to:
    this script builds one — a new player_id_map table — by matching each
    Kaggle player's real full name against nba_api's static all-time player
    list (nba_api.stats.static.players, 5,103 players, bundled with the
-   package — no live API call, so this can't hit the same live-scrape
-   timeouts that have been the recurring problem elsewhere in this app).
-   A name that matches exactly one nba_api player is mapped with high
-   confidence; a name matching zero or multiple nba_api players is recorded
-   as unmatched/ambiguous and that player-season is skipped rather than
-   guessed at — consistent with this project's "disclosed gaps, not
-   invented data" rule. The map is a real table, not a one-off dict, so any
+   package — no live API call). Matching lives in bref_nba_ids.py (shared
+   with load_draft_history_bref.py): exact names with Jr./II kept, first-
+   name forms, a few hand-checked nicknames, season overlap and NBA id-era
+   checks, one person per id. Rebuilt 2026-09-27: the first version matched
+   exact names only, so 233 players (Ewing, Payton, Hardaway...) were
+   skipped and 4 ids held two different players' seasons. A player it
+   can't match safely is recorded with the reason and that player-season is
+   skipped rather than guessed at. The map is a real table, not a one-off dict, so any
    later script (or a future Kaggle re-import) can reuse it instead of
    re-resolving names from scratch.
 
@@ -69,13 +70,11 @@ Usage:
 """
 
 import os
-import re
-import unicodedata
 
 import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
-from nba_api.stats.static import players as nba_static_players
+import bref_nba_ids
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DATA_DIR = os.path.join(BASE_DIR, "nba_data", "kaggle_1947_present")
@@ -97,29 +96,28 @@ INSERT_COLUMNS = [
 ]
 
 
-def normalize_name(name):
-    """Strip accents/periods/suffixes and lowercase, for name matching across
-    the two data sources' differing conventions (e.g. "Luka Dončić" vs
-    "Luka Doncic", "Metta World Peace" name changes aren't handled here —
-    those are genuinely unmatched, not silently guessed)."""
-    name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
-    name = re.sub(r"\b(jr|sr|ii|iii|iv)\b\.?", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"[^a-z ]", "", name.lower())
-    return re.sub(r"\s+", " ", name).strip()
-
-
 def build_player_id_map(bbref_names):
-    """bbref_names: set of (bbref_id, real_full_name). Returns dict
-    bbref_id -> nba_player_id for names matching exactly one nba_api static
-    player; unmatched/ambiguous names are written to player_id_map with
-    nba_player_id=NULL/match_method recorded, not guessed at."""
-    static = nba_static_players.get_players()
-    by_norm = {}
-    for p in static:
-        by_norm.setdefault(normalize_name(p["full_name"]), []).append(p["id"])
-
+    """Returns dict bbref_id -> nba_player_id and rewrites player_id_map for
+    every BAA/NBA player in the export, using bref_nba_ids.resolve (names,
+    first-name forms, checked nicknames, 2010+ season overlap, NBA id eras,
+    one person per id). Players it can't match safely get
+    nba_player_id=NULL with the reason in match_method, not a guess.
+    bbref_names is kept for the call signature; resolution runs over all
+    players so a pre-2010 player can't claim an id that belongs to a later
+    one."""
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
+    cur.execute("""SELECT player_id, player_name, min(season), max(season)
+                   FROM player_season_stats WHERE season >= %s GROUP BY 1, 2;""", (SEASON_CUTOFF,))
+    evidence = {"_names": {}}
+    for pid, name, lo, hi in cur.fetchall():
+        evidence[pid] = (lo, hi)
+        evidence["_names"][pid] = name
+
+    bref = bref_nba_ids.load_bref_players()
+    result = bref_nba_ids.resolve(bref, evidence)
+    names = dict(zip(bref.player_id, bref.player))
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS player_id_map (
             bbref_id TEXT PRIMARY KEY,
@@ -129,36 +127,16 @@ def build_player_id_map(bbref_names):
             updated_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
     """)
-
-    resolved = {}
-    rows = []
-    n_exact, n_ambiguous, n_unmatched = 0, 0, 0
-    for bbref_id, full_name in bbref_names:
-        candidates = by_norm.get(normalize_name(full_name), [])
-        if len(candidates) == 1:
-            resolved[bbref_id] = candidates[0]
-            rows.append((bbref_id, full_name, candidates[0], "exact_name"))
-            n_exact += 1
-        elif len(candidates) > 1:
-            # Ambiguous (name shared by multiple all-time players, e.g. two
-            # different "Bobby Jones"): not guessed, left unmapped.
-            rows.append((bbref_id, full_name, None, "ambiguous_name"))
-            n_ambiguous += 1
-        else:
-            rows.append((bbref_id, full_name, None, "unmatched"))
-            n_unmatched += 1
-
-    execute_values(
-        cur,
-        "INSERT INTO player_id_map (bbref_id, player_name, nba_player_id, match_method) VALUES %s "
-        "ON CONFLICT (bbref_id) DO UPDATE SET nba_player_id = EXCLUDED.nba_player_id, "
-        "match_method = EXCLUDED.match_method, updated_at = NOW();",
-        rows,
-    )
+    cur.execute("DELETE FROM player_id_map;")
+    rows = [(bid, names[bid], pid, how) for bid, (pid, how) in result.items()]
+    execute_values(cur, "INSERT INTO player_id_map (bbref_id, player_name, nba_player_id, match_method) VALUES %s;", rows)
     conn.commit()
     conn.close()
 
-    print(f"player_id_map: {n_exact} exact, {n_ambiguous} ambiguous (skipped), {n_unmatched} unmatched (skipped)")
+    resolved = {bid: pid for bid, (pid, _) in result.items() if pid is not None}
+    wanted = {bid for bid, _ in bbref_names}
+    print(f"player_id_map: {len(resolved)} of {len(result)} Basketball-Reference players matched; "
+          f"{len(wanted - set(resolved))} of the {len(wanted)} with pre-{SEASON_CUTOFF} seasons left unmatched")
     return resolved
 
 

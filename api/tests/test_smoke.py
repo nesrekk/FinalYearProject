@@ -918,3 +918,31 @@ def test_player_roles_shape_and_sanity():
         assert next(p for p in players if p["player_name"] == name)["archetype"] == role
     assert all(p["family"] for p in client.get("/clusters/season/2026").json()["players"])
     _assert_has_source(resp.json())
+
+
+def test_player_id_map_fixes():
+    """player_id_map rebuilt with scripts/bref_nba_ids.py (2026-09-27). Real
+    sniff tests: stars once missing from pre-2010 seasons are present with
+    their own ids; ids that used to hold two players' careers are split;
+    no NBA id is matched to two Basketball-Reference players; Patrick Ewing
+    (not his son) is on the 75th Anniversary Team."""
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    cur.execute("SELECT count(*) FROM player_id_map")
+    if cur.fetchone()[0] == 0:
+        conn.close()
+        pytest.skip("player_id_map not built on this machine.")
+    expect = {121: (1986, 2002), 56: (1991, 2007), 896: (1990, 2003), 913: (1992, 2001),
+              2739: (2005, 2008), 77103: (1965, 1972)}
+    for pid, span in expect.items():
+        cur.execute("SELECT min(season), max(season) FROM player_season_stats WHERE player_id = %s", (pid,))
+        assert cur.fetchone() == span, pid
+    cur.execute("""SELECT count(*) FROM (SELECT nba_player_id FROM player_id_map
+                   WHERE nba_player_id IS NOT NULL GROUP BY 1 HAVING count(*) > 1) x""")
+    assert cur.fetchone()[0] == 0
+    cur.execute("SELECT player_id FROM nba75_team WHERE player_name = 'Patrick Ewing'")
+    assert cur.fetchone()[0] == 121
+    cur.execute("""SELECT count(*) FROM nba75_team n
+                   WHERE NOT EXISTS (SELECT 1 FROM player_season_stats p WHERE p.player_id = n.player_id)""")
+    assert cur.fetchone()[0] == 0
+    conn.close()
