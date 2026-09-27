@@ -184,6 +184,17 @@ def add_labels(df):
 
 # ─── Step 3: Restrict each award to a relevant candidate pool ──────────────
 
+def first_nba_seasons():
+    """player_id -> first NBA season, from player_first_season."""
+    conn = psycopg2.connect(**DB_CONFIG)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT player_id, first_season FROM player_first_season;")
+        return {int(pid): int(first) for pid, first in cur.fetchall()}
+    finally:
+        conn.close()
+
+
 def add_candidate_pool_flags(df):
     """
     Without this, DPOY/ROY are trained to pick the winner out of EVERY
@@ -194,14 +205,21 @@ def add_candidate_pool_flags(df):
     awards). Restricting to the actual reference group each award is judged
     against fixes this.
 
-      - ROY: only rows where this is the player's first season in the data
-        (their rookie season), so the model compares Luka to other rookies,
-        not to the entire league.
+      - ROY: only each player's rookie season (his first NBA season), so the
+        model compares Luka to other rookies, not to the entire league. The
+        first season comes from player_first_season (build_first_nba_season.py:
+        the earlier of Basketball-Reference's first NBA season and the first
+        season in this table). Using only this table's first season, as before
+        2026-09-27, counted 240 players whose earlier short stints are missing
+        from it as rookies.
       - DPOY: only rows above a minutes/games floor comfortably below every
         historical winner's actual minutes, cutting out low-minute players
         who were never realistic candidates.
     """
-    rookie_season = df.groupby("player_id")["season"].transform("min")
+    rookie_season = df["player_id"].map(first_nba_seasons())
+    # Players the first-season table doesn't know (it's rebuilt from this same
+    # table, so only brand-new rows) fall back to their first season here.
+    rookie_season = rookie_season.fillna(df.groupby("player_id")["season"].transform("min"))
     df["is_rookie_candidate"] = df["season"] == rookie_season
     df["is_dpoy_candidate"] = (df["min"] >= DPOY_MIN_MINUTES) & (df["gp"] >= DPOY_MIN_GAMES)
     return df

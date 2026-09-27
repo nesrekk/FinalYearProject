@@ -920,8 +920,10 @@ def predict_dpoy(season: int, top_n: int = 15):
 def predict_roy(season: int, top_n: int = 15):
     """
     Predict ROY probabilities for a given season, restricted to players in
-    their rookie season (their first season anywhere in player_season_stats)
-    — matching the candidate pool build_dpoy_roy_models.py trained on.
+    their rookie season (first NBA season per player_first_season: the earlier
+    of Basketball-Reference's first NBA season and the first season in
+    player_season_stats) — matching the candidate pool build_dpoy_roy_models.py
+    trained on.
     """
     with get_db() as conn:
         cursor = conn.cursor()
@@ -936,15 +938,12 @@ def predict_roy(season: int, top_n: int = 15):
                        f"already veterans before the data starts, so ROY isn't computed for it.",
             )
 
-        cols = ", ".join(["player_id", "player_name", "team_abbreviation"] + ROY_FEATURES)
+        cols = ", ".join(f"p.{c}" for c in ["player_id", "player_name", "team_abbreviation"] + ROY_FEATURES)
         cursor.execute(
             f"""
             SELECT {cols} FROM player_season_stats p
-            WHERE p.season = %s
-              AND p.season = (
-                  SELECT MIN(season) FROM player_season_stats
-                  WHERE player_id = p.player_id
-              );
+            JOIN player_first_season f ON f.player_id = p.player_id
+            WHERE p.season = %s AND f.first_season = p.season;
             """,
             (season,),
         )
@@ -980,7 +979,7 @@ def predict_roy(season: int, top_n: int = 15):
     return {
         "season": season,
         "candidate_pool_size": len(rows),
-        "candidate_pool_rule": "rookie season only (player's first season on record)",
+        "candidate_pool_rule": "rookie season only (first NBA season, per Basketball-Reference)",
         "results": [
             {
                 "rank": i + 1,

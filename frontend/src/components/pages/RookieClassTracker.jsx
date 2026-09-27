@@ -61,8 +61,8 @@ export default function RookieClassTracker() {
                     <span className="card-icon"><Icon name="eco" /></span>
                     Rookie Class Tracker
                     <InfoTooltip label="How this works" title="Every rookie, tracked live">
-                        "Rookie" here means the player's first season anywhere in this database — the
-                        same definition the ROY model already uses, no separate draft data needed. The ROY
+                        "Rookie" here means the player's first NBA season, taken from Basketball-Reference
+                        (so a short earlier stint counts) — the same definition the ROY model uses. The ROY
                         chance is that model's score calibrated so the whole rookie class adds up to 100%. Clicking a rookie shows their closest
                         historical season comp (any player, any season) from the season-similarity engine —
                         useful for "who does this rookie's season actually resemble so far," not a

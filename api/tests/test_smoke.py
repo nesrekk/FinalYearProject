@@ -1098,3 +1098,14 @@ def test_award_chances_are_calibrated():
 
     allnba = client.get("/allnba/predict/2026").json()["results"]
     assert all(0 < r["all_nba_chance"] < 1 for r in allnba)
+
+
+def test_roy_pool_is_first_nba_season():
+    from mvp_api import app
+    res = TestClient(app).get("/roy/predict/2026", params={"top_n": 500}).json()
+    names = {r["player_name"] for r in res["results"]}
+    # Real 2025-26 rookies are in; players with earlier NBA stints (missing from
+    # player_season_stats but on Basketball-Reference) are not.
+    assert {"Cooper Flagg", "Kon Knueppel"} <= names
+    assert not names & {"Bronny James", "Alondes Williams", "Daniss Jenkins", "Sidy Cissoko"}
+    assert "Basketball-Reference" in res["candidate_pool_rule"]

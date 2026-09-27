@@ -41,11 +41,11 @@ const AWARDS = {
         probKey: 'roy_chance',
         columns: ['Rank', 'Player', 'Chance to win %', 'PTS', 'TS%', 'USG%', 'Net Rtg', 'MIN'],
         keys: ['rank', 'player', 'probability', 'pts', 'ts_pct', 'usg_pct', 'net_rating', 'min'],
-        blurb: `Restricted to each player's rookie season only (their first season
-            anywhere in this database) — a 21 PPG rookie year doesn't look special
+        blurb: `Restricted to each player's rookie season only (their first NBA season,
+            checked against Basketball-Reference) — a 21 PPG rookie year doesn't look special
             next to prime LeBron unless it's compared against other rookies. Chances
             are calibrated to add up to 100% across the rookie pool. Backtest (14
-            seasons): favourite won 8, winner always in the top 5.`,
+            seasons): favourite won 9, winner always in the top 5.`,
     },
     allnba: {
         label: 'All-NBA',

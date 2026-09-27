@@ -32,6 +32,7 @@ export const SECTIONS = [
                     'The calibration rests on 14 to 16 seasons, so the percentages are approximate; the MVP favourite averaged a 55% chance and won 7 of 15.',
                     'The Prediction Ledger keeps the raw probabilities that were logged before 2026-09-27.',
                     'Voter narrative and the league\'s 65-game eligibility rule are not modelled; DPOY and All-NBA only apply a minutes floor to who counts as a candidate.',
+                    'ROY candidates are players in their first NBA season per Basketball-Reference. Until 2026-09-27 the first season in this database was used, which let in 240 players with missing earlier stints (53 in 2025-26); the ROY model was retrained on the corrected pool.',
                 ],
                 live: 'awards',
             },
@@ -253,10 +254,6 @@ export const SECTIONS = [
 
 // Problems found and not yet fixed. Remove an entry in the commit that fixes it.
 export const OPEN_ISSUES = [
-    {
-        title: 'Some non-rookies are in the ROY pool',
-        body: 'A rookie is a player whose first season in this database is the current one, but some short earlier stints are missing from the database: 53 players in 2025-26\'s pool (e.g. Bronny James, Daniss Jenkins) had played before, and 240 across 2010-11 to 2025-26. This affects the ROY list and the pool its model was trained on.',
-    },
     {
         title: 'Some models can\'t be retrained right now',
         body: 'stats.nba.com has been unreachable from the build machine since 2026-09-26, so Pair Synergy still uses the old in-house defensive BPM it was trained on.',
