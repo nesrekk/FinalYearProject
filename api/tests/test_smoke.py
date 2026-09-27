@@ -969,3 +969,31 @@ def test_bpm_is_basketball_reference_published():
     top = TestClient(app).get("/impact/bpm/2026").json()
     best = max(r["bpm"] for r in (top.get("results") or top.get("leaderboard") or []))
     assert 8 < best < 16
+
+
+def test_greats_shape_and_sanity():
+    """Greats of the Game (scripts/build_greats.py). Real sniff tests: all 76
+    of the 75th Anniversary Team plus today's stars by the stated rule;
+    Jordan 5 MVPs, 14 All-Star selections, 32,292 points; Kareem 6 MVPs;
+    Mikan's totals include his BAA seasons; the three players the NBA CDN
+    has no photo for are flagged; Curry's trivia includes the three-point
+    record (from the data) and a sourced line with a Wikipedia link."""
+    from impact_api import app
+    resp = TestClient(app).get("/greats")
+    if resp.status_code == 503:
+        pytest.skip("greats not built on this machine.")
+    assert resp.status_code == 200
+    data = resp.json()
+    by = {g["player_name"]: g for g in data["greats"]}
+    assert data["counts"]["team75"] == 76 and data["counts"]["total"] == len(data["greats"])
+    assert data["counts"]["stars"] >= 1 and "All-NBA" in data["stars_rule"]
+    mj = by["Michael Jordan"]
+    assert (mj["mvps"], mj["all_star"], mj["pts"]) == (5, 14, 32292)
+    assert by["Kareem Abdul-Jabbar"]["mvps"] == 6
+    assert by["George Mikan"]["first_season"] == 1949
+    assert {n for n, g in by.items() if not g["has_photo"]} == {"Jason Kidd", "Lenny Wilkens", "Patrick Ewing"}
+    curry = by["Stephen Curry"]["trivia"]
+    assert any(t["basis"] == "data" and "three-pointers" in t["text"] for t in curry)
+    assert any(t["basis"] == "source" and t["url"].startswith("https://en.wikipedia.org/") for t in curry)
+    assert all(g["facts"] for g in data["greats"])
+    _assert_has_source(data)

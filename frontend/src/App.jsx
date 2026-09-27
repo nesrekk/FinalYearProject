@@ -34,6 +34,7 @@ const StatLeaders = lazy(() => import('./components/pages/StatLeaders'));
 const TradeAnalyzer = lazy(() => import('./components/pages/TradeAnalyzer'));
 const DraftValueGuide = lazy(() => import('./components/pages/DraftValueGuide'));
 const HallOfFame = lazy(() => import('./components/pages/HallOfFame'));
+const GreatsOfTheGame = lazy(() => import('./components/pages/GreatsOfTheGame'));
 const RookieClassTracker = lazy(() => import('./components/pages/RookieClassTracker'));
 const GamesHub = lazy(() => import('./components/pages/GamesHub'));
 const LearnTheGame = lazy(() => import('./components/pages/LearnTheGame'));
@@ -67,6 +68,7 @@ export default function App() {
       case 'trade': return <TradeAnalyzer />;
       case 'draft': return <DraftValueGuide />;
       case 'hof': return <HallOfFame />;
+      case 'greats': return <GreatsOfTheGame />;
       case 'rookies': return <RookieClassTracker />;
       case 'games': return <GamesHub />;
       case 'learn': return <LearnTheGame onNavigate={setActivePage} />;

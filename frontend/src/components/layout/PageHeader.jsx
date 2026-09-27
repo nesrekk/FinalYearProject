@@ -2,6 +2,8 @@ import React from 'react';
 import { NAV_GROUPS, groupForPage } from './navConfig';
 
 const POSTER_PAGES = new Set(['dashboard', 'analytics', 'shotcharts', 'games', 'hof']);
+// Pages whose own full-bleed hero replaces the standard header.
+const HERO_PAGES = new Set(['greats']);
 
 const pageTitles = {
     dashboard: 'Dashboard',
@@ -18,6 +20,7 @@ const pageTitles = {
     draft: 'Draft Value Guide',
     rookies: 'Rookie Class Tracker',
     hof: 'Hall of Fame',
+    greats: 'Greats of the Game',
     games: 'Games',
     learn: 'Learn the Game',
 };
@@ -49,6 +52,7 @@ function greeting() {
 }
 
 export default function PageHeader({ activePage }) {
+    if (HERO_PAGES.has(activePage)) return null;
     const group = NAV_GROUPS.find((g) => g.id === groupForPage(activePage));
     const poster = POSTER_PAGES.has(activePage);
     const isDashboard = activePage === 'dashboard' || !pageTitles[activePage];

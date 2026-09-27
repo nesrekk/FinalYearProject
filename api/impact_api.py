@@ -26,6 +26,7 @@ from routers import (
     draft_prospects,
     draft_value,
     games_misc,
+    greats,
     garbage_time,
     guess_the_game,
     guess_the_player,
@@ -87,7 +88,7 @@ for _router_module in (
     players_table, impact_rankings, draft_value, player_impact, meta, media,
     players_search_profile, leaders, games_misc, news, vegas_scanner,
     team_comparison, hall_of_fame, garbage_time, dad_index, scouting_report,
-    spacing_lab, contract_value, learn, college,
+    spacing_lab, contract_value, learn, college, greats,
 ):
     app.include_router(_router_module.router)
 

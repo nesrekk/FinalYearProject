@@ -786,3 +786,9 @@ export async function fetchMarchMadness(season) {
     const response = await axios.get(`${IMPACT_BASE}/college/madness`, { params: season ? { season } : {} });
     return response.data;
 }
+
+// ─── Greats of the Game ──────────────────────────────────────────
+export async function fetchGreats() {
+    const response = await axios.get(`${IMPACT_BASE}/greats`);
+    return response.data;
+}
