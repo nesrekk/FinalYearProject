@@ -86,7 +86,9 @@ export function toJson({ header, rows }) {
 }
 
 export function slugify(s) {
-    return clean(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'table';
+    // Strip accents first so "Jokić" becomes "jokic", not "joki".
+    const ascii = clean(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    return ascii.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'table';
 }
 
 export function downloadText(text, filename, mime) {

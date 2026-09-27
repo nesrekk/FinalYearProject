@@ -76,6 +76,16 @@ export async function fetchSeasonSimilarity(player, season) {
     return response.data;
 }
 
+export async function fetchSeasonSimilarityProfile(
+    player, season, { topN = 10, excludeSelf = true, minGp = 20, onePerPlayer = false } = {}
+) {
+    const response = await axios.get(
+        `${SIMILARITY_BASE}/similarity/season-profile/${encodeURIComponent(player)}/${season}`,
+        { params: { top_n: topN, exclude_self: excludeSelf, min_gp: minGp, one_per_player: onePerPlayer } }
+    );
+    return response.data;
+}
+
 export async function fetchPlayerTrajectory(player, season, topNComps = 5, projectYears = 3) {
     const response = await axios.get(
         `${SIMILARITY_BASE}/players/trajectory/${encodeURIComponent(player)}`,

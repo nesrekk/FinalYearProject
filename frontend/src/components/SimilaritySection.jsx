@@ -1,16 +1,61 @@
-import React, { useEffect, useState } from 'react';
-import { fetchPlayerSuggestions, fetchSeasonSimilarity } from '../services/api';
-import DataTable from './DataTable';
+import React, { useCallback, useEffect, useState } from 'react';
+import { fetchPlayerSuggestions, fetchSeasonSimilarityProfile } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
 import SourceBadge from './common/SourceBadge';
+import PlayerName from './common/PlayerName';
+import TableExport from './common/TableExport';
+
+// Similarity inputs exist from 2009-10 on (usage, net rating, AST%/REB%).
+// The last season updates from the API's pool after the first search.
+const FIRST_SEASON = 2010;
+const DEFAULT_LAST_SEASON = 2026;
+
+const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
+const pct = (v) => `${(v * 100).toFixed(1)}%`;
+const signed = (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}`;
+
+const STAT_COLUMNS = [
+    { key: 'pts', label: 'PTS', fmt: (v) => v.toFixed(1) },
+    { key: 'ts_pct', label: 'TS%', fmt: pct },
+    { key: 'usg_pct', label: 'USG%', fmt: pct },
+    { key: 'net_rating', label: 'Net', fmt: signed },
+    { key: 'ast_pct', label: 'AST%', fmt: pct },
+    { key: 'reb_pct', label: 'REB%', fmt: pct },
+    { key: 'age', label: 'Age', fmt: (v) => v.toFixed(0) },
+    { key: 'min', label: 'MIN', fmt: (v) => v.toFixed(1) },
+];
+
+const WORDS = {
+    pts: 'scoring', ts_pct: 'true shooting', usg_pct: 'usage', net_rating: 'net rating',
+    ast_pct: 'assist %', reb_pct: 'rebound %', age: 'age', min: 'minutes',
+};
+
+function why(row) {
+    const d = row.differs_most;
+    const diff = d.feature === 'age'
+        ? (d.direction === 'higher' ? 'older' : 'younger')
+        : `${d.direction} ${WORDS[d.feature]}`;
+    return `Closest on ${row.closest_on.map((f) => WORDS[f]).join(' and ')}; differs most: ${diff}`;
+}
+
+function StatCells({ stats }) {
+    return STAT_COLUMNS.map((c) => (
+        <td key={c.key} className="sim-num">{c.fmt(stats[c.key])}</td>
+    ));
+}
 
 export default function SimilaritySection() {
     const [player, setPlayer] = useState('');
-    const [season, setSeason] = useState('2026');
-    const [results, setResults] = useState(null);
-    const [source, setSource] = useState(null);
+    const [season, setSeason] = useState(String(DEFAULT_LAST_SEASON));
+    const [lastSeason, setLastSeason] = useState(DEFAULT_LAST_SEASON);
+    const [excludeSelf, setExcludeSelf] = useState(true);
+    const [minGp, setMinGp] = useState(20);
+    const [onePerPlayer, setOnePerPlayer] = useState(false);
+    const [topN, setTopN] = useState(10);
+    const [searched, setSearched] = useState(null);
+    const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [suggestions, setSuggestions] = useState([]);
@@ -24,8 +69,8 @@ export default function SimilaritySection() {
 
         const timer = setTimeout(async () => {
             try {
-                const data = await fetchPlayerSuggestions(query, 10);
-                setSuggestions(data?.results ?? []);
+                const res = await fetchPlayerSuggestions(query, 10);
+                setSuggestions(res?.results ?? []);
             } catch {
                 setSuggestions([]);
             }
@@ -34,49 +79,59 @@ export default function SimilaritySection() {
         return () => clearTimeout(timer);
     }, [player]);
 
-    const handleSearch = async () => {
-        if (!player.trim() || !season) return;
+    const load = useCallback(async (target) => {
         setLoading(true);
         setError('');
-        setResults(null);
-        setSource(null);
-
         try {
-            const data = await fetchSeasonSimilarity(player.trim(), season);
-            const rows = Array.isArray(data) ? data : data.results ?? data.similar_seasons ?? [];
-            const normalized = rows.map((row) => ({
-                ...row,
-                player: row.player ?? row.player_name,
-            }));
-            setResults(normalized);
-            setSource(Array.isArray(data) ? null : data._source ?? null);
+            const res = await fetchSeasonSimilarityProfile(target.player, target.season, { topN, excludeSelf, minGp, onePerPlayer });
+            setData(res);
+            if (res?.pool?.to) setLastSeason(res.pool.to);
         } catch (err) {
+            setData(null);
             setError(err.response?.data?.detail || 'Failed to fetch similarity data.');
         } finally {
             setLoading(false);
         }
+    }, [topN, excludeSelf, minGp, onePerPlayer]);
+
+    // Changing a filter re-runs the last search.
+    useEffect(() => {
+        if (searched) load(searched);
+    }, [searched, load]);
+
+    const handleSearch = (e) => {
+        e.preventDefault();
+        if (!player.trim() || !season) return;
+        setSearched({ player: player.trim(), season: Number(season) });
     };
+
+    const seasons = [];
+    for (let s = lastSeason; s >= FIRST_SEASON; s -= 1) seasons.push(s);
+    const q = data?.query;
 
     return (
         <section className="dashboard-card">
             <h2 className="card-title hb-page-title">
                 <span className="card-icon"><Icon name="bar_chart" /></span>
                 Season Similarity
-                <InfoTooltip
-                    label="How Season Similarity works"
-                    title="Under the hood"
-                >
-                    We represent each player-season as a normalized feature vector (stats like scoring, efficiency,
-                    usage, impact signals). Similarity is computed using cosine similarity, which compares the
-                    direction of two vectors (stat “profile”) and returns the closest matches.
+                <InfoTooltip label="How Season Similarity works" title="Under the hood">
+                    {data?.methodology ?? (
+                        'Each season is described by eight numbers: points, true shooting, usage, net rating, assist % and '
+                        + 'rebound % (each z-scored within its own season, so eras compare fairly), plus age and minutes. '
+                        + 'Seasons are compared by the cosine of those vectors (1 = identical shape).'
+                    )}
                 </InfoTooltip>
-                <SourceBadge source={source} />
+                <SourceBadge source={data?._source} />
             </h2>
+            <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
+                Pick a player-season to find the seasons that look most like it, and see why they match.
+            </p>
 
-            <div className="input-row">
+            <form className="input-row" onSubmit={handleSearch}>
                 <input
                     type="text"
-                    placeholder="Player Name"
+                    placeholder="Player name"
+                    aria-label="Player name"
                     value={player}
                     onChange={(e) => setPlayer(e.target.value)}
                     className="input-field"
@@ -87,33 +142,99 @@ export default function SimilaritySection() {
                         <option key={name} value={name} />
                     ))}
                 </datalist>
-                <input
-                    type="number"
-                    placeholder="Season (e.g. 2026)"
+                <select
+                    className="input-field"
+                    aria-label="Season"
                     value={season}
                     onChange={(e) => setSeason(e.target.value)}
-                    className="input-field"
-                    min={1980}
-                    max={2030}
-                />
-                <button
-                    className="action-btn"
-                    onClick={handleSearch}
-                    disabled={loading || !player.trim() || !season}
                 >
+                    {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
+                </select>
+                <button type="submit" className="action-btn" disabled={loading || !player.trim()}>
                     {loading ? 'Searching…' : 'Find Similar Seasons'}
                 </button>
+            </form>
+
+            <div className="sim-filters">
+                <label>
+                    <input type="checkbox" checked={excludeSelf} onChange={(e) => setExcludeSelf(e.target.checked)} />
+                    Other players only
+                </label>
+                <label>
+                    <input type="checkbox" checked={onePerPlayer} onChange={(e) => setOnePerPlayer(e.target.checked)} />
+                    One season per player
+                </label>
+                <label>
+                    Min. games{' '}
+                    <select value={minGp} onChange={(e) => setMinGp(Number(e.target.value))}>
+                        {[0, 10, 20, 40, 60].map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                </label>
+                <label>
+                    Show{' '}
+                    <select value={topN} onChange={(e) => setTopN(Number(e.target.value))}>
+                        {[10, 25].map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                </label>
             </div>
 
             {loading && <Loader />}
             {error && <p className="error-message">{error}</p>}
-            {results && (
-                <DataTable
-                    columns={['Player', 'Season', 'Similarity Score']}
-                    keys={['player', 'season', 'similarity_score']}
-                    rows={results}
-                    emptyMessage="No similar seasons found."
-                />
+            {!loading && q && (
+                <>
+                    <p className="page-subtitle sim-summary">
+                        {data.results.length} closest of {data.pool.seasons.toLocaleString()} player-seasons
+                        ({seasonLabel(data.pool.from)} to {seasonLabel(data.pool.to)})
+                        {data.filters.exclude_self ? ', other players only' : ''}
+                        {data.filters.one_per_player ? ', one season per player' : ''}
+                        {data.filters.min_gp ? `, ${data.filters.min_gp}+ games` : ''}.
+                        Similarity 1.000 = identical shape.
+                    </p>
+                    <TableExport name={`seasons like ${q.player_name} ${seasonLabel(q.season)}`} />
+                    <div className="table-wrapper">
+                        <table className="data-table sim-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Player</th>
+                                    <th>Season</th>
+                                    <th>Team</th>
+                                    <th className="sim-num">GP</th>
+                                    <th className="sim-num">Similarity</th>
+                                    {STAT_COLUMNS.map((c) => <th key={c.key} className="sim-num">{c.label}</th>)}
+                                    <th>Why</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr className="sim-query-row">
+                                    <td>Searched</td>
+                                    <td><PlayerName playerId={q.player_id} name={q.player_name} /></td>
+                                    <td>{seasonLabel(q.season)}</td>
+                                    <td>{q.team}</td>
+                                    <td className="sim-num">{q.gp}</td>
+                                    <td className="sim-num">—</td>
+                                    <StatCells stats={q.stats} />
+                                    <td>—</td>
+                                </tr>
+                                {data.results.map((r) => (
+                                    <tr key={`${r.player_id}-${r.season}`}>
+                                        <td>{r.rank}</td>
+                                        <td><PlayerName playerId={r.player_id} name={r.player_name} /></td>
+                                        <td>{seasonLabel(r.season)}</td>
+                                        <td>{r.team}</td>
+                                        <td className="sim-num">{r.gp}</td>
+                                        <td className="sim-num">{r.similarity_score.toFixed(3)}</td>
+                                        <StatCells stats={r.stats} />
+                                        <td className="sim-why">{why(r)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    {data.results.length === 0 && (
+                        <p className="empty-message">No seasons pass these filters.</p>
+                    )}
+                </>
             )}
         </section>
     );

@@ -5,6 +5,8 @@ FastAPI backend for NBA Player Similarity Engine.
 
 Endpoints:
     GET /similarity/season/{player_name}/{season}  — Top 10 similar seasons
+    GET /similarity/season-profile/{player_name}/{season} — Same method, computed
+        live, with filters and each season's stat profile
     GET /similarity/career/{player_name}           — Top 10 similar careers
 
 Usage:
@@ -12,7 +14,10 @@ Usage:
 """
 
 from contextlib import contextmanager
+from functools import lru_cache
 import unicodedata
+
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2 import pool
@@ -453,6 +458,142 @@ def get_season_similarity(player_name: str, season: int, top_n: int = 10):
             for row in rows
         ],
         "_source": make_source(["season_similarity", "player_season_stats"], "nba_api (stats.nba.com)"),
+    }
+
+
+# ─── Season similarity, computed live (same method as season_similarity) ─────
+# precompute_league_similarity.py stores only each season's top 10, so a
+# player's own other seasons crowd out everyone else and a 3-game cameo can
+# be a match. Recomputing is cheap (about 7,300 seasons x 8 numbers) and was
+# checked to reproduce every stored score and top-10 set exactly.
+
+SIM_ADJUST = ["pts", "ts_pct", "usg_pct", "net_rating", "ast_pct", "reb_pct"]
+SIM_FEATURES = SIM_ADJUST + ["age", "min"]
+SIM_LABELS = {
+    "pts": "Points", "ts_pct": "True shooting", "usg_pct": "Usage", "net_rating": "Net rating",
+    "ast_pct": "Assist %", "reb_pct": "Rebound %", "age": "Age", "min": "Minutes",
+}
+
+
+@lru_cache(maxsize=1)
+def _season_matrix():
+    """Every player-season with all eight inputs, z-scored the way the
+    precompute script does it: each stat within its own season, then every
+    feature standardised over the whole pool, then unit-normalised."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT player_id, player_name, season, team_abbreviation, gp, {", ".join(SIM_FEATURES)}
+            FROM player_season_stats
+            WHERE {" AND ".join(f"{c} IS NOT NULL" for c in SIM_FEATURES)}
+            ORDER BY player_id, season;
+        """)
+        rows = cur.fetchall()
+    meta = [r[:5] for r in rows]
+    raw = np.array([r[5:] for r in rows], dtype=float)
+    seasons = np.array([m[2] for m in meta])
+    z = raw[:, :len(SIM_ADJUST)].copy()
+    for s in np.unique(seasons):
+        mask = seasons == s
+        block = z[mask]
+        std = block.std(axis=0, ddof=1)  # pandas' default, as in the precompute script
+        std[std == 0] = 1.0
+        z[mask] = (block - block.mean(axis=0)) / std
+    feats = np.column_stack([z, raw[:, len(SIM_ADJUST):]])
+    scaled = (feats - feats.mean(axis=0)) / feats.std(axis=0)
+    unit = scaled / np.linalg.norm(scaled, axis=1, keepdims=True)
+    index = {(m[0], m[2]): i for i, m in enumerate(meta)}
+    return meta, raw, z, scaled, unit, index
+
+
+def _season_row(i, meta, raw, z):
+    pid, name, season, team, gp = meta[i]
+    return {
+        "player_id": pid,
+        "player_name": name,
+        "season": season,
+        "team": team,
+        "gp": gp,
+        "stats": {f: round(float(raw[i, k]), 4) for k, f in enumerate(SIM_FEATURES)},
+        "season_z": {f: round(float(z[i, k]), 2) for k, f in enumerate(SIM_ADJUST)},
+    }
+
+
+@app.get("/similarity/season-profile/{player_name}/{season}")
+def get_season_similarity_profile(player_name: str, season: int, top_n: int = 10,
+                                  exclude_self: bool = False, min_gp: int = 0,
+                                  one_per_player: bool = False):
+    """
+    Most similar player-seasons, with filters: exclude_self drops the player's
+    own other seasons, min_gp drops matches with fewer games, one_per_player
+    keeps only each player's closest season. Each match lists the inputs it's
+    closest on and the one it differs most on.
+    """
+    top_n = max(1, min(top_n, 25))
+    min_gp = max(0, min_gp)
+    with get_db() as conn:
+        player_id, resolved_name = find_player_id(conn.cursor(), player_name)
+
+    meta, raw, z, scaled, unit, index = _season_matrix()
+    i = index.get((player_id, season))
+    if i is None:
+        seasons = sorted(m[2] for m in meta if m[0] == player_id)
+        label = lambda y: f"{y - 1}-{str(y)[-2:]}"  # noqa: E731
+        detail = (f"No comparable season for {resolved_name} in {label(season)}. "
+                  + (f"Seasons available: {label(seasons[0])} to {label(seasons[-1])}." if seasons
+                     else "Similarity needs usage, net rating, assist % and rebound %, "
+                          "which this database has from 2009-10 on."))
+        raise HTTPException(status_code=404, detail=detail)
+
+    sims = unit @ unit[i]
+    keep = np.ones(len(meta), dtype=bool)
+    keep[i] = False
+    if exclude_self:
+        keep &= np.array([m[0] != player_id for m in meta])
+    if min_gp:
+        keep &= np.array([(m[4] or 0) >= min_gp for m in meta])
+    candidates = np.flatnonzero(keep)
+    order = candidates[np.argsort(-sims[candidates], kind="stable")]
+    if one_per_player:
+        seen = set()
+        order = [j for j in order if not (meta[j][0] in seen or seen.add(meta[j][0]))]
+    order = order[:top_n]
+
+    results = []
+    for rank, j in enumerate(order, start=1):
+        gap = np.abs(scaled[j] - scaled[i])
+        # "Closest on" names playing-style stats only; age and minutes still
+        # count towards the score and can be what differs most.
+        closest = [SIM_ADJUST[k] for k in np.argsort(gap[:len(SIM_ADJUST)], kind="stable")[:2]]
+        k = int(np.argmax(gap))
+        results.append({
+            "rank": rank,
+            **_season_row(j, meta, raw, z),
+            "similarity_score": round(float(sims[j]), 4),
+            "closest_on": closest,
+            "differs_most": {
+                "feature": SIM_FEATURES[k],
+                "direction": "higher" if raw[j, k] > raw[i, k] else "lower",
+            },
+        })
+
+    seasons_all = [m[2] for m in meta]
+    return {
+        "query": _season_row(i, meta, raw, z),
+        "filters": {"top_n": top_n, "exclude_self": exclude_self, "min_gp": min_gp,
+                    "one_per_player": one_per_player},
+        "pool": {"seasons": len(meta), "from": min(seasons_all), "to": max(seasons_all)},
+        "results": results,
+        "features": [{"key": f, "label": SIM_LABELS[f]} for f in SIM_FEATURES],
+        "methodology": (
+            "Each season is described by eight numbers: points, true shooting, usage, net rating, assist % and "
+            "rebound % (each z-scored within its own season, so eras compare fairly), plus age and minutes per "
+            "game. Every number is then standardised across all seasons and two seasons are compared by the "
+            "cosine of their vectors (1 = identical shape). Same method and numbers as the stored "
+            "season_similarity table; this view recomputes it so filters work. Covers 2009-10 on, where "
+            "usage and net rating exist."
+        ),
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com)"),
     }
 
 

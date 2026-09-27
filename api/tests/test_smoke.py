@@ -107,6 +107,42 @@ def test_similarity_league_evolution():
     assert len(data["trends"]) == len(data["seasons"])
 
 
+def test_similarity_season_profile_matches_stored_and_filters():
+    from similarity_api import app
+    client = TestClient(app)
+    # Unfiltered, the live computation must reproduce the stored top 10.
+    stored = client.get("/similarity/season/Stephen Curry/2016").json()["results"]
+    resp = client.get("/similarity/season-profile/Stephen Curry/2016")
+    assert resp.status_code == 200
+    data = resp.json()
+    _assert_has_source(data)
+    live = data["results"]
+    assert [(r["player_id"], r["season"]) for r in live] == [(r["player_id"], r["season"]) for r in stored]
+    for a, b in zip(live, stored):
+        assert abs(a["similarity_score"] - b["similarity_score"]) < 1e-3
+    assert data["query"]["stats"]["pts"] == pytest.approx(30.1)
+
+    # Filters: no Curry seasons, no short seasons, scores still descending.
+    data = client.get("/similarity/season-profile/Stephen Curry/2016",
+                      params={"exclude_self": True, "min_gp": 40, "top_n": 25}).json()
+    rows = data["results"]
+    assert len(rows) == 25
+    assert all(r["player_id"] != data["query"]["player_id"] for r in rows)
+    assert all(r["gp"] >= 40 for r in rows)
+    scores = [r["similarity_score"] for r in rows]
+    assert scores == sorted(scores, reverse=True)
+    assert all(len(r["closest_on"]) == 2 and r["differs_most"]["feature"] for r in rows)
+    data = client.get("/similarity/season-profile/Stephen Curry/2016",
+                      params={"one_per_player": True, "top_n": 25}).json()
+    ids = [r["player_id"] for r in data["results"]]
+    assert len(ids) == len(set(ids)) == 25
+
+    # Before 2009-10 the inputs don't exist: a clear 404, not an empty list.
+    resp = client.get("/similarity/season-profile/Michael Jordan/1996")
+    assert resp.status_code == 404
+    assert "2009-10" in resp.json()["detail"]
+
+
 # ─── impact_api (port 8002) ─────────────────────────────────────────────────
 
 def test_impact_playoff_comparison_shape():

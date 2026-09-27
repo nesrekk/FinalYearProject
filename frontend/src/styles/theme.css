@@ -563,3 +563,38 @@ select,
   color: var(--negative);
   margin-right: auto;
 }
+
+/* Season Similarity (SimilaritySection.jsx) */
+.sim-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  align-items: center;
+  margin-top: var(--space-3);
+  color: var(--text-2);
+  font-size: 0.85rem;
+}
+.sim-filters label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sim-summary {
+  margin-top: var(--space-4);
+  font-size: 0.8rem;
+}
+.sim-table .sim-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sim-table .sim-why {
+  min-width: 220px;
+  color: var(--text-2);
+  font-size: 0.8rem;
+}
+.sim-table tbody tr.sim-query-row td {
+  background: var(--surface-2);
+  font-weight: 700;
+  border-bottom: 2px solid var(--line);
+}
