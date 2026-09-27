@@ -6,10 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  // src/components/charts is third-party Bklit UI code copied in by the shadcn
-  // CLI (see components.json); it's kept as shipped rather than rewritten to
-  // this project's lint rules, so updates can be pulled cleanly.
-  globalIgnores(['dist', 'src/components/charts']),
+  globalIgnores(['dist']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
