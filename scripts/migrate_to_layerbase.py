@@ -20,11 +20,14 @@ explicit real IDs, and this migration is for real read access, not
 local/cloud parity for writes.
 
 Usage:
-    cd scripts && python3 migrate_to_layerbase.py
+    cd scripts && python3 migrate_to_layerbase.py                    # every table
+    cd scripts && python3 migrate_to_layerbase.py --tables a,b,c     # just these
+    cd scripts && python3 migrate_to_layerbase.py --check            # compare row counts only, no writes
 """
 
 import io
 import os
+import sys
 
 import psycopg2
 from dotenv import load_dotenv
@@ -168,7 +171,30 @@ def main():
     cloud_cur = cloud_conn.cursor()
 
     tables = list_tables(local_cur)
-    print(f"Migrating {len(tables)} tables (full copy, no exclusions)...")
+    if "--check" in sys.argv:
+        cloud_cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
+        cloud_tables = {r[0] for r in cloud_cur.fetchall()}
+        mismatches = 0
+        for table in tables:
+            local_cur.execute(f'SELECT COUNT(*) FROM "{table}";')
+            local_n = local_cur.fetchone()[0]
+            if table in cloud_tables:
+                cloud_cur.execute(f'SELECT COUNT(*) FROM "{table}";')
+                cloud_n = cloud_cur.fetchone()[0]
+            else:
+                cloud_n = None
+            if cloud_n != local_n:
+                mismatches += 1
+                print(f"  {table:35s} local {local_n:>9,}  cloud {cloud_n if cloud_n is not None else 'missing'}")
+        print(f"{len(tables)} local tables, {mismatches} differ from Layerbase.")
+        return
+    if "--tables" in sys.argv:
+        wanted = sys.argv[sys.argv.index("--tables") + 1].split(",")
+        unknown = set(wanted) - set(tables)
+        if unknown:
+            raise SystemExit(f"Not local tables: {', '.join(sorted(unknown))}")
+        tables = [t for t in tables if t in wanted]
+    print(f"Migrating {len(tables)} tables...")
 
     total_rows = 0
     total_indexes = 0
