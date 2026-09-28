@@ -63,6 +63,7 @@ from routers import (
     spacing_lab,
     team_comparison,
     trade_analyzer,
+    trade_impact,
     trend_analysis,
     trivia,
     vegas_scanner,
@@ -96,6 +97,7 @@ for _router_module in (
     spacing_lab, contract_value, learn, college, greats, leaderboard, explore, era,
     pair_chemistry,
     role_finder,
+    trade_impact,
 ):
     app.include_router(_router_module.router)
 

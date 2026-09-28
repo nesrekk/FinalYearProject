@@ -663,6 +663,15 @@ export async function simulateTrade({ season, teamA, playerAId, teamB, playerBId
     return response.data;
 }
 
+// ─── Trade Impact (wins + spacing + payroll for one trade) ─────
+export async function fetchTradeImpact({ season, teamA, playerAId, teamB, playerBId }) {
+    const response = await axios.get(`${IMPACT_BASE}/trade/impact`, {
+        params: { season, team_a: teamA, player_a_id: playerAId, team_b: teamB, player_b_id: playerBId },
+        timeout: 60 * 1000,
+    });
+    return response.data;
+}
+
 // ─── Impact Rankings ───────────────────────────────────────────
 export async function fetchRawImpact(season) {
     const response = await axios.get(`${IMPACT_BASE}/impact/raw/${season}`);

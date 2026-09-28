@@ -121,6 +121,20 @@ export const SECTIONS = [
                 ],
             },
             {
+                id: 'tradeimpact',
+                name: 'Trade Impact',
+                open: { page: 'tradeimpact', label: 'Trade Impact' },
+                answers: 'For a 1-for-1 trade, what happens to each team\'s projected wins, starting-five spacing, payroll and surplus?',
+                method: 'Nothing new is estimated. Projected win% is the Trade Analyzer\'s regression on the roster\'s minute-weighted net rating and TS% (players keep their own season stats). Spacing is the Gravity Index summed over the team\'s most-used real five-man lineup, with the incoming player in the outgoing player\'s spot (or the lowest-minute starter\'s spot if the outgoing player wasn\'t in that five). Payroll and surplus are Contract Value\'s, summed over the players with matched salaries who played for the team.',
+                checked: 'Each piece carries its own validation (see the Gravity and Contract Value cards; the win model is leave-one-season-out R² 0.92, about 2.5 wins of error over 82 games). Checked on a real 2024-25 case: the Knicks\' most-used five is their real starting five (1,939 possessions), and swapping Josh Hart for Duncan Robinson moves its spacing from the 81st to the 97th percentile while payroll changes by the real $1.26M salary difference.',
+                limits: [
+                    'Role, usage and minutes changes after a trade are not simulated; the win change is a roster-production estimate.',
+                    'Spacing is a proxy with a small validated effect on offensive rating; the starting five after the trade is an assumption stated on the page.',
+                    'Payroll is the priced on-court payroll, not the cap sheet, and only for seasons with reliable salary data (2005-06 to 2016-17, 2018-19, 2019-20, 2024-25). 2024-25 is the only season with all three blocks after 2019-20.',
+                    'One-for-one trades only.',
+                ],
+            },
+            {
                 id: 'rolefinder',
                 name: 'Role Player Finder',
                 open: { page: 'rolefinder', label: 'Role Player Finder' },

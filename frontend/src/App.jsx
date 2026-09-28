@@ -33,6 +33,7 @@ const ShotCharts = lazy(() => import('./components/pages/ShotCharts'));
 const AnalyticsSection = lazy(() => import('./components/pages/AnalyticsSection'));
 const StatLeaders = lazy(() => import('./components/pages/StatLeaders'));
 const TradeAnalyzer = lazy(() => import('./components/pages/TradeAnalyzer'));
+const TradeImpact = lazy(() => import('./components/pages/TradeImpact'));
 const DraftValueGuide = lazy(() => import('./components/pages/DraftValueGuide'));
 const HallOfFame = lazy(() => import('./components/pages/HallOfFame'));
 const GreatsOfTheGame = lazy(() => import('./components/pages/GreatsOfTheGame'));
@@ -60,6 +61,7 @@ const PAGES = {
   analytics: AnalyticsSection,
   leaders: StatLeaders,
   trade: TradeAnalyzer,
+  tradeimpact: TradeImpact,
   draft: DraftValueGuide,
   hof: HallOfFame,
   greats: GreatsOfTheGame,
@@ -116,12 +118,13 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  // `hash` is an Analytics tab id (e.g. 'wpa').
-  const navigate = useCallback((page, hash) => {
+  // `hash` is an Analytics tab id (e.g. 'wpa'); `params` are optional tool
+  // inputs for the target page (e.g. a trade handed to Trade Impact).
+  const navigate = useCallback((page, hash, params) => {
     const target = PAGES[page] ? page : 'dashboard';
     // Re-picking the open page from the menu keeps its inputs and link.
     if (!hash && currentPageParam() === target) return;
-    pushPage(target, hash);
+    pushPage(target, hash, params);
     setRoute({ landing: false, page: target });
   }, []);
 

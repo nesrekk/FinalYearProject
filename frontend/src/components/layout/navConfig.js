@@ -38,6 +38,7 @@ export const NAV_GROUPS = [
         items: [
             { id: 'teams', label: 'Team Comparison', icon: 'swords' },
             { id: 'trade', label: 'Trade Analyzer', icon: 'swap_horiz' },
+            { id: 'tradeimpact', label: 'Trade Impact', icon: 'account_balance' },
         ],
     },
     {

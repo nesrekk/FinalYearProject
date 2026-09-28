@@ -120,37 +120,28 @@ def get_gravity(season: Optional[int] = None, top_n: int = 25):
     }
 
 
-@router.get("/spacing/lineup")
-def get_lineup_spacing(player_ids: str, season: Optional[int] = None):
-    try:
-        ids = [int(x) for x in player_ids.split(",") if x.strip()]
-    except ValueError:
-        raise HTTPException(status_code=400, detail="player_ids must be 5 comma-separated player ids.")
-    if len(ids) != 5 or len(set(ids)) != 5:
-        raise HTTPException(status_code=400, detail="Pick exactly 5 different players.")
-
-    with get_db() as conn:
-        cursor = conn.cursor()
-        _require(cursor)
-        season, _ = _season(cursor, season)
-        cursor.execute(
-            """SELECT player_id, player_name, team_abbreviation, gravity, in_pool
-               FROM player_gravity WHERE season = %s AND player_id = ANY(%s);""",
-            (season, ids),
-        )
-        found = {r[0]: r for r in cursor.fetchall()}
-        missing = [i for i in ids if i not in found or found[i][3] is None]
-        if missing:
-            raise HTTPException(status_code=404, detail=f"No real Gravity on file for player id(s) {missing} in that season.")
-        spacing = float(sum(found[i][3] for i in ids))
-        dist = _season_lineup_spacing(cursor, season)
-        validation = _validation(cursor)
-        cursor.execute(
-            """SELECT poss, off_rating, group_name FROM lineup_stats
-               WHERE season = %s AND player_ids @> %s::bigint[] AND cardinality(player_ids) = 5;""",
-            (season, ids),
-        )
-        real = cursor.fetchone()
+def lineup_report(cursor, season, ids):
+    """Spacing of one five-man lineup vs. every real 100+-possession lineup
+    that season. Shared by /spacing/lineup and /trade/impact. Raises
+    HTTPException (404) when a player has no real Gravity that season."""
+    cursor.execute(
+        """SELECT player_id, player_name, team_abbreviation, gravity, in_pool
+           FROM player_gravity WHERE season = %s AND player_id = ANY(%s);""",
+        (season, ids),
+    )
+    found = {r[0]: r for r in cursor.fetchall()}
+    missing = [i for i in ids if i not in found or found[i][3] is None]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"No real Gravity on file for player id(s) {missing} in that season.")
+    spacing = float(sum(found[i][3] for i in ids))
+    dist = _season_lineup_spacing(cursor, season)
+    validation = _validation(cursor)
+    cursor.execute(
+        """SELECT poss, off_rating, group_name FROM lineup_stats
+           WHERE season = %s AND player_ids @> %s::bigint[] AND cardinality(player_ids) = 5;""",
+        (season, ids),
+    )
+    real = cursor.fetchone()
 
     below = sum(1 for s in dist if s < spacing)
     percentile = round(100 * below / len(dist), 1) if dist else None
@@ -194,6 +185,24 @@ def get_lineup_spacing(player_ids: str, season: Optional[int] = None):
         "no_effect_message": no_effect_message,
         "real_lineup": {"poss": real[0], "off_rating": real[1], "group_name": real[2]} if real else None,
         "validation": validation,
-        "_source": make_source(["player_gravity", "lineup_stats", "gravity_validation"],
-                               "nba_api (LeagueDashPlayerPtShot, LeagueDashLineups)"),
     }
+
+
+@router.get("/spacing/lineup")
+def get_lineup_spacing(player_ids: str, season: Optional[int] = None):
+    try:
+        ids = [int(x) for x in player_ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="player_ids must be 5 comma-separated player ids.")
+    if len(ids) != 5 or len(set(ids)) != 5:
+        raise HTTPException(status_code=400, detail="Pick exactly 5 different players.")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        _require(cursor)
+        season, _ = _season(cursor, season)
+        report = lineup_report(cursor, season, ids)
+
+    report["_source"] = make_source(["player_gravity", "lineup_stats", "gravity_validation"],
+                                    "nba_api (LeagueDashPlayerPtShot, LeagueDashLineups)")
+    return report

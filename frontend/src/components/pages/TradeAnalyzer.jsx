@@ -128,7 +128,7 @@ function TeamPanel({ side, isAdvanced, preset }) {
 // Keep a player id only if they're on the roster that just loaded.
 const onRoster = (roster) => (id) => (roster.some((p) => String(p.player_id) === id) ? id : '');
 
-export default function TradeAnalyzer() {
+export default function TradeAnalyzer({ onNavigate }) {
     // A shared link carries ?season=&ta=&pa=&tb=&pb= (utils/useUrlState.js).
     const params = useInitialParams();
     const linkedId = (key) => (parseParam.int(params, key, { min: 1 }) ?? '').toString();
@@ -298,6 +298,12 @@ export default function TradeAnalyzer() {
                     >
                         {loading ? 'Simulating…' : 'Simulate Trade'}
                     </button>
+                    {canSimulate && onNavigate && (
+                        <button type="button" className="table-export-btn"
+                            onClick={() => onNavigate('tradeimpact', undefined, { season, ta: teamA, pa: playerAId, tb: teamB, pb: playerBId })}>
+                            <Icon name="account_balance" size={15} /> Open in Trade Impact
+                        </button>
+                    )}
                 </div>
                 {teamA && teamA === teamB && (
                     <p className="error-message" style={{ marginTop: '0.5rem' }}>Pick two different teams.</p>

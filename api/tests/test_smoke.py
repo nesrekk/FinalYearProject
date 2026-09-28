@@ -1379,3 +1379,45 @@ def test_role_finder_presets_land_known_players():
                    {"positions": "PG"}, {"relative": "team"}):
         assert client.get("/roles/finder", params=params).status_code == 400
     assert client.get("/roles/finder", params={"season": 2015}).status_code == 404
+
+
+def test_trade_impact_combines_wins_spacing_and_payroll():
+    """Trade Impact (api/routers/trade_impact.py): the Trade Analyzer's win
+    model, the Spacing Lab's lineup spacing and Contract Value on one screen.
+    Real 2024-25 case: Josh Hart (NYK) for Duncan Robinson (MIA)."""
+    from impact_api import app
+    client = TestClient(app)
+    params = {"season": 2025, "team_a": "NYK", "player_a_id": 1628404, "team_b": "MIA", "player_b_id": 1629130}
+    resp = client.get("/trade/impact", params=params)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["trade"]["team_a"]["sends"]["player_id"] == 1628404
+    assert data["trade"]["team_b"]["receives"]["player_id"] == 1628404
+    for side in ("team_a", "team_b"):
+        w = data["wins"][side]
+        assert w["available"] and 0 < w["before_pct"] < 1 and 0 < w["after_pct"] < 1
+        assert abs(w["delta_wins"] - (w["after_pct"] - w["before_pct"]) * 82) < 1e-6
+        s = data["spacing"][side]
+        assert s["available"] and len(s["before"]["players"]) == 5 and len(s["after"]["players"]) == 5
+        assert s["lineup"]["poss"] >= 100 and s["before"]["real_lineup"]["poss"] == s["lineup"]["poss"]
+        for rep in (s["before"], s["after"]):
+            assert abs(sum(p["gravity"] for p in rep["players"]) - rep["spacing"]) < 1e-6
+        p = data["payroll"][side]
+        assert p["available"] and p["before"]["n_priced"] == p["after"]["n_priced"]
+        assert abs(p["delta_payroll"] - (p["incoming"]["salary"] - p["outgoing"]["salary"])) < 1e-6
+    # Both were starters in their team's most-used five, so the incoming player takes that spot.
+    a, b = data["spacing"]["team_a"], data["spacing"]["team_b"]
+    assert a["rule"] == "outgoing_starter" and a["replaced_player_id"] == 1628404
+    after_ids = {p["player_id"] for p in a["after"]["players"]}
+    assert 1629130 in after_ids and 1628404 not in after_ids
+    # A non-shooter out, one of the league's top shooters in: spacing rises for NYK, falls for MIA.
+    assert a["delta_spacing"] > 0 and b["delta_spacing"] < 0
+    # Money moves symmetrically: one team's payroll change is the other's negative.
+    assert abs(data["payroll"]["team_a"]["delta_payroll"] + data["payroll"]["team_b"]["delta_payroll"]) < 1e-6
+    # A season without reliable salary data says so instead of showing zeros.
+    no_pay = client.get("/trade/impact", params={**params, "season": 2024}).json()
+    assert no_pay["payroll"]["available"] is False and "2023-24" in no_pay["payroll"]["reason"]
+    assert no_pay["spacing"]["available"] is True
+    # Guards.
+    assert client.get("/trade/impact", params={**params, "team_b": "NYK"}).status_code == 400
+    assert client.get("/trade/impact", params={**params, "player_b_id": 1628404}).status_code == 400

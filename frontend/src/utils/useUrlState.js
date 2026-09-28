@@ -17,8 +17,16 @@ export function currentPageParam() {
 
 // Go to a page: a fresh URL with only `page` (and the Analytics tab hash),
 // so one tool's inputs never leak into another's link. No page = landing.
-export function pushPage(page, hash) {
-    const qs = page ? `?${PAGE_PARAM}=${encodeURIComponent(page)}` : '';
+// `params` ({ key: value }) pre-fills the target page's inputs, for the
+// few cases where one tool hands its inputs to another.
+export function pushPage(page, hash, params) {
+    const search = new URLSearchParams();
+    if (page) search.set(PAGE_PARAM, page);
+    for (const [k, v] of Object.entries(params || {})) {
+        const p = toParam(v);
+        if (p != null) search.set(k, p);
+    }
+    const qs = search.toString() ? `?${search.toString().replace(/%2C/gi, ',').replace(/%3A/gi, ':')}` : '';
     const url = `${window.location.pathname}${qs}${hash ? `#${hash}` : ''}`;
     if (url !== here()) window.history.pushState(null, '', url);
     // pushState doesn't fire hashchange; AnalyticsSection listens for it
