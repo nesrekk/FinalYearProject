@@ -49,6 +49,7 @@ from routers import (
     pair_synergy,
     player_comparison,
     player_impact,
+    player_profile,
     players_search_profile,
     players_table,
     playoff_forecaster,
@@ -98,6 +99,7 @@ for _router_module in (
     pair_chemistry,
     role_finder,
     trade_impact,
+    player_profile,
 ):
     app.include_router(_router_module.router)
 

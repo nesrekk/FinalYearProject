@@ -74,6 +74,7 @@ export const NAV_GROUPS = [
 ];
 
 export function groupForPage(pageId) {
+    if (pageId === 'player') return 'players'; // a player's profile, opened from any name
     const g = NAV_GROUPS.find((group) => group.id === pageId || group.items.some((item) => item.id === pageId));
     return g ? g.id : NAV_GROUPS[0].id;
 }

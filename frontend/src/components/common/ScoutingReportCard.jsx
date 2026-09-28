@@ -4,8 +4,8 @@ import Loader from '../Loader';
 import InfoTooltip from './InfoTooltip';
 import SourceBadge from './SourceBadge';
 
-const STRENGTH = '#34d399';
-const WEAKNESS = '#f87171';
+const STRENGTH = 'var(--positive)';
+const WEAKNESS = 'var(--negative)';
 
 function seasonLabel(season) {
     return `${season - 1}-${String(season).slice(-2)}`;

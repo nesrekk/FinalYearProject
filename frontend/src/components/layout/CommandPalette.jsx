@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../common/Icon';
-import { fetchLivePlayerSuggestions } from '../../services/api';
+import { fetchLivePlayerSuggestions, resolvePlayerId } from '../../services/api';
+import { openPlayerProfile } from '../../utils/useUrlState';
 import { TEAM_NAME_TO_ABBR } from '../../utils/teamAssets';
 import { NAV_GROUPS } from './navConfig';
 
@@ -70,7 +71,10 @@ export default function CommandPalette({ open, onClose, onNavigate }) {
         } else if (result.kind === 'team') {
             onNavigate('teams');
         } else if (result.kind === 'player') {
-            onNavigate('players');
+            // Results are names; the profile page needs the id.
+            resolvePlayerId(result.label)
+                .then((p) => openPlayerProfile(p.player_id))
+                .catch(() => onNavigate('players'));
         }
         onClose();
     };

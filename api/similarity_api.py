@@ -524,17 +524,22 @@ def _season_row(i, meta, raw, z):
 @app.get("/similarity/season-profile/{player_name}/{season}")
 def get_season_similarity_profile(player_name: str, season: int, top_n: int = 10,
                                   exclude_self: bool = False, min_gp: int = 0,
-                                  one_per_player: bool = False):
+                                  one_per_player: bool = False, player_id: int | None = None):
     """
     Most similar player-seasons, with filters: exclude_self drops the player's
     own other seasons, min_gp drops matches with fewer games, one_per_player
     keeps only each player's closest season. Each match lists the inputs it's
-    closest on and the one it differs most on.
+    closest on and the one it differs most on. player_id, when given, picks
+    the player exactly (two players can share a name) and player_name is
+    only used in messages.
     """
     top_n = max(1, min(top_n, 25))
     min_gp = max(0, min_gp)
-    with get_db() as conn:
-        player_id, resolved_name = find_player_id(conn.cursor(), player_name)
+    if player_id is not None:
+        resolved_name = player_name
+    else:
+        with get_db() as conn:
+            player_id, resolved_name = find_player_id(conn.cursor(), player_name)
 
     meta, raw, z, scaled, unit, index = _season_matrix()
     i = index.get((player_id, season))

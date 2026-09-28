@@ -8,6 +8,8 @@ import TeamLogo from './TeamLogo';
 import PlayerHeadshot from './PlayerHeadshot';
 import ScoutingReportCard from './ScoutingReportCard';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
+import { isPlainClick, openPlayerProfile, playerProfileHref } from '../../utils/useUrlState';
+import '../../styles/profile.css';
 
 function fmt(v, digits = 1) {
     if (v == null) return '—';
@@ -100,6 +102,20 @@ export default function PlayerDetailModal({ player, onClose }) {
                             {player.position && <>&nbsp;·&nbsp;Est. {player.position}</>}
                         </div>
                     </div>
+                    {player.player_id > 0 && (
+                        <a
+                            className="player-modal-profile-link"
+                            href={playerProfileHref(player.player_id)}
+                            onClick={(e) => {
+                                if (!isPlainClick(e)) return;
+                                e.preventDefault();
+                                onClose();
+                                openPlayerProfile(player.player_id);
+                            }}
+                        >
+                            Open full profile
+                        </a>
+                    )}
                     <button type="button" className="player-modal-close" onClick={onClose} aria-label="Close">
                         <Icon name="close" />
                     </button>

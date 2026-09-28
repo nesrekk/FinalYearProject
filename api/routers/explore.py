@@ -253,6 +253,33 @@ def _persistence(stats: tuple, min_gp: int, min_mpg: float):
             "from": used[0], "to": used[-1], "players": n_players}
 
 
+BREAKOUT_DEFAULT_GP, BREAKOUT_DEFAULT_MPG = 30, 15.0  # the endpoint's default floors
+BREAKOUT_FLAG_TOP = 25  # the Breakout Detector's default list length
+
+
+@lru_cache(maxsize=1)
+def breakout_flags():
+    """{player_id: [{season, direction, rank, pool, score}]}: every season a
+    player made the Breakout Detector's default list (default stats and
+    floors, top 25) for a jump or a drop. Same ranking as /explore/breakouts,
+    so the player profile's flags match what that page shows."""
+    zs = _season_z(tuple(BREAKOUT_DEFAULT), BREAKOUT_DEFAULT_GP, BREAKOUT_DEFAULT_MPG)
+    flags = {}
+    for season in sorted(zs):
+        if season - 1 not in zs:
+            continue
+        jumps = _jumps(zs, season)
+        for direction, order in (("up", sorted(jumps, key=lambda t: -t[1])), ("down", sorted(jumps, key=lambda t: t[1]))):
+            for rank, (pid, score, _d) in enumerate(order[:BREAKOUT_FLAG_TOP], start=1):
+                flags.setdefault(pid, []).append({"season": season, "direction": direction, "rank": rank,
+                                                  "pool": len(jumps), "score": round(score, 3)})
+    return flags
+
+
+def breakout_persistence():
+    return _persistence(tuple(BREAKOUT_DEFAULT), BREAKOUT_DEFAULT_GP, BREAKOUT_DEFAULT_MPG)
+
+
 @router.get("/explore/breakouts")
 def breakouts(
     season: int | None = None,

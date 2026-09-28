@@ -14,7 +14,7 @@ import DashboardHome from './components/pages/DashboardHome';
 import LandingPage from './components/pages/LandingPage';
 import Loader from './components/Loader';
 import { prefetchCoreData } from './services/api';
-import { PAGE_PARAM, currentPageParam, pushPage } from './utils/useUrlState';
+import { NAVIGATE_EVENT, PAGE_PARAM, currentPageParam, pushPage } from './utils/useUrlState';
 import './styles/dashboard.css';
 import './styles/theme.css';
 
@@ -44,6 +44,7 @@ const Methodology = lazy(() => import('./components/pages/Methodology'));
 const LeaderboardBuilder = lazy(() => import('./components/pages/LeaderboardBuilder'));
 const RegressionExplorer = lazy(() => import('./components/pages/RegressionExplorer'));
 const BreakoutDetector = lazy(() => import('./components/pages/BreakoutDetector'));
+const PlayerProfile = lazy(() => import('./components/pages/PlayerProfile'));
 const RoleFinder = lazy(() => import('./components/pages/RoleFinder'));
 const EraTranslator = lazy(() => import('./components/pages/EraTranslator'));
 const StatLineFinder = lazy(() => import('./components/pages/StatLineFinder'));
@@ -73,6 +74,7 @@ const PAGES = {
   builder: LeaderboardBuilder,
   regression: RegressionExplorer,
   breakouts: BreakoutDetector,
+  player: PlayerProfile,
   rolefinder: RoleFinder,
   era: EraTranslator,
   statline: StatLineFinder,
@@ -84,6 +86,11 @@ const PAGES = {
 // still opens Analytics on that tab.
 function routeFromUrl() {
   const page = currentPageParam();
+  // A profile is keyed by its player, so one profile linking to another
+  // mounts fresh instead of keeping the first player's state.
+  if (page === 'player') {
+    return { landing: false, page, key: `player-${new URLSearchParams(window.location.search).get('id')}` };
+  }
   if (page) return { landing: false, page: PAGES[page] ? page : 'dashboard' };
   if (window.location.hash.length > 1) return { landing: false, page: 'analytics' };
   return { landing: true, page: 'dashboard' };
@@ -117,7 +124,13 @@ export default function App() {
       window.dispatchEvent(new Event('hashchange'));
     };
     window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    // openPage() (utils/useUrlState.js): a link that already pushed its URL.
+    const onNavigateEvent = () => setRoute(routeFromUrl());
+    window.addEventListener(NAVIGATE_EVENT, onNavigateEvent);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      window.removeEventListener(NAVIGATE_EVENT, onNavigateEvent);
+    };
   }, []);
 
   // `hash` is an Analytics tab id (e.g. 'wpa'); `params` are optional tool
@@ -151,7 +164,7 @@ export default function App() {
         <PageHeader activePage={activePage} />
         <AnimatePresence mode="wait">
           <motion.div
-            key={activePage}
+            key={route.key || activePage}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}

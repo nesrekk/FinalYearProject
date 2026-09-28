@@ -34,6 +34,30 @@ export function pushPage(page, hash, params) {
     if (hash) window.dispatchEvent(new Event('hashchange'));
 }
 
+// Opening a page that needs its own query params (a player's profile,
+// `?page=player&id=203999`) from anywhere, including components that don't
+// get onNavigate. App re-reads the URL on this event, as on Back/Forward.
+export const NAVIGATE_EVENT = 'nbahub:navigate';
+
+export function pageHref(page, params = {}) {
+    return `${window.location.pathname}?${new URLSearchParams({ [PAGE_PARAM]: page, ...params })}`;
+}
+
+export function openPage(page, params) {
+    const url = pageHref(page, params);
+    if (url !== here()) window.history.pushState(null, '', url);
+    window.dispatchEvent(new Event(NAVIGATE_EVENT));
+}
+
+export const playerProfileHref = (playerId) => pageHref('player', { id: playerId });
+export const openPlayerProfile = (playerId) => openPage('player', { id: playerId });
+
+// A plain left click (no modifier keys) is handled in-app; cmd/ctrl/shift
+// and middle clicks keep the browser's own behaviour (open in a new tab).
+export function isPlainClick(e) {
+    return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+}
+
 // The query string as it was when the component mounted. Read inputs from
 // it once, when the component sets up its initial state.
 export function useInitialParams() {

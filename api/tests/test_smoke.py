@@ -1265,6 +1265,40 @@ def test_breakout_detector_known_seasons():
     assert client.get("/explore/breakouts", params={"stats": "age"}).status_code == 400
 
 
+def test_player_profile_known_players():
+    from impact_api import app
+    client = TestClient(app)
+    jokic = client.get("/player-profile/203999").json()
+    _assert_has_source(jokic)
+    wins = {(a["season"], a["award"]) for a in jokic["awards"]["rows"] if a["winner"] and a["award"] == "MVP"}
+    assert wins == {(2021, "MVP"), (2022, "MVP"), (2024, "MVP")}
+    assert jokic["player"]["draft"]["pick"] == 41 and jokic["player"]["greats"]
+    for block in ("defense", "gravity", "contracts"):
+        assert jokic[block]["rows"], block
+    assert jokic["clutch"]["clutch_plays"] > 0 and jokic["shots"]["zones"]["fga"] > 0
+    # Profile breakout flags match the Breakout Detector's own list.
+    flag = next(f for f in jokic["breakouts"]["flags"] if f["season"] == 2017)
+    listed = client.get("/explore/breakouts", params={"season": 2017, "top_n": 25}).json()["results"]
+    assert next(r["rank"] for r in listed if r["player_id"] == 203999) == flag["rank"]
+
+    # Traded mid-season: games per team (Basketball-Reference), 2021-22 BKN 44 + PHI 21.
+    harden = client.get("/player-profile/201935").json()
+    row = next(s for s in harden["seasons"]["rows"] if s["season"] == 2022)
+    assert [(t["team"], t["gp"]) for t in row["stints"]] == [("BKN", 44), ("PHI", 21)]
+
+    # Pre-tracking legend: season rows and awards, no tracking blocks.
+    jordan = client.get("/player-profile/893").json()
+    assert sum(a["award"] == "MVP" and a["winner"] for a in jordan["awards"]["rows"]) == 5
+    assert not jordan["defense"]["rows"] and not jordan["gravity"]["rows"] and jordan["clutch"] is None
+    assert jordan["shots"]["seasons"][0]["season"] == 1997  # shot locations start in 1996-97
+
+    zones = client.get("/player-profile/203999/shot-zones", params={"season": 2016}).json()
+    assert sum(z["fga"] for z in zones["zones"]) == zones["fga"]
+    assert client.get("/player-profile/203999/shot-zones", params={"season": 1990}).status_code == 404
+    assert client.get("/player-profile/999999999").status_code == 404
+    assert client.get("/player-profile/resolve", params={"name": "jokic"}).json()["player_id"] == 203999
+
+
 def test_shot_zone_history_matches_box_scores():
     """Shot mix over a career: regular-season shots per season by zone, with
     the league's own mix. Stored shots should match box-score FGA closely."""

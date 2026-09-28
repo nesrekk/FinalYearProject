@@ -77,11 +77,12 @@ export async function fetchSeasonSimilarity(player, season) {
 }
 
 export async function fetchSeasonSimilarityProfile(
-    player, season, { topN = 10, excludeSelf = true, minGp = 20, onePerPlayer = false } = {}
+    player, season, { topN = 10, excludeSelf = true, minGp = 20, onePerPlayer = false, playerId } = {}
 ) {
+    // playerId (optional) picks the player exactly; two players can share a name.
     const response = await axios.get(
         `${SIMILARITY_BASE}/similarity/season-profile/${encodeURIComponent(player)}/${season}`,
-        { params: { top_n: topN, exclude_self: excludeSelf, min_gp: minGp, one_per_player: onePerPlayer } }
+        { params: { top_n: topN, exclude_self: excludeSelf, min_gp: minGp, one_per_player: onePerPlayer, player_id: playerId } }
     );
     return response.data;
 }
@@ -613,6 +614,24 @@ export async function fetchScoutingReport(playerName, season) {
         `${IMPACT_BASE}/players/scouting-report/${encodeURIComponent(playerName)}`,
         { params: season ? { season } : {} }
     );
+    return response.data;
+}
+
+// ─── Player profile page ─────────────────────────────────────────
+
+export async function fetchPlayerFullProfile(playerId) {
+    const response = await axios.get(`${IMPACT_BASE}/player-profile/${playerId}`);
+    return response.data;
+}
+
+export async function fetchProfileShotZones(playerId, season) {
+    const response = await axios.get(`${IMPACT_BASE}/player-profile/${playerId}/shot-zones`, { params: { season } });
+    return response.data;
+}
+
+// Name -> { player_id, player_name }, for links that only know a name.
+export async function resolvePlayerId(name) {
+    const response = await axios.get(`${IMPACT_BASE}/player-profile/resolve`, { params: { name } });
     return response.data;
 }
 
