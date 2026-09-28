@@ -928,6 +928,24 @@ export async function fetchShotZoneHistory(playerName) {
     return response.data;
 }
 
+// Expected FG% / shot-making (routers/shot_making.py, scripts/build_shot_making.py).
+export async function fetchShotMaking(playerName) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/shots/player/${encodeURIComponent(playerName)}/shot-making`
+    );
+    return response.data;
+}
+
+export async function fetchShotMakingLeaderboard(params = {}) {
+    const response = await axios.get(`${IMPACT_BASE}/shots/shot-making/leaderboard`, { params });
+    return response.data;
+}
+
+export async function fetchShotMakingModel() {
+    const response = await axios.get(`${IMPACT_BASE}/shots/shot-making/model`);
+    return response.data;
+}
+
 export async function fetchHofCareerLeaders(stat, limit = 50) {
     return getWithCache(`hof_career_${stat}_${limit}`, 10 * 60 * 1000, async () => {
         const response = await axios.get(`${IMPACT_BASE}/hof/career-leaders`, { params: { stat, limit } });

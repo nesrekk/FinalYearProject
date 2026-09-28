@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
-    fetchAllNBABacktest, fetchAwardCalibration, fetchBacktestOverview, fetchWpaValidation,
+    fetchAllNBABacktest, fetchAwardCalibration, fetchBacktestOverview, fetchShotMakingModel, fetchWpaValidation,
 } from '../../services/api';
 import Icon from '../common/Icon';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import { ShotMakingModelStats } from '../common/ShotMaking';
 import { CHECKED_ON, OPEN_ISSUES, PRINCIPLES, SECTIONS } from './methodologyContent';
 import '../../styles/methodology.css';
 
@@ -158,12 +159,13 @@ function ModelCard({ item, live, onNavigate }) {
             {item.live === 'awards' && <AwardsBacktest data={live.backtest} allNba={live.allNba} />}
             {item.live === 'awards' && <CalibrationTable data={live.calibration} />}
             {item.live === 'wp' && <WpValidation data={live.wp} />}
+            {item.live === 'shotmaking' && <ShotMakingModelStats data={live.shotmaking} compact />}
         </article>
     );
 }
 
 export default function Methodology({ onNavigate }) {
-    const [live, setLive] = useState({ backtest: null, allNba: null, calibration: null, wp: null });
+    const [live, setLive] = useState({ backtest: null, allNba: null, calibration: null, wp: null, shotmaking: null });
 
     useEffect(() => {
         let alive = true;
@@ -173,6 +175,7 @@ export default function Methodology({ onNavigate }) {
         fetchAllNBABacktest().then(put('allNba')).catch(() => put('allNba')(null));
         fetchWpaValidation().then(put('wp')).catch(() => put('wp')({}));
         fetchAwardCalibration().then(put('calibration')).catch(() => put('calibration')({}));
+        fetchShotMakingModel().then(put('shotmaking')).catch(() => put('shotmaking')({}));
         return () => { alive = false; };
     }, []);
 
@@ -181,7 +184,7 @@ export default function Methodology({ onNavigate }) {
             <section className="dashboard-card meth-intro">
                 <p className="page-subtitle">
                     How each model and index on this site works, how it was checked, and where it falls short.
-                    Written numbers were checked on {CHECKED_ON}; the award and win-probability numbers load live.
+                    Written numbers were checked on {CHECKED_ON}; the award, win-probability and shot-making numbers load live.
                 </p>
                 <ul className="meth-principles">
                     {PRINCIPLES.map(([t, d]) => (

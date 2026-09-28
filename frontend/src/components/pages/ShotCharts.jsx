@@ -6,6 +6,7 @@ import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import ShotMixHistory from '../common/ShotMixHistory';
+import { ShotMakingLeaderboard, ShotMakingModel, ShotMakingPlayer } from '../common/ShotMaking';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 function clamp(n, lo, hi) {
@@ -180,7 +181,13 @@ export default function ShotCharts() {
   const [seasons, setSeasons] = useState([]);
   const [season, setSeason] = useState('');
   const [source, setSource] = useState('');
-  const [viewMode, setViewMode] = useState(() => parseParam.oneOf(params, 'view', ['heatmap']) ?? 'dots'); // 'dots' | 'heatmap'
+  const [viewMode, setViewMode] = useState(() => parseParam.oneOf(params, 'view', ['heatmap', 'shotmaking']) ?? 'dots'); // 'dots' | 'heatmap' | 'shotmaking'
+  // Shot-making tab: the leaderboard's season, ranking and order (rank=, by=, order= in the link).
+  const [rank, setRank] = useState(() => ({
+    season: parseParam.int(params, 'rank', { min: 1997, max: 2100 }),
+    sort: parseParam.oneOf(params, 'by', ['shot_making', 'quality', 'pts_above', 'efg']) ?? 'shot_making',
+    order: parseParam.oneOf(params, 'order', ['asc', 'desc']) ?? 'desc',
+  }));
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -243,7 +250,13 @@ export default function ShotCharts() {
 
   // Nothing is written until a player has loaded, so a slow first load
   // doesn't wipe the link it came from.
-  useUrlSync(resolvedPlayer ? { player: resolvedPlayer, season, view: viewMode === 'heatmap' ? 'heatmap' : null } : null);
+  const onShotMaking = viewMode === 'shotmaking';
+  useUrlSync(resolvedPlayer ? {
+    player: resolvedPlayer, season, view: viewMode === 'dots' ? null : viewMode,
+    rank: onShotMaking ? rank.season : null,
+    by: onShotMaking && rank.sort !== 'shot_making' ? rank.sort : null,
+    order: onShotMaking && rank.order !== 'desc' ? rank.order : null,
+  } : null);
 
   function handleSeasonChange(newSeason) {
     setSeason(newSeason);
@@ -380,6 +393,13 @@ export default function ShotCharts() {
           >
             Heat Map
           </button>
+          <button
+            type="button"
+            className={`tab-btn ${viewMode === 'shotmaking' ? 'tab-btn--active' : ''}`}
+            onClick={() => setViewMode('shotmaking')}
+          >
+            Shot-making
+          </button>
         </div>
         {viewMode === 'heatmap' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: '0.75rem' }}>
@@ -394,6 +414,7 @@ export default function ShotCharts() {
         )}
       </div>
 
+      {!onShotMaking && (<>
       <div className="court-container">
         <svg viewBox="0 0 500 470" className="court-svg" role="img" aria-label={viewMode === 'heatmap'
           ? `Half-court heat map of ${resolvedPlayer || 'the selected player'}'s real field goal percentage by court zone for the ${season || 'selected'} season, colored from cold (low FG%) to hot (high FG%) with opacity showing shot volume`
@@ -502,6 +523,17 @@ export default function ShotCharts() {
           Showing up to 5,000 shots for performance.
         </p>
       </div>
+
+      </>)}
+
+      {onShotMaking && resolvedPlayer && (
+        <>
+          <ShotMakingPlayer key={resolvedPlayer} playerName={resolvedPlayer} />
+          <ShotMakingLeaderboard season={rank.season} sort={rank.sort} order={rank.order}
+            onChange={(patch) => setRank((prev) => ({ ...prev, ...patch }))} />
+          <ShotMakingModel />
+        </>
+      )}
 
       {resolvedPlayer && <ShotMixHistory key={resolvedPlayer} playerName={resolvedPlayer} />}
     </div>

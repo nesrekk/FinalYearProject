@@ -28,6 +28,7 @@ from routers.dad_index import MIN_DFGA_RELIABLE
 from routers.explore import BREAKOUT_DEFAULT, BREAKOUT_DEFAULT_GP, BREAKOUT_DEFAULT_MPG, BREAKOUT_FLAG_TOP, \
     breakout_flags, breakout_persistence
 from routers.leaderboard import STATS
+from routers.shot_making import PLAYER_COLS as SM_COLS, _row as sm_row
 from routers.on_off import DEFAULT_MIN_MINUTES as ON_OFF_MIN_MINUTES, FEW_OFF_MINUTES as ON_OFF_FEW_OFF
 from source_badge import make_source
 
@@ -74,6 +75,7 @@ def _coverage():
             "defense": _span(cur, "SELECT min(season), max(season) FROM defender_dad"),
             "gravity": _span(cur, "SELECT min(season), max(season) FROM player_gravity WHERE gravity IS NOT NULL"),
             "clutch": _span(cur, "SELECT min(season), max(season) FROM pbp_games"),
+            "shot_making": _span(cur, "SELECT min(season), max(season) FROM shot_making_league"),
             "on_off": _span(cur, "SELECT min(season), max(season) FROM player_on_off"),
             "game_lines": _span(cur, "SELECT min(season), max(season) FROM player_game_lines"),
             "awards": _span(cur, "SELECT min(season), max(season) FROM player_awards WHERE award <> 'All-Star'"),
@@ -270,6 +272,13 @@ def get_player_profile(player_id: int):
 
         shot_seasons = _shot_seasons(cur, player_id)
 
+        # ── Shot-making: actual vs expected eFG% per season (player_shot_making) ──
+        cur.execute(f"SELECT {', '.join(SM_COLS)} FROM player_shot_making WHERE player_id = %s ORDER BY season",
+                    (player_id,))
+        shot_making = [sm_row(SM_COLS, r) for r in cur.fetchall()]
+        cur.execute("SELECT notes->>'min_fga' FROM shot_making_validation WHERE scope = 'crossfit' LIMIT 1")
+        sm_min = cur.fetchone()
+
         # ── Game log: seasons with game lines (rows load from /games/player-log) ──
         cur.execute("""SELECT l.season, count(*) FROM player_game_lines l
                        JOIN team_game_fatigue f ON f.team_abbreviation = l.team_abbreviation
@@ -317,6 +326,7 @@ def get_player_profile(player_id: int):
         "awards": {"rows": awards},
         "shots": {"seasons": shot_seasons, "zones": zones, "zone_min_fga": ZONE_MIN_FGA,
                   "season_min_fga": SHOT_SEASON_MIN_FGA},
+        "shot_making": {"rows": shot_making, "min_fga": int(sm_min[0]) if sm_min and sm_min[0] else 200},
         "scouting": {"seasons": scouting_seasons},
         "defense": {"rows": defense, "reliable_min_dfga": MIN_DFGA_RELIABLE},
         "gravity": {"rows": gravity},
@@ -333,7 +343,7 @@ def get_player_profile(player_id: int):
         "_source": make_source(
             ["player_season_stats", "player_team_stints", "player_bio", "player_awards", "draft_history",
              "player_roles", "greats", "player_shots", "scouting_splits", "defender_dad", "player_gravity",
-             "contract_value", "player_wpa_totals", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue"],
+             "contract_value", "player_wpa_totals", "player_shot_making", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue"],
             "nba_api (stats.nba.com), Basketball-Reference via Kaggle, ESPN play-by-play, Kaggle salary datasets",
         ),
     }

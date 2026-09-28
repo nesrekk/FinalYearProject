@@ -9,6 +9,7 @@ import PlayerHeadshot from '../common/PlayerHeadshot';
 import PlayerName from '../common/PlayerName';
 import ScoutingReportCard from '../common/ScoutingReportCard';
 import ShotMixHistory from '../common/ShotMixHistory';
+import { ShotMakingInfo, ShotMakingTable } from '../common/ShotMaking';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import TeamLogo from '../common/TeamLogo';
@@ -353,6 +354,19 @@ function ShotZones({ playerId, block }) {
     );
 }
 
+function ShotMakingBlock({ block, coverage, onNavigate, name }) {
+    return (
+        <Section id="shotmaking" title="Shot-making" info={<ShotMakingInfo />}
+            meta={<>Actual eFG% minus what an average shooter would post on the same shots, each regular season
+                ({span(coverage)}); seasons under {block.min_fga} attempts are not ranked.{' '}
+                <button type="button" className="pp-link" onClick={() => onNavigate('shotcharts', null, { player: name, view: 'shotmaking' })}>
+                    Open in Shot Charts
+                </button></>}>
+            <ShotMakingTable rows={block.rows} minFga={block.min_fga} />
+        </Section>
+    );
+}
+
 function Scouting({ name, seasons }) {
     const [season, setSeason] = useState(seasons[seasons.length - 1]);
     return (
@@ -675,6 +689,11 @@ function missingReasons(d) {
             ? `Shot locations start in ${label(cov.shots.from)}; ${career}.`
             : 'No regular-season shot locations stored for him.']);
     }
+    if (!d.shot_making.rows.length) {
+        out.push(['Shot-making', endedBefore(cov.shot_making.from)
+            ? `Shot locations start in ${label(cov.shot_making.from)}; ${career}.`
+            : 'No regular-season shots on file for him.']);
+    }
     if (!d.scouting.seasons.length) {
         out.push(['Scouting report', endedBefore(cov.scouting.from)
             ? `Play-type data starts in ${label(cov.scouting.from)}; ${career}.`
@@ -766,6 +785,7 @@ export default function PlayerProfile({ onNavigate }) {
         ['gamelog', 'Game log', d.game_log.seasons.length > 0],
         ['awards', 'Awards', d.awards.rows.length > 0 || d.player.greats],
         ['shots', 'Shot zones', d.shots.seasons.length > 0],
+        ['shotmaking', 'Shot-making', d.shot_making.rows.length > 0],
         ['scouting', 'Scouting', d.scouting.seasons.length > 0],
         ['defense', 'Defense', d.defense.rows.length > 0],
         ['gravity', 'Gravity', d.gravity.rows.length > 0],
@@ -802,6 +822,10 @@ export default function PlayerProfile({ onNavigate }) {
                     <ShotZones playerId={d.player.player_id} block={d.shots} />
                     <ShotMixHistory key={d.player.player_name} playerName={d.player.player_name} />
                 </>
+            )}
+            {d.shot_making.rows.length > 0 && (
+                <ShotMakingBlock block={d.shot_making} coverage={d.coverage.shot_making} onNavigate={onNavigate}
+                    name={d.player.player_name} />
             )}
             {d.scouting.seasons.length > 0 && <Scouting name={d.player.player_name} seasons={d.scouting.seasons} />}
             {d.defense.rows.length > 0 && <Defense block={d.defense} onNavigate={onNavigate} />}

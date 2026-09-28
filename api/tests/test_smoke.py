@@ -1663,3 +1663,47 @@ def test_on_off_known_cases():
     assert {r["season"] for r in prof["rows"]} >= {2021, 2022, 2023, 2024, 2025, 2026}
     assert client.get("/lineups/on-off", params={"season": 2010}).status_code == 404
     assert client.get("/lineups/on-off", params={"team": "XXX"}).status_code == 404
+
+
+# ─── Round 3, Phase 8: Expected FG% / shot-making ────────────────────────────
+
+def test_shot_making_known_shooters_and_model_check():
+    """Expected FG% per shot (scripts/build_shot_making.py) and what it says
+    about famous seasons; the model must beat its baselines out of sample."""
+    from impact_api import app
+    client = TestClient(app)
+    lb = client.get("/shots/shot-making/leaderboard", params={"season": 2016}).json()
+    _assert_has_source(lb)
+    assert lb["min_fga"] == 200 and lb["rows"][0]["player_name"] == "Stephen Curry"
+    curry = lb["rows"][0]
+    assert curry["fga"] == 1598 and curry["rank"] == 1 and curry["shot_making"] > 0.10
+    assert abs(curry["efg_pct"] - 0.630) < 0.003          # Basketball-Reference: .630
+    assert all(r["qualified"] and r["fga"] >= 200 for r in lb["rows"])
+    assert abs(lb["league"]["efg_pct"] - lb["league"]["x_efg_pct"]) < 0.005   # calibrated within the season
+    quality = client.get("/shots/shot-making/leaderboard", params={"season": 2025, "sort": "quality"}).json()
+    gobert = quality["rows"][0]
+    assert gobert["player_name"] == "Rudy Gobert" and gobert["quality_rank"] == 1
+    assert abs(gobert["shot_making"]) < 2 * gobert["se"]   # rim-only big: best diet, no shot-making
+    worst = client.get("/shots/shot-making/leaderboard", params={"season": 2023, "order": "asc", "limit": 30}).json()
+    assert "Russell Westbrook" in [r["player_name"] for r in worst["rows"]]
+    assert client.get("/shots/shot-making/leaderboard", params={"season": 1990}).status_code == 404
+
+    p = client.get("/shots/player/Kyle Korver/shot-making").json()
+    _assert_has_source(p)
+    s15 = next(r for r in p["rows"] if r["season"] == 2015)
+    assert s15["rank"] == 1 and s15["fg3_pct"] > 0.48 and s15["margin95"] == round(1.96 * s15["se"], 4)
+    assert client.get("/shots/player/Magic Johnson/shot-making").status_code == 404
+
+    m = client.get("/shots/shot-making/model").json()
+    by = {r["model_type"]: r for r in m["holdout"]}
+    assert by["hgb"]["deployed"] and by["hgb"]["log_loss"] < by["logreg"]["log_loss"] < by["constant"]["log_loss"]
+    assert by["hgb"]["log_loss"] < by["zone_baseline"]["log_loss"]
+    assert len(by["hgb"]["reliability_bins"]) >= 5
+    assert all(abs(b["predicted_mean"] - b["observed_rate"]) < 0.05
+               for b in by["hgb"]["reliability_bins"] if b["n"] >= 1000)
+    y2y = m["crossfit"]["notes"]["year_to_year"]["200"]
+    assert y2y["quality"] > 0.8 > y2y["shot_making"] > 0.4
+
+    prof = client.get("/player-profile/201939").json()   # Curry
+    assert prof["shot_making"]["min_fga"] == 200
+    assert any(r["season"] == 2016 and r["rank"] == 1 for r in prof["shot_making"]["rows"])

@@ -1,0 +1,40 @@
+/* Expected FG% / shot-making (common/ShotMaking.jsx): Shot Charts › Shot-making
+   tab and the player profile block. Paper/Ink tokens only. */
+.smk-pos { color: var(--positive); }
+.smk-neg { color: var(--negative); }
+.smk-margin { color: var(--text-3); font-size: 0.8em; white-space: nowrap; }
+.smk-row--small { color: var(--text-3); }
+.smk-row--chosen td { font-weight: 600; }
+.smk-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--space-3); }
+.smk-cards .stat-card-sub { color: var(--text-3); font-size: 0.8rem; margin-top: 2px; }
+@media (max-width: 640px) { .smk-cards { grid-template-columns: 1fr; } }
+
+.smk-chart { position: relative; margin-top: var(--space-3); }
+.smk-chart svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+.smk-grid { stroke: var(--hairline); stroke-width: 1; }
+.smk-zero { stroke: var(--text); stroke-width: 1.5; }
+.smk-tick { fill: var(--text-2); font-family: var(--font-mono); font-size: 11px; }
+.smk-bar rect { stroke: var(--surface); stroke-width: 1; }
+.smk-bar--up rect { fill: var(--positive); }
+.smk-bar--down rect { fill: var(--negative); }
+.smk-bar--small { opacity: 0.35; }
+.smk-bar--active rect { stroke: var(--text); stroke-width: 1.5; }
+.smk-whisker { stroke: var(--text); stroke-width: 1.5; opacity: 0.7; }
+.smk-hit { fill: transparent; cursor: pointer; }
+.smk-hit:focus-visible { outline: none; fill: color-mix(in srgb, var(--text) 8%, transparent); }
+.smk-detail {
+  margin: var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+}
+.smk-detail h4 { margin: 0 0 var(--space-2); font-size: 1rem; color: var(--text); }
+.smk-detail p { margin: 0; color: var(--text-2); font-size: 0.85rem; }
+
+.smk-controls { flex-wrap: wrap; gap: var(--space-3) var(--space-4); margin-bottom: var(--space-3); }
+.smk-select { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
+.smk-select > span { font-size: var(--text-eyebrow-size); letter-spacing: var(--text-eyebrow-tracking); text-transform: uppercase; color: var(--text-3); }
+.smk-select .input-field { flex: none; min-width: 160px; max-width: 100%; }
+.smk-model .meth-live-note { color: var(--text-2); font-size: 0.85rem; margin: var(--space-3) 0 0; }
+.smk-table th, .smk-table td { white-space: nowrap; }
+.smk-table .lb-num { text-align: right; font-variant-numeric: tabular-nums; }

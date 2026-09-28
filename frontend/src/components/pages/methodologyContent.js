@@ -52,6 +52,21 @@ export const SECTIONS = [
                 live: 'wp',
             },
             {
+                id: 'shotmaking',
+                name: 'Expected FG% and shot-making',
+                open: { page: 'shotcharts', label: 'Shot Charts' },
+                answers: 'How often would an average shooter make this shot, and who shoots better or worse than that on their own shots?',
+                method: 'A gradient-boosting classifier (scikit-learn HistGradientBoosting) scores every regular-season shot since 1996-97 (5.93 million) from its court location, distance, angle, zone, two or three, period, seconds left in the period and season. Shot quality is the expected eFG% of a player\'s own shots; shot-making is his actual eFG% minus that, with a binomial 95% range; points above expected is the same gap in points. Every player is scored by a model trained on the other four-fifths of players (5 folds), so his own makes never raise the bar he is measured against. Seasons under 200 attempts are shown but not ranked.',
+                checked: 'Chosen on 2025-26, which no candidate saw: log loss 0.648 for boosting against 0.657 for a logistic regression on engineered terms, 0.657 for last season\'s FG% by zone and 0.692 for a constant (live numbers below, with the reliability bins). Cross-fitted over all seasons, the league\'s expected eFG% is within 0.35 points of its actual eFG% in every season. Sniff tests: Curry 2015-16 +13.1 eFG points (1st of 326), Korver 2014-15 +15.1 (1st), Jokić 2024-25 +11.0 (1st of 333); Gobert 2024-25 and DeAndre Jordan 2014-15 have the best shot quality of their seasons with shot-making within a standard error of zero. Year to year, shot quality correlates 0.88 and shot-making 0.56 (players with 200+ attempts in both seasons, 6,866 pairs). Checked 2026-09-28.',
+                limits: [
+                    'No shot on file has a closest-defender distance or a shot type (catch-and-shoot vs. pull-up), so shot-making also carries the defence a player faced and the shots he created; a rim-runner\'s finishing counts as much as a shooter\'s jumper.',
+                    'Before 2010-11 about a quarter of shots (nearly all at the rim) have no exact location and sit at the hoop; the season input lets the model treat them era by era. The stored shot_distance is not used: 7% of threes carry 0 there.',
+                    'A shot is far from certain either way (held-out ROC-AUC 0.65), so a season\'s shot-making carries a range of about ± 3-4 eFG points even on 1,000 attempts. A season after the last one in training is scored as that last season.',
+                    'Regular season only.',
+                ],
+                live: 'shotmaking',
+            },
+            {
                 id: 'madness',
                 name: 'March Madness model',
                 open: { page: 'analytics', hash: 'madness', label: 'March Madness' },
