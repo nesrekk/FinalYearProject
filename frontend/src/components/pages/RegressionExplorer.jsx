@@ -5,6 +5,7 @@ import InfoTooltip from '../common/InfoTooltip';
 import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import ChartExport from '../common/ChartExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
@@ -121,6 +122,7 @@ function Scatter({ data }) {
 
     return (
         <div className="rx-chart" ref={boxRef}>
+            <ChartExport svgRef={svgRef} name={`${data.y.label} vs ${data.x.label}`} />
             <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary}
                 onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
                 {niceTicks(y0, y1).map((t) => (

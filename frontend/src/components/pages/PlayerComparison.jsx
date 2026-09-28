@@ -10,6 +10,7 @@ import ScoutingReportCard from '../common/ScoutingReportCard';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import TableExport from '../common/TableExport';
+import ChartExport from '../common/ChartExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
@@ -203,6 +204,7 @@ function BioCard({ profile, color }) {
 }
 
 export default function PlayerComparison() {
+    const radarRef = useRef(null);
     // A shared link carries ?season=&a=&b= (utils/useUrlState.js).
     const params = useInitialParams();
     const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: 2026 }) ?? 2025);
@@ -376,8 +378,9 @@ export default function PlayerComparison() {
                         <p className="page-subtitle" style={{ marginTop: '-0.5rem', marginBottom: '1rem' }}>
                             Percentile rank vs. all qualified players this season · pool size {profileA.pool_size}
                         </p>
+                        <ChartExport svgRef={radarRef} name={`${profileA.player_name} vs ${profileB.player_name} skill profile`} />
                         <div style={{ display: 'flex', justifyContent: 'center' }}>
-                            <svg viewBox={`0 0 ${RADAR_SIZE} ${RADAR_SIZE}`} style={{ maxWidth: 420, width: '100%', height: 'auto' }} role="img" aria-label={`Radar chart comparing ${profileA.player_name} and ${profileB.player_name}'s percentile rank against all qualified players this season across ${profileA.skill_profile.length} skill categories`}>
+                            <svg ref={radarRef} viewBox={`0 0 ${RADAR_SIZE} ${RADAR_SIZE}`} style={{ maxWidth: 420, width: '100%', height: 'auto' }} role="img" aria-label={`Radar chart comparing ${profileA.player_name} and ${profileB.player_name}'s percentile rank against all qualified players this season across ${profileA.skill_profile.length} skill categories`}>
                                 <rect x="0" y="0" width={RADAR_SIZE} height={RADAR_SIZE} fill="var(--surface-2)" rx="8" />
                                 {[0.25, 0.5, 0.75, 1].map((f) => (
                                     <polygon key={f} points={ringPoints(profileA.skill_profile.length, f)} fill="none" stroke="var(--hairline)" strokeWidth="1" />

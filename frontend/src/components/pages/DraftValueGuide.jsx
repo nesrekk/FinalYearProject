@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { fetchDraftClass, fetchDraftValueCurve, fetchDraftBestValue } from '../../services/api';
 import Loader from '../Loader';
 import InfoTooltip from '../common/InfoTooltip';
@@ -6,6 +6,7 @@ import PlayerName from '../common/PlayerName';
 import Icon from '../common/Icon';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import ChartExport from '../common/ChartExport';
 
 const CHART_W = 640, CHART_H = 260, PAD_L = 56, PAD_R = 16, PAD_T = 16, PAD_B = 40;
 
@@ -14,6 +15,7 @@ function fmt(v, digits = 1) {
 }
 
 function ValueCurveChart({ buckets }) {
+    const svgRef = useRef(null);
     const plotW = CHART_W - PAD_L - PAD_R;
     const plotH = CHART_H - PAD_T - PAD_B;
     const values = buckets.map((b) => b.avg_ws_first5).filter((v) => v != null);
@@ -26,7 +28,9 @@ function ValueCurveChart({ buckets }) {
     const zeroY = yFor(0);
 
     return (
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="Bar chart of average Win Shares in a player's first five NBA seasons by draft-pick range, falling as the pick gets later">
+        <div>
+            <ChartExport svgRef={svgRef} name="draft value curve" />
+            <svg ref={svgRef} viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="Bar chart of average Win Shares in a player's first five NBA seasons by draft-pick range, falling as the pick gets later">
             <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
             {[0, 0.25, 0.5, 0.75, 1].map((t) => {
                 const v = minVal + t * span;
@@ -62,6 +66,7 @@ function ValueCurveChart({ buckets }) {
             })}
             <text x={CHART_W / 2} y={CHART_H - 6} fill="var(--text-2)" fontSize="11" textAnchor="middle">Overall Pick Range</text>
         </svg>
+        </div>
     );
 }
 

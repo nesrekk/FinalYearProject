@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchBacktestDetail, fetchBacktestComparison, fetchShapCandidates, fetchShapBreakdown, fetchAllNBABacktest, fetchWpaValidation, fetchWpaModelCompare } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
 
 const ROC_SIZE = 320;
 const ROC_PAD = 36;
@@ -13,13 +14,16 @@ const ROC_PLOT = ROC_SIZE - 2 * ROC_PAD;
 function rocX(fpr) { return ROC_PAD + fpr * ROC_PLOT; }
 function rocY(tpr) { return ROC_SIZE - ROC_PAD - tpr * ROC_PLOT; }
 
-function RocCurveChart({ points, auc, color }) {
+function RocCurveChart({ points, auc, color, exportName }) {
+    const svgRef = useRef(null);
     if (!points?.length) return null;
     const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${rocX(p.fpr).toFixed(1)} ${rocY(p.tpr).toFixed(1)}`).join(' ');
     const areaPath = `${linePath} L ${rocX(1).toFixed(1)} ${rocY(0).toFixed(1)} L ${rocX(0).toFixed(1)} ${rocY(0).toFixed(1)} Z`;
     const ticks = [0, 0.25, 0.5, 0.75, 1];
     return (
-        <svg viewBox={`0 0 ${ROC_SIZE} ${ROC_SIZE}`} style={{ maxWidth: 320, display: 'block' }} role="img" aria-label={`ROC curve plotting true positive rate against false positive rate across every decision threshold, pooled across held-out seasons, with an AUC of ${auc?.toFixed(3) ?? 'unavailable'}; the dashed diagonal marks what random guessing would trace`}>
+        <div>
+            <ChartExport svgRef={svgRef} name={exportName ?? 'ROC curve'} />
+            <svg ref={svgRef} viewBox={`0 0 ${ROC_SIZE} ${ROC_SIZE}`} style={{ maxWidth: 320, display: 'block' }} role="img" aria-label={`ROC curve plotting true positive rate against false positive rate across every decision threshold, pooled across held-out seasons, with an AUC of ${auc?.toFixed(3) ?? 'unavailable'}; the dashed diagonal marks what random guessing would trace`}>
             <rect x="0" y="0" width={ROC_SIZE} height={ROC_SIZE} fill="var(--surface-2)" rx="8" />
             {/* Random-guess diagonal baseline */}
             <line x1={rocX(0)} y1={rocY(0)} x2={rocX(1)} y2={rocY(1)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
@@ -39,10 +43,12 @@ function RocCurveChart({ points, auc, color }) {
                 AUC = {auc?.toFixed(3) ?? '—'}
             </text>
         </svg>
+        </div>
     );
 }
 
 function ReliabilityChart({ bins, color, label }) {
+    const svgRef = useRef(null);
     if (!bins?.length) return null;
     const maxN = Math.max(...bins.map((b) => b.n));
     const ticks = [0, 0.25, 0.5, 0.75, 1];
@@ -50,7 +56,9 @@ function ReliabilityChart({ bins, color, label }) {
         .map((b, i) => `${i === 0 ? 'M' : 'L'} ${rocX(b.predicted_mid).toFixed(1)} ${rocY(b.observed_rate).toFixed(1)}`)
         .join(' ');
     return (
-        <svg viewBox={`0 0 ${ROC_SIZE} ${ROC_SIZE}`} style={{ maxWidth: 320, display: 'block' }} role="img" aria-label={`Reliability (calibration) chart of predicted win probability versus real observed win rate${label ? ` for ${label}` : ''}, with dot size showing sample size per bucket; points on the dashed diagonal are well-calibrated`}>
+        <div>
+            <ChartExport svgRef={svgRef} name={label ? `calibration ${label}` : 'calibration'} />
+            <svg ref={svgRef} viewBox={`0 0 ${ROC_SIZE} ${ROC_SIZE}`} style={{ maxWidth: 320, display: 'block' }} role="img" aria-label={`Reliability (calibration) chart of predicted win probability versus real observed win rate${label ? ` for ${label}` : ''}, with dot size showing sample size per bucket; points on the dashed diagonal are well-calibrated`}>
             <rect x="0" y="0" width={ROC_SIZE} height={ROC_SIZE} fill="var(--surface-2)" rx="8" />
             {/* Perfect-calibration diagonal */}
             <line x1={rocX(0)} y1={rocY(0)} x2={rocX(1)} y2={rocY(1)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
@@ -81,6 +89,7 @@ function ReliabilityChart({ bins, color, label }) {
                 </text>
             )}
         </svg>
+        </div>
     );
 }
 
@@ -427,7 +436,7 @@ export default function ModelValidationSection() {
                                 Pooled across every held-out season's out-of-fold predictions — the dashed
                                 diagonal is what random guessing would trace.
                             </p>
-                            <RocCurveChart points={allNbaDetail.summary.roc_curve} auc={allNbaDetail.summary.roc_auc} color="#facc15" />
+                            <RocCurveChart points={allNbaDetail.summary.roc_curve} auc={allNbaDetail.summary.roc_auc} color="#facc15" exportName="All-NBA ROC curve" />
                         </>
                     )}
 
@@ -656,7 +665,7 @@ export default function ModelValidationSection() {
                                 top-left corner because the model is discriminating real signal from noise well
                                 above chance, matching the {detail.summary.roc_auc?.toFixed(3) ?? '—'} AUC above.
                             </p>
-                            <RocCurveChart points={detail.summary.roc_curve} auc={detail.summary.roc_auc} color="#38bdf8" />
+                            <RocCurveChart points={detail.summary.roc_curve} auc={detail.summary.roc_auc} color="#38bdf8" exportName={`${detail.summary.model_label} ROC curve`} />
                         </>
                     )}
 

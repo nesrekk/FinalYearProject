@@ -4,6 +4,7 @@ import InfoTooltip from './InfoTooltip';
 import PlayerName from './PlayerName';
 import SourceBadge from './SourceBadge';
 import TableExport from './TableExport';
+import ChartExport from './ChartExport';
 import '../../styles/shotmaking.css';
 
 // Expected FG% / shot-making (GET /shots/shot-making/*, routers/shot_making.py,
@@ -38,6 +39,7 @@ export function ShotMakingInfo() {
 // ── Chart: one bar per season, 95% whiskers, zero line ───────────────────
 function ShotMakingChart({ rows, minFga, name, active, onHover, onPick }) {
     const boxRef = useRef(null);
+    const svgRef = useRef(null);
     const [W, setW] = useState(720);
     const H = W < 520 ? 220 : 260;
 
@@ -68,7 +70,8 @@ function ShotMakingChart({ rows, minFga, name, active, onHover, onPick }) {
 
     return (
         <div className="smk-chart" ref={boxRef}>
-            <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} onMouseLeave={() => onHover(null)}>
+            <ChartExport svgRef={svgRef} name={`${name} shot-making`} />
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} onMouseLeave={() => onHover(null)}>
                 {ticks.map((t) => (
                     <g key={t}>
                         <line className={t === 0 ? 'smk-zero' : 'smk-grid'} x1={M.l} x2={W - M.r} y1={sy(t)} y2={sy(t)} />

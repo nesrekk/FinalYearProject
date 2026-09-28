@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchArchetypes, fetchSeasonClusters, fetchPlayerClusterHistory, fetchLivePlayerSuggestions, fetchLeagueEvolution } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
@@ -6,6 +6,7 @@ import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import OffensiveStyleSection from './OffensiveStyleSection';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
 
 // Ten distinct hues for the ten roles; fills only (never text), readable on Paper and Ink.
 const PALETTE = ['#ff5b14', '#2e86de', '#f5b700', '#8e5bd6', '#12a4a0', '#e0245e', '#6ab04c', '#9aa5b1', '#c97c3a', '#4dc9f6'];
@@ -19,6 +20,7 @@ function seasonLabel(season) {
 }
 
 function StackedArchetypeChart({ evolution, colorByArchetype }) {
+    const svgRef = useRef(null);
     const seasons = evolution?.seasons || [];
     const archetypes = evolution?.archetypes || [];
     if (!seasons.length) return null;
@@ -39,27 +41,31 @@ function StackedArchetypeChart({ evolution, colorByArchetype }) {
     const tickEvery = seasons.length > 10 ? 3 : 1;
 
     return (
-        <svg viewBox={`0 0 ${EVO_W} ${EVO_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Stacked area chart of each player archetype's share of the qualified player pool from ${seasons[0]} through ${seasons[seasons.length - 1]}`}>
-            <rect x="0" y="0" width={EVO_W} height={EVO_H} fill="var(--surface-2)" rx="8" />
-            {[0, 0.25, 0.5, 0.75, 1].map((t) => (
-                <React.Fragment key={t}>
-                    <line x1={EVO_PAD_L} y1={evoY(t)} x2={EVO_W - EVO_PAD_R} y2={evoY(t)} stroke="var(--hairline)" strokeWidth="1" />
-                    <text x={EVO_PAD_L - 6} y={evoY(t) + 3} fill="var(--text-3)" fontSize="9" textAnchor="end">{Math.round(t * 100)}%</text>
-                </React.Fragment>
-            ))}
-            {layers.map((l) => (
-                <path key={l.archetype} d={l.path} fill={colorByArchetype[l.archetype] || '#94a3b8'} fillOpacity={0.85} stroke="var(--surface)" strokeWidth="0.5" />
-            ))}
-            {seasons.map((s, i) => (
-                i % tickEvery === 0 && (
-                    <text key={s} x={evoX(i)} y={EVO_H - 6} fill="var(--text-3)" fontSize="9" textAnchor="middle">{s}</text>
-                )
-            ))}
-        </svg>
+        <div>
+            <ChartExport svgRef={svgRef} name="archetype share of the player pool" />
+            <svg ref={svgRef} viewBox={`0 0 ${EVO_W} ${EVO_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Stacked area chart of each player archetype's share of the qualified player pool from ${seasons[0]} through ${seasons[seasons.length - 1]}`}>
+                <rect x="0" y="0" width={EVO_W} height={EVO_H} fill="var(--surface-2)" rx="8" />
+                {[0, 0.25, 0.5, 0.75, 1].map((t) => (
+                    <React.Fragment key={t}>
+                        <line x1={EVO_PAD_L} y1={evoY(t)} x2={EVO_W - EVO_PAD_R} y2={evoY(t)} stroke="var(--hairline)" strokeWidth="1" />
+                        <text x={EVO_PAD_L - 6} y={evoY(t) + 3} fill="var(--text-3)" fontSize="9" textAnchor="end">{Math.round(t * 100)}%</text>
+                    </React.Fragment>
+                ))}
+                {layers.map((l) => (
+                    <path key={l.archetype} d={l.path} fill={colorByArchetype[l.archetype] || '#94a3b8'} fillOpacity={0.85} stroke="var(--surface)" strokeWidth="0.5" />
+                ))}
+                {seasons.map((s, i) => (
+                    i % tickEvery === 0 && (
+                        <text key={s} x={evoX(i)} y={EVO_H - 6} fill="var(--text-3)" fontSize="9" textAnchor="middle">{s}</text>
+                    )
+                ))}
+            </svg>
+        </div>
     );
 }
 
 function TrendMiniChart({ label, data, valueKey, format, color }) {
+    const svgRef = useRef(null);
     const values = data.map((d) => d[valueKey]).filter((v) => v != null);
     if (!values.length) return null;
     const vMin = Math.min(...values), vMax = Math.max(...values);
@@ -74,7 +80,7 @@ function TrendMiniChart({ label, data, valueKey, format, color }) {
     return (
         <div>
             <div className="page-subtitle" style={{ marginBottom: 4, fontSize: '0.78rem' }}>{label}</div>
-            <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Line chart of ${label} from ${data[0].season} to ${data[data.length - 1].season}, ranging from ${format(vMin)} to ${format(vMax)}`}>
+            <svg ref={svgRef} viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Line chart of ${label} from ${data[0].season} to ${data[data.length - 1].season}, ranging from ${format(vMin)} to ${format(vMax)}`}>
                 <rect x="0" y="0" width={w} height={h} fill="var(--surface-2)" rx="6" />
                 <path d={path} fill="none" stroke={color} strokeWidth="2" />
                 <text x={padL} y={h - 3} fill="var(--text-3)" fontSize="8">{data[0].season}</text>
@@ -82,11 +88,13 @@ function TrendMiniChart({ label, data, valueKey, format, color }) {
                 <text x={padL} y={padT + 8} fill="var(--text-2)" fontSize="9" fontWeight="700">{format(vMax)}</text>
                 <text x={padL} y={h - padB + 4} fill="var(--text-2)" fontSize="9" fontWeight="700">{format(vMin)}</text>
             </svg>
+            <ChartExport svgRef={svgRef} name={label} />
         </div>
     );
 }
 
 export default function PlayerArchetypesSection() {
+    const scatterRef = useRef(null);
     const [archetypes, setArchetypes] = useState([]);
     const [season, setSeason] = useState(2025);
     const [seasonData, setSeasonData] = useState(null);
@@ -273,7 +281,8 @@ export default function PlayerArchetypesSection() {
 
             {!loading && plot && (
                 <div className="court-container" style={{ marginTop: '1rem' }}>
-                    <svg viewBox={`0 0 ${plot.width} ${plot.height}`} className="court-svg" style={{ maxHeight: 420 }} role="img" aria-label={`Scatter plot of a 2D projection of each player's statistical profile for the ${season} season, with dots colored by player archetype cluster`}>
+                    <ChartExport svgRef={scatterRef} name={`player archetypes ${season}`} />
+                    <svg ref={scatterRef} viewBox={`0 0 ${plot.width} ${plot.height}`} className="court-svg" style={{ maxHeight: 420 }} role="img" aria-label={`Scatter plot of a 2D projection of each player's statistical profile for the ${season} season, with dots colored by player archetype cluster`}>
                         <rect x="0" y="0" width={plot.width} height={plot.height} fill="var(--surface-2)" rx="8" />
                         {visiblePlayers.map((p) => (
                             <circle

@@ -1,13 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchPlaytypeArchetypes, fetchPlaytypeSeasonClusters } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
 
 const PALETTE = ['#facc15', '#fb923c', '#38bdf8', '#a78bfa', '#34d399', '#f87171'];
 
 export default function OffensiveStyleSection() {
+    const svgRef = useRef(null);
     const [styles, setStyles] = useState([]);
     const [season, setSeason] = useState(2025);
     const [seasonData, setSeasonData] = useState(null);
@@ -121,7 +123,8 @@ export default function OffensiveStyleSection() {
 
             {!loading && plot && (
                 <div className="court-container">
-                    <svg viewBox={`0 0 ${plot.width} ${plot.height}`} className="court-svg" style={{ maxHeight: 380 }} role="img" aria-label={`Scatter plot of a 2D projection of each player's offensive play-type frequency mix for the ${season} season, with dots colored by offensive style cluster`}>
+                    <ChartExport svgRef={svgRef} name={`offensive style ${season}`} />
+                    <svg ref={svgRef} viewBox={`0 0 ${plot.width} ${plot.height}`} className="court-svg" style={{ maxHeight: 380 }} role="img" aria-label={`Scatter plot of a 2D projection of each player's offensive play-type frequency mix for the ${season} season, with dots colored by offensive style cluster`}>
                         <rect x="0" y="0" width={plot.width} height={plot.height} fill="var(--surface-2)" rx="8" />
                         {visiblePlayers.map((p) => (
                             <circle

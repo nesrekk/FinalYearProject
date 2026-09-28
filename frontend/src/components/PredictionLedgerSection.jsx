@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchLedgerSummary } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
@@ -6,6 +6,7 @@ import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
 
 const MODELS = [
     { id: 'mvp', label: 'MVP' },
@@ -30,7 +31,8 @@ function fmtTime(iso) {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-function TrajectoryChart({ candidates }) {
+function TrajectoryChart({ candidates, exportName }) {
+    const svgRef = useRef(null);
     if (!candidates?.length) return null;
 
     const allTimes = candidates.flatMap((c) => c.trajectory.map((p) => new Date(p.predicted_at).getTime()));
@@ -40,7 +42,9 @@ function TrajectoryChart({ candidates }) {
     const y = (p) => PAD_T + (1 - p) * PLOT_H;
 
     return (
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Line chart of each logged award candidate's real predicted win probability over time, from ${candidates.length} tracked candidate${candidates.length === 1 ? '' : 's'}`}>
+        <div>
+            <ChartExport svgRef={svgRef} name={exportName} />
+            <svg ref={svgRef} viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Line chart of each logged award candidate's real predicted win probability over time, from ${candidates.length} tracked candidate${candidates.length === 1 ? '' : 's'}`}>
             <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
             {[0, 0.25, 0.5, 0.75, 1].map((t) => (
                 <React.Fragment key={t}>
@@ -65,6 +69,7 @@ function TrajectoryChart({ candidates }) {
             <text x={PAD_L} y={CHART_H - 4} fill="var(--text-3)" fontSize="9">{fmtTime(new Date(tMin).toISOString())}</text>
             <text x={CHART_W - PAD_R} y={CHART_H - 4} fill="var(--text-3)" fontSize="9" textAnchor="end">{fmtTime(new Date(tMax).toISOString())}</text>
         </svg>
+        </div>
     );
 }
 
@@ -155,7 +160,7 @@ export default function PredictionLedgerSection() {
                     )}
                     {candidates.length > 0 && (
                         <>
-                            <TrajectoryChart candidates={candidates} />
+                            <TrajectoryChart candidates={candidates} exportName={`${MODELS.find((m) => m.id === model)?.label} favorites over time`} />
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem 1.25rem', marginTop: '0.6rem' }}>
                                 {candidates.map((c, i) => (
                                     <div key={c.player_id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

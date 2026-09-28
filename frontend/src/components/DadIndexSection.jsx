@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchDadIndex } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
@@ -7,6 +7,7 @@ import TeamLogo from './common/TeamLogo';
 import SourceBadge from './common/SourceBadge';
 import AboutModelDrawer from './ui/AboutModelDrawer';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
 
 const POS_COLORS = { G: '#38bdf8', F: '#a78bfa', C: '#f59e0b' };
 const POS_LABELS = { G: 'Guards', F: 'Forwards', C: 'Centers' };
@@ -26,7 +27,8 @@ function pp(v) {
     return v == null ? '—' : `${v > 0 ? '+' : ''}${(v * 100).toFixed(1)} pts`;
 }
 
-function Scatter({ defenders, zKey, focusId, onHover, onSelect }) {
+function Scatter({ defenders, zKey, focusId, onHover, onSelect, exportName }) {
+    const svgRef = useRef(null);
     const W = 720;
     const H = 470;
     const m = { top: 28, right: 20, bottom: 44, left: 56 };
@@ -61,7 +63,8 @@ function Scatter({ defenders, zKey, focusId, onHover, onSelect }) {
 
     return (
         <div style={{ width: '100%', overflowX: 'auto' }}>
-            <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: 520, height: 'auto', display: 'block' }}
+            <ChartExport svgRef={svgRef} name={exportName} />
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: 520, height: 'auto', display: 'block' }}
                 role="img" aria-label="Scatter of DAD z-score against defended FG% differential">
                 {xTicks.map((t) => (
                     <g key={`x${t}`}>
@@ -309,7 +312,8 @@ export default function DadIndexSection() {
                                 {defenders.map((d) => <option key={d.player_id} value={d.player_name} />)}
                             </datalist>
                         </div>
-                        <Scatter defenders={defenders} zKey={zKey} focusId={focusId} onHover={setHoverId} onSelect={setSelectedId} />
+                        <Scatter defenders={defenders} zKey={zKey} focusId={focusId} onHover={setHoverId} onSelect={setSelectedId}
+                            exportName={`DAD index ${seasonLabel(data.season)}`} />
                         <div style={{ marginTop: '1rem' }}>
                             <DefenderDetail d={byId.get(focusId)} zKey={zKey} quadrants={data.quadrants} />
                         </div>

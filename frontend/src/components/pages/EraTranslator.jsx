@@ -5,9 +5,12 @@ import InfoTooltip from '../common/InfoTooltip';
 import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import ChartExport from '../common/ChartExport';
+import ChartTooltip from '../common/ChartTooltip';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import AutocompleteDropdown from '../common/AutocompleteDropdown';
+import useChartCrosshair from '../../utils/useChartCrosshair';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
@@ -34,6 +37,7 @@ const M = { l: 44, r: 14, t: 16, b: 30 };
 
 function PaceChart({ series, source, target }) {
     const boxRef = useRef(null);
+    const svgRef = useRef(null);
     const [W, setW] = useState(720);
     const H = W < 520 ? 190 : 220;
 
@@ -66,9 +70,14 @@ function PaceChart({ series, source, target }) {
         ...(target !== source ? [{ s: target, cls: 'era-mark era-mark--target', label: seasonLabel(target) }] : []),
     ].filter((m) => bySeason[m.s]);
 
+    const crosshairPoints = series.map((p) => ({ x: sx(p.season), y: sy(p.pace), p }));
+    const { point: hovered, overlayProps } = useChartCrosshair(crosshairPoints, W);
+
     return (
         <div className="rx-chart era-chart" ref={boxRef}>
-            <svg viewBox={`0 0 ${W} ${H}`} role="img"
+            <ChartExport svgRef={svgRef} name="league pace by season" />
+            <div style={{ position: 'relative' }}>
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img"
                 aria-label={`League pace by season, ${seasonLabel(s0)} to ${seasonLabel(s1)}: ${seasonLabel(source)} ${bySeason[source]?.pace}, ${seasonLabel(target)} ${bySeason[target]?.pace} possessions per 48 minutes.`}>
                 {[90, 100, 110, 120, 130].map((t) => (
                     <g key={t}>
@@ -81,6 +90,7 @@ function PaceChart({ series, source, target }) {
                 ))}
                 {est.length > 0 && <path className="era-line era-line--est" d={path(est)} />}
                 {measured.length > 0 && <path className="era-line" d={path(measured)} />}
+                {hovered && <line x1={hovered.x} y1={M.t} x2={hovered.x} y2={H - M.b} className="chart-crosshair-line" />}
                 {marks.map((m) => {
                     const x = sx(m.s);
                     const y = sy(bySeason[m.s].pace);
@@ -94,7 +104,19 @@ function PaceChart({ series, source, target }) {
                         </g>
                     );
                 })}
+                <rect x={M.l} y={M.t} width={W - M.l - M.r} height={H - M.t - M.b}
+                    className="chart-crosshair-overlay" role="slider" aria-label="League pace by season, use arrow keys to step through"
+                    aria-valuetext={hovered ? `${seasonLabel(hovered.p.season)}: ${hovered.p.pace.toFixed(1)} possessions per 48 minutes` : undefined}
+                    {...overlayProps} />
             </svg>
+            {hovered && (
+                <ChartTooltip x={hovered.x} y={hovered.y} chartWidth={W} chartHeight={H}>
+                    <div style={{ fontWeight: 600 }}>{seasonLabel(hovered.p.season)}</div>
+                    <div>{hovered.p.pace.toFixed(1)} possessions per 48 min</div>
+                    {hovered.p.pace_source !== 'bref' && <div style={{ color: 'var(--text-3)' }}>Estimated</div>}
+                </ChartTooltip>
+            )}
+            </div>
             <p className="era-chart-key">
                 League pace, possessions per 48 minutes; seasons by the year they ended. <span className="era-key-est">Dashed</span>: estimated
                 (before 1973-74 offensive rebounds and turnovers weren&apos;t recorded; 1949-50 estimated by this app).

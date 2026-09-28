@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { fetchShotZoneHistory } from '../../services/api';
 import SourceBadge from './SourceBadge';
 import TableExport from './TableExport';
+import ChartExport from './ChartExport';
 
 // Shot mix over a career: one 100%-stacked column per season (regular
 // season only), zones from the rim outward, bottom to top. The dashed line
@@ -27,6 +28,7 @@ function threeShare(zones, key) {
 
 function MixChart({ data, active, onHover, onPick }) {
     const boxRef = useRef(null);
+    const svgRef = useRef(null);
     const [W, setW] = useState(720);
     const H = W < 520 ? 240 : 300;
 
@@ -64,7 +66,8 @@ function MixChart({ data, active, onHover, onPick }) {
 
     return (
         <div className="sm-chart" ref={boxRef}>
-            <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} onMouseLeave={() => onHover(null)}>
+            <ChartExport svgRef={svgRef} name={`${data.player_name} shot mix`} />
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} onMouseLeave={() => onHover(null)}>
                 {[0, 0.25, 0.5, 0.75, 1].map((t) => (
                     <g key={t}>
                         <line className="sm-grid" x1={M.l} x2={W - M.r} y1={sy(t)} y2={sy(t)} />

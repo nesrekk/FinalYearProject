@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchLivePlayerSuggestions, fetchPlayerShots } from '../../services/api';
 import Icon from '../common/Icon';
 import PlayerName from '../common/PlayerName';
 import TableExport from '../common/TableExport';
+import ChartExport from '../common/ChartExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import ShotMixHistory from '../common/ShotMixHistory';
@@ -169,6 +170,7 @@ function computeZoneStats(shots) {
 }
 
 export default function ShotCharts() {
+  const svgRef = useRef(null);
   // A shared link carries ?player=&season=&view= (utils/useUrlState.js).
   const params = useInitialParams();
   const [searchInput, setSearchInput] = useState(() => parseParam.str(params, 'player') ?? 'Stephen Curry');
@@ -416,7 +418,8 @@ export default function ShotCharts() {
 
       {!onShotMaking && (<>
       <div className="court-container">
-        <svg viewBox="0 0 500 470" className="court-svg" role="img" aria-label={viewMode === 'heatmap'
+        <ChartExport svgRef={svgRef} name={`${resolvedPlayer || 'player'} shot chart ${season || ''}`} />
+        <svg ref={svgRef} viewBox="0 0 500 470" className="court-svg" role="img" aria-label={viewMode === 'heatmap'
           ? `Half-court heat map of ${resolvedPlayer || 'the selected player'}'s real field goal percentage by court zone for the ${season || 'selected'} season, colored from cold (low FG%) to hot (high FG%) with opacity showing shot volume`
           : `Half-court shot chart of every real shot ${resolvedPlayer || 'the selected player'} attempted in the ${season || 'selected'} season, plotted at its real court location and marked made or missed`}>
           <rect x="0" y="0" width="500" height="470" fill="var(--surface-2)" rx="8" />

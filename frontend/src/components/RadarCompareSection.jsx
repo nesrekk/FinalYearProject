@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchRadarProfile, fetchLivePlayerSuggestions } from '../services/api';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
 
 // Debounced suggestion fetch for one search slot, with a cancellation guard
 // so an earlier keystroke's response can't resolve after a later one and
@@ -115,6 +116,7 @@ function PlayerSlot({ index, color, entry, onSearch, onPick, onRemove, suggestio
 }
 
 export default function RadarCompareSection() {
+    const svgRef = useRef(null);
     const [season, setSeason] = useState(2025);
     const [slots, setSlots] = useState([null, null, null]); // {playerName, data, error}
     const [searchValues, setSearchValues] = useState(['', '', '']);
@@ -240,7 +242,8 @@ export default function RadarCompareSection() {
             {activeSlots.length > 0 && (
                 <>
                     <div className="court-container">
-                        <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="court-svg" style={{ maxHeight: 460 }} role="img" aria-label={`Radar chart comparing ${activeSlots.map((s) => s.playerName).join(', ')} across percentile rank on ${visibleAxes.length} stats: ${visibleAxes.map((a) => STAT_LABELS[a]).join(', ')}`}>
+                        <ChartExport svgRef={svgRef} name={`radar ${activeSlots.map((s) => s.playerName).join(' vs ')}`} />
+                        <svg ref={svgRef} viewBox={`0 0 ${SIZE} ${SIZE}`} className="court-svg" style={{ maxHeight: 460 }} role="img" aria-label={`Radar chart comparing ${activeSlots.map((s) => s.playerName).join(', ')} across percentile rank on ${visibleAxes.length} stats: ${visibleAxes.map((a) => STAT_LABELS[a]).join(', ')}`}>
                             <rect x="0" y="0" width={SIZE} height={SIZE} fill="var(--surface-2)" rx="8" />
                             {[0.25, 0.5, 0.75, 1].map((f) => (
                                 <polygon key={f} points={ringPolygonPoints(visibleAxes.length, f)} fill="none" stroke="var(--hairline)" strokeWidth="1" />

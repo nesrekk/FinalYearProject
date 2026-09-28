@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchGravity, fetchLineupSpacing } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
@@ -6,6 +6,7 @@ import PlayerHeadshot from './common/PlayerHeadshot';
 import TeamLogo from './common/TeamLogo';
 import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
 
 const WARM = [249, 115, 22]; // congested
 const COOL = [56, 189, 248]; // open
@@ -35,23 +36,27 @@ function tint(percentile) {
 // Half court in NBA shot-chart units (tenths of a foot, hoop at 0,0,
 // baseline 52.5 behind it), drawn with the baseline at the top.
 function HalfCourt({ percentile }) {
+    const svgRef = useRef(null);
     const Y = (y) => y + 52.5;
     const arcY = Math.sqrt(237.5 ** 2 - 220 ** 2);
     const fill = percentile == null ? 'var(--bg-elevated)' : tint(percentile);
     const line = 'var(--text-secondary)';
     return (
-        <svg viewBox="-260 -10 520 480" style={{ width: '100%', maxWidth: 420, height: 'auto', display: 'block' }}
-            role="img" aria-label="Half court tinted by this lineup's spacing percentile">
-            <rect x={-250} y={0} width={500} height={470} fill={fill} fillOpacity={percentile == null ? 1 : 0.35} stroke={line} strokeWidth={3} />
-            <rect x={-80} y={0} width={160} height={Y(137.5)} fill="none" stroke={line} strokeWidth={2} />
-            <circle cx={0} cy={Y(137.5)} r={60} fill="none" stroke={line} strokeWidth={2} />
-            <path d={`M -40 ${Y(0)} A 40 40 0 0 0 40 ${Y(0)}`} fill="none" stroke={line} strokeWidth={2} />
-            <line x1={-220} y1={0} x2={-220} y2={Y(arcY)} stroke={line} strokeWidth={2} />
-            <line x1={220} y1={0} x2={220} y2={Y(arcY)} stroke={line} strokeWidth={2} />
-            <path d={`M -220 ${Y(arcY)} A 237.5 237.5 0 0 0 220 ${Y(arcY)}`} fill="none" stroke={line} strokeWidth={2} />
-            <line x1={-30} y1={Y(-7.5)} x2={30} y2={Y(-7.5)} stroke={line} strokeWidth={3} />
-            <circle cx={0} cy={Y(0)} r={7.5} fill="none" stroke="#f97316" strokeWidth={2.5} />
-        </svg>
+        <div>
+            <ChartExport svgRef={svgRef} name="lineup spacing" />
+            <svg ref={svgRef} viewBox="-260 -10 520 480" style={{ width: '100%', maxWidth: 420, height: 'auto', display: 'block' }}
+                role="img" aria-label="Half court tinted by this lineup's spacing percentile">
+                <rect x={-250} y={0} width={500} height={470} fill={fill} fillOpacity={percentile == null ? 1 : 0.35} stroke={line} strokeWidth={3} />
+                <rect x={-80} y={0} width={160} height={Y(137.5)} fill="none" stroke={line} strokeWidth={2} />
+                <circle cx={0} cy={Y(137.5)} r={60} fill="none" stroke={line} strokeWidth={2} />
+                <path d={`M -40 ${Y(0)} A 40 40 0 0 0 40 ${Y(0)}`} fill="none" stroke={line} strokeWidth={2} />
+                <line x1={-220} y1={0} x2={-220} y2={Y(arcY)} stroke={line} strokeWidth={2} />
+                <line x1={220} y1={0} x2={220} y2={Y(arcY)} stroke={line} strokeWidth={2} />
+                <path d={`M -220 ${Y(arcY)} A 237.5 237.5 0 0 0 220 ${Y(arcY)}`} fill="none" stroke={line} strokeWidth={2} />
+                <line x1={-30} y1={Y(-7.5)} x2={30} y2={Y(-7.5)} stroke={line} strokeWidth={3} />
+                <circle cx={0} cy={Y(0)} r={7.5} fill="none" stroke="#f97316" strokeWidth={2.5} />
+            </svg>
+        </div>
     );
 }
 

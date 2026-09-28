@@ -7,6 +7,7 @@ import InfoTooltip from '../common/InfoTooltip';
 import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import ChartExport from '../common/ChartExport';
 import TeamLink from '../common/TeamLink';
 import TeamLogo from '../common/TeamLogo';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
@@ -136,6 +137,7 @@ function Glance({ s }) {
 // ── Franchise history: win% every season, this one highlighted ─────────
 function FranchiseChart({ rows, season, onSeason }) {
     const [ref, W] = useWidth();
+    const svgRef = useRef(null);
     const H = 150;
     const M = { l: 34, r: 8, t: 10, b: 24 };
     const step = (W - M.l - M.r) / rows.length;
@@ -143,7 +145,8 @@ function FranchiseChart({ rows, season, onSeason }) {
     const every = Math.max(1, Math.ceil(rows.length / (W < 520 ? 6 : 12)));
     return (
         <div className="rx-chart" ref={ref}>
-            <svg viewBox={`0 0 ${W} ${H}`} role="img"
+            <ChartExport svgRef={svgRef} name={`${rows[0].team_name ?? ''} win pct by season`} />
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img"
                 aria-label={`Win percentage every season, ${label(rows[0].season)} to ${label(rows[rows.length - 1].season)}; ${label(season)} highlighted.`}>
                 {[0, 0.5, 1].map((t) => (
                     <g key={t}>
@@ -237,6 +240,7 @@ function Summary({ s }) {
 // ── Game by game ────────────────────────────────────────────────────────
 function MarginChart({ games }) {
     const [ref, W] = useWidth();
+    const svgRef = useRef(null);
     const H = 170;
     const M = { l: 34, r: 8, t: 10, b: 22 };
     const max = Math.max(20, ...games.map((g) => Math.abs(g.pts_for - g.pts_against)));
@@ -245,7 +249,8 @@ function MarginChart({ games }) {
     const monthTicks = games.map((g, i) => [g.date.slice(5, 7), i]).filter(([m], i, arr) => i === 0 || m !== arr[i - 1][0]);
     return (
         <div className="rx-chart" ref={ref}>
-            <svg viewBox={`0 0 ${W} ${H}`} role="img"
+            <ChartExport svgRef={svgRef} name="game margins" />
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img"
                 aria-label={`Final margin of each of ${games.length} games, in order; wins above the line, losses below.`}>
                 {[-max, 0, max].map((t) => (
                     <g key={t}>

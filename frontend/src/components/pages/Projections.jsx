@@ -5,8 +5,11 @@ import InfoTooltip from '../common/InfoTooltip';
 import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import ChartExport from '../common/ChartExport';
+import ChartTooltip from '../common/ChartTooltip';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
+import useChartCrosshair from '../../utils/useChartCrosshair';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/stability.css';
 import '../../styles/projections.css';
@@ -49,6 +52,7 @@ function useWidth() {
 // ─── Backtest: mean absolute error of each method, one bar each ────────
 function ErrorBars({ bt, format, label }) {
     const [ref, W] = useWidth();
+    const svgRef = useRef(null);
     const methods = [
         ['Projection', bt.mae, true],
         ['Same as last season', bt.mae_last],
@@ -63,7 +67,8 @@ function ErrorBars({ bt, format, label }) {
     const sx = (v) => labelW + (v / max) * (W - labelW - 70);
     return (
         <div className="rx-chart pj-bars" ref={ref}>
-            <svg viewBox={`0 0 ${W} ${H}`} role="img"
+            <ChartExport svgRef={svgRef} name={`${label} backtest error by method`} />
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img"
                 aria-label={`${label}: average miss of each method in the backtest. Projection ${fmtErr(format, bt.mae)}, same as last season ${fmtErr(format, bt.mae_last)}, league average ${fmtErr(format, bt.mae_league)}.`}>
                 {methods.map(([name, v, main], i) => (
                     <g key={name} transform={`translate(0 ${i * rowH + 4})`}>
@@ -80,6 +85,7 @@ function ErrorBars({ bt, format, label }) {
 // ─── Backtest by season: projection vs. the two naive baselines ──────────
 function SeasonLines({ rows, format, label }) {
     const [ref, W] = useWidth();
+    const svgRef = useRef(null);
     const M = { l: 46, r: 14, t: 12, b: 32 };
     const H = W < 520 ? 200 : 240;
     const s0 = rows[0].season;
@@ -91,9 +97,13 @@ function SeasonLines({ rows, format, label }) {
     const path = (key) => rows.map((r, i) => `${i ? 'L' : 'M'}${sx(r.season).toFixed(1)},${sy(r[key]).toFixed(1)}`).join('');
     const ticks = rows.map((r) => r.season).filter((s) => s % (W < 520 ? 10 : 5) === 0);
     const yTicks = [0, 0.25, 0.5, 0.75, 1].map((t) => t * y1);
+    const crosshairPoints = rows.map((r) => ({ x: sx(r.season), y: sy(r.mae), r }));
+    const { point: hovered, overlayProps } = useChartCrosshair(crosshairPoints, W);
     return (
         <div className="rx-chart" ref={ref}>
-            <svg viewBox={`0 0 ${W} ${H}`} role="img"
+            <ChartExport svgRef={svgRef} name={`${label} backtest error by season`} />
+            <div style={{ position: 'relative' }}>
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img"
                 aria-label={`${label}: average miss by target season, ${seasonLabel(s0)} to ${seasonLabel(s1)}, projection against same-as-last-season and league average.`}>
                 {yTicks.map((t) => (
                     <g key={t}>
@@ -103,10 +113,24 @@ function SeasonLines({ rows, format, label }) {
                 ))}
                 {ticks.map((s) => <text key={s} className="rx-tick" x={sx(s)} y={H - M.b + 16} textAnchor="middle">{s}</text>)}
                 <text className="rx-axis" x={(M.l + W - M.r) / 2} y={H - 4} textAnchor="middle">Target season (year it ended)</text>
+                {hovered && <line x1={hovered.x} y1={M.t} x2={hovered.x} y2={H - M.b} className="chart-crosshair-line" />}
                 <path className="pj-season-line pj-season-line--league" d={path('mae_league')} />
                 <path className="pj-season-line pj-season-line--last" d={path('mae_last')} />
                 <path className="pj-season-line" d={path('mae')} />
+                <rect x={M.l} y={M.t} width={W - M.l - M.r} height={H - M.t - M.b}
+                    className="chart-crosshair-overlay" role="slider" aria-label={`${label} backtest error by season, use arrow keys to step through`}
+                    aria-valuetext={hovered ? `${hovered.r.season}: projection ${fmtErr(format, hovered.r.mae, 1)}, same as last season ${fmtErr(format, hovered.r.mae_last, 1)}, league average ${fmtErr(format, hovered.r.mae_league, 1)}` : undefined}
+                    {...overlayProps} />
             </svg>
+            {hovered && (
+                <ChartTooltip x={hovered.x} y={hovered.y} chartWidth={W} chartHeight={H}>
+                    <div style={{ fontWeight: 600 }}>{hovered.r.season}</div>
+                    <div>Projection: {fmtErr(format, hovered.r.mae, 1)}</div>
+                    <div style={{ color: 'var(--text-3)' }}>Same as last: {fmtErr(format, hovered.r.mae_last, 1)}</div>
+                    <div style={{ color: 'var(--text-3)' }}>League average: {fmtErr(format, hovered.r.mae_league, 1)}</div>
+                </ChartTooltip>
+            )}
+            </div>
             <p className="pj-key">
                 <span className="pj-key-item"><span className="pj-swatch" />Projection</span>
                 <span className="pj-key-item"><span className="pj-swatch pj-swatch--last" />Same as last season</span>

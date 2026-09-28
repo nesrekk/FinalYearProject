@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchWpReplayList, fetchWpReplay, fetchWpReplayWhatIf } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
@@ -6,6 +6,7 @@ import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
 
 const CHART_W = 760;
 const CHART_H = 300;
@@ -44,6 +45,7 @@ function wpColor(v) {
 }
 
 export default function GameReplaySection() {
+    const svgRef = useRef(null);
     const [games, setGames] = useState(null);
     const [gamesError, setGamesError] = useState('');
     const [selectedGameId, setSelectedGameId] = useState('');
@@ -189,7 +191,8 @@ export default function GameReplaySection() {
                         <span className="page-subtitle" style={{ marginLeft: 8 }}>{replay.game_date}</span>
                     </div>
 
-                    <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Line chart of ${replay.home_team}'s real home win probability over the course of the game from ${replay.away_team} ${replay.final_score.away} vs ${replay.home_team} ${replay.final_score.home}, tracked play by play from tip-off through the final buzzer, with markers on the top swing plays`}>
+                    <ChartExport svgRef={svgRef} name={`${replay.away_team} at ${replay.home_team} ${replay.game_date} win probability`} />
+                    <svg ref={svgRef} viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Line chart of ${replay.home_team}'s real home win probability over the course of the game from ${replay.away_team} ${replay.final_score.away} vs ${replay.home_team} ${replay.final_score.home}, tracked play by play from tip-off through the final buzzer, with markers on the top swing plays`}>
                         <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
                         {/* 50% reference line */}
                         <line x1={PAD_L} y1={chartY(0.5)} x2={CHART_W - PAD_R} y2={chartY(0.5)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
@@ -222,8 +225,11 @@ export default function GameReplaySection() {
                                 r={5}
                                 fill="transparent"
                                 style={{ cursor: 'pointer', pointerEvents: 'all' }}
+                                tabIndex={0}
                                 onMouseEnter={() => setHovered(p)}
                                 onMouseLeave={() => setHovered((h) => (h?.event_id === p.event_id ? null : h))}
+                                onFocus={() => setHovered(p)}
+                                onBlur={() => setHovered((h) => (h?.event_id === p.event_id ? null : h))}
                             />
                         ))}
 

@@ -5,6 +5,7 @@ import InfoTooltip from '../common/InfoTooltip';
 import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import ChartExport from '../common/ChartExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import AutocompleteDropdown from '../common/AutocompleteDropdown';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
@@ -68,6 +69,7 @@ function niceStep(span, count) {
 
 function AgingChart({ data, player }) {
     const [boxRef, W] = useWidth();
+    const svgRef = useRef(null);
     const narrow = W < 520;
     const H = narrow ? 300 : 360;
     const s = data.summary;
@@ -114,7 +116,8 @@ function AgingChart({ data, player }) {
 
     return (
         <div className="rx-chart ag-chart" ref={boxRef}>
-            <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={aria}>
+            <ChartExport svgRef={svgRef} name={`${s.label} aging curve ${s.era_label}`} />
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={aria}>
                 {yTicks.map((t) => (
                     <g key={`y${t}`}>
                         <line className={t === 0 ? 'ag-zero' : 'rx-grid'} x1={M.l} x2={W - M.r} y1={sy(t)} y2={sy(t)} />

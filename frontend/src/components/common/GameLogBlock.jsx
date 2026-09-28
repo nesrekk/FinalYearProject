@@ -4,9 +4,12 @@ import Loader from '../Loader';
 import HotStreakCard from './HotStreakCard';
 import InfoTooltip from './InfoTooltip';
 import TableExport from './TableExport';
+import ChartExport from './ChartExport';
+import ChartTooltip from './ChartTooltip';
 import TeamLogo from './TeamLogo';
 import TeamLink from './TeamLink';
 import { openPage } from '../../utils/useUrlState';
+import useChartCrosshair from '../../utils/useChartCrosshair';
 import '../../styles/gamelog.css';
 
 // Game log on the player profile: every regular-season game he played in a
@@ -44,8 +47,9 @@ function niceStep(raw) {
     return [1, 2, 2.5, 5, 10].map((m) => m * p).find((v) => v >= raw);
 }
 
-function RollingChart({ rows, stat, win, seasonValue }) {
+function RollingChart({ rows, stat, win, seasonValue, exportName }) {
     const boxRef = useRef(null);
+    const svgRef = useRef(null);
     const [W, setW] = useState(720);
     const H = W < 520 ? 240 : 280;
     const M = { t: 16, r: 16, b: 34, l: 44 };
@@ -83,9 +87,16 @@ function RollingChart({ rows, stat, win, seasonValue }) {
     if (n) xTicks.push(n - 1);
     const summary = `${name}, game by game, with a ${win}-game rolling average across ${n} games.`;
 
+    const crosshairPoints = rows.map((r, i) => ({
+        i, x: sx(i), y: sy(points[i].v ?? rolling[i] ?? seasonValue ?? 0), r, v: points[i].v, roll: rolling[i],
+    }));
+    const { point: hovered, overlayProps } = useChartCrosshair(crosshairPoints, W);
+
     return (
         <div className="rx-chart gl-chart" ref={boxRef}>
-            <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary}>
+            <ChartExport svgRef={svgRef} name={exportName} />
+            <div style={{ position: 'relative' }}>
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary}>
                 {ticks.map((t) => (
                     <g key={t}>
                         <line className="rx-grid" x1={M.l} x2={W - M.r} y1={sy(t)} y2={sy(t)} />
@@ -101,15 +112,27 @@ function RollingChart({ rows, stat, win, seasonValue }) {
                 {seasonValue != null && (
                     <line className="gl-avg" x1={M.l} x2={W - M.r} y1={sy(seasonValue)} y2={sy(seasonValue)} />
                 )}
+                {hovered && <line x1={hovered.x} y1={M.t} x2={hovered.x} y2={H - M.b} className="chart-crosshair-line" />}
                 <g className="gl-dots">
                     {points.map((p) => p.v != null && (
-                        <circle key={p.r.date} cx={sx(p.i)} cy={sy(p.v)} r={3}>
-                            <title>{`${day(p.r.date)} ${p.r.home ? 'vs' : '@'} ${p.r.opponent}: ${fmt(p.v)} in ${p.r.min} min`}</title>
-                        </circle>
+                        <circle key={p.r.date} cx={sx(p.i)} cy={sy(p.v)} r={hovered?.i === p.i ? 5 : 3}
+                            style={{ pointerEvents: 'none' }} />
                     ))}
                 </g>
                 {line && <polyline className="gl-roll" points={line} />}
+                <rect x={M.l} y={M.t} width={W - M.l - M.r} height={H - M.t - M.b}
+                    className="chart-crosshair-overlay" role="slider" aria-label={`${name} by game, use arrow keys to step through`}
+                    aria-valuetext={hovered ? `${day(hovered.r.date)}: ${fmt(hovered.v)}` : undefined}
+                    {...overlayProps} />
             </svg>
+            {hovered && (
+                <ChartTooltip x={hovered.x} y={hovered.y} chartWidth={W} chartHeight={H}>
+                    <div style={{ fontWeight: 600 }}>{day(hovered.r.date)} {hovered.r.home ? 'vs' : '@'} {hovered.r.opponent}</div>
+                    <div>{name}: {fmt(hovered.v)} in {hovered.r.min.toFixed(1)} min</div>
+                    {hovered.roll != null && <div style={{ color: 'var(--text-3)' }}>{win}-game avg: {fmt(hovered.roll)}</div>}
+                </ChartTooltip>
+            )}
+            </div>
             <p className="ss-legend">
                 Dots: each game. Line: average of the last {win} games
                 {format === 'pct' ? ' (made over attempted across those games)' : ''}, from game {win} on. Dashed: season average
@@ -193,7 +216,10 @@ export default function GameLogBlock({ playerId, seasons, nbaGp = {} }) {
                             </span>
                         )}
                     </p>
-                    {data.rows.length > 1 && <RollingChart rows={data.rows} stat={stat} win={win} seasonValue={seasonValue} />}
+                    {data.rows.length > 1 && (
+                        <RollingChart rows={data.rows} stat={stat} win={win} seasonValue={seasonValue}
+                            exportName={`${data.player_name} ${CHART_STATS[stat][0]} ${label(season)}`} />
+                    )}
                     <HotStreakCard key={season} playerId={playerId} season={season} stat={stat} win={win} dates={data.rows.map((r) => r.date)} />
                     <TableExport name={`${data.player_name} game log ${label(season)}`} />
                     <div className="table-wrapper pp-scroll">

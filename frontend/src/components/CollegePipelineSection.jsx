@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchCollegePipeline } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
@@ -6,6 +6,7 @@ import SourceBadge from './common/SourceBadge';
 import PlayerName from './common/PlayerName';
 import '../styles/college.css';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
 
 const RUN_LABEL = {
     Champions: 'Won title', '2ND': 'Runner-up', F4: 'Final Four', E8: 'Elite 8', S16: 'Sweet 16',
@@ -28,6 +29,7 @@ function crossesZero(groups) {
 
 /* Dot-and-whisker chart: group mean with its 95% bootstrap interval. */
 function ForestPlot({ groups, ariaLabel }) {
+    const svgRef = useRef(null);
     const W = 520, rowH = 36, padL = 170, padR = 20, padT = 10, padB = 34;
     const H = padT + groups.length * rowH + padB;
     const lo = Math.min(-2, ...groups.map((g) => g.ci_low));
@@ -37,7 +39,9 @@ function ForestPlot({ groups, ariaLabel }) {
     for (let t = Math.ceil(lo); t <= Math.floor(hi); t += 1) ticks.push(t);
 
     return (
-        <svg className="cb-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel}>
+        <div>
+            <ChartExport svgRef={svgRef} name="college pipeline by round" />
+            <svg ref={svgRef} className="cb-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel}>
             {ticks.map((t) => (
                 <g key={t}>
                     <line className={t === 0 ? 'cb-zero' : 'cb-axis'} x1={x(t)} x2={x(t)} y1={padT} y2={H - padB} />
@@ -59,10 +63,12 @@ function ForestPlot({ groups, ariaLabel }) {
             })}
             <text x={(padL + W - padR) / 2} y={H - 2} textAnchor="middle">Win Shares vs. draft-slot expectation (first 4 NBA seasons)</text>
         </svg>
+        </div>
     );
 }
 
 function StrengthScatter({ players, highlight }) {
+    const svgRef = useRef(null);
     const W = 520, H = 330, padL = 44, padR = 12, padT = 12, padB = 40;
     const xs = players.map((p) => p.adj_margin);
     const ys = players.map((p) => p.ws4_vs_expected);
@@ -76,7 +82,9 @@ function StrengthScatter({ players, highlight }) {
     for (let t = yMin; t <= yMax; t += 10) yTicks.push(t);
 
     return (
-        <svg className="cb-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Scatter of college team strength against NBA Win Shares versus draft-slot expectation, one dot per player">
+        <div>
+            <ChartExport svgRef={svgRef} name="college strength vs NBA win shares" />
+            <svg ref={svgRef} className="cb-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Scatter of college team strength against NBA Win Shares versus draft-slot expectation, one dot per player">
             {yTicks.map((t) => (
                 <g key={`y${t}`}>
                     <line className={t === 0 ? 'cb-zero' : 'cb-axis'} x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} />
@@ -97,6 +105,7 @@ function StrengthScatter({ players, highlight }) {
             ))}
             <text x={(padL + W - padR) / 2} y={H - 4} textAnchor="middle">College team strength (adj. margin per 100 possessions vs. average D1)</text>
         </svg>
+        </div>
     );
 }
 

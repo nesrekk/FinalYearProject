@@ -7,6 +7,8 @@ import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import AutocompleteDropdown from './common/AutocompleteDropdown';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
+import ChartTooltip from './common/ChartTooltip';
 
 const CHART_W = 720, CHART_H = 320, PAD_L = 56, PAD_R = 20, PAD_T = 20, PAD_B = 36;
 
@@ -26,6 +28,7 @@ const COLOR_PROJECTED = '#a78bfa';
 const COLOR_OVERLAY = '#facc15';
 
 function TrajectoryChart({ data }) {
+    const svgRef = useRef(null);
     const [hovered, setHovered] = useState(null);
     const { actual, projected, overlay } = buildChartPoints(data);
     const allAges = [...actual.map((p) => p.age), ...projected.map((p) => p.age)];
@@ -67,6 +70,9 @@ function TrajectoryChart({ data }) {
     const hoverProps = (key, point, label) => ({
         onMouseEnter: () => setHovered({ key, x: xFor(point.age), y: yFor(point.pts), age: point.age, pts: point.pts, floor: point.floor, ceiling: point.ceiling, label }),
         onMouseLeave: () => setHovered((h) => (h?.key === key ? null : h)),
+        onFocus: () => setHovered({ key, x: xFor(point.age), y: yFor(point.pts), age: point.age, pts: point.pts, floor: point.floor, ceiling: point.ceiling, label }),
+        onBlur: () => setHovered((h) => (h?.key === key ? null : h)),
+        tabIndex: 0,
     });
 
     // Band/projected-line hover targets have no single (age, pts) point, so
@@ -76,15 +82,23 @@ function TrajectoryChart({ data }) {
     const bandHoverProps = {
         onMouseEnter: () => setHovered({ key: 'band', x: xFor(midAge), y: yFor(yMin + (yMax - yMin) * 0.3), label: 'Comp range', note: 'Real range between the best and worst outcome among the comps used — not a statistical confidence interval.' }),
         onMouseLeave: () => setHovered((h) => (h?.key === 'band' ? null : h)),
+        onFocus: () => setHovered({ key: 'band', x: xFor(midAge), y: yFor(yMin + (yMax - yMin) * 0.3), label: 'Comp range', note: 'Real range between the best and worst outcome among the comps used — not a statistical confidence interval.' }),
+        onBlur: () => setHovered((h) => (h?.key === 'band' ? null : h)),
+        tabIndex: 0,
     };
     const projLineHoverProps = {
         onMouseEnter: () => setHovered({ key: 'projLine', x: xFor(midAge), y: yFor(yMin + (yMax - yMin) * 0.7), label: 'Projected (comp-weighted)', note: 'Points-per-game weighted by how similar each real comp was at this age.' }),
         onMouseLeave: () => setHovered((h) => (h?.key === 'projLine' ? null : h)),
+        onFocus: () => setHovered({ key: 'projLine', x: xFor(midAge), y: yFor(yMin + (yMax - yMin) * 0.7), label: 'Projected (comp-weighted)', note: 'Points-per-game weighted by how similar each real comp was at this age.' }),
+        onBlur: () => setHovered((h) => (h?.key === 'projLine' ? null : h)),
+        tabIndex: 0,
     };
 
     return (
-        <div style={{ position: 'relative' }}>
-            <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label={`Line chart of ${data.player_name}'s real career points per game by age, with a projected trajectory and comp-based ceiling/floor band for future ages, and any actual outcomes overlaid where already known`}>
+        <div>
+            <ChartExport svgRef={svgRef} name={`${data.player_name} trajectory`} />
+            <div style={{ position: 'relative' }}>
+            <svg ref={svgRef} viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label={`Line chart of ${data.player_name}'s real career points per game by age, with a projected trajectory and comp-based ceiling/floor band for future ages, and any actual outcomes overlaid where already known`}>
                 <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
                 {yTicks.map((t, idx) => (
                     <React.Fragment key={idx}>
@@ -139,24 +153,7 @@ function TrajectoryChart({ data }) {
                 ))}
             </svg>
             {hovered && (
-                <div
-                    style={{
-                        position: 'absolute',
-                        left: `${(hovered.x / CHART_W) * 100}%`,
-                        top: `${(hovered.y / CHART_H) * 100}%`,
-                        transform: 'translate(-50%, -120%)',
-                        background: 'var(--surface)',
-                        border: '1px solid var(--hairline)',
-                        borderRadius: 8,
-                        padding: '0.5rem 0.65rem',
-                        fontSize: '0.75rem',
-                        color: 'var(--text)',
-                        whiteSpace: 'nowrap',
-                        pointerEvents: 'none',
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-                        zIndex: 5,
-                    }}
-                >
+                <ChartTooltip x={hovered.x} y={hovered.y} chartWidth={CHART_W} chartHeight={CHART_H}>
                     <div style={{ fontWeight: 600 }}>{hovered.label}</div>
                     {hovered.note ? (
                         <div style={{ color: 'var(--text-3)', maxWidth: 220, whiteSpace: 'normal' }}>{hovered.note}</div>
@@ -168,8 +165,9 @@ function TrajectoryChart({ data }) {
                             )}
                         </>
                     )}
-                </div>
+                </ChartTooltip>
             )}
+            </div>
         </div>
     );
 }

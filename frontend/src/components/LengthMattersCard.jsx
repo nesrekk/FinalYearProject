@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchLengthStudy } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
+import ChartExport from './common/ChartExport';
 
 const CHART_W = 480;
 const CHART_H = 320;
@@ -13,6 +14,7 @@ const PLOT_W = CHART_W - PAD_L - PAD_R;
 const PLOT_H = CHART_H - PAD_T - PAD_B;
 
 function ScatterChart({ points, xKey, yKey, xLabel, yLabel, color }) {
+    const svgRef = useRef(null);
     const xs = points.map((p) => p[xKey]);
     const ys = points.map((p) => p[yKey]);
     const xMin = Math.min(...xs), xMax = Math.max(...xs);
@@ -21,16 +23,19 @@ function ScatterChart({ points, xKey, yKey, xLabel, yLabel, color }) {
     const y = (v) => PAD_T + (1 - (v - yMin) / ((yMax - yMin) || 1)) * PLOT_H;
 
     return (
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Scatter plot of ${xLabel} versus ${yLabel} for every player, showing the real correlation between wingspan-minus-height and defensive production`}>
-            <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
-            {points.map((p) => (
-                <circle key={p.player_id} cx={x(p[xKey])} cy={y(p[yKey])} r={3} fill={color} fillOpacity={0.65}>
-                    <title>{p.player_name}: {xLabel} {p[xKey]}, {yLabel} {p[yKey]}</title>
-                </circle>
-            ))}
-            <text x={CHART_W / 2} y={CHART_H - 6} fill="var(--text-2)" fontSize="11" textAnchor="middle">{xLabel}</text>
-            <text x="12" y={CHART_H / 2} fill="var(--text-2)" fontSize="11" textAnchor="middle" transform={`rotate(-90 12 ${CHART_H / 2})`}>{yLabel}</text>
-        </svg>
+        <div>
+            <ChartExport svgRef={svgRef} name={`${xLabel} vs ${yLabel}`} />
+            <svg ref={svgRef} viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Scatter plot of ${xLabel} versus ${yLabel} for every player, showing the real correlation between wingspan-minus-height and defensive production`}>
+                <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
+                {points.map((p) => (
+                    <circle key={p.player_id} cx={x(p[xKey])} cy={y(p[yKey])} r={3} fill={color} fillOpacity={0.65}>
+                        <title>{p.player_name}: {xLabel} {p[xKey]}, {yLabel} {p[yKey]}</title>
+                    </circle>
+                ))}
+                <text x={CHART_W / 2} y={CHART_H - 6} fill="var(--text-2)" fontSize="11" textAnchor="middle">{xLabel}</text>
+                <text x="12" y={CHART_H / 2} fill="var(--text-2)" fontSize="11" textAnchor="middle" transform={`rotate(-90 12 ${CHART_H / 2})`}>{yLabel}</text>
+            </svg>
+        </div>
     );
 }
 

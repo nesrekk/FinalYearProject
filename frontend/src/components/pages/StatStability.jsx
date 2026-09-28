@@ -4,8 +4,11 @@ import Loader from '../Loader';
 import InfoTooltip from '../common/InfoTooltip';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import ChartExport from '../common/ChartExport';
+import ChartTooltip from '../common/ChartTooltip';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
+import useChartCrosshair from '../../utils/useChartCrosshair';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/stability.css';
 
@@ -30,6 +33,7 @@ function niceTicks(max, count) {
 
 function ReliabilityCurve({ est, label }) {
     const boxRef = useRef(null);
+    const svgRef = useRef(null);
     const [W, setW] = useState(720);
     const H = W < 520 ? 300 : 360;
     useEffect(() => {
@@ -54,9 +58,14 @@ function ReliabilityCurve({ est, label }) {
     const typicalShown = est.typical_n != null && est.typical_n <= xMax;
     const summary = `${label}: reliability against sample size in ${est.unit_label}. Half signal at ${fmtN(m)} ${est.unit_label}.`;
 
+    const crosshairPoints = est.curve.map((p) => ({ x: sx(p.n_half), y: sy(p.r), p }));
+    const { point: hovered, overlayProps } = useChartCrosshair(crosshairPoints, W);
+
     return (
         <div className="rx-chart ss-chart" ref={boxRef}>
-            <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary}>
+            <ChartExport svgRef={svgRef} name={`${label} reliability curve`} />
+            <div style={{ position: 'relative' }}>
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary}>
                 {[0, 0.25, 0.5, 0.75, 1].map((t) => (
                     <g key={`y${t}`}>
                         <line className="rx-grid" x1={M.l} x2={W - M.r} y1={sy(t)} y2={sy(t)} />
@@ -77,16 +86,27 @@ function ReliabilityCurve({ est, label }) {
                         <text className="ss-mark" x={sx(est.typical_n) - 6} y={sy(1) + 12} textAnchor="end">Typical season</text>
                     </g>
                 )}
+                {hovered && <line x1={hovered.x} y1={M.t} x2={hovered.x} y2={H - M.b} className="chart-crosshair-line" />}
                 <polyline className="rx-fit ss-fit" points={fitted} />
                 <g className="ss-points">
                     {est.curve.map((p) => (
-                        <circle key={p.n} cx={sx(p.n_half)} cy={sy(p.r)} r={p.pool >= 100 ? 5 : 3.5}
-                            className={p.pool >= 100 ? '' : 'ss-thin'}>
-                            <title>{`${fmtN(p.n_half)} ${est.unit_label} per half: r = ${p.r.toFixed(2)} across ${p.pool.toLocaleString()} player-seasons`}</title>
-                        </circle>
+                        <circle key={p.n} cx={sx(p.n_half)} cy={sy(p.r)} r={hovered?.p === p ? (p.pool >= 100 ? 7 : 5.5) : (p.pool >= 100 ? 5 : 3.5)}
+                            className={p.pool >= 100 ? '' : 'ss-thin'} style={{ pointerEvents: 'none' }} />
                     ))}
                 </g>
+                <rect x={M.l} y={M.t} width={W - M.l - M.r} height={H - M.t - M.b}
+                    className="chart-crosshair-overlay" role="slider" aria-label={`${label} reliability curve, use arrow keys to step through`}
+                    aria-valuetext={hovered ? `${fmtN(hovered.p.n_half)} ${est.unit_label} per half: r = ${hovered.p.r.toFixed(2)}` : undefined}
+                    {...overlayProps} />
             </svg>
+            {hovered && (
+                <ChartTooltip x={hovered.x} y={hovered.y} chartWidth={W} chartHeight={H}>
+                    <div style={{ fontWeight: 600 }}>{fmtN(hovered.p.n_half)} {est.unit_label} per half</div>
+                    <div>r = {hovered.p.r.toFixed(2)}</div>
+                    <div style={{ color: 'var(--text-3)' }}>{hovered.p.pool.toLocaleString()} player-seasons</div>
+                </ChartTooltip>
+            )}
+            </div>
         </div>
     );
 }

@@ -1,9 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchPlayerHistory, fetchTeamHistory, fetchTradeTeams, fetchLivePlayerSuggestions } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
+import ChartExport from './common/ChartExport';
+import ChartTooltip from './common/ChartTooltip';
+import useChartCrosshair from '../utils/useChartCrosshair';
 
 const PLAYER_STATS = [
     { key: 'pts', label: 'Points', digits: 1 },
@@ -35,13 +38,13 @@ function seasonLabel(s) {
     return `${s - 1}-${String(s).slice(-2)}`;
 }
 
-function LineTrendChart({ points, statDef, color }) {
-    const [hovered, setHovered] = useState(null);
+function LineTrendChart({ points, statDef, color, exportName }) {
+    const svgRef = useRef(null);
     const valid = points.filter((p) => p.value != null);
-    if (!valid.length) return <p className="empty-message">No data for this stat.</p>;
 
     const values = valid.map((p) => p.value);
-    const rawMin = Math.min(...values), rawMax = Math.max(...values);
+    const rawMin = valid.length ? Math.min(...values) : 0;
+    const rawMax = valid.length ? Math.max(...values) : 1;
     const span = rawMax - rawMin || 1;
     const yMin = rawMin - span * 0.15;
     const yMax = rawMax + span * 0.15;
@@ -59,62 +62,58 @@ function LineTrendChart({ points, statDef, color }) {
     const fmt = (v) => statDef.pct ? `${(v * 100).toFixed(1)}%` : v.toFixed(statDef.digits);
 
     const yTicks = [0, 0.25, 0.5, 0.75, 1].map((t) => yMin + t * (yMax - yMin));
-    const peak = valid.reduce((a, b) => (b.value > a.value ? b : a), valid[0]);
+    const peak = valid.length ? valid.reduce((a, b) => (b.value > a.value ? b : a), valid[0]) : null;
+
+    const crosshairPoints = valid.map((p) => ({ ...p, x: xFor(p.i), y: yFor(p.value), isPeak: p.season === peak.season }));
+    const { point: hovered, overlayProps } = useChartCrosshair(crosshairPoints, CHART_W);
+
+    if (!valid.length) return <p className="empty-message">No data for this stat.</p>;
 
     return (
-        <div style={{ position: 'relative' }}>
-            <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label={`Line chart of ${statDef.label} by season, with the peak season marked in gold`}>
-                <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
-                {yTicks.map((t, idx) => (
-                    <React.Fragment key={idx}>
-                        <line x1={PAD_L} y1={yFor(t)} x2={CHART_W - PAD_R} y2={yFor(t)} stroke="var(--hairline)" strokeWidth="1" />
-                        <text x={PAD_L - 8} y={yFor(t) + 3} fill="var(--text-3)" fontSize="10" textAnchor="end">{fmt(t)}</text>
-                    </React.Fragment>
-                ))}
-                {points.map((p, i) => (
-                    (i % Math.ceil(points.length / 10) === 0 || i === points.length - 1) && (
-                        <text key={p.season} x={xFor(i)} y={CHART_H - PAD_B + 16} fill="var(--text-3)" fontSize="9" textAnchor="middle">
-                            {seasonLabel(p.season)}
-                        </text>
-                    )
-                ))}
-                <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" />
-                {valid.map((p) => (
-                    <circle
-                        key={p.season} cx={xFor(p.i)} cy={yFor(p.value)}
-                        r={hovered?.season === p.season ? (p.season === peak.season ? 6 : 5) : (p.season === peak.season ? 4.5 : 3)}
-                        fill={p.season === peak.season ? '#facc15' : color}
-                        style={{ cursor: 'pointer' }}
-                        onMouseEnter={() => setHovered({ season: p.season, x: xFor(p.i), y: yFor(p.value), value: p.value, isPeak: p.season === peak.season })}
-                        onMouseLeave={() => setHovered((h) => (h?.season === p.season ? null : h))}
-                    >
-                        <title>{seasonLabel(p.season)}: {fmt(p.value)}</title>
-                    </circle>
-                ))}
-            </svg>
-            {hovered && (
-                <div
-                    style={{
-                        position: 'absolute',
-                        left: `${(hovered.x / CHART_W) * 100}%`,
-                        top: `${(hovered.y / CHART_H) * 100}%`,
-                        transform: 'translate(-50%, -120%)',
-                        background: 'var(--surface)',
-                        border: '1px solid var(--hairline)',
-                        borderRadius: 8,
-                        padding: '0.5rem 0.65rem',
-                        fontSize: '0.75rem',
-                        color: 'var(--text)',
-                        whiteSpace: 'nowrap',
-                        pointerEvents: 'none',
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-                        zIndex: 5,
-                    }}
-                >
-                    <div style={{ fontWeight: 600 }}>{seasonLabel(hovered.season)}{hovered.isPeak ? ' · peak' : ''}</div>
-                    <div>{statDef.label}: {fmt(hovered.value)}</div>
-                </div>
-            )}
+        <div>
+            <ChartExport svgRef={svgRef} name={exportName} />
+            <div style={{ position: 'relative' }}>
+                <svg ref={svgRef} viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label={`Line chart of ${statDef.label} by season, with the peak season marked in gold`}>
+                    <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
+                    {yTicks.map((t, idx) => (
+                        <React.Fragment key={idx}>
+                            <line x1={PAD_L} y1={yFor(t)} x2={CHART_W - PAD_R} y2={yFor(t)} stroke="var(--hairline)" strokeWidth="1" />
+                            <text x={PAD_L - 8} y={yFor(t) + 3} fill="var(--text-3)" fontSize="10" textAnchor="end">{fmt(t)}</text>
+                        </React.Fragment>
+                    ))}
+                    {points.map((p, i) => (
+                        (i % Math.ceil(points.length / 10) === 0 || i === points.length - 1) && (
+                            <text key={p.season} x={xFor(i)} y={CHART_H - PAD_B + 16} fill="var(--text-3)" fontSize="9" textAnchor="middle">
+                                {seasonLabel(p.season)}
+                            </text>
+                        )
+                    ))}
+                    <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" />
+                    {hovered && (
+                        <line x1={hovered.x} y1={PAD_T} x2={hovered.x} y2={CHART_H - PAD_B} className="chart-crosshair-line" />
+                    )}
+                    {valid.map((p) => (
+                        <circle
+                            key={p.season} cx={xFor(p.i)} cy={yFor(p.value)}
+                            r={hovered?.season === p.season ? (p.season === peak.season ? 6 : 5) : (p.season === peak.season ? 4.5 : 3)}
+                            fill={p.season === peak.season ? '#facc15' : color}
+                            style={{ pointerEvents: 'none' }}
+                        />
+                    ))}
+                    <rect
+                        x={PAD_L} y={PAD_T} width={plotW} height={plotH}
+                        className="chart-crosshair-overlay" role="slider" aria-label={`${statDef.label} by season, use arrow keys to step through`}
+                        aria-valuetext={hovered ? `${seasonLabel(hovered.season)}: ${fmt(hovered.value)}` : undefined}
+                        {...overlayProps}
+                    />
+                </svg>
+                {hovered && (
+                    <ChartTooltip x={hovered.x} y={hovered.y} chartWidth={CHART_W} chartHeight={CHART_H}>
+                        <div style={{ fontWeight: 600 }}>{seasonLabel(hovered.season)}{hovered.isPeak ? ' · peak' : ''}</div>
+                        <div>{statDef.label}: {fmt(hovered.value)}</div>
+                    </ChartTooltip>
+                )}
+            </div>
         </div>
     );
 }
@@ -277,7 +276,7 @@ export default function TrendAnalysisSection() {
                             <p className="page-subtitle" style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
                                 {playerHistory.player_name} · {playerHistory.seasons.length} seasons · {playerStatDef.label} · gold dot marks the peak season
                             </p>
-                            <LineTrendChart points={playerPoints} statDef={playerStatDef} color="#38bdf8" />
+                            <LineTrendChart points={playerPoints} statDef={playerStatDef} color="#38bdf8" exportName={`${playerHistory.player_name} ${playerStatDef.label} trend`} />
                         </>
                     )}
                 </>
@@ -302,7 +301,7 @@ export default function TrendAnalysisSection() {
                             <p className="page-subtitle" style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
                                 {teamHistory.team} · {teamHistory.seasons.length} seasons · {teamStatDef.label} · gold dot marks the peak season
                             </p>
-                            <LineTrendChart points={teamPoints} statDef={teamStatDef} color="#f87171" />
+                            <LineTrendChart points={teamPoints} statDef={teamStatDef} color="#f87171" exportName={`${teamHistory.team} ${teamStatDef.label} trend`} />
                         </>
                     )}
                 </>

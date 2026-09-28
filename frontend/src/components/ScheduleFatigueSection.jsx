@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { fetchRestStudy, fetchScheduleDifficulty } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
@@ -7,6 +7,8 @@ import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
 import TeamLink from './common/TeamLink';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
+import ChartTooltip from './common/ChartTooltip';
 
 const CHART_W = 480;
 const CHART_H = 220;
@@ -18,6 +20,7 @@ const PLOT_W = CHART_W - PAD_L - PAD_R;
 const PLOT_H = CHART_H - PAD_T - PAD_B;
 
 function RestBucketChart({ buckets }) {
+    const svgRef = useRef(null);
     const [hovered, setHovered] = useState(null);
     if (!buckets?.length) return null;
     const vals = buckets.map((b) => b.win_pct);
@@ -29,8 +32,10 @@ function RestBucketChart({ buckets }) {
     const maxN = Math.max(...buckets.map((b) => b.n));
 
     return (
-        <div style={{ position: 'relative' }}>
-            <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label="Line chart of real team win percentage by days of rest before the game, with dot size showing sample size in each rest bucket">
+        <div>
+            <ChartExport svgRef={svgRef} name="win percent by days of rest" />
+            <div style={{ position: 'relative' }}>
+            <svg ref={svgRef} viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label="Line chart of real team win percentage by days of rest before the game, with dot size showing sample size in each rest bucket">
                 <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
                 <line x1={PAD_L} y1={y(0.5)} x2={CHART_W - PAD_R} y2={y(0.5)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray="4 3" />
                 <path d={path} fill="none" stroke="var(--accent)" strokeWidth="2.5" />
@@ -41,8 +46,11 @@ function RestBucketChart({ buckets }) {
                             key={b.rest_days} cx={x(i)} cy={y(b.win_pct)}
                             r={hovered?.rest_days === b.rest_days ? r + 2 : r} fill="var(--accent)"
                             style={{ cursor: 'pointer' }}
+                            tabIndex={0}
                             onMouseEnter={() => setHovered({ ...b, x: x(i), y: y(b.win_pct) })}
                             onMouseLeave={() => setHovered((h) => (h?.rest_days === b.rest_days ? null : h))}
+                            onFocus={() => setHovered({ ...b, x: x(i), y: y(b.win_pct) })}
+                            onBlur={() => setHovered((h) => (h?.rest_days === b.rest_days ? null : h))}
                         />
                     );
                 })}
@@ -52,29 +60,13 @@ function RestBucketChart({ buckets }) {
                 <text x="14" y={CHART_H / 2} fill="var(--text-2)" fontSize="10" textAnchor="middle" transform={`rotate(-90 14 ${CHART_H / 2})`}>Win %</text>
             </svg>
             {hovered && (
-                <div
-                    style={{
-                        position: 'absolute',
-                        left: `${(hovered.x / CHART_W) * 100}%`,
-                        top: `${(hovered.y / CHART_H) * 100}%`,
-                        transform: 'translate(-50%, -120%)',
-                        background: 'var(--surface)',
-                        border: '1px solid var(--hairline)',
-                        borderRadius: 8,
-                        padding: '0.5rem 0.65rem',
-                        fontSize: '0.75rem',
-                        color: 'var(--text)',
-                        whiteSpace: 'nowrap',
-                        pointerEvents: 'none',
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-                        zIndex: 5,
-                    }}
-                >
+                <ChartTooltip x={hovered.x} y={hovered.y} chartWidth={CHART_W} chartHeight={CHART_H}>
                     <div style={{ fontWeight: 600 }}>{hovered.bucket_label}</div>
                     <div>{(hovered.win_pct * 100).toFixed(1)}% win rate</div>
                     <div style={{ color: 'var(--text-3)' }}>n = {hovered.n.toLocaleString()} games</div>
-                </div>
+                </ChartTooltip>
             )}
+            </div>
         </div>
     );
 }

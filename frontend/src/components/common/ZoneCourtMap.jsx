@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import ChartExport from './ChartExport';
 
 // Same court-unit convention as ShotCharts.jsx (NBA shotchartdetail LOC_X/
 // LOC_Y, tenths of a foot, hoop-centered at 0,0) — duplicated rather than
@@ -59,14 +60,17 @@ function heatColor(playerPct, leaguePct) {
     return `rgba(${r},${g},${b},0.55)`;
 }
 
-export default function ZoneCourtMap({ zones, leagueZones, size = 280 }) {
+export default function ZoneCourtMap({ zones, leagueZones, size = 280, playerName }) {
+    const svgRef = useRef(null);
     const byZone = Object.fromEntries((zones || []).map((z) => [z.zone, z]));
     const leagueByZone = Object.fromEntries((leagueZones || []).map((z) => [z.zone, z]));
 
     const colorFor = (zoneName) => heatColor(byZone[zoneName]?.fg_pct, leagueByZone[zoneName]?.fg_pct);
 
     return (
-        <svg viewBox="0 0 500 460" style={{ width: '100%', maxWidth: size, height: 'auto', display: 'block', color: 'var(--text)' }} role="img" aria-label="Half-court shot chart colored by zone, showing this player's field goal percentage in each court zone relative to league average — red zones are hotter than league average, blue zones are colder">
+        <div>
+            <ChartExport svgRef={svgRef} name={playerName ? `${playerName} shot zones` : 'shot zones'} />
+            <svg ref={svgRef} viewBox="0 0 500 460" style={{ width: '100%', maxWidth: size, height: 'auto', display: 'block', color: 'var(--text)' }} role="img" aria-label="Half-court shot chart colored by zone, showing this player's field goal percentage in each court zone relative to league average — red zones are hotter than league average, blue zones are colder">
             <rect x={FULL_RECT.x} y={FULL_RECT.y} width={FULL_RECT.width} height={FULL_RECT.height} fill="var(--surface-2)" rx="6" />
             {/* Above the Break 3 wash covers the whole court; everything below layers on top */}
             <rect x={FULL_RECT.x} y={FULL_RECT.y} width={FULL_RECT.width} height={FULL_RECT.height} fill={colorFor('Above the Break 3')} />
@@ -84,5 +88,6 @@ export default function ZoneCourtMap({ zones, leagueZones, size = 280 }) {
             <line x1={BACKBOARD.x1} y1={BACKBOARD.y} x2={BACKBOARD.x2} y2={BACKBOARD.y} stroke="currentColor" strokeOpacity="0.85" strokeWidth="2" />
             <circle cx={HOOP.cx} cy={HOOP.cy} r={HOOP.r} fill="none" stroke="var(--brand)" strokeWidth="2" />
         </svg>
+        </div>
     );
 }

@@ -4,6 +4,7 @@ import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
 import CopyLinkButton from './common/CopyLinkButton';
 import SaveViewButton from './common/SaveViewButton';
 import TeamLogo from './common/TeamLogo';
@@ -115,6 +116,7 @@ function LuckBar({ v }) {
 // On the diagonal = exactly as many wins as the points said; above = lucky.
 function FitScatter({ model, season, team }) {
     const [ref, W] = useWidth();
+    const svgRef = useRef(null);
     const narrow = W < 520;
     const H = narrow ? 300 : 360;
     const M = { l: 44, r: 12, t: 12, b: 40 };
@@ -129,7 +131,8 @@ function FitScatter({ model, season, team }) {
     const tip = (p) => `${p.team} ${seasonLabel(p.season)}: ${(p.win_pct * 100).toFixed(1)}% won, ${(p.exp_win_pct * 100).toFixed(1)}% expected (${p.games} games, margin ${signed(p.mov)})`;
     return (
         <div className="rx-chart lk-scatter" ref={ref}>
-            <svg viewBox={`0 0 ${W} ${H}`} role="img"
+            <ChartExport svgRef={svgRef} name={`luck fit ${seasonLabel(season)}`} />
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img"
                 aria-label={`Expected against actual win% for ${pts.length} team-seasons; ${seasonLabel(season)} highlighted. Fit: Pythagorean exponent ${num(fit.param, 2)}, leave-one-season-out error ${num(fit.loso_rmse_wins)} wins.`}>
                 {ticks.map((t) => (
                     <g key={t}>
@@ -170,6 +173,7 @@ function FitScatter({ model, season, team }) {
 // One franchise's luck in every season, as bars from zero.
 function TeamHistory({ hist, season, onPick }) {
     const [ref, W] = useWidth();
+    const svgRef = useRef(null);
     const rows = hist.seasons;
     const H = 150;
     const M = { l: 34, r: 8, t: 10, b: 26 };
@@ -178,8 +182,9 @@ function TeamHistory({ hist, season, onPick }) {
     const sy = (v) => M.t + ((max - v) / (2 * max)) * (H - M.t - M.b);
     return (
         <div className="lk-history">
+            <ChartExport svgRef={svgRef} name={`${hist.franchise} luck by season`} />
             <div className="rx-chart" ref={ref}>
-                <svg viewBox={`0 0 ${W} ${H}`} role="img"
+                <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img"
                     aria-label={`${hist.franchise} luck by season: ${rows.map((r) => `${seasonLabel(r.season)} ${signed(r.luck)}`).join(', ')}.`}>
                     {[-max, 0, max].map((t) => (
                         <g key={t}>

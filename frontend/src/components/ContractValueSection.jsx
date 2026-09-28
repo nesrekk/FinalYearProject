@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchContractValue } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
@@ -7,6 +7,7 @@ import TeamLogo from './common/TeamLogo';
 import SourceBadge from './common/SourceBadge';
 import AboutModelDrawer from './ui/AboutModelDrawer';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
 
 function seasonLabel(season) {
     return `${season - 1}-${String(season).slice(-2)}`;
@@ -26,7 +27,8 @@ function signedMoney(v) {
     return `${v > 0 ? '+' : ''}${money(v)}`;
 }
 
-function Scatter({ points, costPerWin, minSalary, minMinutes }) {
+function Scatter({ points, costPerWin, minSalary, minMinutes, exportName }) {
+    const svgRef = useRef(null);
     const [hover, setHover] = useState(null);
     const W = 720;
     const H = 440;
@@ -54,7 +56,8 @@ function Scatter({ points, costPerWin, minSalary, minMinutes }) {
 
     return (
         <div style={{ width: '100%', overflowX: 'auto' }}>
-            <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: 520, height: 'auto', display: 'block' }}
+            <ChartExport svgRef={svgRef} name={exportName} />
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: 520, height: 'auto', display: 'block' }}
                 role="img" aria-label="Scatter of real salary against WAR with the fair-value line">
                 {yTicks.map((t) => (
                     <g key={`y${t}`}>
@@ -235,7 +238,7 @@ export default function ContractValueSection() {
                     <div className="dashboard-card" style={{ marginTop: '1rem' }}>
                         <h4 className="section-heading" style={{ marginTop: 0 }}>Salary vs. WAR — {seasonLabel(data.season)}</h4>
                         <Scatter points={data.points} costPerWin={s.cost_per_win} minSalary={s.min_salary_0yr}
-                            minMinutes={data.thresholds.bargain_min_minutes} />
+                            minMinutes={data.thresholds.bargain_min_minutes} exportName={`salary vs WAR ${seasonLabel(data.season)}`} />
                     </div>
                     <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
                         <ValueTable title="Top 10 bargains"

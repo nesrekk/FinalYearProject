@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchGarbageTime, fetchGarbageTimePlayer } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
@@ -7,6 +7,7 @@ import TeamLogo from './common/TeamLogo';
 import SourceBadge from './common/SourceBadge';
 import AboutModelDrawer from './ui/AboutModelDrawer';
 import TableExport from './common/TableExport';
+import ChartExport from './common/ChartExport';
 
 const BUCKET_META = {
     garbage: { label: 'Garbage time', color: '#94a3b8' },
@@ -48,6 +49,7 @@ function spreadLabels(items, gap, top, bottom) {
 }
 
 function SlopeChart({ rows, selectedId, onSelect }) {
+    const svgRef = useRef(null);
     const [hoverId, setHoverId] = useState(null);
     const W = 640;
     const H = 500;
@@ -75,7 +77,8 @@ function SlopeChart({ rows, selectedId, onSelect }) {
 
     return (
         <div style={{ width: '100%', overflowX: 'auto' }}>
-            <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: 480, height: 'auto', display: 'block' }} role="img"
+            <ChartExport svgRef={svgRef} name="raw vs filtered PPG" />
+            <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: 480, height: 'auto', display: 'block' }} role="img"
                 aria-label="Slope chart of raw PPG to filtered PPG for the top 30 scorers">
                 {ticks.map((t) => (
                     <g key={t}>

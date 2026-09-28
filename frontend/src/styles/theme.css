@@ -590,6 +590,57 @@ select,
   margin-right: auto;
 }
 
+/* Chart export (common/ChartExport.jsx): same small toolbar, above a chart. */
+.chart-export {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+  font-size: 12px;
+}
+.chart-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+}
+.chart-export-btn:hover,
+.chart-export-btn:focus-visible {
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+.chart-export-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Crosshair overlay (utils/useChartCrosshair.js): invisible, keyboard-
+   focusable hit target spanning the plot area of a time-series chart. */
+.chart-crosshair-overlay {
+  fill: transparent;
+  cursor: crosshair;
+}
+.chart-crosshair-overlay:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+.chart-crosshair-line {
+  stroke: var(--text-3);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+
 /* Copy link (common/CopyLinkButton.jsx): sits at the end of a tool's title row. */
 .copy-link {
   display: inline-flex;
