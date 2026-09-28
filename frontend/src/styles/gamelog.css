@@ -89,6 +89,7 @@
 /* Table cells default to --text (theme.css); keep the result colour. */
 .gl-table td.pp-pos { color: var(--positive); }
 .gl-table td.pp-neg { color: var(--negative); }
+.gl-table tr.pp-small td { color: var(--text-3); }
 
 /* ── Hot streak card (common/HotStreakCard.jsx) ── */
 .hs-card {
