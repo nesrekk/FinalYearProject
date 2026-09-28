@@ -427,6 +427,13 @@ export async function fetchLineupChemistry(order = 'best', minMinutes = 40, topN
     return response.data;
 }
 
+// Two-player chemistry grid from the stored 5-man lineups.
+// params: { season, team, min_minutes, max_players }
+export async function fetchPairGrid(params) {
+    const response = await axios.get(`${IMPACT_BASE}/lineups/pair-grid`, { params });
+    return response.data;
+}
+
 // ─── Vegas vs. Machine: Championship Odds Scanner ───────────────
 export async function fetchChampionshipOdds() {
     const response = await axios.get(`${IMPACT_BASE}/odds/championship`);

@@ -53,6 +53,14 @@ const MOTIFS = {
             ))}
         </svg>
     ),
+    heatmap: (
+        <svg viewBox="0 0 120 48" className="tool-preview-svg" aria-hidden="true">
+            {[0, 1, 2, 3].flatMap((r) => [0, 1, 2, 3, 4, 5].map((c) => (
+                <rect key={`${r}-${c}`} x={6 + c * 18} y={2 + r * 11} width="16" height="9" rx="1.5"
+                    className="tool-preview-shape" style={{ opacity: 0.15 + (((r * 7 + c * 5) % 6) * 0.13) }} />
+            )))}
+        </svg>
+    ),
     bracket: (
         <svg viewBox="0 0 120 48" className="tool-preview-svg" aria-hidden="true">
             <path d="M6,8 H30 M6,24 H30 M6,40 H30 M30,8 V24 M30,40 V24 M30,24 H60 M60,16 H84 M60,32 V16 M84,16 V24 M84,24 H110" fill="none" className="tool-preview-line" strokeWidth="1.5" opacity="0.5" />

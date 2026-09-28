@@ -1265,3 +1265,35 @@ def test_shot_zone_history_matches_box_scores():
     hakeem = client.get("/shots/player/Hakeem Olajuwon/zone-history").json()
     assert hakeem["seasons_before_coverage"] == 12
     assert client.get("/shots/player/Magic Johnson/zone-history").status_code == 404
+
+
+def test_pair_chemistry_grid_known_team():
+    from impact_api import app
+    client = TestClient(app)
+    d = client.get("/lineups/pair-grid", params={"season": 2016, "team": "GSW"}).json()
+    _assert_has_source(d)
+    t = d["team_summary"]
+    # 2015-16 Warriors: 73-9.
+    assert (t["wins"], t["losses"]) == (73, 9)
+    # Only the top 2,000 league lineups are stored, so coverage is partial.
+    assert 0.3 < t["coverage"] < 1
+    names = {p["player_id"]: p["player_name"] for p in d["players"]}
+    assert {"Stephen Curry", "Draymond Green", "Klay Thompson"} <= set(names.values())
+    for p in d["players"]:
+        assert p["minutes"] <= p["season_minutes_all_teams"] + 1
+    by_pair = {frozenset((names[c["a"]], names[c["b"]])): c for c in d["pairs"]}
+    cg = by_pair[frozenset(("Stephen Curry", "Draymond Green"))]
+    curry = next(p for p in d["players"] if p["player_name"] == "Stephen Curry")
+    assert cg["qualified"] and 1500 < cg["minutes"] <= curry["minutes"]
+    assert abs(cg["net_rating"] - (cg["off_rating"] - cg["def_rating"])) < 0.15
+    assert all(c["qualified"] == (c["minutes"] >= d["min_minutes"]) for c in d["pairs"])
+
+    # A traded player appears under each team with only that team's lineups.
+    bkn = client.get("/lineups/pair-grid", params={"season": 2023, "team": "BKN", "max_players": 15}).json()
+    phx = client.get("/lineups/pair-grid", params={"season": 2023, "team": "PHX", "max_players": 15}).json()
+    mb = [next(p for p in g["players"] if p["player_name"] == "Mikal Bridges") for g in (bkn, phx)]
+    assert sum(p["minutes"] for p in mb) <= mb[0]["season_minutes_all_teams"] + 1
+
+    assert client.get("/lineups/pair-grid", params={"season": 1990}).status_code == 404
+    assert client.get("/lineups/pair-grid", params={"team": "XXX"}).status_code == 404
+    assert client.get("/lineups/pair-grid", params={"max_players": 7}).status_code == 400

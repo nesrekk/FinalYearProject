@@ -116,6 +116,12 @@ export const TOOL_META = {
         tagline: 'Real 5-man lineups that have actually shared the floor.',
         about: 'Shows real 5-man lineup combinations that have actually shared the floor this season, fetched live from the NBA’s own real lineup data — real minutes, real possessions, real net rating. A minimum shared-minutes cutoff filters out tiny, noisy samples, and that cutoff is shown rather than hidden.',
     },
+    pairs: {
+        group: 'Teams & Markets',
+        visual: 'heatmap',
+        tagline: 'Every pair of teammates: how the team did with both on the floor.',
+        about: 'A team-and-season grid of every pair of its most-used players, built from the stored real 5-man lineups (the 2,000 most-used each season, 2013-14 onward). A pair’s minutes are summed over every stored lineup with both players; its ratings are those lineups’ ratings weighted by possessions. Lineups outside the top 2,000, mostly short bench units, are missing, and the share of the team’s minutes covered is shown. Pairs under the minutes floor are greyed out. Descriptive only: not adjusted for opponents or for the other three players.',
+    },
     replay: {
         group: 'Teams & Markets',
         visual: 'line',

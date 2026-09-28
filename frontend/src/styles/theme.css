@@ -904,3 +904,131 @@ select,
   .sl-row { grid-template-columns: minmax(0, 1fr) auto; }
   .sl-row label { grid-column: 1 / -1; }
 }
+
+/* Pair chemistry grid (PairChemistrySection.jsx) */
+.pc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: var(--space-3);
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+.pc-legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 3px;
+  margin-left: 6px;
+}
+.pc-grid-wrap { margin-top: var(--space-3); }
+.pc-grid {
+  border-collapse: separate;
+  border-spacing: 2px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+}
+.pc-caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.pc-corner,
+.pc-rowhead {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  text-align: left;
+}
+.pc-corner {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  vertical-align: bottom;
+}
+.pc-colhead {
+  min-width: 52px;
+  padding: 2px;
+  vertical-align: bottom;
+  font-weight: 600;
+  color: var(--text);
+}
+.pc-colhead > span:last-child {
+  display: block;
+  max-width: 56px;
+  margin: 2px auto 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+}
+.pc-rowhead {
+  padding: 2px 8px 2px 0;
+  min-width: 140px;
+  max-width: 170px;
+}
+.pc-rowname {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pc-rowmin {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-2);
+}
+.pc-cell {
+  padding: 0;
+  height: 36px;
+  text-align: center;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+.pc-cell-btn {
+  width: 100%;
+  height: 100%;
+  min-height: 36px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.pc-cell-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.pc-cell--self {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.pc-cell--thin {
+  background: repeating-linear-gradient(135deg, var(--surface-2) 0 4px, var(--surface) 4px 8px);
+  color: var(--text-3);
+}
+.pc-cell--thin .pc-cell-btn { font-weight: 500; }
+.pc-cell--none { color: var(--text-3); background: transparent; }
+.pc-cell--on { box-shadow: inset 0 0 0 2px var(--brand); }
+.pc-detail {
+  margin-top: var(--space-3);
+  min-height: 2.8em;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+.pc-detail em { color: var(--text-2); }
+.pc-list-title { margin-top: var(--space-5); }

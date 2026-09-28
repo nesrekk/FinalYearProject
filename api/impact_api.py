@@ -44,6 +44,7 @@ from routers import (
     media,
     meta,
     news,
+    pair_chemistry,
     pair_synergy,
     player_comparison,
     player_impact,
@@ -91,6 +92,7 @@ for _router_module in (
     players_search_profile, leaders, games_misc, news, vegas_scanner,
     team_comparison, hall_of_fame, garbage_time, dad_index, scouting_report,
     spacing_lab, contract_value, learn, college, greats, leaderboard, explore,
+    pair_chemistry,
 ):
     app.include_router(_router_module.router)
 

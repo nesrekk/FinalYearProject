@@ -267,6 +267,15 @@ export const SECTIONS = [
                 limits: ['Other absences and opponents aren\'t controlled for; small lineups are noisy.'],
             },
             {
+                id: 'pairs',
+                name: 'Pair Chemistry',
+                open: { page: 'analytics', hash: 'pairs', label: 'Pair Chemistry' },
+                answers: 'How did a team do with each pair of its players on the floor together?',
+                method: 'Every stored five-man lineup containing both players, summed: minutes and possessions added up, offensive and defensive ratings weighted by possessions. Colours compare each pair with the team over the same lineups; pairs under a shared-minutes floor (default 100) are greyed out.',
+                checked: 'The 2015-16 Warriors: Curry and Green are the most-shared pair (2,179 stored minutes, +19.8) and the top three pairs with 500+ shared minutes all include Iguodala; no player\'s stored minutes exceed their season minutes. Checked on 2026-09-28.',
+                limits: ['Only the league\'s 2,000 most-used lineups a season are stored: 31-89% of a team\'s minutes (median 65%), with bench units missing most, so a team\'s figure over these lineups runs above its real net rating.', 'Descriptive: not adjusted for opponents or for the other three players on the floor.'],
+            },
+            {
                 id: 'scouting',
                 name: 'Scouting Report',
                 open: { page: 'compare', label: 'Player Comparison' },

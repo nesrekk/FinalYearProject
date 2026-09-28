@@ -17,6 +17,7 @@ import DraftProspectSection from '../DraftProspectSection';
 import HeliocentricitySection from '../HeliocentricitySection';
 import ClutchWpaSection from '../ClutchWpaSection';
 import LineupChemistrySection from '../LineupChemistrySection';
+import PairChemistrySection from '../PairChemistrySection';
 import GameReplaySection from '../GameReplaySection';
 import PredictionLedgerSection from '../PredictionLedgerSection';
 import WithWithoutStarSection from '../WithWithoutStarSection';
@@ -61,6 +62,7 @@ const TAB_GROUPS = [
             { id: 'vegas', label: 'Vegas Scanner', icon: 'currency_exchange' },
             { id: 'playoffs', label: 'Playoff Forecaster', icon: 'military_tech' },
             { id: 'lineups', label: 'Lineup Chemistry', icon: 'diversity_3' },
+            { id: 'pairs', label: 'Pair Chemistry', icon: 'grid_on' },
             { id: 'spacing', label: 'Spacing Lab', icon: 'open_with' },
             { id: 'contracts', label: 'Contract Value', icon: 'payments' },
             { id: 'replay', label: 'Game Replay', icon: 'movie' },
@@ -214,6 +216,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'wpa' && <ClutchWpaSection />}
                 {activeTab === 'matchups' && <MatchupFinderSection />}
                 {activeTab === 'lineups' && <LineupChemistrySection />}
+                {activeTab === 'pairs' && <PairChemistrySection />}
                 {activeTab === 'replay' && <GameReplaySection />}
                 {activeTab === 'withwithout' && <WithWithoutStarSection />}
                 {activeTab === 'fatigue' && <ScheduleFatigueSection />}
