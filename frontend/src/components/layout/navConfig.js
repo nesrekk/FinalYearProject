@@ -65,6 +65,12 @@ export const NAV_GROUPS = [
         icon: 'menu_book',
         items: [],
     },
+    {
+        id: 'watchlist',
+        label: 'Watchlist',
+        icon: 'star',
+        items: [],
+    },
 ];
 
 export function groupForPage(pageId) {

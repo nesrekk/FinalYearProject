@@ -31,6 +31,7 @@ const pageTitles = {
     rolefinder: 'Role Player Finder',
     era: 'Era Translator',
     statline: 'Stat Line Finder',
+    watchlist: 'Watchlist',
 };
 
 const pageDescriptions = {
@@ -58,6 +59,7 @@ const pageDescriptions = {
     rolefinder: '"I need a 3-and-D wing": ranked players for a role, with the weights shown in full',
     era: 'Any player-season restated in another season\'s pace and league',
     statline: 'Type a stat line, get the real player-seasons closest to it',
+    watchlist: 'Your starred players, side by side',
 };
 
 function greeting() {

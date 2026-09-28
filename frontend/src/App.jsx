@@ -47,6 +47,7 @@ const BreakoutDetector = lazy(() => import('./components/pages/BreakoutDetector'
 const RoleFinder = lazy(() => import('./components/pages/RoleFinder'));
 const EraTranslator = lazy(() => import('./components/pages/EraTranslator'));
 const StatLineFinder = lazy(() => import('./components/pages/StatLineFinder'));
+const Watchlist = lazy(() => import('./components/pages/Watchlist'));
 
 // Every page the app can show, by the id used in navConfig and `?page=`.
 const PAGES = {
@@ -75,6 +76,7 @@ const PAGES = {
   rolefinder: RoleFinder,
   era: EraTranslator,
   statline: StatLineFinder,
+  watchlist: Watchlist,
 };
 
 // Which view the URL asks for. No `page` = the landing page, except that an

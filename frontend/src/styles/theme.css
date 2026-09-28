@@ -471,6 +471,32 @@ select,
   text-overflow: ellipsis;
 }
 
+/* Star toggle (common/PlayerName.jsx) — adds/removes the watchlist. */
+.watch-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  background: transparent;
+  border: none;
+  padding: 2px;
+  margin-left: -2px;
+  cursor: pointer;
+  color: var(--text-3);
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+.watch-star:hover,
+.watch-star:focus-visible {
+  color: var(--brand-text);
+}
+.watch-star:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.watch-star--active {
+  color: var(--brand-text);
+}
+
 /* ── Info tooltip popover ──────────────────────── */
 .it-popover {
   background: var(--surface);
