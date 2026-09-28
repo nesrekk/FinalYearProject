@@ -14,6 +14,8 @@ per-game source, and it starts in 2020-21.
 
 Opponent, home/away, result and rest come from team_game_fatigue, joined on
 (team, date): ESPN game ids (espn_...) aren't the NBA ids used there. The
+margin is the real final score from game_scores (scripts/fetch_game_scores.py),
+not team_game_fatigue.plus_minus (summed player +/- / 5, wrong in 160 games). The
 join also defines which games count: only games in the standings. The lines
 that don't match are the three NBA Cup finals (Dec 2023, 2024, 2025), which
 don't count in regular-season stats, and one 2021-22 line with no team.
@@ -44,7 +46,9 @@ MIN_STREAK = 2
 BASE_FROM = """
     FROM player_game_lines l
     JOIN team_game_fatigue f ON f.team_abbreviation = l.team_abbreviation AND f.game_date = l.game_date
+    LEFT JOIN game_scores gs ON gs.game_id = f.game_id AND gs.team_abbreviation = f.team_abbreviation
 """
+MARGIN_SQL = "(gs.pts_for - gs.pts_against)"
 BASE_WHERE = ["l.seconds > 0"]
 
 # key -> (label, per-game SQL expression over l, format). Shooting % are
@@ -71,10 +75,10 @@ STATS = {
     "ts_pct": ("True shooting %", "(l.pts / NULLIF(2 * (l.fga + 0.44 * l.fta), 0))", "pct"),
 }
 OPS = {"gte": ">=", "gt": ">", "lte": "<=", "lt": "<", "eq": "="}
-SORTS = {**{k: v[1] for k, v in STATS.items()}, "date": "l.game_date", "margin": "f.plus_minus"}
+SORTS = {**{k: v[1] for k, v in STATS.items()}, "date": "l.game_date", "margin": MARGIN_SQL}
 RAW = ["pts", "fgm", "fga", "fg3m", "fg3a", "ftm", "fta", "oreb", "dreb", "ast", "stl", "blk", "tov"]
 ROW_SQL = ("l.player_id, l.season, l.game_date, l.team_abbreviation, f.opponent, f.is_home, f.win, "
-           "f.plus_minus, f.rest_days, f.is_b2b, f.game_id, l.seconds, " + ", ".join(f"l.{c}" for c in RAW))
+           f"{MARGIN_SQL}, f.rest_days, f.is_b2b, f.game_id, l.seconds, " + ", ".join(f"l.{c}" for c in RAW))
 ROW_KEYS = ["player_id", "season", "date", "team", "opponent", "home", "win", "margin", "rest_days", "b2b",
             "nba_game_id", "seconds"] + RAW
 
@@ -170,8 +174,9 @@ def _players():
 
 
 def _source():
-    return make_source(["player_game_lines", "team_game_fatigue", "player_season_stats"],
-                       "ESPN play-by-play (lines rebuilt from it), nba_api (stats.nba.com) schedule")
+    return make_source(["player_game_lines", "team_game_fatigue", "game_scores", "player_season_stats"],
+                       "ESPN play-by-play (lines rebuilt from it) and scoreboard (final scores), "
+                       "nba_api (stats.nba.com) schedule")
 
 
 def _notes(meta):

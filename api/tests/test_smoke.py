@@ -1940,3 +1940,59 @@ def test_team_profile_blocks_and_coverage():
     assert old["summary"]["team"]["w"] == 72
     assert client.get("/team-profile/XYZ").status_code == 404
     assert client.get("/team-profile/OKC", params={"season": 1960}).status_code == 404
+
+
+def test_margins_come_from_final_scores():
+    """Game Log, Game Finder, Schedule Fatigue, Team Comparison and Situational Splits read margins from
+    game_scores (real final scores), not team_game_fatigue.plus_minus (summed player +/- / 5, wrong in 160 games)."""
+    from impact_api import app
+    client = TestClient(app)
+    conn = psycopg2.connect(**DB_CONFIG)
+    try:
+        cur = conn.cursor()
+        # Game Log: SAS lost 101-126 at DEN on 2022-11-05 (plus_minus says -20).
+        log = client.get("/games/player-log/1629640", params={"season": 2023}).json()
+        g = next(r for r in log["rows"] if r["date"] == "2022-11-05")
+        assert (g["opponent"], g["win"], g["margin"]) == ("DEN", False, -25)
+        assert all((r["margin"] > 0) == r["win"] for r in log["rows"])
+        # Game Finder's margin sort uses the same real margin.
+        d = client.get("/games/finder", params={"player_id": 1629640, "season_from": 2023, "season_to": 2023,
+                                                "sort": "margin", "order": "asc", "one_per_player": False,
+                                                "limit": 200}).json()
+        margins = [r["margin"] for r in d["results"]]
+        assert margins == sorted(margins) and -25 in margins
+
+        # Team Comparison: LAL beat CHI by 11 on 2026-01-26 (plus_minus says 10.6).
+        cmp_ = client.get("/teams/compare/LAL/CHI").json()
+        m = next(x for x in cmp_["head_to_head"]["recent_meetings"] if x["date"] == "2026-01-26")
+        assert (m["team_a_won"], m["team_a_point_diff"]) == (True, 11)
+        for x in cmp_["team_a"]["recent_form"]["results"]:
+            assert (x["point_diff"] > 0) == x["win"]
+
+        # Schedule Fatigue: back-to-back average margin equals the real scores'.
+        cur.execute("""SELECT AVG(g.pts_for - g.pts_against) FROM team_game_fatigue f
+                       JOIN game_scores g USING (game_id, team_abbreviation)
+                       WHERE f.rest_days = 0 AND f.season = 2018""")
+        real = float(cur.fetchone()[0])
+        b2b = next(b for b in client.get("/schedule/rest-study", params={"season": 2018}).json()["buckets"]
+                   if b["rest_days"] == 0)
+        assert abs(b2b["avg_point_diff"] - real) < 0.001
+
+        # Situational Splits: 2020-21's top 10 by real margin is exactly ten teams (plus_minus tied NYK and DAL
+        # for 10th), and the stored rows were built from it: Jokic's games vs. those teams.
+        cur.execute("""WITH r AS (SELECT team_abbreviation,
+                                         RANK() OVER (ORDER BY AVG(pts_for - pts_against) DESC) AS rk
+                                  FROM game_scores WHERE season = 2021 GROUP BY 1)
+                       SELECT array_agg(team_abbreviation) FROM r WHERE rk <= 10""")
+        top10 = cur.fetchone()[0]
+        assert len(top10) == 10 and "NYK" in top10 and "DAL" not in top10
+        cur.execute("""SELECT count(*) FROM player_game_lines l
+                       JOIN team_game_fatigue f ON f.team_abbreviation = l.team_abbreviation AND f.game_date = l.game_date
+                       WHERE l.player_id = 203999 AND l.season = 2021 AND l.seconds > 0 AND f.opponent = ANY(%s)""",
+                    (top10,))
+        jokic_top10 = cur.fetchone()[0]
+        cur.execute("""SELECT games_a FROM player_situational_splits
+                       WHERE player_id = 203999 AND season = 2021 AND split = 'opp' AND stat = 'pts'""")
+        assert cur.fetchone()[0] == jokic_top10
+    finally:
+        conn.close()

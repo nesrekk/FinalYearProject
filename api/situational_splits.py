@@ -20,7 +20,10 @@ Every split has two sides, A and B, and the effect is A minus B:
 Games that fit neither side (a 300-999 mile trip, a middle-10 opponent, a
 second night he sat the first night of, the first game of a season) are in
 neither. Rest and travel are the team's schedule (team_game_fatigue);
-"played the first night" comes from his own game lines.
+"played the first night" comes from his own game lines. Opponent margin is
+the real final score (game_scores), not team_game_fatigue.plus_minus
+(summed player +/- / 5, wrong in 160 games; it tied NYK and DAL for 10th
+in 2020-21, which put 11 teams in that season's top 10).
 
 Every stat is a ratio of two per-game sums, so a side's value is the ratio
 of its sums (points per 36 = 36 x points / minutes over the side's games).
@@ -61,8 +64,8 @@ LONG_TRIP, SHORT_TRIP = 1000, 300
 LINES_SQL = """
     WITH margin AS (
         SELECT season, team_abbreviation,
-               RANK() OVER (PARTITION BY season ORDER BY AVG(plus_minus) DESC) AS opp_rank
-        FROM team_game_fatigue GROUP BY season, team_abbreviation
+               RANK() OVER (PARTITION BY season ORDER BY AVG(pts_for - pts_against) DESC) AS opp_rank
+        FROM game_scores GROUP BY season, team_abbreviation
     ), lines AS (
         SELECT l.*, LAG(l.game_date) OVER (PARTITION BY l.player_id ORDER BY l.game_date) AS prev_date
         FROM player_game_lines l WHERE l.seconds > 0

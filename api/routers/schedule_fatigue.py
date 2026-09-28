@@ -20,15 +20,18 @@ def get_rest_study(season: Optional[int] = None):
             raise HTTPException(status_code=503, detail="No schedule data yet — run scripts/build_schedule_fatigue.py first.")
 
         params = [season] if season else []
-        season_clause = "AND season = %s" if season else ""
+        season_clause = "AND f.season = %s" if season else ""
+        # Margins are real final scores (game_scores), not team_game_fatigue.plus_minus,
+        # which is summed player +/- / 5 and wrong in 160 games.
         cursor.execute(
-            f"""SELECT rest_days, COUNT(*) AS n,
-                       AVG(CASE WHEN win THEN 1.0 ELSE 0 END) AS win_pct,
-                       AVG(plus_minus) AS avg_point_diff
-                FROM team_game_fatigue
-                WHERE rest_days IS NOT NULL {season_clause}
-                GROUP BY rest_days
-                ORDER BY rest_days;""",
+            f"""SELECT f.rest_days, COUNT(*) AS n,
+                       AVG(CASE WHEN f.win THEN 1.0 ELSE 0 END) AS win_pct,
+                       AVG(g.pts_for - g.pts_against) AS avg_point_diff
+                FROM team_game_fatigue f
+                LEFT JOIN game_scores g ON g.game_id = f.game_id AND g.team_abbreviation = f.team_abbreviation
+                WHERE f.rest_days IS NOT NULL {season_clause}
+                GROUP BY f.rest_days
+                ORDER BY f.rest_days;""",
             params,
         )
         rows = cursor.fetchall()
@@ -70,12 +73,13 @@ def get_rest_study(season: Optional[int] = None):
         "season": season,
         "buckets": final_buckets,
         "methodology": (
-            "Real win% and real average point differential (that game's real plus/minus) by real rest-days "
+            "Real win% and real average point differential (that game's real final score, game_scores) by real rest-days "
             "bucket, across every real team-game with a known previous real game (team_game_fatigue). "
             "0 days rest = a real back-to-back. Real n is shown per bucket — samples get thin past 3+ days "
             "rest, folded into one '4+ days rest' bucket rather than presented as many noisy one-off buckets."
         ),
-        "_source": make_source(["team_game_fatigue"], "nba_api (stats.nba.com)"),
+        "_source": make_source(["team_game_fatigue", "game_scores"],
+                               "nba_api (stats.nba.com) schedule, ESPN scoreboard final scores"),
     }
 
 @router.get("/schedule/difficulty")

@@ -312,7 +312,7 @@ COVERAGE_MAP = [
         "table": "team_game_fatigue", "label": "Team game log (rest/travel)", "group": "Teams",
         "range_sql": "SELECT MIN(season), MAX(season) FROM team_game_fatigue", "range_fmt": "season_int",
         "source": "Built from the NBA schedule; one row per team-game with rest days, back-to-backs and travel.",
-        "gap": "Margin only — no points for/against stored per team-game — and plus_minus is stats.nba.com's summed player +/- ÷ 5, not the final margin: it differs from the real final score in 160 of 20,348 games (use game_scores for margins). Records are right.",
+        "gap": "No points for/against (those are in game_scores). Its plus_minus is stats.nba.com's summed player +/- ÷ 5, not the final margin: it differs from the real final score in 160 of 20,348 games, so no tool reads it; margins come from game_scores. Records are right.",
         "used_by": [],
     },
     {

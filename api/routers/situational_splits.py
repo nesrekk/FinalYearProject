@@ -47,7 +47,7 @@ METHOD = (
     "draw. The league effect is the average qualified player's effect, weighted by his playing time on the smaller "
     "side, with an interval that resamples whole team-seasons. Vs. league = his effect minus that. Rest and travel "
     "are the team's schedule; back-to-backs count only second nights he also played the first night of. Opponent "
-    "strength is the opponent's average margin over that whole season (the game itself included)."
+    "strength is the opponent's average final-score margin over that whole season (the game itself included)."
 )
 
 
@@ -57,8 +57,9 @@ def label(season):
 
 def _source():
     return make_source(["player_situational_splits", "situational_split_league", "player_game_lines",
-                        "team_game_fatigue"],
-                       "ESPN play-by-play (lines rebuilt from it), nba_api (stats.nba.com) schedule")
+                        "team_game_fatigue", "game_scores"],
+                       "ESPN play-by-play (lines rebuilt from it) and scoreboard (final scores), "
+                       "nba_api (stats.nba.com) schedule")
 
 
 def _f(v, d=4):

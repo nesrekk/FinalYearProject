@@ -12,7 +12,9 @@ router = APIRouter()
 # block), a real roster (top players by real points that season), a real
 # head-to-head record + recent-meetings list from team_game_fatigue, and
 # each team's real last-10-games form — all straight aggregation, nothing
-# modeled or projected.
+# modeled or projected. Point differentials are real final scores from
+# game_scores, not team_game_fatigue.plus_minus (summed player +/- / 5,
+# wrong in 160 games).
 
 
 def _advanced_team_stats(cursor, team_abbr: str, season: int) -> Optional[dict]:
@@ -53,10 +55,11 @@ def _roster(cursor, team_abbr: str, season: int, limit: int = 8) -> list[dict]:
 
 def _recent_form(cursor, team_abbr: str, n: int = 10) -> Optional[dict]:
     cursor.execute(
-        """SELECT game_date, opponent, win, plus_minus
-           FROM team_game_fatigue
-           WHERE team_abbreviation = %s
-           ORDER BY game_date DESC
+        """SELECT f.game_date, f.opponent, f.win, g.pts_for - g.pts_against
+           FROM team_game_fatigue f
+           LEFT JOIN game_scores g ON g.game_id = f.game_id AND g.team_abbreviation = f.team_abbreviation
+           WHERE f.team_abbreviation = %s
+           ORDER BY f.game_date DESC
            LIMIT %s;""",
         (team_abbr, n),
     )
@@ -77,10 +80,11 @@ def _recent_form(cursor, team_abbr: str, n: int = 10) -> Optional[dict]:
 
 def _head_to_head(cursor, team_a: str, team_b: str, limit_recent: int = 5) -> dict:
     cursor.execute(
-        """SELECT game_date, win, plus_minus
-           FROM team_game_fatigue
-           WHERE team_abbreviation = %s AND opponent = %s
-           ORDER BY game_date DESC;""",
+        """SELECT f.game_date, f.win, g.pts_for - g.pts_against
+           FROM team_game_fatigue f
+           LEFT JOIN game_scores g ON g.game_id = f.game_id AND g.team_abbreviation = f.team_abbreviation
+           WHERE f.team_abbreviation = %s AND f.opponent = %s
+           ORDER BY f.game_date DESC;""",
         (team_a, team_b),
     )
     rows = cursor.fetchall()
@@ -124,7 +128,7 @@ def get_team_comparison(team_a: str, team_b: str, season: Optional[int] = None):
         "team_b": {"abbreviation": team_b, "advanced_stats": adv_b, "roster": roster_b, "recent_form": form_b},
         "head_to_head": head_to_head,
         "_source": make_source(
-            ["player_season_stats", "team_game_fatigue"],
-            "nba_api (stats.nba.com)",
+            ["player_season_stats", "team_game_fatigue", "game_scores"],
+            "nba_api (stats.nba.com), ESPN scoreboard final scores",
         ),
     }
