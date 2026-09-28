@@ -233,6 +233,11 @@ a.player-name-link:focus-visible {
 .pp-won td { font-weight: 700; }
 .pp-pos { color: var(--positive); }
 .pp-neg { color: var(--negative); }
+/* Table cells default to --text (.data-table tbody td in theme.css, 0,1,2):
+   restate the tones at higher specificity. A greyed row stays grey, tone or not. */
+.pp-table td.pp-pos { color: var(--positive); }
+.pp-table td.pp-neg { color: var(--negative); }
+.pp-table tr.pp-small td { color: var(--text-3); }
 .pp-tag {
   margin-left: 6px;
   padding: 0 5px;
