@@ -55,6 +55,7 @@ from routers import (
     player_impact,
     player_profile,
     players_search_profile,
+    projections,
     players_table,
     playoff_forecaster,
     playtype_hustle,
@@ -110,6 +111,7 @@ for _router_module in (
     aging,
     on_off,
     hot_streaks,
+    projections,
 ):
     app.include_router(_router_module.router)
 

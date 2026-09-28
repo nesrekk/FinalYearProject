@@ -52,6 +52,20 @@ export const SECTIONS = [
                 live: 'wp',
             },
             {
+                id: 'projections',
+                name: 'Next-season projections',
+                open: { page: 'projections', label: 'Projections' },
+                answers: 'What should a simple, fully-stated baseline expect from each current player next season, and how far off is it usually?',
+                method: 'Marcel-style: the player\'s last three seasons weighted 5/4/3 (and by their samples), regressed toward the league average of those seasons with the weight on his own numbers N / (N + M), where M is the sample at which the stat is half signal from Stat Stability (for minutes a game and BPM, where real change matters more than in-season noise, M comes from the year-to-year correlation instead), then an age step from the aging curves (level at his age next season minus the level at each past season\'s age). Minutes a game are the exception: the population minutes curve is mostly players gaining and losing a role, so their age step is the average miss of the regressed minutes projection for players of that age and minutes level (bench, rotation, starter), measured on the other backtest seasons. Per-game counts are the projected per-36 rate times projected minutes. Ages come from birth dates (age on February 1) in every season. 34 stats; no projection for a player with under 250 minutes over the three seasons. The 80% range is the 10th to 90th percentile of the same method\'s past errors for players in the same reliability and level bin.',
+                checked: 'Every season from 2000-01 to 2025-26 projected from the seasons before it and scored on players who then played 500+ minutes (7,795 player-seasons for points). The projection beats "same as last season" on 31 of 34 stats (median 8% smaller error) and the league average on all 34 (median 51% smaller): points 2.32 a game against 2.46 and 4.69; minutes 3.87 against 4.18 and 6.62; BPM 1.33 against 1.55 and 2.07; 3P% 3.4 points against 4.7 and 3.8. The three it loses to last season are 3-point attempts and makes, because league-wide three-point volume keeps rising and the regression pulls toward past averages. The 80% range held 80% of actuals for every stat, each season judged by the other seasons\' errors; calibration slopes run 0.90 to 1.12. The age step earns its place: without it, points miss by 2.57 and minutes by 4.15. Sniff tests for 2026-27: Dončić 30.6 points (26.6 to 35.2), Wembanyama 25.0 → 25.7 at 23, Jokić 27.7 → 24.3 at 31, LeBron 20.9 → 17.3 at 42; Kennard\'s 47.8% from three regresses to 40.9%. Checked 2026-09-28.',
+                limits: [
+                    'A baseline that knows nothing about role changes, trades, injuries, a new coach or a player\'s summer. The players still scoring 22+ a game at 34 or older (31 in the backtest) beat it by 3 points a game on average: the aging curve describes the typical player, and they aren\'t one.',
+                    'Regression is toward the playing-time-weighted league average, so bench players are pulled a little high for BPM (bias −0.21) and the projection lags the league-wide rise in three-point volume (3PA bias +0.16).',
+                    'The backtest scores only players who went on to play 500+ minutes, so it says how the method does for players who kept playing. The M values (2020-21 to 2025-26 data) and the aging curves (all seasons) were not re-estimated per backtest season.',
+                    'Rebound %, offensive rebound %, turnover %, usage % and assist % change definition in 2009-10, so no projection mixes seasons from both sides for them. Not projected: on-court ratings and plus-minus, VORP, impact score, games played.',
+                ],
+            },
+            {
                 id: 'shotmaking',
                 name: 'Expected FG% and shot-making',
                 open: { page: 'shotcharts', label: 'Shot Charts' },

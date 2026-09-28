@@ -49,6 +49,7 @@ const PlayerProfile = lazy(() => import('./components/pages/PlayerProfile'));
 const RoleFinder = lazy(() => import('./components/pages/RoleFinder'));
 const EraTranslator = lazy(() => import('./components/pages/EraTranslator'));
 const AgingCurves = lazy(() => import('./components/pages/AgingCurves'));
+const Projections = lazy(() => import('./components/pages/Projections'));
 const StatLineFinder = lazy(() => import('./components/pages/StatLineFinder'));
 const GameFinder = lazy(() => import('./components/pages/GameFinder'));
 const HotStreaks = lazy(() => import('./components/pages/HotStreaks'));
@@ -85,6 +86,7 @@ const PAGES = {
   rolefinder: RoleFinder,
   era: EraTranslator,
   aging: AgingCurves,
+  projections: Projections,
   statline: StatLineFinder,
   gamefinder: GameFinder,
   hotstreaks: HotStreaks,

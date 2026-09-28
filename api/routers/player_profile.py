@@ -30,6 +30,7 @@ from routers.explore import BREAKOUT_DEFAULT, BREAKOUT_DEFAULT_GP, BREAKOUT_DEFA
 from routers.leaderboard import STATS
 from routers.shot_making import PLAYER_COLS as SM_COLS, _row as sm_row
 from routers.on_off import DEFAULT_MIN_MINUTES as ON_OFF_MIN_MINUTES, FEW_OFF_MINUTES as ON_OFF_FEW_OFF
+from routers.projections import LOW_WEIGHT as PROJECTION_LOW_WEIGHT, PROFILE_STATS as PROJECTION_STATS
 from source_badge import make_source
 
 router = APIRouter()
@@ -77,6 +78,7 @@ def _coverage():
             "clutch": _span(cur, "SELECT min(season), max(season) FROM pbp_games"),
             "shot_making": _span(cur, "SELECT min(season), max(season) FROM shot_making_league"),
             "on_off": _span(cur, "SELECT min(season), max(season) FROM player_on_off"),
+            "projections": _span(cur, "SELECT min(season), max(season) FROM player_projections"),
             "game_lines": _span(cur, "SELECT min(season), max(season) FROM player_game_lines"),
             "awards": _span(cur, "SELECT min(season), max(season) FROM player_awards WHERE award <> 'All-Star'"),
             "all_star": _span(cur, "SELECT min(season), max(season) FROM player_awards WHERE award = 'All-Star'"),
@@ -302,6 +304,18 @@ def get_player_profile(player_id: int):
             o["ci_excludes_zero"] = None if o["ci_low"] is None else bool(o["ci_low"] > 0 or o["ci_high"] < 0)
             on_off.append(o)
 
+        # ── Next season: the Marcel-style baseline projection (player_projections) ──
+        cur.execute("""SELECT p.stat, s.label, s.format, s.higher_is_better, p.projection, p.lo, p.hi, p.own_weight,
+                              p.seasons_used, p.last_season, p.last_value, p.age_adjustment, p.age_known, p.age_next,
+                              p.season
+                       FROM player_projections p JOIN projection_stats s USING (stat)
+                       WHERE p.player_id = %s AND p.stat = ANY(%s)""", (player_id, PROJECTION_STATS))
+        pkeys = ["stat", "label", "format", "higher_is_better", "projection", "lo", "hi", "own_weight", "seasons_used",
+                 "last_season", "last_value", "age_adjustment", "age_known", "age_next", "season"]
+        proj_rows = {x[0]: {k: (_num(v) if isinstance(v, float) else v) for k, v in zip(pkeys, x)} for x in cur.fetchall()}
+        projections = [dict(proj_rows[k], low_weight=proj_rows[k]["own_weight"] < PROJECTION_LOW_WEIGHT)
+                       for k in PROJECTION_STATS if k in proj_rows]
+
         zones = _zones(cur, player_id, shot_seasons[-1]["season"]) if shot_seasons else None
 
         # Seasons the similarity service can compare (all eight inputs present).
@@ -335,6 +349,8 @@ def get_player_profile(player_id: int):
         "on_off": {"rows": on_off, "qualified_minutes": ON_OFF_MIN_MINUTES, "few_off_minutes": ON_OFF_FEW_OFF},
         "similarity": {"seasons": sim_seasons},
         "game_log": {"seasons": game_log_seasons},
+        "projections": {"rows": projections, "season": projections[0]["season"] if projections else None,
+                        "low_weight": PROJECTION_LOW_WEIGHT},
         "breakouts": {
             "flags": flags, "top": BREAKOUT_FLAG_TOP, "stats": [STATS[k][0] for k in BREAKOUT_DEFAULT],
             "keys": BREAKOUT_DEFAULT, "min_gp": BREAKOUT_DEFAULT_GP, "min_mpg": BREAKOUT_DEFAULT_MPG,
@@ -343,7 +359,7 @@ def get_player_profile(player_id: int):
         "_source": make_source(
             ["player_season_stats", "player_team_stints", "player_bio", "player_awards", "draft_history",
              "player_roles", "greats", "player_shots", "scouting_splits", "defender_dad", "player_gravity",
-             "contract_value", "player_wpa_totals", "player_shot_making", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue"],
+             "contract_value", "player_wpa_totals", "player_shot_making", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue", "player_projections"],
             "nba_api (stats.nba.com), Basketball-Reference via Kaggle, ESPN play-by-play, Kaggle salary datasets",
         ),
     }

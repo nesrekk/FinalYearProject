@@ -623,6 +623,50 @@ function Breakouts({ block }) {
     );
 }
 
+function NextSeason({ block, player, onNavigate }) {
+    const rows = block.rows;
+    const first = rows[0];
+    const fmtP = (f, v) => (v == null ? '—' : f === 'pct' ? pct(v) : f === 'signed1' ? signed(v) : num(v));
+    return (
+        <Section id="projection" title={`Next season: ${label(block.season)}`}
+            info={(
+                <InfoTooltip label="How the projection is made" title="A baseline, not a scouting opinion">
+                    His last three seasons, weighted 5/4/3 and by sample, pulled toward the league average by how noisy
+                    each stat is (Stat Stability), then moved along the aging curve to his age next season. The 80%
+                    range is where the same method&apos;s past projections for players like him landed, checked on every
+                    season since 2000-01. It knows nothing about role, team, health or a new coach.
+                </InfoTooltip>
+            )}
+            meta={<>Age {first.age_next ?? '—'} next season, from {first.seasons_used} season{first.seasons_used === 1 ? '' : 's'} on file
+                {!first.age_known && ' (no birth date on file, so no age step)'}. Rows greyed where under{' '}
+                {block.low_weight} of the number comes from his own seasons.{' '}
+                <button type="button" className="pp-link" onClick={() => onNavigate('projections', null, { q: player.player_name })}>Open Projections</button></>}>
+            <TableExport name={`${player.player_name} projection ${label(block.season)}`} />
+            <div className="table-wrapper">
+                <table className="data-table lb-table pp-table">
+                    <thead>
+                        <tr><th>Stat</th><th className="lb-num">{label(block.season - 1)}</th><th className="lb-num lb-stat">{label(block.season)}</th>
+                            <th className="lb-num">80% range</th><th className="lb-num">Age step</th><th className="lb-num">Own weight</th></tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((r) => (
+                            <tr key={r.stat} className={r.low_weight ? 'sl-short' : undefined}
+                                title={r.low_weight ? `Own weight ${r.own_weight.toFixed(2)}: mostly the league average` : undefined}>
+                                <td>{r.label}</td>
+                                <td className="lb-num">{fmtP(r.format, r.last_value)}{r.last_season !== block.season - 1 && ` (${label(r.last_season)})`}</td>
+                                <td className="lb-num lb-stat">{fmtP(r.format, r.projection)}</td>
+                                <td className="lb-num">{fmtP(r.format, r.lo)} to {fmtP(r.format, r.hi)}</td>
+                                <td className="lb-num">{r.age_known ? (r.format === 'pct' ? `${signed(r.age_adjustment * 100)} pts` : signed(r.age_adjustment)) : '—'}</td>
+                                <td className="lb-num">{r.own_weight.toFixed(2)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </Section>
+    );
+}
+
 function OnOff({ block, coverage, onNavigate }) {
     const rows = block.rows;
     const thin = rows.some((r) => r.few_off_minutes);
@@ -723,6 +767,13 @@ function missingReasons(d) {
             ? `Play-by-play covers ${span(cov.clutch)}; ${career}.`
             : `No clutch plays in the play-by-play (${span(cov.clutch)}).`]);
     }
+    if (d.projections && !d.projections.rows.length) {
+        const windowMinutes = d.seasons.rows.filter((r) => r.season >= cov.seasons.to - 2)
+            .reduce((sum, r) => sum + (r.gp || 0) * (r.min || 0), 0);
+        out.push(['Next season', p.active
+            ? `No projection: ${Math.round(windowMinutes).toLocaleString()} minutes over the last three seasons, under the 250-minute floor (regressing so few minutes toward the league average would invent a role).`
+            : `Projections are made for players with a ${label(cov.seasons.to)} season; ${career}.`]);
+    }
     if (d.on_off && !d.on_off.rows.length) {
         out.push(['On/off', endedBefore(cov.on_off.from)
             ? `Play-by-play lines cover ${span(cov.on_off)}; ${career}.`
@@ -791,6 +842,7 @@ export default function PlayerProfile({ onNavigate }) {
         ['gravity', 'Gravity', d.gravity.rows.length > 0],
         ['contract', 'Contract', d.contracts.rows.length > 0],
         ['clutch', 'Clutch', !!d.clutch],
+        ['projection', 'Next season', (d.projections?.rows.length ?? 0) > 0],
         ['onoff', 'On/off', (d.on_off?.rows.length ?? 0) > 0],
         ['similar', 'Similar', d.similarity.seasons.length > 0],
         ['breakouts', 'Breakouts', d.breakouts.flags.length > 0],
@@ -832,6 +884,7 @@ export default function PlayerProfile({ onNavigate }) {
             {d.gravity.rows.length > 0 && <Gravity rows={d.gravity.rows} onNavigate={onNavigate} />}
             {d.contracts.rows.length > 0 && <Contracts rows={d.contracts.rows} coverage={d.coverage.contracts} onNavigate={onNavigate} />}
             {d.clutch && <Clutch c={d.clutch} coverage={d.coverage.clutch} onNavigate={onNavigate} />}
+            {(d.projections?.rows.length ?? 0) > 0 && <NextSeason block={d.projections} player={d.player} onNavigate={onNavigate} />}
             {(d.on_off?.rows.length ?? 0) > 0 && <OnOff block={d.on_off} coverage={d.coverage.on_off} onNavigate={onNavigate} />}
             {d.similarity.seasons.length > 0 && <Similar player={d.player} seasons={d.similarity.seasons} />}
             {d.breakouts.flags.length > 0 && <Breakouts block={d.breakouts} />}

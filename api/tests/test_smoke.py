@@ -1753,3 +1753,45 @@ def test_shot_making_known_shooters_and_model_check():
     prof = client.get("/player-profile/201939").json()   # Curry
     assert prof["shot_making"]["min_fga"] == 200
     assert any(r["season"] == 2016 and r["rank"] == 1 for r in prof["shot_making"]["rows"])
+
+
+def test_projections_baseline_beats_last_season_and_covers():
+    """Next-season projections (api/routers/projections.py, scripts/build_projections.py):
+    the backtest must beat 'same as last season' on the bread-and-butter stats,
+    its 80% range must hold about 80% of actuals, and a current star must get a
+    projection with a sensible range; a retired player gets a reason instead."""
+    from impact_api import app
+    client = TestClient(app)
+    d = client.get("/projections", params={"stat": "pts"}).json()
+    _assert_has_source(d)
+    assert d["season"] == d["latest_season"] + 1 and d["players"] > 400
+    bt = d["backtest"]["all"]
+    assert bt["mae"] < bt["mae_last"] < bt["mae_league"]
+    assert 0.76 <= bt["coverage80"] <= 0.84 and 0.85 <= bt["slope"] <= 1.15
+    assert len(d["backtest"]["by_season"]) >= 25
+    # Every row has a range around its projection; ranges never collapse to a point.
+    for r in d["rows"]:
+        assert r["lo"] < r["projection"] < r["hi"]
+    keys = {s["key"] for s in d["catalogue"]}
+    assert {"min", "pts", "pts36", "fg3_pct", "usg_pct", "bpm"} <= keys
+    # The whole catalogue beats the league average; per-36 and shooting stats beat last season too.
+    for s in d["catalogue"]:
+        b = s["backtest"]
+        assert b["mae"] < b["mae_league"], s["key"]
+        if s["key"] in ("pts36", "reb36", "fg_pct", "ft_pct", "ts_pct", "bpm", "min"):
+            assert b["mae"] < b["mae_last"], s["key"]
+    # Jokić: three seasons used, a projection near his level, age from his birth date (1995-02-19).
+    j = client.get("/projections/player/203999").json()
+    rows = {r["stat"]: r for r in j["rows"]}
+    assert j["player"]["seasons_used"] == 3 and j["player"]["age_next"] == d["season"] - 1996
+    assert 18 < rows["pts"]["projection"] < 30 and rows["pts"]["lo"] < rows["pts"]["projection"] < rows["pts"]["hi"]
+    # 3P% is the noisier stat, so his own numbers get less of the weight than for points.
+    assert rows["pts"]["own_weight"] > 0.9 and rows["fg3_pct"]["own_weight"] < rows["pts"]["own_weight"]
+    # Wilt: no projection, with the reason.
+    w = client.get("/projections/player/76375").json()
+    assert w["rows"] == [] and "1972-73" in w["reason"]
+    assert client.get("/projections", params={"stat": "nope"}).status_code == 400
+    # The profile carries the same block.
+    p = client.get("/player-profile/203999").json()
+    assert p["projections"]["season"] == d["season"]
+    assert {r["stat"] for r in p["projections"]["rows"]} >= {"min", "pts", "bpm"}

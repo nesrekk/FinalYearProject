@@ -1038,3 +1038,22 @@ export async function fetchAgingPlayer(params) {
     const response = await axios.get(`${IMPACT_BASE}/aging/player`, { params });
     return response.data;
 }
+
+// ─── Next-season projections ──────────────────────────────────────
+// params: { stat }
+export async function fetchProjections(params) {
+    const response = await axios.get(`${IMPACT_BASE}/projections`, { params });
+    return response.data;
+}
+
+export async function fetchProjectionBacktest() {
+    return getWithCache('projection_backtest', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/projections/backtest`);
+        return response.data;
+    });
+}
+
+export async function fetchPlayerProjections(playerId) {
+    const response = await axios.get(`${IMPACT_BASE}/projections/player/${playerId}`);
+    return response.data;
+}

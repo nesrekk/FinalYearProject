@@ -25,6 +25,7 @@ export const NAV_GROUPS = [
             { id: 'rolefinder', label: 'Role Player Finder', icon: 'person_search' },
             { id: 'era', label: 'Era Translator', icon: 'history' },
             { id: 'aging', label: 'Aging Curves', icon: 'timeline' },
+            { id: 'projections', label: 'Projections', icon: 'update' },
             { id: 'statline', label: 'Stat Line Finder', icon: 'manage_search' },
             { id: 'gamefinder', label: 'Game Finder', icon: 'event_note' },
             { id: 'hotstreaks', label: 'Hot Streak Checker', icon: 'local_fire_department' },
