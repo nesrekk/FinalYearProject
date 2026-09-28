@@ -68,7 +68,7 @@ const pageDescriptions = {
     rolefinder: '"I need a 3-and-D wing": ranked players for a role, with the weights shown in full',
     era: 'Any player-season restated in another season\'s pace and league',
     aging: 'How a typical player\'s game changes from one age to the next, and any career against it',
-    projections: 'Next season\'s stat line for every current player, from a simple baseline that was backtested on 25 seasons',
+    projections: 'Next season\'s stat line for every current player, from a simple baseline that was backtested on 26 seasons',
     statline: 'Type a stat line, get the real player-seasons closest to it',
     gamefinder: 'Every player-game since 2020-21: filter by any stat line, or find the longest streaks',
     hotstreaks: 'Who\'s hot or cold over their last few games, and how much of it is likely to last',

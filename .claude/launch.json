@@ -7,6 +7,12 @@
       "runtimeArgs": ["-c", "cd frontend && npm run dev -- --port ${PORT:-5173} --strictPort"],
       "port": 5173,
       "autoPort": true
+    },
+    {
+      "name": "impact-api",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd api && /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m uvicorn impact_api:app --port 8002"],
+      "port": 8002
     }
   ]
 }
