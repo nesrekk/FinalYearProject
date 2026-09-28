@@ -1542,3 +1542,30 @@ def test_meta_coverage():
         assert row["exists"] is True, f"{row['table']} is in COVERAGE_MAP but missing from the database"
         assert row["n_rows"] > 0
         assert isinstance(row["used_by"], list)
+
+
+def test_aging_curves_peaks_and_player_overlay():
+    from impact_api import app
+    client = TestClient(app)
+    d = client.get("/aging/curves", params={"stat": "pts", "era": "all"}).json()
+    _assert_has_source(d)
+    s = d["summary"]
+    # Scoring peaks in the mid-to-late twenties; athletic stats peak earlier.
+    assert 25 <= s["peak_age"] <= 28 and s["pairs"] > 10000
+    peaks = {x["key"]: x["peaks"] for x in d["stats"]}
+    assert peaks["blk"]["all"]["age"] < peaks["pts"]["all"]["age"] < peaks["ast"]["all"]["age"]
+    assert {e["era"] for e in d["eras"]} == {"all", "three_point", "modern"}
+    pts = {p["age"]: p for p in d["points"]}
+    # Anchored at 27, and declining well before 34; every age on the curve has 30+ pairs.
+    assert abs(pts[27]["change_vs_ref"]) < 1e-9 and pts[34]["change_vs_ref"] < pts[30]["change_vs_ref"] < 0
+    assert all(p["pairs"] is None or p["pairs"] >= 30 for p in d["points"])
+    assert all(p["ci_lo"] <= p["change_vs_ref"] <= p["ci_hi"] for p in d["points"])
+    # One age convention: LeBron (born 1984-12-30) was 19 on 1 Feb 2004 and 25 on 1 Feb 2010.
+    lb = client.get("/aging/player", params={"player_id": 2544, "stat": "bpm"}).json()
+    ages = {x["season"]: x["age"] for x in lb["seasons"]}
+    assert ages[2004] == 19 and ages[2010] == 25 and lb["offset"] > 5 and lb["path"]
+    # BPM starts in 1973-74: Wilt's seasons are listed but can't be placed.
+    wilt = client.get("/aging/player", params={"player_id": 76375, "stat": "bpm"}).json()
+    assert wilt["qualified_seasons"] == 0 and wilt["path"] is None
+    assert client.get("/aging/curves", params={"stat": "nope"}).status_code == 400
+    assert client.get("/aging/curves", params={"stat": "pts", "era": "x"}).status_code == 400

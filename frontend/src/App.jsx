@@ -48,6 +48,7 @@ const StatStability = lazy(() => import('./components/pages/StatStability'));
 const PlayerProfile = lazy(() => import('./components/pages/PlayerProfile'));
 const RoleFinder = lazy(() => import('./components/pages/RoleFinder'));
 const EraTranslator = lazy(() => import('./components/pages/EraTranslator'));
+const AgingCurves = lazy(() => import('./components/pages/AgingCurves'));
 const StatLineFinder = lazy(() => import('./components/pages/StatLineFinder'));
 const Watchlist = lazy(() => import('./components/pages/Watchlist'));
 const SavedAnalyses = lazy(() => import('./components/pages/SavedAnalyses'));
@@ -81,6 +82,7 @@ const PAGES = {
   player: PlayerProfile,
   rolefinder: RoleFinder,
   era: EraTranslator,
+  aging: AgingCurves,
   statline: StatLineFinder,
   watchlist: Watchlist,
   saved: SavedAnalyses,

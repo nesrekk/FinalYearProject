@@ -24,6 +24,7 @@ export const NAV_GROUPS = [
             { id: 'stability', label: 'Stat Stability', icon: 'equalizer' },
             { id: 'rolefinder', label: 'Role Player Finder', icon: 'person_search' },
             { id: 'era', label: 'Era Translator', icon: 'history' },
+            { id: 'aging', label: 'Aging Curves', icon: 'timeline' },
             { id: 'statline', label: 'Stat Line Finder', icon: 'manage_search' },
             { id: 'shotcharts', label: 'Shot Charts', icon: 'adjust' },
             { id: 'draft', label: 'Draft Value Guide', icon: 'school' },

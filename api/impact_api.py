@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import (
+    aging,
     blurred_player,
     clutch_wpa,
     college,
@@ -100,6 +101,7 @@ for _router_module in (
     role_finder,
     trade_impact,
     player_profile,
+    aging,
 ):
     app.include_router(_router_module.router)
 

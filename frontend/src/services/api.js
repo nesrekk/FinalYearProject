@@ -949,3 +949,16 @@ export async function fetchEraTranslation(params) {
     const response = await axios.get(`${IMPACT_BASE}/era/translate`, { params });
     return response.data;
 }
+
+// ─── Aging Curves ─────────────────────────────────────────────────
+// params: { stat, era }
+export async function fetchAgingCurves(params) {
+    const response = await axios.get(`${IMPACT_BASE}/aging/curves`, { params });
+    return response.data;
+}
+
+// params: { player_id, stat, era }
+export async function fetchAgingPlayer(params) {
+    const response = await axios.get(`${IMPACT_BASE}/aging/player`, { params });
+    return response.data;
+}

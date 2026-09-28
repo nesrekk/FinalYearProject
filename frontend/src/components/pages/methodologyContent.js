@@ -338,6 +338,20 @@ export const SECTIONS = [
                     'BPM, VORP and impact score exist only as season totals, so they get only year-to-year correlation, which also counts real change (age, role, team).',
                 ],
             },
+            {
+                id: 'aging',
+                name: 'Aging Curves',
+                open: { page: 'aging', label: 'Aging Curves' },
+                answers: 'How does a typical player\'s game change from one age to the next, and at what age does each part of it peak?',
+                method: 'Delta method: every player with two consecutive seasons of 250+ minutes (shooting % also need 100 FGA, 50 3PA or 50 FTA in both) gives one change from age a to a+1. Each season is measured against that season\'s league average first, so league-wide trends (three-point volume) don\'t count as aging. Changes are weighted by the harmonic mean of the two seasons\' minutes (attempts for shooting %), averaged per age, chained into a curve and anchored at the average 27-year-old. Ages with under 30 pairs are left off; under 100 is flagged. 95% ranges from 300 bootstrap resamples of whole careers. 24 stats (per 36 minutes, shooting, rates, BPM), each for every season it\'s recorded, the three-point era (1979-80 on) and 2009-10 on.',
+                checked: 'Checked 2026-09-28: points per 36 peak at 26 (95% range 25-26) and BPM at 25 (25-26), from 16,018 and 14,167 pairs; assists (28), free-throw % (28) and three-point attempts (29) peak later, while blocks and offensive rebounds (19), rebounds (22) and steals (24) peak earlier, the athletic-first, skill-later pattern the plan expected. By 34 the typical player is 2.7 BPM below his 27-year-old self. The three eras put the peak within a year of each other for 19 of 24 stats; the other five (rebounds, rebound %, offensive rebound %, free-throw %, turnovers) differ by two years, the 2009-10-on curve being the odd one out.',
+                limits: [
+                    'Survivor bias: players who decline sharply often leave, so their drop never appears as a pair (at 34, 34% of qualified players never had another 250-minute season, and they were already 2.1 BPM below those who did). Declines at older ages are if anything too gentle.',
+                    'Age is the age on February 1 of the season, from birth dates, in every season: the stored ages switch from Basketball-Reference\'s to NBA.com\'s (often a year older) in 2009-10, so they aren\'t used. 7 player-seasons without a birth date are left out.',
+                    'Rebound %, offensive rebound %, turnover %, usage % and assist % change definition in 2009-10 (Basketball-Reference, then NBA.com), so changes across that line are left out for them.',
+                    'Per 36 minutes describes the minutes a player earns, and coaches cut minutes for older players; the curve says what the typical player did, not what any one player will do.',
+                ],
+            },
         ],
     },
 ];
