@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../common/Icon';
 import { fetchLivePlayerSuggestions, resolvePlayerId } from '../../services/api';
-import { openPlayerProfile } from '../../utils/useUrlState';
+import { openPlayerProfile, openTeamProfile } from '../../utils/useUrlState';
 import { TEAM_NAME_TO_ABBR } from '../../utils/teamAssets';
 import { NAV_GROUPS } from './navConfig';
 
@@ -69,7 +69,7 @@ export default function CommandPalette({ open, onClose, onNavigate }) {
         if (result.kind === 'page') {
             onNavigate(result.id, result.hash);
         } else if (result.kind === 'team') {
-            onNavigate('teams');
+            openTeamProfile(result.abbr);
         } else if (result.kind === 'player') {
             // Results are names; the profile page needs the id.
             resolvePlayerId(result.label)

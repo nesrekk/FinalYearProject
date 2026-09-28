@@ -9,6 +9,7 @@ import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import TeamLogo from '../common/TeamLogo';
+import TeamLink from '../common/TeamLink';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/gamelog.css';
 
@@ -388,8 +389,8 @@ export default function GameFinder() {
                                                         <td>{data.offset + i + 1}</td>
                                                         <td><PlayerName playerId={r.player_id} name={r.player_name} size={24} /></td>
                                                         <td>{day(r.date)}</td>
-                                                        <td>{r.team}</td>
-                                                        <td><span className="gl-opp">{r.home ? 'vs' : '@'} <TeamLogo abbreviation={r.opponent} size={18} /> {r.opponent}</span></td>
+                                                        <td><TeamLink abbr={r.team} season={r.season}><span>{r.team}</span></TeamLink></td>
+                                                        <td><span className="gl-opp">{r.home ? 'vs' : '@'} <TeamLink abbr={r.opponent} season={r.season} logoSize={18} /></span></td>
                                                         <td className={r.win ? 'pp-pos' : 'pp-neg'}>{r.win ? 'W' : 'L'} {r.margin > 0 ? '+' : r.margin < 0 ? '−' : ''}{Math.abs(r.margin)}</td>
                                                         {GAME_COLS.map(([k, , cell]) => (
                                                             <td key={k} className={`lb-num${hitCols.has(k) ? ' gf-hit' : ''}`}>{cell(r)}</td>

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import TeamLogo from '../common/TeamLogo';
+import TeamLink from '../common/TeamLink';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import Icon from '../common/Icon';
 import InfoTooltip from '../common/InfoTooltip';
@@ -510,10 +511,10 @@ export default function DashboardHome({ onNavigate }) {
                                 <tr key={`${team.abbr}-${idx}`}>
                                     <td className="rank-cell">{idx + 1}</td>
                                     <td className="team-cell">
-                                        <span className="entity-row">
+                                        <TeamLink abbr={team.abbr || abbrFromTeamName(team.team)} className="entity-row">
                                             <TeamLogo abbreviation={team.abbr || abbrFromTeamName(team.team)} size={24} />
-                                            {team.team}
-                                        </span>
+                                            <span>{team.team}</span>
+                                        </TeamLink>
                                     </td>
                                     <td>{team.w}-{team.l}</td>
                                     <td className="text-accent">{team.pct}</td>

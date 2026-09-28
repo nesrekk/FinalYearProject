@@ -14,6 +14,7 @@ import { ShotMakingInfo, ShotMakingTable } from '../common/ShotMaking';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import TeamLogo from '../common/TeamLogo';
+import TeamLink from '../common/TeamLink';
 import ZoneCourtMap from '../common/ZoneCourtMap';
 import { openPage, parseParam, useInitialParams } from '../../utils/useUrlState';
 import '../../styles/profile.css';
@@ -95,10 +96,10 @@ function Hero({ data }) {
                 <h1 className="pp-name">{p.player_name}</h1>
                 {facts.length > 0 && <p className="pp-facts">{facts.join(' · ')}</p>}
                 <div className="pp-chips">
-                    <span className="pp-chip">
+                    <TeamLink abbr={p.last_team} season={p.last_season} className="pp-chip">
                         <TeamLogo abbreviation={p.last_team} size={20} />
-                        {p.active ? `${p.last_team} · ${label(p.last_season)}` : `Last played ${label(p.last_season)} · ${p.last_team}`}
-                    </span>
+                        <span>{p.active ? `${p.last_team} · ${label(p.last_season)}` : `Last played ${label(p.last_season)} · ${p.last_team}`}</span>
+                    </TeamLink>
                     <span className="pp-chip">
                         {p.n_seasons} season{p.n_seasons === 1 ? '' : 's'} · {label(p.first_season)}
                         {p.last_season !== p.first_season && ` to ${label(p.last_season)}`}
@@ -186,8 +187,17 @@ function SeasonsTable({ block }) {
                                 <td>{label(r.season)}</td>
                                 <td>
                                     {r.stints.length
-                                        ? <span title="Traded: games per team">{r.stints.map((s) => `${s.team} ${s.gp}`).join(' · ')}</span>
-                                        : r.team_abbreviation}
+                                        ? (
+                                            <span title="Traded: games per team">
+                                                {r.stints.map((s, i) => (
+                                                    <React.Fragment key={s.team}>
+                                                        {i > 0 && ' · '}
+                                                        <TeamLink abbr={s.team} season={r.season}><span>{s.team}</span></TeamLink> {s.gp}
+                                                    </React.Fragment>
+                                                ))}
+                                            </span>
+                                        )
+                                        : <TeamLink abbr={r.team_abbreviation} season={r.season}><span>{r.team_abbreviation}</span></TeamLink>}
                                 </td>
                                 <td className="lb-num">{num(r.age, 0)}</td>
                                 <td className="lb-num">{r.gp ?? '—'}</td>

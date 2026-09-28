@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
+import TeamLink from './common/TeamLink';
 import TableExport from './common/TableExport';
 
 const CHART_W = 480;
@@ -180,10 +181,10 @@ export default function ScheduleFatigueSection() {
                                         <tr key={r.team_abbreviation}>
                                             <td>{r.rank}</td>
                                             <td>
-                                                <div className="entity-row">
+                                                <TeamLink abbr={r.team_abbreviation} season={difficulty?.season} className="entity-row">
                                                     <TeamLogo abbreviation={r.team_abbreviation} size={20} />
-                                                    {r.team_abbreviation}
-                                                </div>
+                                                    <span>{r.team_abbreviation}</span>
+                                                </TeamLink>
                                             </td>
                                             <td>{r.n_games}</td>
                                             <td>{r.total_travel_miles?.toLocaleString() ?? '—'}</td>

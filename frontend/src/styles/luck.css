@@ -44,6 +44,8 @@
   line-height: 1;
   cursor: pointer;
 }
+.lk-open { margin-left: auto; font-size: 0.85rem; font-weight: 600; }
+.lk-open + .lk-close { margin-left: 8px; }
 .lk-close:hover, .lk-close:focus-visible { color: var(--brand-text); border-color: var(--brand); }
 .lk-team-block {
   margin-top: var(--space-4);

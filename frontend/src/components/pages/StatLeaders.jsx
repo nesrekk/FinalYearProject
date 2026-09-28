@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { fetchStatLeaders, fetchHustleLeaders } from '../../services/api';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import TeamLogo from '../common/TeamLogo';
+import TeamLink from '../common/TeamLink';
 import InfoTooltip from '../common/InfoTooltip';
 import Icon from '../common/Icon';
 import PlayerDetailModal from '../common/PlayerDetailModal';
@@ -201,10 +202,10 @@ export default function StatLeaders() {
                         </span>
                       </td>
                       <td>
-                        <span className="entity-row">
+                        <TeamLink abbr={row.team_abbr} className="entity-row">
                           <TeamLogo abbreviation={row.team_abbr} size={18} />
-                          {row.team_abbr || '-'}
-                        </span>
+                          <span>{row.team_abbr || '-'}</span>
+                        </TeamLink>
                       </td>
                       <td className="hb-cell-accent">{row.value}</td>
                     </tr>

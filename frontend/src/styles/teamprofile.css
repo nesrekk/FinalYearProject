@@ -1,0 +1,58 @@
+/* Team page (pages/TeamProfile.jsx) and the team link (common/TeamLink.jsx).
+   Builds on profile.css (.pp-*) and theme.css (.rx-*, .lb-*). Paper/Ink tokens only. */
+
+/* ── Team → page link ── */
+.team-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+  vertical-align: middle;
+}
+a.team-link:hover span,
+a.team-link:focus-visible span { color: var(--brand-text); text-decoration: underline; text-underline-offset: 3px; }
+a.team-link:hover,
+a.team-link:focus-visible { color: var(--brand-text); }
+a.team-link:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.tp-hero-logo { flex: none; }
+.tp-note { margin-top: var(--space-2); }
+.tp-actions { align-items: flex-end; flex-wrap: wrap; }
+.tp-tile-rank { display: block; margin-top: 2px; font-size: 0.75rem; color: var(--text-2); font-family: var(--font-mono); }
+.tp-rank { color: var(--text-2); font-size: 0.8em; font-family: var(--font-mono); }
+.tp-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-4); align-items: start; }
+.tp-table-gap { margin-top: var(--space-3); }
+.tp-links { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-3); }
+.tp-more { display: flex; gap: 8px; align-items: center; }
+.tp-five { display: flex; flex-wrap: wrap; gap: 4px 12px; min-width: 260px; }
+
+/* Charts */
+.tp-mid { stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 4 3; }
+.tp-bar { fill: var(--text-3); opacity: 0.55; }
+.tp-bar--po { fill: var(--brand); opacity: 0.7; }
+.tp-bar--on { opacity: 1; stroke: var(--text); stroke-width: 1.5; }
+.tp-hbar { cursor: pointer; }
+.tp-hbar:hover .tp-bar { opacity: 1; }
+.tp-win { fill: var(--positive); opacity: 0.8; }
+.tp-loss { fill: var(--negative); opacity: 0.8; }
+.tp-key { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: var(--space-2) 0 0; font-size: 0.8rem; color: var(--text-2); }
+.tp-key > span { display: inline-flex; align-items: center; gap: 6px; }
+.tp-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--text-3); opacity: 0.55; }
+.tp-swatch--po { background: var(--brand); opacity: 0.7; }
+.tp-swatch--team { background: var(--brand); opacity: 1; }
+.tp-swatch--lg { background: var(--text-3); opacity: 0.8; }
+.tp-swatch--opp { background: var(--text); opacity: 0.8; }
+
+/* Shot mix bars */
+.tp-bars-col { width: 34%; min-width: 120px; }
+.tp-bars { display: flex; flex-direction: column; gap: 2px; }
+.tp-sbar { display: block; height: 5px; border-radius: 2px; }
+.tp-sbar--team { background: var(--brand); }
+.tp-sbar--lg { background: var(--text-3); opacity: 0.8; }
+.tp-sbar--opp { background: var(--text); opacity: 0.8; }
+
+@media (max-width: 640px) {
+  .tp-hero-logo { width: 72px !important; height: 72px !important; }
+  .tp-bars-col { display: none; }
+}

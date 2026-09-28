@@ -7,6 +7,7 @@ import TableExport from './common/TableExport';
 import CopyLinkButton from './common/CopyLinkButton';
 import PlayerName from './common/PlayerName';
 import TeamLogo from './common/TeamLogo';
+import TeamLink from './common/TeamLink';
 import { currentPageParam, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
@@ -310,7 +311,7 @@ export default function OnOffSection() {
                                             {flags.length > 0 && <span className="oo-flag" aria-label={flags.join('. ')} title={flags.join('. ')} data-export-as={short ? ' (small sample)' : ' (few off minutes)'}>†</span>}
                                         </td>
                                         {showTeamCol && (
-                                            <td className="oo-team"><TeamLogo abbreviation={r.team_abbreviation} size={20} /> {r.team_abbreviation}</td>
+                                            <td className="oo-team"><TeamLink abbr={r.team_abbreviation} season={season} /></td>
                                         )}
                                         <td className="lb-num">{r.games}</td>
                                         <td className="lb-num">{int(r.minutes_on)}</td>

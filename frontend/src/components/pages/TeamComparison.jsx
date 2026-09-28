@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { fetchCurrentMeta, fetchTeamComparisonExtra } from '../../services/api';
 import TeamLogo from '../common/TeamLogo';
+import TeamLink from '../common/TeamLink';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import BigStat from '../ui/BigStat';
 import InfoTooltip from '../common/InfoTooltip';
@@ -238,8 +239,10 @@ export default function TeamComparison() {
                         className="team-compare-hero-side"
                         style={{ '--team-wash': TEAM_COLORS[statsA.abbr] || 'var(--brand)' }}
                     >
-                        <TeamLogo abbreviation={statsA.abbr} size={40} />
-                        <span className="team-compare-hero-name">{statsA.name}</span>
+                        <TeamLink abbr={statsA.abbr}>
+                            <TeamLogo abbreviation={statsA.abbr} size={40} />
+                            <span className="team-compare-hero-name">{statsA.name}</span>
+                        </TeamLink>
                         {standings?.[teamA] && (
                             <BigStat
                                 label={`${standings[teamA].pct} win pct`}
@@ -260,8 +263,10 @@ export default function TeamComparison() {
                                 className="team-compare-hero-stat"
                             />
                         )}
-                        <span className="team-compare-hero-name">{statsB.name}</span>
-                        <TeamLogo abbreviation={statsB.abbr} size={40} />
+                        <TeamLink abbr={statsB.abbr}>
+                            <span className="team-compare-hero-name">{statsB.name}</span>
+                            <TeamLogo abbreviation={statsB.abbr} size={40} />
+                        </TeamLink>
                     </div>
                 </div>
             )}
@@ -392,13 +397,13 @@ export default function TeamComparison() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
                             <div>
                                 <div className="entity-row" style={{ marginBottom: '0.5rem' }}>
-                                    <TeamLogo abbreviation={statsA.abbr} size={20} /> <strong>{statsA.name}</strong>
+                                    <TeamLink abbr={statsA.abbr}><TeamLogo abbreviation={statsA.abbr} size={20} /> <strong>{statsA.name}</strong></TeamLink>
                                 </div>
                                 <FormStreak form={extra.team_a.recent_form} />
                             </div>
                             <div>
                                 <div className="entity-row" style={{ marginBottom: '0.5rem' }}>
-                                    <TeamLogo abbreviation={statsB.abbr} size={20} /> <strong>{statsB.name}</strong>
+                                    <TeamLink abbr={statsB.abbr}><TeamLogo abbreviation={statsB.abbr} size={20} /> <strong>{statsB.name}</strong></TeamLink>
                                 </div>
                                 <FormStreak form={extra.team_b.recent_form} />
                             </div>
@@ -415,13 +420,13 @@ export default function TeamComparison() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
                             <div>
                                 <div className="entity-row" style={{ marginBottom: '0.5rem' }}>
-                                    <TeamLogo abbreviation={statsA.abbr} size={20} /> <strong>{statsA.name}</strong>
+                                    <TeamLink abbr={statsA.abbr}><TeamLogo abbreviation={statsA.abbr} size={20} /> <strong>{statsA.name}</strong></TeamLink>
                                 </div>
                                 <RosterTable roster={extra.team_a.roster} />
                             </div>
                             <div>
                                 <div className="entity-row" style={{ marginBottom: '0.5rem' }}>
-                                    <TeamLogo abbreviation={statsB.abbr} size={20} /> <strong>{statsB.name}</strong>
+                                    <TeamLink abbr={statsB.abbr}><TeamLogo abbreviation={statsB.abbr} size={20} /> <strong>{statsB.name}</strong></TeamLink>
                                 </div>
                                 <RosterTable roster={extra.team_b.roster} />
                             </div>

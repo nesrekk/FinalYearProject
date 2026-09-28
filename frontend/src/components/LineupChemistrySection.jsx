@@ -6,6 +6,7 @@ import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import TeamLogo from './common/TeamLogo';
+import TeamLink from './common/TeamLink';
 import TableExport from './common/TableExport';
 
 function netRatingColor(v) {
@@ -114,7 +115,7 @@ export default function LineupChemistrySection() {
                                                 {r.players.map((p) => p.player_name).join(' · ')}
                                             </div>
                                         </td>
-                                        <td><TeamLogo abbreviation={r.team_abbreviation} size={20} /></td>
+                                        <td><TeamLink abbr={r.team_abbreviation}><TeamLogo abbreviation={r.team_abbreviation} size={20} /></TeamLink></td>
                                         <td>{r.gp}</td>
                                         <td>{r.min.toFixed(0)}</td>
                                         <td>{r.off_rating.toFixed(1)}</td>

@@ -444,6 +444,10 @@ export const SECTIONS = [
 // Problems found and not yet fixed. Remove an entry in the commit that fixes it.
 export const OPEN_ISSUES = [
     {
+        title: 'A few players a season are listed under the wrong team',
+        body: 'From 2020-21 on, 3 to 5 player-seasons a year in player_season_stats carry a team the player never played for that season (2024-25: Desmond Bane under ORL, Cole Anthony and Kentavious Caldwell-Pope under MEM, a later team). The team page and its payroll use the play-by-play\'s per-game teams instead and list who was left out; other tools that show a player\'s team (Player Stats, Role Player Finder, leaderboards) still show the listed one.',
+    },
+    {
         title: 'Per-game margins in a few older tools are off in 160 games',
         body: 'team_game_fatigue.plus_minus (stats.nba.com\'s summed player plus-minus ÷ 5, not the final margin) disagrees with the real final score in 160 of 20,348 games 2009-10 to 2025-26, 134 of them by a point or more (in some the two teams\' margins don\'t add to zero or the sign is wrong). Game Log, Schedule Fatigue and Team Comparison still read it (With/Without a Star fetches the same field live from stats.nba.com); Luck & Schedule uses the real scores in game_scores. Records (wins and losses) are right everywhere.',
     },

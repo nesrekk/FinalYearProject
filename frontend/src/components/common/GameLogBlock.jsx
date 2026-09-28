@@ -5,6 +5,7 @@ import HotStreakCard from './HotStreakCard';
 import InfoTooltip from './InfoTooltip';
 import TableExport from './TableExport';
 import TeamLogo from './TeamLogo';
+import TeamLink from './TeamLink';
 import { openPage } from '../../utils/useUrlState';
 import '../../styles/gamelog.css';
 
@@ -212,7 +213,7 @@ export default function GameLogBlock({ playerId, seasons, nbaGp = {} }) {
                                         <td>{day(r.date)}</td>
                                         <td>
                                             <span className="gl-opp">
-                                                {r.home ? 'vs' : '@'} <TeamLogo abbreviation={r.opponent} size={18} /> {r.opponent}
+                                                {r.home ? 'vs' : '@'} <TeamLink abbr={r.opponent} season={season} logoSize={18} />
                                             </span>
                                         </td>
                                         <td className={r.win ? 'pp-pos' : 'pp-neg'}>{r.win ? 'W' : 'L'} {r.margin > 0 ? '+' : r.margin < 0 ? '−' : ''}{Math.abs(r.margin)}</td>

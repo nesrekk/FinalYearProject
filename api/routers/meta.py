@@ -316,6 +316,20 @@ COVERAGE_MAP = [
         "used_by": [],
     },
     {
+        "table": "team_seasons", "label": "Team seasons (records, ratings)", "group": "Teams",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM team_seasons", "range_fmt": "season_int",
+        "source": "Basketball-Reference team summaries via the local Kaggle export (scripts/build_team_seasons.py), with franchise and per-season codes from api/teams_lib.py.",
+        "gap": "Ratings, pace and four factors are Basketball-Reference's; the earliest BAA seasons lack some of them. Two 1946-48 team-seasons have no player rows.",
+        "used_by": [],
+    },
+    {
+        "table": "team_zone_mix", "label": "Team shot mix", "group": "Shooting",
+        "range_sql": "SELECT MIN(LEFT(season, 4)::int + 1), MAX(LEFT(season, 4)::int + 1) FROM team_zone_mix", "range_fmt": "season_int",
+        "source": "Every located regular-season shot in player_shots, placed on a team game by game (scripts/build_team_zone_mix.py).",
+        "gap": "99.98% of shots placed; every team-season holds 97-100% of Basketball-Reference's FGA. No shot type or defender distance, as in player_shots.",
+        "used_by": [],
+    },
+    {
         "table": "game_scores", "label": "Final scores", "group": "Teams",
         "range_sql": "SELECT MIN(season), MAX(season) FROM game_scores", "range_fmt": "season_int",
         "source": "ESPN's scoreboard, matched to NBA game ids by date and teams (scripts/fetch_game_scores.py).",

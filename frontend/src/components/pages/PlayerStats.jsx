@@ -4,6 +4,7 @@ import { fetchPlayersTable } from '../../services/api';
 import Loader from '../Loader';
 import Icon from '../common/Icon';
 import TeamLogo from '../common/TeamLogo';
+import TeamLink from '../common/TeamLink';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import InfoTooltip from '../common/InfoTooltip';
 import PlayerDetailModal from '../common/PlayerDetailModal';
@@ -335,10 +336,10 @@ export default function PlayerStats() {
                                                     </span>
                                                 </td>
                                                 <td className={isSortedCell('team_abbreviation', null) ? 'hb-cell-accent' : ''}>
-                                                    <span className="entity-row">
+                                                    <TeamLink abbr={r.team_abbreviation} season={season} className="entity-row">
                                                         <TeamLogo abbreviation={r.team_abbreviation} size={18} />
-                                                        {r.team_abbreviation}
-                                                    </span>
+                                                        <span>{r.team_abbreviation}</span>
+                                                    </TeamLink>
                                                 </td>
                                                 <td className={isSortedCell('age', null) ? 'hb-cell-accent' : ''}>{r.age ?? '—'}</td>
                                                 <td className={isSortedCell('gp', null) ? 'hb-cell-accent' : ''}>{r.gp ?? '—'}</td>

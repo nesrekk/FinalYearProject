@@ -71,6 +71,7 @@ from routers import (
     situational_splits,
     spacing_lab,
     team_comparison,
+    team_profile,
     trade_analyzer,
     trade_impact,
     trend_analysis,
@@ -116,6 +117,7 @@ for _router_module in (
     situational_splits,
     luck_schedule,
     projections,
+    team_profile,
 ):
     app.include_router(_router_module.router)
 

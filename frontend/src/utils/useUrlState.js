@@ -51,6 +51,10 @@ export function openPage(page, params) {
 
 export const playerProfileHref = (playerId) => pageHref('player', { id: playerId });
 export const openPlayerProfile = (playerId) => openPage('player', { id: playerId });
+// A team's page (?page=team&abbr=BOS&season=2024); no season = its latest.
+const teamParams = (abbr, season) => (season ? { abbr, season } : { abbr });
+export const teamProfileHref = (abbr, season) => pageHref('team', teamParams(abbr, season));
+export const openTeamProfile = (abbr, season) => openPage('team', teamParams(abbr, season));
 
 // Opens a full saved URL (pathname + search + hash), e.g. from
 // utils/savedViews.js — unlike openPage(), it doesn't rebuild the query

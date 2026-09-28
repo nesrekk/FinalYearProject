@@ -46,6 +46,7 @@ const RegressionExplorer = lazy(() => import('./components/pages/RegressionExplo
 const BreakoutDetector = lazy(() => import('./components/pages/BreakoutDetector'));
 const StatStability = lazy(() => import('./components/pages/StatStability'));
 const PlayerProfile = lazy(() => import('./components/pages/PlayerProfile'));
+const TeamProfile = lazy(() => import('./components/pages/TeamProfile'));
 const RoleFinder = lazy(() => import('./components/pages/RoleFinder'));
 const EraTranslator = lazy(() => import('./components/pages/EraTranslator'));
 const AgingCurves = lazy(() => import('./components/pages/AgingCurves'));
@@ -84,6 +85,7 @@ const PAGES = {
   breakouts: BreakoutDetector,
   stability: StatStability,
   player: PlayerProfile,
+  team: TeamProfile,
   rolefinder: RoleFinder,
   era: EraTranslator,
   aging: AgingCurves,
@@ -106,6 +108,10 @@ function routeFromUrl() {
   // mounts fresh instead of keeping the first player's state.
   if (page === 'player') {
     return { landing: false, page, key: `player-${new URLSearchParams(window.location.search).get('id')}` };
+  }
+  // Same for a team page: each team mounts fresh (seasons change inside the page).
+  if (page === 'team') {
+    return { landing: false, page, key: `team-${new URLSearchParams(window.location.search).get('abbr')}` };
   }
   if (page) return { landing: false, page: PAGES[page] ? page : 'dashboard' };
   if (window.location.hash.length > 1) return { landing: false, page: 'analytics' };

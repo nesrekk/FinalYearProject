@@ -7,6 +7,7 @@ import TableExport from './common/TableExport';
 import CopyLinkButton from './common/CopyLinkButton';
 import SaveViewButton from './common/SaveViewButton';
 import TeamLogo from './common/TeamLogo';
+import TeamLink from './common/TeamLink';
 import { currentPageParam, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
 import '../styles/luck.css';
 
@@ -506,6 +507,7 @@ export default function LuckScheduleSection() {
                         <h3 className="lk-h3">
                             <TeamLogo abbreviation={hist.franchise} size={22} /> {hist.franchise}
                             {hist.abbreviations.length > 1 ? ` (${hist.abbreviations.join(' / ')})` : ''} in every season since 2009-10
+                            <TeamLink abbr={hist.seasons.find((r) => r.season === season)?.team_abbreviation ?? hist.franchise} season={season} className="lk-open"><span>Team page</span></TeamLink>
                             <button type="button" className="lk-close" onClick={() => set({ team: null })} aria-label="Close team history">×</button>
                         </h3>
                         <p className="rx-verdict">

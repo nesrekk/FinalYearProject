@@ -448,6 +448,14 @@ export async function fetchOnOffStars(params) {
     return response.data;
 }
 
+// ─── Team page ──────────────────────────────────────────────────
+// Every block of one team-season (?page=team). abbr: any code the team has
+// used, or its franchise's; season: end year (omit for its latest).
+export async function fetchTeamProfile(abbr, season) {
+    const response = await axios.get(`${IMPACT_BASE}/team-profile/${encodeURIComponent(abbr)}`, { params: { season } });
+    return response.data;
+}
+
 // ─── Luck & Schedule ────────────────────────────────────────────
 // Every team: record, expected wins from points, luck, close games, SRS/SOS.
 // params: { season, as_of } (as_of = 'YYYY-MM-DD': standings, ratings and the schedule left that morning)

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { fetchCurrentMeta } from '../../services/api';
 import TeamLogo from '../common/TeamLogo';
+import TeamLink from '../common/TeamLink';
 import { abbrFromTeamName } from '../../utils/teamAssets';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import TableExport from '../common/TableExport';
@@ -77,7 +78,9 @@ export default function StandingsSection() {
                     transition={preset.spring}
                 >
                     <span className="hb-row-avatar">
-                        <TeamLogo abbreviation={leader.abbr || abbrFromTeamName(leader.team)} size={40} />
+                        <TeamLink abbr={leader.abbr || abbrFromTeamName(leader.team)}>
+                            <TeamLogo abbreviation={leader.abbr || abbrFromTeamName(leader.team)} size={40} />
+                        </TeamLink>
                     </span>
                     <div className="hb-hero-text">
                         <div className="hb-hero-label">#1 Seed — {CONFERENCES.find((c) => c.id === conference)?.label}</div>
@@ -107,10 +110,10 @@ export default function StandingsSection() {
                             <tr key={team.team}>
                                 <td className="rank-cell">{team.rank}</td>
                                 <td className="team-cell">
-                                    <span className="entity-row">
+                                    <TeamLink abbr={team.abbr || abbrFromTeamName(team.team)} className="entity-row">
                                         <TeamLogo abbreviation={team.abbr || abbrFromTeamName(team.team)} size={24} />
-                                        {team.team}
-                                    </span>
+                                        <span>{team.team}</span>
+                                    </TeamLink>
                                 </td>
                                 <td>{team.w}</td>
                                 <td>{team.l}</td>

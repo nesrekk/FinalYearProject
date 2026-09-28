@@ -1891,3 +1891,52 @@ def test_luck_schedule_srs_and_carryover():
     assert client.get("/teams/luck-schedule", params={"season": 1990}).status_code == 404
     assert client.get("/teams/luck-schedule", params={"season": 2016, "as_of": "2015-10-01"}).status_code == 400
     assert client.get("/teams/luck-schedule/team/XXX").status_code == 404
+
+
+def test_team_profile_blocks_and_coverage():
+    """Team page (api/routers/team_profile.py): team_seasons (scripts/build_team_seasons.py) and
+    team_zone_mix (scripts/build_team_zone_mix.py) plus the stored tables it aggregates."""
+    from impact_api import app
+    client = TestClient(app)
+    d = client.get("/team-profile/BOS", params={"season": 2024}).json()
+    _assert_has_source(d)
+    t = d["summary"]["team"]
+    # 2023-24 Celtics: 64-18, first in SRS, and the same record in every block that has one.
+    assert (t["w"], t["l"]) == (64, 18) and d["summary"]["ranks"]["srs"] == 1 and d["summary"]["n_teams"] == 30
+    assert (d["luck"]["wins"], d["luck"]["losses"]) == (64, 18) and d["luck"]["srs_rank"] == 1
+    games = d["games"]["games"]
+    assert len(games) == 82 and sum(g["pts_for"] > g["pts_against"] for g in games) == 64
+    home = next(s for s in d["games"]["splits"] if s["key"] == "home")
+    away = next(s for s in d["games"]["splits"] if s["key"] == "away")
+    assert home["n"] + away["n"] == 82
+    names = [p["player_name"] for p in d["roster"]["players"]]
+    assert names[0] == "Jayson Tatum" and "Jrue Holiday" in names
+    assert d["lineups"]["available"] and d["on_off"]["available"] and d["pairs"]["available"]
+    assert not d["payroll"]["available"] and "2023-24" in d["payroll"]["reason"]
+    mix = d["shot_mix"]
+    assert abs(sum(z["share"] for z in mix["zones"]) - 1) < 0.01 and mix["fga"] > 6500
+    # Franchise history: every season under its own name, joined into one franchise.
+    fr = {r["season"]: r["abbreviation"] for r in client.get("/team-profile/OKC", params={"season": 2005}).json()["franchise_history"]}
+    assert fr[2005] == "SEA" and fr[2009] == "OKC"
+    # Asking for the franchise in a season it played under another name opens that team, with a note.
+    sea = client.get("/team-profile/OKC", params={"season": 2005}).json()
+    assert sea["abbreviation"] == "SEA" and sea["note"] and sea["summary"]["team"]["w"] == 52
+    assert not sea["games"]["available"] and sea["games"]["reason"]
+    assert sea["shot_mix"]["available"] and sea["roster"]["players"][0]["player_name"] == "Ray Allen"
+    # Either code for the Suns works; 2015-16 Warriors 73-9 from Basketball-Reference.
+    assert client.get("/team-profile/PHO", params={"season": 2024}).json()["abbreviation"] == "PHX"
+    assert client.get("/team-profile/PHX", params={"season": 2005}).json()["abbreviation"] == "PHO"
+    gsw = client.get("/team-profile/GSW", params={"season": 2016}).json()["summary"]["team"]
+    assert (gsw["w"], gsw["l"]) == (73, 9)
+    # A player the season rows list under a later team isn't on this roster (play-by-play decides).
+    mem = client.get("/team-profile/MEM", params={"season": 2025}).json()
+    assert "Cole Anthony" not in [p["player_name"] for p in mem["roster"]["players"]]
+    assert any(x["player_name"] == "Cole Anthony" for x in mem["roster"]["left_out"])
+    assert mem["payroll"]["available"] and mem["payroll"]["n_teams"] == 30
+    # Every block that's missing says why; guards.
+    old = client.get("/team-profile/CHI", params={"season": 1996}).json()
+    for k in ("games", "luck", "payroll", "lineups", "on_off", "shot_mix"):
+        assert old[k]["available"] or old[k]["reason"]
+    assert old["summary"]["team"]["w"] == 72
+    assert client.get("/team-profile/XYZ").status_code == 404
+    assert client.get("/team-profile/OKC", params={"season": 1960}).status_code == 404
