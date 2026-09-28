@@ -1109,3 +1109,27 @@ def test_roy_pool_is_first_nba_season():
     assert {"Cooper Flagg", "Kon Knueppel"} <= names
     assert not names & {"Bronny James", "Alondes Williams", "Daniss Jenkins", "Sidy Cissoko"}
     assert "Basketball-Reference" in res["candidate_pool_rule"]
+
+
+def test_composite_metric_z_scores_and_guards():
+    from impact_api import app
+    client = TestClient(app)
+    data = client.get("/leaderboard/composite", params={"weights": "pts:1,ts_pct:1", "season_from": 2026}).json()
+    _assert_has_source(data)
+    top = data["results"][0]
+    # Score is the weighted sum of the parts' z-scores, and the list is sorted by it.
+    assert abs(top["score"] - sum(p["contribution"] for p in top["parts"].values())) < 0.01
+    scores = [r["score"] for r in data["results"]]
+    assert scores == sorted(scores, reverse=True)
+
+    # Lower-is-better stats are flipped: fewest turnovers score highest.
+    tov = client.get("/leaderboard/composite", params={"weights": "tov:1", "top_n": 5}).json()["results"]
+    assert tov[0]["parts"]["tov"]["z"] > 0 and tov[0]["parts"]["tov"]["value"] <= tov[-1]["parts"]["tov"]["value"]
+
+    # Across eras, Jokic 2025-26 leads points + rebounds + assists (z within each season).
+    era = client.get("/leaderboard/composite", params={
+        "weights": "pts:1,reb:1,ast:1", "season_from": 1974, "season_to": 2026, "top_n": 3}).json()
+    assert era["results"][0]["player_name"] == "Nikola Jokić"
+
+    for bad in ("pts:0", "age:1", "nope:1", "pts:9"):
+        assert client.get("/leaderboard/composite", params={"weights": bad}).status_code == 400

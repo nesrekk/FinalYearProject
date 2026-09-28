@@ -189,3 +189,167 @@ def custom_leaderboard(
         "results": results,
         "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Basketball-Reference"),
     }
+
+
+# ─── Composite metric ("build your own") ────────────────────────────────────
+# Stats that can go into a composite: everything except age, which has no
+# better or worse end.
+COMPOSITE_STATS = [k for k in STATS if k != "age"]
+MAX_COMPOSITE_STATS = 8
+
+
+def _parse_weights(weights: str):
+    parsed = {}
+    for part in (weights or "").split(","):
+        if not part.strip():
+            continue
+        key, _, w = part.partition(":")
+        key = key.strip()
+        if key not in COMPOSITE_STATS:
+            raise HTTPException(status_code=400, detail=f"Unknown or unusable stat '{key}'.")
+        try:
+            w = float(w)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Weight for '{key}' must be a number.")
+        if not -5 <= w <= 5:
+            raise HTTPException(status_code=400, detail="Weights must be between -5 and 5.")
+        if w != 0:
+            parsed[key] = w
+    if not parsed:
+        raise HTTPException(status_code=400, detail="Give at least one stat with a non-zero weight, e.g. pts:1,ts_pct:1.")
+    if len(parsed) > MAX_COMPOSITE_STATS:
+        raise HTTPException(status_code=400, detail=f"At most {MAX_COMPOSITE_STATS} stats.")
+    return parsed
+
+
+@router.get("/leaderboard/composite")
+def composite_leaderboard(
+    weights: str,
+    season_from: int | None = None,
+    season_to: int | None = None,
+    min_gp: int = Query(30, ge=0),
+    min_mpg: float = Query(20.0, ge=0),
+    team: str | None = None,
+    top_n: int = Query(25, ge=1, le=100),
+):
+    """
+    Rank player-seasons by a weighted sum of z-scores: weights = "pts:1,ts_pct:2".
+
+    Each stat is z-scored within its own season's qualified pool (the players
+    passing min_gp/min_mpg that season, before the team filter), so the score
+    means "standard deviations above that season's qualified players" and a
+    range of seasons compares eras fairly. Stats where lower is better
+    (turnovers, defensive rating, turnover %) are flipped, so a positive
+    weight always rewards the good end. A shooting percentage on fewer
+    attempts a game than ATTEMPT_DEFAULTS counts as average (z = 0), so a
+    1-for-1 season can't dominate.
+    """
+    import numpy as np  # local: only this endpoint needs it
+
+    parsed = _parse_weights(weights)
+    stats = list(parsed)
+    first_needed = max(STATS[k][3] for k in stats)
+
+    with get_db() as conn:
+        cur = conn.cursor()
+        lo, hi = _bounds(cur)
+        season_to = hi if season_to is None else season_to
+        season_from = season_to if season_from is None else season_from
+        if season_from > season_to:
+            season_from, season_to = season_to, season_from
+        clipped_from = max(season_from, first_needed, lo)
+        if season_to < clipped_from:
+            raise HTTPException(status_code=404, detail=(
+                f"These stats are all recorded only from {first_needed - 1}-{str(first_needed)[-2:]} on."))
+        attempt_cols = sorted({STATS[k][5] for k in stats if STATS[k][5]})
+        cols = ["player_id", "player_name", "team_abbreviation", "season", "gp", "min"] + \
+            [c for c in stats + attempt_cols if c not in ("gp", "min")]
+        cur.execute(
+            f"""SELECT {', '.join(cols)} FROM player_season_stats
+                WHERE season BETWEEN %s AND %s AND gp >= %s AND min >= %s;""",
+            (clipped_from, season_to, min_gp, min_mpg),
+        )
+        rows = cur.fetchall()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="No player-seasons pass these filters.")
+    data = {c: np.array([r[i] for r in rows], dtype=object) for i, c in enumerate(cols)}
+    seasons = data["season"].astype(int)
+    n = len(rows)
+    score = np.zeros(n)
+    parts = {}
+    missing = np.zeros(n, dtype=bool)
+    for k in stats:
+        _label, _group, _fmt, _first, higher_is_better, attempts = STATS[k]
+        raw = np.array([np.nan if v is None else float(v) for v in data[k]])
+        usable = ~np.isnan(raw)
+        if attempts:
+            att = np.array([0.0 if v is None else float(v) for v in data[attempts]])
+            enough = att >= ATTEMPT_DEFAULTS[attempts]
+            usable &= enough
+            # A percentage with too few (or no) attempts is average, not missing.
+            missing |= np.isnan(raw) & enough
+        else:
+            missing |= np.isnan(raw)
+        z = np.zeros(n)
+        for s in np.unique(seasons):
+            m = (seasons == s) & usable
+            if m.sum() >= 2:
+                sd = raw[m].std(ddof=0)
+                z[m] = 0.0 if sd == 0 else (raw[m] - raw[m].mean()) / sd
+        if not higher_is_better:
+            z = -z
+        parts[k] = (raw, z)
+        score += parsed[k] * z
+
+    keep = ~missing
+    if team:
+        keep &= np.array([t == team.upper() for t in data["team_abbreviation"]])
+    idx = np.flatnonzero(keep)
+    order = idx[np.argsort(-score[idx], kind="stable")][:top_n]
+
+    def rnd(v, d=4):
+        return None if v is None or (isinstance(v, float) and np.isnan(v)) else round(float(v), d)
+
+    results = []
+    for rank, i in enumerate(order, start=1):
+        results.append({
+            "rank": rank,
+            "player_id": int(data["player_id"][i]),
+            "player_name": data["player_name"][i],
+            "team": data["team_abbreviation"][i],
+            "season": int(seasons[i]),
+            "gp": int(data["gp"][i]),
+            "min": rnd(data["min"][i], 1),
+            "score": round(float(score[i]), 3),
+            "parts": {k: {"value": rnd(parts[k][0][i]), "z": round(float(parts[k][1][i]), 2),
+                          "contribution": round(float(parsed[k] * parts[k][1][i]), 3)} for k in stats},
+        })
+
+    notes = []
+    if clipped_from > season_from:
+        notes.append(f"Starts in {clipped_from - 1}-{str(clipped_from)[-2:]}, the first season every chosen stat "
+                     f"is recorded.")
+    if missing.any():
+        k = int(missing.sum())
+        notes.append(f"{k} qualified player-season{'s lack' if k != 1 else ' lacks'} one of the stats "
+                     f"and {'were' if k != 1 else 'was'} left out.")
+    return {
+        "weights": [{"key": k, "label": STATS[k][0], "format": STATS[k][2], "weight": parsed[k],
+                     "higher_is_better": STATS[k][4]} for k in stats],
+        "filters": {"season_from": clipped_from, "season_to": season_to, "min_gp": min_gp, "min_mpg": min_mpg,
+                    "team": team.upper() if team else None, "top_n": top_n},
+        "pool": int(keep.sum()),
+        "notes": notes,
+        "results": results,
+        "method": (
+            "Score = the sum of weight x z-score. Each stat is z-scored within its own season among players "
+            "passing the games and minutes filters, so 1.0 means one standard deviation better than that "
+            "season's qualified players. Lower-is-better stats are flipped. Shooting percentages on too few "
+            "attempts a game count as average. Correlated stats (points and field-goal attempts, say) count "
+            "the same skill twice. When few players did something in a season (threes in the early 1980s), "
+            "the few who did can sit 5-8 standard deviations above the rest, so one stat can dominate a "
+            "multi-era ranking; a stat needs at least two qualifying players in a season to be scored."
+        ),
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Basketball-Reference"),
+    }

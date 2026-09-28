@@ -24,6 +24,8 @@
   --hi-text: #0d0d0d;
   --on-brand: #0d0d0d;
   --brand-text: var(--accent);
+  /* Active tab label: plain --accent on its 16% tint was 4.15:1 in Paper. */
+  --tab-active-text: color-mix(in srgb, var(--accent) 80%, #000);
   --streak: #7a5a00;
   --brand-gradient: linear-gradient(90deg, #a93a0a, #a93a0a);
 
@@ -112,6 +114,7 @@
   --brand-gradient: linear-gradient(90deg, #ff7a3d, #ff7a3d);
   --shadow-card: 4px 4px 0 #ff5b14;
   --streak: #facc15;
+  --tab-active-text: var(--accent);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -132,6 +135,7 @@
     --brand-gradient: linear-gradient(90deg, #ff7a3d, #ff7a3d);
     --shadow-card: 4px 4px 0 #ff5b14;
     --streak: #facc15;
+    --tab-active-text: var(--accent);
   }
 }
 

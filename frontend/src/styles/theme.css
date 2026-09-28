@@ -659,3 +659,52 @@ select,
   white-space: nowrap;
 }
 .lb-table .lb-stat { font-weight: 800; }
+
+/* Composite metric builder (pages/CompositeBuilder.jsx) */
+.lb-modes { margin-bottom: var(--space-4); }
+.cb-weights {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.cb-weight {
+  display: grid;
+  grid-template-columns: minmax(0, 240px) minmax(80px, 220px) 3ch auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+.cb-weight .input-field { flex: none; width: 100%; min-width: 0; }
+.cb-weight input[type='range'] { width: 100%; accent-color: var(--brand); }
+.cb-weight-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-align: right;
+}
+.cb-remove,
+.cb-add {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  cursor: pointer;
+}
+.cb-remove { width: 28px; height: 28px; line-height: 1; font-size: 1.1rem; }
+.cb-add { align-self: flex-start; padding: 4px 12px; font-size: 0.85rem; font-weight: 600; }
+.cb-remove:hover, .cb-remove:focus-visible, .cb-add:hover, .cb-add:focus-visible {
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+.cb-z { color: var(--text-2); font-size: 0.85em; }
+@media (max-width: 560px) {
+  .cb-weight { grid-template-columns: minmax(0, 1fr) 3ch auto; }
+  .cb-weight input[type='range'] { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* Active tabs everywhere (dashboard.css sets color: var(--accent) !important). */
+.tab-btn--active { color: var(--tab-active-text) !important; }
+
+/* Long source labels wrap instead of clipping on phones. */
+.lb-card .pill-badge { white-space: normal; }

@@ -5,6 +5,7 @@ import InfoTooltip from '../common/InfoTooltip';
 import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import CompositeBuilder from './CompositeBuilder';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 
@@ -42,6 +43,7 @@ export default function LeaderboardBuilder() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [mode, setMode] = useState('single'); // 'single' | 'composite'
 
     useEffect(() => {
         fetchLeaderboardOptions()
@@ -60,7 +62,7 @@ export default function LeaderboardBuilder() {
 
     // Re-run whenever a control changes (debounced for typing in number boxes).
     useEffect(() => {
-        if (!form || !stat) return undefined;
+        if (!form || !stat || mode !== 'single') return undefined;
         const timer = setTimeout(async () => {
             setLoading(true);
             setError('');
@@ -85,7 +87,7 @@ export default function LeaderboardBuilder() {
             }
         }, 300);
         return () => clearTimeout(timer);
-    }, [form, stat]);
+    }, [form, stat, mode]);
 
     if (optionsError) return <section className="dashboard-card"><p className="error-message">{optionsError}</p></section>;
     if (!options || !form) return <Loader />;
@@ -129,141 +131,161 @@ export default function LeaderboardBuilder() {
 
     return (
         <section className="dashboard-card lb-card">
-            <h2 className="card-title hb-page-title">
-                Build a leaderboard
-                <InfoTooltip label="How the Leaderboard Builder works" title="Under the hood">
-                    Ranks single player-seasons from player_season_stats (regular season). Per-game stats unless the
-                    name says %, rating or BPM. Each stat starts in the first season it&apos;s recorded for nearly every
-                    player (steals and blocks 1973-74, threes 1979-80, net rating and plus-minus 2009-10); a range
-                    reaching back further is trimmed and the page says so. Shooting percentages need a minimum number
-                    of attempts per game. {options.notes.join(' ')}
-                </InfoTooltip>
-                <SourceBadge source={data?._source ?? options._source} />
-            </h2>
-
-            <div className="lb-presets" aria-label="Presets">
-                {PRESETS.map((p) => (
-                    <button key={p.label} type="button" onClick={() => applyPreset(p)}>{p.label}</button>
+            <div className="tab-bar lb-modes" role="tablist" aria-label="Leaderboard type">
+                {[['single', 'Rank by one stat'], ['composite', 'Build your own metric']].map(([id, label]) => (
+                    <button
+                        key={id} type="button" role="tab" aria-selected={mode === id}
+                        className={`tab-btn ${mode === id ? 'tab-btn--active' : ''}`}
+                        onClick={() => setMode(id)}
+                    >
+                        {label}
+                    </button>
                 ))}
             </div>
+            {mode === 'composite' ? (
+                <>
+                    <h2 className="card-title hb-page-title">Build your own metric</h2>
+                    <CompositeBuilder stats={options.stats} seasons={options.seasons} teams={options.teams} />
+                </>
+            ) : (
+                <>
+                    <h2 className="card-title hb-page-title">
+                        Build a leaderboard
+                        <InfoTooltip label="How the Leaderboard Builder works" title="Under the hood">
+                            Ranks single player-seasons from player_season_stats (regular season). Per-game stats unless the
+                            name says %, rating or BPM. Each stat starts in the first season it&apos;s recorded for nearly every
+                            player (steals and blocks 1973-74, threes 1979-80, net rating and plus-minus 2009-10); a range
+                            reaching back further is trimmed and the page says so. Shooting percentages need a minimum number
+                            of attempts per game. {options.notes.join(' ')}
+                        </InfoTooltip>
+                        <SourceBadge source={data?._source ?? options._source} />
+                    </h2>
 
-            <div className="lb-controls">
-                <label>
-                    <span>Stat</span>
-                    <select className="input-field" value={form.stat} onChange={(e) => changeStat(e.target.value)}>
-                        {groups.map((g) => (
-                            <optgroup key={g} label={g}>
-                                {options.stats.filter((s) => s.group === g).map((s) => (
-                                    <option key={s.key} value={s.key}>{s.label}</option>
-                                ))}
-                            </optgroup>
+                    <div className="lb-presets" aria-label="Presets">
+                        {PRESETS.map((p) => (
+                            <button key={p.label} type="button" onClick={() => applyPreset(p)}>{p.label}</button>
                         ))}
-                    </select>
-                </label>
-                <label>
-                    <span>From</span>
-                    <select className="input-field" value={form.from} onChange={(e) => set({ from: Number(e.target.value) })}>
-                        {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
-                    </select>
-                </label>
-                <label>
-                    <span>To</span>
-                    <select className="input-field" value={form.to} onChange={(e) => set({ to: Number(e.target.value) })}>
-                        {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
-                    </select>
-                </label>
-                <label>
-                    <span>Min. games</span>
-                    <input className="input-field" type="number" min={0} max={82} value={form.minGp}
-                        onChange={(e) => set({ minGp: e.target.value === '' ? '' : Number(e.target.value) })} />
-                </label>
-                <label>
-                    <span>Min. minutes a game</span>
-                    <input className="input-field" type="number" min={0} max={48} step={1} value={form.minMpg}
-                        onChange={(e) => set({ minMpg: e.target.value === '' ? '' : Number(e.target.value) })} />
-                </label>
-                {attemptsKey && (
-                    <label>
-                        <span>Min. {ATTEMPT_LABELS[attemptsKey]} a game</span>
-                        <input className="input-field" type="number" min={0} step={0.5}
-                            value={form.minAttempts ?? stat.default_min_attempts}
-                            onChange={(e) => set({ minAttempts: e.target.value === '' ? 0 : Number(e.target.value) })} />
-                    </label>
-                )}
-                <label>
-                    <span>Team</span>
-                    <select className="input-field" value={form.team} onChange={(e) => set({ team: e.target.value })}>
-                        <option value="">All teams</option>
-                        {teams.map((t) => <option key={t.team} value={t.team}>{t.team}</option>)}
-                    </select>
-                </label>
-                <label>
-                    <span>Order</span>
-                    <select className="input-field" value={form.order || defaultOrder} onChange={(e) => set({ order: e.target.value })}>
-                        <option value="high">Highest first</option>
-                        <option value="low">Lowest first</option>
-                    </select>
-                </label>
-                <label>
-                    <span>Show</span>
-                    <select className="input-field" value={form.topN} onChange={(e) => set({ topN: Number(e.target.value) })}>
-                        {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                </label>
-            </div>
+                    </div>
 
-            {error && <p className="error-message">{error}</p>}
-            {loading && !data && <Loader />}
-            {data && (
-                <div className={loading ? 'lb-results lb-results--stale' : 'lb-results'} aria-busy={loading}>
-                    <p className="page-subtitle lb-summary">
-                        <strong>{data.stat.label}</strong>, {range}: {data.qualified.toLocaleString()} player-seasons
-                        qualify ({data.filters.min_gp}+ games, {data.filters.min_mpg}+ minutes
-                        {data.filters.min_attempts ? `, ${data.filters.min_attempts}+ ${ATTEMPT_LABELS[attemptsKey]} a game` : ''}
-                        {data.filters.team ? `, ${data.filters.team}` : ''}).
-                        {' '}{data.filters.order === 'high' ? 'Highest' : 'Lowest'} first.
-                        {data.notes.map((n) => <span key={n} className="lb-note"> {n}</span>)}
-                    </p>
-                    {data.results.length === 0 ? (
-                        <p className="empty-message">No player-seasons pass these filters.</p>
-                    ) : (
-                        <>
-                            <TableExport name={`${data.stat.label} leaders ${range}`} />
-                            <div className="table-wrapper">
-                                <table className="data-table lb-table">
-                                    <thead>
-                                        <tr>
-                                            <th>#</th>
-                                            <th>Player</th>
-                                            <th>Season</th>
-                                            <th>Team</th>
-                                            <th className="lb-num lb-stat">{data.stat.label}</th>
-                                            {data.stat.attempts && <th className="lb-num">{ATTEMPT_LABELS[data.stat.attempts]}</th>}
-                                            {CONTEXT_COLUMNS.filter((c) => c.key !== data.stat.key).map((c) => (
-                                                <th key={c.key} className="lb-num">{c.label}</th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {data.results.map((r) => (
-                                            <tr key={`${r.player_id}-${r.season}`}>
-                                                <td>{r.rank}</td>
-                                                <td><PlayerName playerId={r.player_id} name={r.player_name} /></td>
-                                                <td>{seasonLabel(r.season)}</td>
-                                                <td>{r.team}</td>
-                                                <td className="lb-num lb-stat">{fmt(data.stat.format, r.value)}</td>
-                                                {data.stat.attempts && <td className="lb-num">{fmt('num1', r.context[data.stat.attempts])}</td>}
-                                                {CONTEXT_COLUMNS.filter((c) => c.key !== data.stat.key).map((c) => (
-                                                    <td key={c.key} className="lb-num">{fmt(c.format, r.context[c.key])}</td>
-                                                ))}
-                                            </tr>
+                    <div className="lb-controls">
+                        <label>
+                            <span>Stat</span>
+                            <select className="input-field" value={form.stat} onChange={(e) => changeStat(e.target.value)}>
+                                {groups.map((g) => (
+                                    <optgroup key={g} label={g}>
+                                        {options.stats.filter((s) => s.group === g).map((s) => (
+                                            <option key={s.key} value={s.key}>{s.label}</option>
                                         ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </>
+                                    </optgroup>
+                                ))}
+                            </select>
+                        </label>
+                        <label>
+                            <span>From</span>
+                            <select className="input-field" value={form.from} onChange={(e) => set({ from: Number(e.target.value) })}>
+                                {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
+                            </select>
+                        </label>
+                        <label>
+                            <span>To</span>
+                            <select className="input-field" value={form.to} onChange={(e) => set({ to: Number(e.target.value) })}>
+                                {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
+                            </select>
+                        </label>
+                        <label>
+                            <span>Min. games</span>
+                            <input className="input-field" type="number" min={0} max={82} value={form.minGp}
+                                onChange={(e) => set({ minGp: e.target.value === '' ? '' : Number(e.target.value) })} />
+                        </label>
+                        <label>
+                            <span>Min. minutes a game</span>
+                            <input className="input-field" type="number" min={0} max={48} step={1} value={form.minMpg}
+                                onChange={(e) => set({ minMpg: e.target.value === '' ? '' : Number(e.target.value) })} />
+                        </label>
+                        {attemptsKey && (
+                            <label>
+                                <span>Min. {ATTEMPT_LABELS[attemptsKey]} a game</span>
+                                <input className="input-field" type="number" min={0} step={0.5}
+                                    value={form.minAttempts ?? stat.default_min_attempts}
+                                    onChange={(e) => set({ minAttempts: e.target.value === '' ? 0 : Number(e.target.value) })} />
+                            </label>
+                        )}
+                        <label>
+                            <span>Team</span>
+                            <select className="input-field" value={form.team} onChange={(e) => set({ team: e.target.value })}>
+                                <option value="">All teams</option>
+                                {teams.map((t) => <option key={t.team} value={t.team}>{t.team}</option>)}
+                            </select>
+                        </label>
+                        <label>
+                            <span>Order</span>
+                            <select className="input-field" value={form.order || defaultOrder} onChange={(e) => set({ order: e.target.value })}>
+                                <option value="high">Highest first</option>
+                                <option value="low">Lowest first</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Show</span>
+                            <select className="input-field" value={form.topN} onChange={(e) => set({ topN: Number(e.target.value) })}>
+                                {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+                            </select>
+                        </label>
+                    </div>
+
+                    {error && <p className="error-message">{error}</p>}
+                    {loading && !data && <Loader />}
+                    {data && (
+                        <div className={loading ? 'lb-results lb-results--stale' : 'lb-results'} aria-busy={loading}>
+                            <p className="page-subtitle lb-summary">
+                                <strong>{data.stat.label}</strong>, {range}: {data.qualified.toLocaleString()} player-seasons
+                                qualify ({data.filters.min_gp}+ games, {data.filters.min_mpg}+ minutes
+                                {data.filters.min_attempts ? `, ${data.filters.min_attempts}+ ${ATTEMPT_LABELS[attemptsKey]} a game` : ''}
+                                {data.filters.team ? `, ${data.filters.team}` : ''}).
+                                {' '}{data.filters.order === 'high' ? 'Highest' : 'Lowest'} first.
+                                {data.notes.map((n) => <span key={n} className="lb-note"> {n}</span>)}
+                            </p>
+                            {data.results.length === 0 ? (
+                                <p className="empty-message">No player-seasons pass these filters.</p>
+                            ) : (
+                                <>
+                                    <TableExport name={`${data.stat.label} leaders ${range}`} />
+                                    <div className="table-wrapper">
+                                        <table className="data-table lb-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Player</th>
+                                                    <th>Season</th>
+                                                    <th>Team</th>
+                                                    <th className="lb-num lb-stat">{data.stat.label}</th>
+                                                    {data.stat.attempts && <th className="lb-num">{ATTEMPT_LABELS[data.stat.attempts]}</th>}
+                                                    {CONTEXT_COLUMNS.filter((c) => c.key !== data.stat.key).map((c) => (
+                                                        <th key={c.key} className="lb-num">{c.label}</th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {data.results.map((r) => (
+                                                    <tr key={`${r.player_id}-${r.season}`}>
+                                                        <td>{r.rank}</td>
+                                                        <td><PlayerName playerId={r.player_id} name={r.player_name} /></td>
+                                                        <td>{seasonLabel(r.season)}</td>
+                                                        <td>{r.team}</td>
+                                                        <td className="lb-num lb-stat">{fmt(data.stat.format, r.value)}</td>
+                                                        {data.stat.attempts && <td className="lb-num">{fmt('num1', r.context[data.stat.attempts])}</td>}
+                                                        {CONTEXT_COLUMNS.filter((c) => c.key !== data.stat.key).map((c) => (
+                                                            <td key={c.key} className="lb-num">{fmt(c.format, r.context[c.key])}</td>
+                                                        ))}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     )}
-                </div>
+                </>
             )}
         </section>
     );
