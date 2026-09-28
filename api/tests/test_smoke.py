@@ -572,6 +572,32 @@ def test_referee_tendencies_min_games_filter():
         assert all(not o["small_n_warning"] for o in data["officials"])
 
 
+def test_referee_crew_tendencies_shape():
+    from impact_api import app
+    resp = TestClient(app).get("/referees/crew-tendencies", params={"min_games": 1})
+    assert resp.status_code in (200, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        assert "crews" in data and isinstance(data["crews"], list)
+        assert "methodology" in data
+        assert "repeat_crews" in data and "total_crews_tracked" in data
+        _assert_has_source(data)
+        for c in data["crews"]:
+            assert c["n_games"] >= 1
+            assert "small_n_warning" in c
+            assert "official_names" in c and "official_ids" in c
+            assert "fouls_diff_pct" in c and "fta_diff_pct" in c
+
+
+def test_referee_crew_tendencies_min_games_filter():
+    from impact_api import app
+    resp = TestClient(app).get("/referees/crew-tendencies", params={"min_games": 3})
+    assert resp.status_code in (200, 503)
+    if resp.status_code == 200:
+        data = resp.json()
+        assert all(c["n_games"] >= 3 for c in data["crews"])
+
+
 # ─── UI redesign: real landing-page headline stats ──────────────────────────
 
 def test_meta_site_stats():
