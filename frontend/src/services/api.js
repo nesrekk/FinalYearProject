@@ -448,6 +448,26 @@ export async function fetchOnOffStars(params) {
     return response.data;
 }
 
+// ─── Luck & Schedule ────────────────────────────────────────────
+// Every team: record, expected wins from points, luck, close games, SRS/SOS.
+// params: { season, as_of } (as_of = 'YYYY-MM-DD': standings, ratings and the schedule left that morning)
+export async function fetchLuckSchedule(params) {
+    const response = await axios.get(`${IMPACT_BASE}/teams/luck-schedule`, { params });
+    return response.data;
+}
+
+// The expected-win curves, every team-season's point, and the checks (does luck carry over?).
+export async function fetchLuckScheduleModel() {
+    const response = await axios.get(`${IMPACT_BASE}/teams/luck-schedule/model`);
+    return response.data;
+}
+
+// One franchise's luck and SRS in every season.
+export async function fetchLuckScheduleTeam(abbr) {
+    const response = await axios.get(`${IMPACT_BASE}/teams/luck-schedule/team/${encodeURIComponent(abbr)}`);
+    return response.data;
+}
+
 // ─── Vegas vs. Machine: Championship Odds Scanner ───────────────
 export async function fetchChampionshipOdds() {
     const response = await axios.get(`${IMPACT_BASE}/odds/championship`);

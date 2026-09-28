@@ -44,6 +44,7 @@ from routers import (
     leaders,
     length_study,
     lineup_chemistry,
+    luck_schedule,
     matchup_finder,
     media,
     meta,
@@ -113,6 +114,7 @@ for _router_module in (
     on_off,
     hot_streaks,
     situational_splits,
+    luck_schedule,
     projections,
 ):
     app.include_router(_router_module.router)

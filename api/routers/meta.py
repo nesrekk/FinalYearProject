@@ -312,7 +312,21 @@ COVERAGE_MAP = [
         "table": "team_game_fatigue", "label": "Team game log (rest/travel)", "group": "Teams",
         "range_sql": "SELECT MIN(season), MAX(season) FROM team_game_fatigue", "range_fmt": "season_int",
         "source": "Built from the NBA schedule; one row per team-game with rest days, back-to-backs and travel.",
-        "gap": "Margin only — no points for/against stored per team-game.",
+        "gap": "Margin only — no points for/against stored per team-game — and plus_minus is stats.nba.com's summed player +/- ÷ 5, not the final margin: it differs from the real final score in 160 of 20,348 games (use game_scores for margins). Records are right.",
+        "used_by": [],
+    },
+    {
+        "table": "game_scores", "label": "Final scores", "group": "Teams",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM game_scores", "range_fmt": "season_int",
+        "source": "ESPN's scoreboard, matched to NBA game ids by date and teams (scripts/fetch_game_scores.py).",
+        "gap": "Regular season only (the NBA Cup final, which doesn't count in the standings, is left out). Season points for/against equal Basketball-Reference's for all 510 team-seasons.",
+        "used_by": [],
+    },
+    {
+        "table": "team_luck_schedule", "label": "Luck & schedule strength", "group": "Teams",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM team_luck_schedule", "range_fmt": "season_int",
+        "source": "Computed from game_scores (scripts/build_luck_schedule.py): expected wins, luck, close-game records, SRS/SOS.",
+        "gap": "SRS weighs every game the same (blowouts, games stars sat) and gives a team one number per season.",
         "used_by": [],
     },
     {

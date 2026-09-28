@@ -128,6 +128,12 @@ export const TOOL_META = {
         tagline: 'How the team did with each player on the floor, and without him.',
         about: 'Every minute of every regular-season game since 2020-21, rebuilt from play-by-play into who was on the floor. On-court: the team’s net rating while he played; off-court: the team’s game totals minus his, over the games he played. The on-minus-off gap carries a 95% interval from resampling his games, and most gaps sit inside it. Descriptive on/off, not RAPM: it includes who he played with and against, and who his backups were. The Stars view shows each team with and without its top-usage player.',
     },
+    luck: {
+        group: 'Teams & Markets',
+        visual: 'scatter',
+        tagline: 'Who won more games than their points said, and who played the harder schedule.',
+        about: 'Every regular-season game since 2009-10, from real final scores. Expected wins: the win% a team’s points for and against usually produce (Pythagorean, exponent fitted on 510 team-seasons and picked over two other curves by leave-one-season-out error); luck = actual minus expected wins; close-game records by final margin. SRS: least-squares ratings with a home-court term, SOS = the average rating of the opponents actually played. An as-of date refits everything on the games before it and projects the rest from the schedule left. Checked: luck barely carries into the next season, and the SRS matches Basketball-Reference’s.',
+    },
     replay: {
         group: 'Teams & Markets',
         visual: 'line',

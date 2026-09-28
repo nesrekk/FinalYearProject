@@ -1846,3 +1846,48 @@ def test_situational_splits_league_effects_and_noise():
     assert client.get("/splits/situational/player/977").status_code == 404  # Kobe: before the play-by-play lines
     assert client.get("/player-profile/203999").json()["situational_splits"]["seasons"]
     assert client.get("/player-profile/977").json()["situational_splits"]["seasons"] == []
+
+
+def test_luck_schedule_srs_and_carryover():
+    """Luck & schedule (api/routers/luck_schedule.py, scripts/build_luck_schedule.py) from the
+    real final scores in game_scores (scripts/fetch_game_scores.py)."""
+    from impact_api import app
+    client = TestClient(app)
+    d = client.get("/teams/luck-schedule", params={"season": 2016}).json()
+    _assert_has_source(d)
+    assert len(d["teams"]) == 30 and d["season_info"]["games"] == 1230 and d["season_info"]["complete"]
+    by = {t["team_abbreviation"]: t for t in d["teams"]}
+    # 2015-16: Warriors 73-9 on a +10.8 margin (lucky), SRS +10.38 like Basketball-Reference's, Spurs right behind.
+    gsw, sas = by["GSW"], by["SAS"]
+    assert (gsw["wins"], gsw["losses"]) == (73, 9) and gsw["srs_rank"] == 1 and abs(gsw["srs"] - 10.38) < 0.02
+    assert sas["srs_rank"] == 2 and gsw["luck"] > 5 and abs(sas["luck"]) < 1
+    for t in d["teams"]:
+        assert t["wins"] + t["losses"] == t["games"] == 82
+        assert abs(t["luck"] - (t["wins"] - t["exp_wins"])) < 0.01
+        assert t["close3_w"] + t["close3_l"] <= t["close5_w"] + t["close5_l"] <= t["games"]
+    # Ratings sum to zero; league-wide luck is about zero.
+    assert abs(sum(t["srs"] for t in d["teams"])) < 0.05
+    assert abs(sum(t["luck"] for t in d["teams"])) < 5
+    # 2020-21 had mostly empty arenas: the smallest home-court edge on file.
+    m = client.get("/teams/luck-schedule/model").json()
+    hca = {s["season"]: s["hca"] for s in m["seasons"]}
+    assert min(hca, key=hca.get) == 2021 and hca[2021] < 1.5
+    assert len(m["points"]) == 510 and sum(f["chosen"] for f in m["fits"]) == 1
+    c = m["checks"]
+    assert c["bref_wins_mismatch"]["value"] == 0 and c["bref_srs_r"]["value"] > 0.999
+    # Luck barely carries over; margin does. Ratings + schedule beat the record at midseason.
+    assert c["luck_next_luck_r"]["value"] < 0.3 < c["mov_next_mov_r"]["value"]
+    assert c["midseason_rmse_srs_schedule"]["value"] < c["midseason_rmse_record"]["value"]
+    # As-of: standings before the date plus the schedule left add up to the full season.
+    a = client.get("/teams/luck-schedule", params={"season": 2016, "as_of": "2016-01-18"}).json()
+    assert a["as_of_info"]["played_games"] + a["as_of_info"]["left_games"] == 1230
+    for t in a["teams"]:
+        assert t["games"] + t["rem_games"] == 82 and t["rem_home"] + t["rem_away"] == t["rem_games"]
+        assert t["wins"] + t["rem_actual_wins"] == t["final_wins"]
+        assert t["wins"] <= t["proj_wins"] <= t["wins"] + t["rem_games"]
+    # One franchise across abbreviations; guards.
+    h = client.get("/teams/luck-schedule/team/NOH").json()
+    assert h["franchise"] == "NOP" and set(h["abbreviations"]) == {"NOH", "NOP"} and len(h["seasons"]) == 17
+    assert client.get("/teams/luck-schedule", params={"season": 1990}).status_code == 404
+    assert client.get("/teams/luck-schedule", params={"season": 2016, "as_of": "2015-10-01"}).status_code == 400
+    assert client.get("/teams/luck-schedule/team/XXX").status_code == 404

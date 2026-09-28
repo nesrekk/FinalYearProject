@@ -3,7 +3,7 @@
 // the award models and the win-probability model are fetched live instead.
 // When a model changes, change its entry in the same commit.
 
-export const CHECKED_ON = '2026-09-27';
+export const CHECKED_ON = '2026-09-28';
 
 export const PRINCIPLES = [
     ['Real data only', 'Every number comes from a stored table or a live source; nothing is filled in with placeholders.'],
@@ -387,6 +387,20 @@ export const SECTIONS = [
                 ],
             },
             {
+                id: 'luck',
+                name: 'Luck & Schedule',
+                open: { page: 'analytics', hash: 'luck', label: 'Luck & Schedule' },
+                answers: 'Which teams won more (or fewer) games than their points said, how hard was their schedule, and does luck carry into the next season?',
+                method: 'Every regular-season game 2009-10 to 2025-26 (20,348) with its real final score from ESPN\'s scoreboard, matched to NBA game ids (the NBA Cup final, which doesn\'t count in the standings, is left out). Expected wins: Pythagorean win% from points for and against, exponent fitted on all 510 team-seasons (13.94); it beat a normal curve and a straight line in margin per game on leave-one-season-out error (3.06 wins against 3.15 and 3.25). Luck = actual minus expected wins. Close games by final margin (3 or fewer, 5 or fewer), plus overtime records. SRS: least-squares ratings per season, each game\'s margin = home court + rating − opponent rating, ratings summing to zero; neutral-site games (international games, NBA Cup semifinals, the 2020 Orlando restart) get no home court. SOS = the average rating of the opponents actually played. The as-of view refits on the games before a date, shrinks the ratings toward average by the share of their spread that is still noise (1 − (game SD² / games) / variance), and turns each remaining game into a win chance with that season\'s home court and game SD.',
+                checked: 'Season points for and against equal Basketball-Reference\'s for all 510 team-seasons, records match all 510, and our SRS matches Basketball-Reference\'s published SRS (correlation 1.000, average gap 0.01, largest 0.26 in the 2019-20 restart season): 2015-16 Warriors +10.38 and Spurs +10.28, 2016-17 Warriors +11.35, 2023-24 Celtics +10.74, 2024-25 Thunder +12.68, each first in its season. Home court fell to +0.9 points in the mostly fan-less 2020-21 season (2.1-3.2 in 2009-10 to 2019-20). Luckiest: 2022-23 Bucks (58-24, expected 49.9) and 2015-16 Warriors (73-9, expected 65.4); unluckiest: 2017-18 Mavericks and 2025-26 Hornets (−8.8), 2021-22 Celtics (51-31, expected 58.9). Luck mostly doesn\'t carry over: a franchise\'s luck correlates 0.14 with the next season\'s (95% interval 0.05 to 0.22, 480 pairs) against 0.59 for margin; close-game win% 0.11 (0.01 to 0.21). At each season\'s halfway date, ratings plus the schedule left predict rest-of-season wins within 4.5 (root-mean-square) against 4.7 for points so far and 5.0 for the record so far. Checked on 2026-09-28.',
+                limits: [
+                    'The small part of luck that does repeat is clear of zero, so it is not pure chance; it may be late-game execution or teams whose points the curve reads badly (starters rested early in blowouts). Next season\'s win% correlates about the same with this season\'s record (0.600) as with its expected win% (0.605).',
+                    'Close-game records are small samples (about 12 games a season decided by 3 or fewer) and use the final margin, so an overtime game counts by its final score.',
+                    'SRS weighs every game the same: blowouts, garbage time and games stars sat out all count at full margin, and a team that changed mid-season (trades, injuries) gets one number.',
+                    'The as-of projection treats ratings as fixed for the rest of the season, so its ranges are too narrow for teams that change; every season on file is complete, so it is shown against what actually happened.',
+                ],
+            },
+            {
                 id: 'scouting',
                 name: 'Scouting Report',
                 open: { page: 'compare', label: 'Player Comparison' },
@@ -429,6 +443,10 @@ export const SECTIONS = [
 
 // Problems found and not yet fixed. Remove an entry in the commit that fixes it.
 export const OPEN_ISSUES = [
+    {
+        title: 'Per-game margins in a few older tools are off in 160 games',
+        body: 'team_game_fatigue.plus_minus (stats.nba.com\'s summed player plus-minus ÷ 5, not the final margin) disagrees with the real final score in 160 of 20,348 games 2009-10 to 2025-26, 134 of them by a point or more (in some the two teams\' margins don\'t add to zero or the sign is wrong). Game Log, Schedule Fatigue and Team Comparison still read it (With/Without a Star fetches the same field live from stats.nba.com); Luck & Schedule uses the real scores in game_scores. Records (wins and losses) are right everywhere.',
+    },
     {
         title: 'Some models can\'t be retrained right now',
         body: 'stats.nba.com has been unreachable from the build machine since 2026-09-26, so Pair Synergy still uses the old in-house defensive BPM it was trained on.',

@@ -19,6 +19,7 @@ import ClutchWpaSection from '../ClutchWpaSection';
 import LineupChemistrySection from '../LineupChemistrySection';
 import PairChemistrySection from '../PairChemistrySection';
 import OnOffSection from '../OnOffSection';
+import LuckScheduleSection from '../LuckScheduleSection';
 import GameReplaySection from '../GameReplaySection';
 import PredictionLedgerSection from '../PredictionLedgerSection';
 import WithWithoutStarSection from '../WithWithoutStarSection';
@@ -65,6 +66,7 @@ const TAB_GROUPS = [
             { id: 'lineups', label: 'Lineup Chemistry', icon: 'diversity_3' },
             { id: 'pairs', label: 'Pair Chemistry', icon: 'grid_on' },
             { id: 'onoff', label: 'On/Off', icon: 'swap_horiz' },
+            { id: 'luck', label: 'Luck & Schedule', icon: 'casino' },
             { id: 'spacing', label: 'Spacing Lab', icon: 'open_with' },
             { id: 'contracts', label: 'Contract Value', icon: 'payments' },
             { id: 'replay', label: 'Game Replay', icon: 'movie' },
@@ -220,6 +222,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'lineups' && <LineupChemistrySection />}
                 {activeTab === 'pairs' && <PairChemistrySection />}
                 {activeTab === 'onoff' && <OnOffSection />}
+                {activeTab === 'luck' && <LuckScheduleSection />}
                 {activeTab === 'replay' && <GameReplaySection />}
                 {activeTab === 'withwithout' && <WithWithoutStarSection />}
                 {activeTab === 'fatigue' && <ScheduleFatigueSection />}
