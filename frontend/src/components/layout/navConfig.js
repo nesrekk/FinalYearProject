@@ -19,6 +19,7 @@ export const NAV_GROUPS = [
             { id: 'compare', label: 'Player Comparison', icon: 'compare_arrows' },
             { id: 'leaders', label: 'Stat Leaders', icon: 'leaderboard' },
             { id: 'builder', label: 'Leaderboard Builder', icon: 'tune' },
+            { id: 'regression', label: 'Regression Explorer', icon: 'scatter_plot' },
             { id: 'shotcharts', label: 'Shot Charts', icon: 'adjust' },
             { id: 'draft', label: 'Draft Value Guide', icon: 'school' },
             { id: 'rookies', label: 'Rookie Class Tracker', icon: 'eco' },

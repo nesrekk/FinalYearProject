@@ -40,6 +40,7 @@ const GamesHub = lazy(() => import('./components/pages/GamesHub'));
 const LearnTheGame = lazy(() => import('./components/pages/LearnTheGame'));
 const Methodology = lazy(() => import('./components/pages/Methodology'));
 const LeaderboardBuilder = lazy(() => import('./components/pages/LeaderboardBuilder'));
+const RegressionExplorer = lazy(() => import('./components/pages/RegressionExplorer'));
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
@@ -76,6 +77,7 @@ export default function App() {
       case 'learn': return <LearnTheGame onNavigate={setActivePage} />;
       case 'methodology': return <Methodology onNavigate={setActivePage} />;
       case 'builder': return <LeaderboardBuilder />;
+      case 'regression': return <RegressionExplorer />;
       default: return <DashboardHome onNavigate={setActivePage} />;
     }
   };

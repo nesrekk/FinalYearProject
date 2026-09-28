@@ -656,6 +656,12 @@ export async function fetchLeaderboardOptions() {
 }
 
 // params: { stat, season_from, season_to, min_gp, min_mpg, min_attempts, team, order, top_n }
+// params: { x, y, season_from, season_to, min_gp, min_mpg, within_season }
+export async function fetchRegression(params) {
+    const response = await axios.get(`${IMPACT_BASE}/explore/regression`, { params });
+    return response.data;
+}
+
 // params: { weights: 'pts:1,ts_pct:2', season_from, season_to, min_gp, min_mpg, team, top_n }
 export async function fetchCompositeLeaderboard(params) {
     const response = await axios.get(`${IMPACT_BASE}/leaderboard/composite`, { params });

@@ -1133,3 +1133,23 @@ def test_composite_metric_z_scores_and_guards():
 
     for bad in ("pts:0", "age:1", "nope:1", "pts:9"):
         assert client.get("/leaderboard/composite", params={"weights": bad}).status_code == 400
+
+
+def test_regression_explorer_known_relationships():
+    from impact_api import app
+    client = TestClient(app)
+    # Assists and turnovers move together strongly; errors are clustered by player.
+    d = client.get("/explore/regression", params={"x": "ast", "y": "tov", "season_from": 2016, "season_to": 2026}).json()
+    _assert_has_source(d)
+    f = d["fit"]
+    assert f["r"] > 0.7 and f["ci_low"] > 0 and f["n_players"] < f["n"]
+    assert len(d["points"]) <= 2500 and d["filters"]["within_season"] is True
+    # Slope agrees with r * sd_y / sd_x (plain OLS identity on the fitted scale).
+    assert abs(f["slope"] - f["r"] * f["sd_y"] / f["sd_x"]) < 1e-3
+
+    # Shooting % gets the attempts floor; stats that don't overlap in time fail clearly.
+    d = client.get("/explore/regression", params={"x": "usg_pct", "y": "ts_pct", "season_from": 2016}).json()
+    assert any("FGA" in n for n in d["notes"])
+    assert client.get("/explore/regression", params={
+        "x": "net_rating", "y": "bpm", "season_from": 1990, "season_to": 2000}).status_code == 404
+    assert client.get("/explore/regression", params={"x": "pts", "y": "pts"}).status_code == 400

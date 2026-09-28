@@ -708,3 +708,41 @@ select,
 
 /* Long source labels wrap instead of clipping on phones. */
 .lb-card .pill-badge { white-space: normal; }
+
+/* Regression Explorer (pages/RegressionExplorer.jsx) */
+.rx-verdict {
+  margin: var(--space-4) 0 0;
+  color: var(--text);
+  line-height: 1.55;
+}
+.rx-chart {
+  position: relative;
+  margin-top: var(--space-3);
+}
+.rx-chart svg { display: block; width: 100%; height: auto; }
+.rx-grid { stroke: var(--hairline); stroke-width: 1; }
+.rx-tick { fill: var(--text-2); font-family: var(--font-mono); font-size: 11px; }
+.rx-axis { fill: var(--text); font-size: 12px; font-weight: 700; }
+.rx-points circle { fill: var(--brand); fill-opacity: 0.35; }
+.rx-fit { stroke: var(--text); stroke-width: 2.5; }
+.rx-hover { fill: none; stroke: var(--text); stroke-width: 2; }
+.rx-tooltip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 12px));
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-card);
+  z-index: 2;
+}
+.rx-outlier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+}

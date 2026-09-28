@@ -25,6 +25,7 @@ const pageTitles = {
     learn: 'Learn the Game',
     methodology: 'Methodology',
     builder: 'Leaderboard Builder',
+    regression: 'Regression Explorer',
 };
 
 const pageDescriptions = {
@@ -46,6 +47,7 @@ const pageDescriptions = {
     learn: 'Basketball for first-time fans, measured from real league data',
     methodology: 'How every model works, how it was checked, and where it falls short',
     builder: 'Rank any player-season by any stat, 1949-50 to today, with your own filters',
+    regression: 'Pick two stats and see how they move together, with honest error bars',
 };
 
 function greeting() {
