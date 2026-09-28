@@ -4,6 +4,7 @@ import Icon from '../common/Icon';
 import PlayerName from '../common/PlayerName';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
+import SaveViewButton from '../common/SaveViewButton';
 import ShotMixHistory from '../common/ShotMixHistory';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
@@ -281,6 +282,7 @@ export default function ShotCharts() {
           <span className="card-icon"><Icon name="adjust" /></span>
           Shot Chart
           <CopyLinkButton />
+          <SaveViewButton pageId="shotcharts" />
         </h2>
 
         <div className="input-row" style={{ marginBottom: 0 }}>

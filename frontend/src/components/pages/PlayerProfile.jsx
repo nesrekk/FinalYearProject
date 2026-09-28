@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchPlayerFullProfile, fetchProfileShotZones, fetchSeasonSimilarityProfile } from '../../services/api';
 import Loader from '../Loader';
 import CopyLinkButton from '../common/CopyLinkButton';
+import SaveViewButton from '../common/SaveViewButton';
 import InfoTooltip from '../common/InfoTooltip';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import PlayerName from '../common/PlayerName';
@@ -120,6 +121,7 @@ function Hero({ data }) {
                 </div>
                 <div className="pp-actions">
                     <CopyLinkButton />
+                    <SaveViewButton pageId="player" title={`${p.player_name} — Player profile`} />
                     <SourceBadge source={data._source} />
                 </div>
             </div>

@@ -34,6 +34,7 @@ const pageTitles = {
     statline: 'Stat Line Finder',
     watchlist: 'Watchlist',
     coverage: 'Data Coverage',
+    saved: 'Saved Analyses',
 };
 
 const pageDescriptions = {
@@ -64,6 +65,7 @@ const pageDescriptions = {
     statline: 'Type a stat line, get the real player-seasons closest to it',
     watchlist: 'Your starred players, side by side',
     coverage: 'Every table this app reads: live row counts, season span, source and known gaps',
+    saved: 'Every tool view you\'ve saved, exactly as you left it',
 };
 
 function greeting() {

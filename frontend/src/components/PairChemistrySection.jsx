@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
 import CopyLinkButton from './common/CopyLinkButton';
+import SaveViewButton from './common/SaveViewButton';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import PlayerName from './common/PlayerName';
 import { currentPageParam, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
@@ -123,6 +124,7 @@ export default function PairChemistrySection() {
                 </InfoTooltip>
                 <SourceBadge source={data._source} />
                 <CopyLinkButton />
+                <SaveViewButton pageId="analytics" />
             </h2>
             <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
                 How the team did with each pair of its players on the floor at the same time, from the real five-man

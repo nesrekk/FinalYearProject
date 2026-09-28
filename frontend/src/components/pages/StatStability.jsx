@@ -5,6 +5,7 @@ import InfoTooltip from '../common/InfoTooltip';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
+import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/stability.css';
 
@@ -141,6 +142,7 @@ export default function StatStability() {
                 </InfoTooltip>
                 <SourceBadge source={data._source} />
                 <CopyLinkButton />
+                <SaveViewButton pageId="stability" />
             </h2>
             <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
                 How big a sample each stat needs before a player&apos;s number says more about him than about luck.

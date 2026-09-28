@@ -11,6 +11,7 @@ import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
+import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 function StatLabel({ statKey, children }) {
@@ -242,6 +243,7 @@ export default function TradeAnalyzer({ onNavigate }) {
                         on-court projection.
                     </InfoTooltip>
                     <CopyLinkButton />
+                    <SaveViewButton pageId="trade" />
                 </h2>
                 <p className="page-subtitle">
                     Pick a season and two teams, then a player from each roster to propose a straight

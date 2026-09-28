@@ -609,6 +609,99 @@ select,
   display: none;
 }
 
+/* Save view (common/SaveViewButton.jsx): sits right after a <CopyLinkButton />. */
+.save-view {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Saved analyses (pages/SavedAnalyses.jsx) */
+.saved-toolbar {
+  display: flex;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+}
+.saved-import-msg {
+  color: var(--text-2);
+  font-size: 12px;
+  margin: var(--space-2) 0 0;
+}
+.saved-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.saved-row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  background: var(--surface);
+}
+.saved-row-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.saved-row-title {
+  font-weight: 700;
+  color: var(--text);
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.saved-row-title:hover,
+.saved-row-title:focus-visible {
+  color: var(--brand-text);
+  text-decoration: underline;
+}
+.saved-row-title-input {
+  font-weight: 700;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: 4px 8px;
+  flex: 1;
+  min-width: 220px;
+}
+.saved-row-date {
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.saved-row-note {
+  color: var(--text-2);
+  font-size: 13px;
+  margin: var(--space-2) 0 0;
+}
+.saved-row-note-input {
+  width: 100%;
+  margin-top: var(--space-2);
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: 6px 8px;
+  resize: vertical;
+}
+.saved-row-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
 /* Season Similarity (SimilaritySection.jsx) */
 .sim-filters {
   display: flex;

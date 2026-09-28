@@ -50,6 +50,7 @@ const RoleFinder = lazy(() => import('./components/pages/RoleFinder'));
 const EraTranslator = lazy(() => import('./components/pages/EraTranslator'));
 const StatLineFinder = lazy(() => import('./components/pages/StatLineFinder'));
 const Watchlist = lazy(() => import('./components/pages/Watchlist'));
+const SavedAnalyses = lazy(() => import('./components/pages/SavedAnalyses'));
 const DataCoverage = lazy(() => import('./components/pages/DataCoverage'));
 
 // Every page the app can show, by the id used in navConfig and `?page=`.
@@ -82,6 +83,7 @@ const PAGES = {
   era: EraTranslator,
   statline: StatLineFinder,
   watchlist: Watchlist,
+  saved: SavedAnalyses,
   coverage: DataCoverage,
 };
 

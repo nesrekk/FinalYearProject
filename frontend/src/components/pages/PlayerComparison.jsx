@@ -11,6 +11,7 @@ import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
+import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 const COLOR_A = '#f87171';
@@ -300,6 +301,7 @@ export default function PlayerComparison() {
                         guessed.
                     </InfoTooltip>
                     <CopyLinkButton />
+                    <SaveViewButton pageId="compare" />
                 </h2>
                 <p className="page-subtitle">Pick a season and two players to compare their full statistical profile.</p>
 

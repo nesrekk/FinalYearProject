@@ -9,6 +9,7 @@ import PlayerHeadshot from '../common/PlayerHeadshot';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
+import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/trade-impact.css';
 
@@ -396,6 +397,7 @@ export default function TradeImpact({ onNavigate }) {
                         estimated; the notes under the results say what each number is and isn't.
                     </InfoTooltip>
                     <CopyLinkButton />
+                    <SaveViewButton pageId="tradeimpact" />
                 </h2>
                 <p className="page-subtitle">
                     Pick a season and two teams, then a player from each roster. Coverage: win projection 2009-10 onward,

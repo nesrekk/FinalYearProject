@@ -73,6 +73,12 @@ export const NAV_GROUPS = [
         icon: 'star',
         items: [],
     },
+    {
+        id: 'saved',
+        label: 'Saved',
+        icon: 'bookmark',
+        items: [],
+    },
 ];
 
 export function groupForPage(pageId) {

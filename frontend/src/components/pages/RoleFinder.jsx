@@ -6,6 +6,7 @@ import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
+import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
@@ -177,6 +178,7 @@ export default function RoleFinder() {
                 </InfoTooltip>
                 <SourceBadge source={data?._source ?? options._source} />
                 <CopyLinkButton />
+                <SaveViewButton pageId="rolefinder" />
             </p>
 
             <div className="lb-presets" aria-label="Roles">

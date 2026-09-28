@@ -52,6 +52,14 @@ export function openPage(page, params) {
 export const playerProfileHref = (playerId) => pageHref('player', { id: playerId });
 export const openPlayerProfile = (playerId) => openPage('player', { id: playerId });
 
+// Opens a full saved URL (pathname + search + hash), e.g. from
+// utils/savedViews.js — unlike openPage(), it doesn't rebuild the query
+// string, so every saved input comes back exactly as it was.
+export function openFullUrl(url) {
+    if (url !== here()) window.history.pushState(null, '', url);
+    window.dispatchEvent(new Event(NAVIGATE_EVENT));
+}
+
 // A plain left click (no modifier keys) is handled in-app; cmd/ctrl/shift
 // and middle clicks keep the browser's own behaviour (open in a new tab).
 export function isPlainClick(e) {

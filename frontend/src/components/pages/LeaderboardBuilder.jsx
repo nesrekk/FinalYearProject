@@ -6,6 +6,7 @@ import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
+import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import CompositeBuilder from './CompositeBuilder';
 import '../../styles/stability.css';
@@ -182,7 +183,7 @@ export default function LeaderboardBuilder() {
             </div>
             {mode === 'composite' ? (
                 <>
-                    <h2 className="card-title hb-page-title">Build your own metric<CopyLinkButton /></h2>
+                    <h2 className="card-title hb-page-title">Build your own metric<CopyLinkButton /><SaveViewButton pageId="builder" /></h2>
                     <CompositeBuilder stats={options.stats} seasons={options.seasons} teams={options.teams} />
                 </>
             ) : (
@@ -198,6 +199,7 @@ export default function LeaderboardBuilder() {
                         </InfoTooltip>
                         <SourceBadge source={data?._source ?? options._source} />
                         <CopyLinkButton />
+                        <SaveViewButton pageId="builder" />
                     </h2>
 
                     <div className="lb-presets" aria-label="Presets">

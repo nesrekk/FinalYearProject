@@ -6,6 +6,7 @@ import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
+import SaveViewButton from '../common/SaveViewButton';
 import AutocompleteDropdown from '../common/AutocompleteDropdown';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
@@ -197,6 +198,7 @@ export default function EraTranslator() {
                 </InfoTooltip>
                 <SourceBadge source={data?._source} />
                 <CopyLinkButton />
+                <SaveViewButton pageId="era" />
             </h2>
             <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
                 Restate any player-season in another season&apos;s game: its pace, and what an average team scored,
