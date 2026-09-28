@@ -19,7 +19,9 @@ Blocks, each with the seasons it covers and a reason when it has nothing:
   roster      who played and how much, with roles (player_season_stats,
               player_team_stints, player_game_lines from 2020-21, player_roles)
   payroll     salary and surplus value (contract_value, covered seasons only)
-  lineups     best and worst stored five-man units (lineup_stats, 2013-14 on)
+  lineups     best and worst five-man units: every play-by-play stint from
+              2020-21 (lineup_seasons, tracked stints only, with the games
+              excluded or partial), the stored top-2,000 before (lineup_stats)
   on_off      biggest on-minus-off gaps and the top-usage player (player_on_off)
   shot_mix    where the team shot and where opponents shot against it, vs.
               the league (team_zone_mix + league_zone_mix, 1996-97 on)
@@ -36,6 +38,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 
 from impact_core import get_db
+from lineups_lib import lineup_sources, team_stint_coverage
 from routers.on_off import DEFAULT_MIN_MINUTES as ON_OFF_MIN, STAR_MINUTES as ON_OFF_STAR_MIN
 from source_badge import make_source
 from teams_lib import lookup_codes
@@ -50,7 +53,7 @@ SMALL_GP = 10
 
 TABLES = ["team_seasons", "team_game_fatigue", "game_scores", "team_luck_schedule", "player_season_stats",
           "player_team_stints", "player_game_lines", "player_roles", "contract_value", "lineup_stats",
-          "player_on_off", "team_zone_mix", "league_zone_mix"]
+          "lineup_seasons", "lineup_stint_games", "player_on_off", "team_zone_mix", "league_zone_mix"]
 UPSTREAM = "Stored tables only (Basketball-Reference team summaries, ESPN scores and play-by-play, nba_api)"
 
 SUMMARY_COLS = ["season", "abbreviation", "bref_abbreviation", "franchise", "team_name", "playoffs", "g", "w", "l",
@@ -109,6 +112,7 @@ def _coverage():
         "game_lines": "SELECT min(season), max(season) FROM player_game_lines",
         "roles": "SELECT min(season), max(season) FROM player_roles",
         "lineups": "SELECT min(season), max(season) FROM lineup_stats",
+        "stints": "SELECT min(season), max(season) FROM lineup_stint_seasons",
         "on_off": "SELECT min(season), max(season) FROM player_on_off",
         "shot_mix": "SELECT min(LEFT(season, 4)::int + 1), max(LEFT(season, 4)::int + 1) FROM team_zone_mix",
     }
@@ -393,16 +397,23 @@ def _payroll(cur, season, abbr):
 
 
 def _lineups(cur, season, abbr, team_minutes):
+    sources = lineup_sources()
     cov = _coverage()["lineups"]
-    if not _in(cov, season):
+    if season not in sources:
         return _missing(f"Five-man lineups are stored from {label(cov['from'])} on (stats.nba.com's lineup "
                         "endpoint).", cov["label"])
-    cur.execute("""SELECT player_ids, gp, minutes, poss, off_rating, def_rating, net_rating FROM lineup_stats
-                   WHERE season = %s AND team_abbreviation = %s""", (season, abbr))
+    source = sources[season]
+    if source == "stints":
+        cur.execute("""SELECT player_ids, games, minutes, poss, off_rating, def_rating, net_rating FROM lineup_seasons
+                       WHERE season = %s AND team_abbreviation = %s""", (season, abbr))
+    else:
+        cur.execute("""SELECT player_ids, gp, minutes, poss, off_rating, def_rating, net_rating FROM lineup_stats
+                       WHERE season = %s AND team_abbreviation = %s""", (season, abbr))
     rows = [dict(zip(["player_ids", "gp", "minutes", "poss", "off_rating", "def_rating", "net_rating"], r))
             for r in cur.fetchall()]
     if not rows:
-        return _missing("None of this team's lineups made the season's 2,000 most-used.", cov["label"])
+        return _missing("No stint of this team-season is tracked." if source == "stints"
+                        else "None of this team's lineups made the season's 2,000 most-used.", cov["label"])
     stored = sum(float(r["minutes"] or 0) for r in rows)
     qualified = [r for r in rows if (r["minutes"] or 0) >= LINEUP_MIN_MINUTES]
     names = _names(cur, {p for r in qualified for p in r["player_ids"]})
@@ -411,14 +422,25 @@ def _lineups(cur, season, abbr, team_minutes):
         for k in ("minutes", "off_rating", "def_rating", "net_rating"):
             r[k] = _num(r[k], 1)
     qualified.sort(key=lambda r: -(r["net_rating"] or 0))
+    if source == "stints":
+        tc = team_stint_coverage(cur, season, abbr)
+        share = tc["share"]
+        note = ("Every stint of every game rebuilt from play-by-play; descriptive ratings, not adjusted for "
+                "opponents, on possessions averaged over both sides (about 3 points under NBA.com's scale).")
+        coverage = _coverage()["stints"]["label"]
+    else:
+        tc = None
+        share = _num(stored / team_minutes, 3) if team_minutes else None
+        note = ("Only the league's 2,000 most-used lineups a season are stored, so bench units are thin; "
+                "descriptive ratings, not adjusted for opponents.")
+        coverage = cov["label"]
     return {
-        "available": True, "coverage": cov["label"], "reason": None,
+        "available": True, "coverage": coverage, "reason": None, "source": source,
         "stored": len(rows), "qualified": len(qualified), "min_minutes": LINEUP_MIN_MINUTES,
-        "stored_minutes": round(stored), "coverage_share": _num(stored / team_minutes, 3) if team_minutes else None,
+        "stored_minutes": round(stored), "coverage_share": share, "stint_coverage": tc,
         "best": qualified[:LINEUP_SHOW],
         "worst": qualified[::-1][:LINEUP_SHOW] if len(qualified) > LINEUP_SHOW else [],
-        "note": ("Only the league's 2,000 most-used lineups a season are stored, so bench units are thin; "
-                 "descriptive ratings, not adjusted for opponents."),
+        "note": note,
     }
 
 
@@ -493,8 +515,12 @@ def team_profile(abbr: str, season: Optional[int] = None):
         summary = _summary(cur, season, code)
         t = summary["team"]
         team_minutes = (t["g"] or 0) * (t["mp_per_game"] or 0) / 5 if t.get("mp_per_game") else None
-        cur.execute("SELECT 1 FROM lineup_stats WHERE season = %s AND team_abbreviation = %s LIMIT 1", (season, code))
-        has_pairs = cur.fetchone() is not None
+        pair_source = lineup_sources().get(season)
+        if pair_source == "stints":
+            cur.execute("SELECT 1 FROM pair_seasons WHERE season = %s AND team_abbreviation = %s LIMIT 1", (season, code))
+        elif pair_source:
+            cur.execute("SELECT 1 FROM lineup_stats WHERE season = %s AND team_abbreviation = %s LIMIT 1", (season, code))
+        has_pairs = pair_source is not None and cur.fetchone() is not None
         profile = {
             "abbreviation": code, "season": season, "season_label": label(season), "franchise": franchise,
             "team_name": t["team_name"], "note": note,
@@ -505,7 +531,8 @@ def team_profile(abbr: str, season: Optional[int] = None):
             "roster": _roster(cur, season, code),
             "payroll": _payroll(cur, season, code),
             "lineups": _lineups(cur, season, code, team_minutes),
-            "pairs": {"available": has_pairs, "coverage": _coverage()["lineups"]["label"],
+            "pairs": {"available": has_pairs, "source": pair_source,
+                      "coverage": _coverage()["stints" if pair_source == "stints" else "lineups"]["label"],
                       "reason": None if has_pairs else "Pair Chemistry is built from the stored lineups, which "
                                                        f"start in {label(_coverage()['lineups']['from'])}."},
             "on_off": _on_off(cur, season, code),

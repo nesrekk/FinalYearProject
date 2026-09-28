@@ -106,6 +106,8 @@ export default function PairChemistrySection() {
     if (!data) return <section className="dashboard-card"><p className="error-message">{error}</p></section>;
 
     const t = data.team_summary;
+    const stints = data.source === 'stints';
+    const cov = data.coverage;
     const teamValue = t[metric.key];
     const names = Object.fromEntries(data.players.map((p) => [p.player_id, p.player_name]));
     const qualified = data.pairs.filter((c) => c.qualified);
@@ -127,8 +129,9 @@ export default function PairChemistrySection() {
                 <SaveViewButton pageId="analytics" />
             </h2>
             <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
-                How the team did with each pair of its players on the floor at the same time, from the real five-man
-                lineups stored for that season. Pick a team and season; each cell is one pair.
+                How the team did with each pair of its players on the floor at the same time: from every stint of every
+                game rebuilt from play-by-play (2020-21 on), or from the 2,000 most-used lineups stored for earlier
+                seasons. Pick a team and season; each cell is one pair.
             </p>
 
             <div className="lb-controls">
@@ -136,7 +139,11 @@ export default function PairChemistrySection() {
                     <span>Season</span>
                     <select className="input-field" value={data.season}
                         onChange={(e) => set({ season: Number(e.target.value) })}>
-                        {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
+                        {seasons.map((s) => (
+                            <option key={s} value={s}>
+                                {seasonLabel(s)}{data.sources?.[String(s)] === 'lineup_stats' ? ' · top 2,000 only' : ''}
+                            </option>
+                        ))}
                     </select>
                 </label>
                 <label>
@@ -173,12 +180,40 @@ export default function PairChemistrySection() {
             <div className={loading ? 'lb-results lb-results--stale' : 'lb-results'} aria-busy={loading}>
                 <p className="rx-verdict">
                     <strong>{data.team} {seasonLabel(data.season)}, {t.wins}-{t.losses}.</strong>{' '}
-                    The stored lineups cover {int(t.minutes)} of its about {int(t.regulation_minutes)} regulation
-                    minutes (<strong>{Math.round(t.coverage * 100)}%</strong>, {t.lineups} lineups). Only the league&apos;s
-                    2,000 most-used lineups are stored, so bench units are under-counted. In these lineups the team&apos;s{' '}
-                    {metric.label.toLowerCase()} was <strong>{metric.show(teamValue)}</strong>
-                    {form.metric !== 'net' && ' points per 100 possessions'}; colours compare each pair to that.
+                    {stints ? (
+                        <>
+                            Every stint from play-by-play: {int(t.minutes)} of its {int(cov.minutes)} minutes are tracked
+                            (<strong>{Math.round(t.coverage * 100)}%</strong>, {t.lineups.toLocaleString()} distinct lineups). {t.note}{' '}
+                            In those minutes the team&apos;s {metric.label.toLowerCase()} was <strong>{metric.show(teamValue)}</strong>
+                            {form.metric !== 'net' && ' points per 100 possessions'}; colours compare each pair to that.
+                        </>
+                    ) : (
+                        <>
+                            The stored lineups cover {int(t.minutes)} of its about {int(t.regulation_minutes)} regulation
+                            minutes (<strong>{Math.round(t.coverage * 100)}%</strong>, {t.lineups} lineups). Only the league&apos;s
+                            2,000 most-used lineups are stored for seasons before 2020-21, so bench units are under-counted. In these
+                            lineups the team&apos;s {metric.label.toLowerCase()} was <strong>{metric.show(teamValue)}</strong>
+                            {form.metric !== 'net' && ' points per 100 possessions'}; colours compare each pair to that.
+                        </>
+                    )}
                 </p>
+                {stints && (cov.excluded.length > 0 || cov.partial.length > 0) && (
+                    <details className="pc-coverage">
+                        <summary>
+                            {cov.excluded.length > 0 && `${cov.excluded.length} game${cov.excluded.length === 1 ? '' : 's'} excluded`}
+                            {cov.excluded.length > 0 && cov.partial.length > 0 && ' · '}
+                            {cov.partial.length > 0 && `${cov.partial.length} game${cov.partial.length === 1 ? '' : 's'} partly tracked (${Math.round(cov.partial_minutes)} min left out)`}
+                        </summary>
+                        <ul>
+                            {cov.excluded.map((g) => (
+                                <li key={g.game_id}>{g.date} {g.home ? 'vs' : 'at'} {g.opponent}: excluded, {g.reason}</li>
+                            ))}
+                            {cov.partial.map((g) => (
+                                <li key={g.game_id}>{g.date} {g.home ? 'vs' : 'at'} {g.opponent}: {g.minutes_lost} min with a player who has no id in the play-by-play</li>
+                            ))}
+                        </ul>
+                    </details>
+                )}
 
                 <div className="pc-legend" aria-hidden="true">
                     <span className="pc-legend-swatch" style={{ background: tint(-SCALE) }} /> worse than the team
@@ -220,7 +255,7 @@ export default function PairChemistrySection() {
                                         if (!c) {
                                             return (
                                                 <td key={col.player_id} className="pc-cell pc-cell--none"
-                                                    title={`${row.player_name} and ${col.player_name}: no stored lineup together`}>
+                                                    title={`${row.player_name} and ${col.player_name}: never on the floor together${stints ? '' : ' in a stored lineup'}`}>
                                                     —
                                                 </td>
                                             );
@@ -255,7 +290,7 @@ export default function PairChemistrySection() {
                     {!focusCell && <span>Hover, tap or tab to a cell for its minutes and ratings. The diagonal shows each player alone.</span>}
                     {focusCell && focus.a === focus.b && (
                         <span>
-                            <strong>{names[focus.a]}</strong> in the stored lineups: {int(focusCell.minutes)} min,{' '}
+                            <strong>{names[focus.a]}</strong> on the floor{stints ? '' : ' in the stored lineups'}: {int(focusCell.minutes)} min,{' '}
                             {int(focusCell.poss)} possessions, {focusCell.lineups} lineups · ORtg {focusCell.off_rating.toFixed(1)} ·
                             DRtg {focusCell.def_rating.toFixed(1)} · Net {signed(focusCell.net_rating)}
                             {focusCell.season_minutes_all_teams ? ` · ${int(focusCell.season_minutes_all_teams)} season minutes (all teams)` : ''}
@@ -270,7 +305,7 @@ export default function PairChemistrySection() {
                             {!focusCell.qualified && <em> · below the {form.minMinutes || 0}-minute floor, treat as noise</em>}
                         </span>
                     )}
-                    {focus && !focusCell && <span>These two never shared the floor in a stored lineup.</span>}
+                    {focus && !focusCell && <span>These two never shared the floor{stints ? '' : ' in a stored lineup'}.</span>}
                 </div>
 
                 <h3 className="section-heading pc-list-title">Pairs with {form.minMinutes || 0}+ shared minutes, best to worst by {metric.label.toLowerCase()}</h3>

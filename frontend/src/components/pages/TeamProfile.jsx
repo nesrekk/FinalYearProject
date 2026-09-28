@@ -452,8 +452,20 @@ function Lineups({ l, pairs, season, abbr, onNavigate }) {
     return (
         <Section id="lineups" title="Five-man lineups" meta={`${l.coverage} · ${l.note}`}>
             <p className="rx-verdict">
-                {l.stored} of this team&apos;s lineups are stored ({num(l.stored_minutes, 0)} minutes
-                {l.coverage_share != null ? `, ${pct(l.coverage_share, 0)} of its minutes` : ''}); {l.qualified} played {l.min_minutes}+ minutes together.
+                {l.source === 'stints' ? (
+                    <>
+                        Every stint from play-by-play: {l.stored.toLocaleString()} distinct five-man lineups over {num(l.stored_minutes, 0)} tracked
+                        minutes{l.coverage_share != null ? ` (${pct(l.coverage_share, 0)} of its minutes` : ''}
+                        {l.stint_coverage?.excluded?.length ? `; ${l.stint_coverage.excluded.length} game${l.stint_coverage.excluded.length === 1 ? '' : 's'} excluded` : ''}
+                        {l.stint_coverage?.partial?.length ? `; ${num(l.stint_coverage.partial_minutes, 0)} min in ${l.stint_coverage.partial.length} game${l.stint_coverage.partial.length === 1 ? '' : 's'} left out for a player with no id in the play-by-play` : ''}
+                        {l.coverage_share != null ? ')' : ''}; {l.qualified} played {l.min_minutes}+ minutes together.
+                    </>
+                ) : (
+                    <>
+                        {l.stored} of this team&apos;s lineups are stored ({num(l.stored_minutes, 0)} minutes
+                        {l.coverage_share != null ? `, ${pct(l.coverage_share, 0)} of its minutes` : ''}); {l.qualified} played {l.min_minutes}+ minutes together.
+                    </>
+                )}
             </p>
             {l.qualified > 0 ? (
                 <>

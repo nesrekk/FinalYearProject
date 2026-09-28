@@ -1996,3 +1996,94 @@ def test_margins_come_from_final_scores():
         assert cur.fetchone()[0] == jokic_top10
     finally:
         conn.close()
+
+
+def test_lineup_stints_reconcile_and_feed_lineup_tools():
+    """Five-man stints from play-by-play (scripts/build_lineup_stints.py, shared parser scripts/pbp_lineups.py,
+    api/lineups_lib.py): every stint of every regular-season game 2020-21 on, reconciled per game; Pair Chemistry,
+    Lineup Chemistry and the team page read them from 2020-21 and lineup_stats before."""
+    from impact_api import app
+    client = TestClient(app)
+    conn = psycopg2.connect(**DB_CONFIG)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT season, games, games_ok, tracked_minutes_share FROM lineup_stint_seasons ORDER BY season")
+        rows = cur.fetchall()
+        assert [r[0] for r in rows] == [2021, 2022, 2023, 2024, 2025, 2026]
+        # 7,220 of 7,232 games reconcile on points, seconds and possessions; 93.7-99.8% of minutes are tracked.
+        assert sum(r[2] for r in rows) / sum(r[1] for r in rows) > 0.995
+        assert all(r[3] > 0.93 for r in rows) and rows[-1][3] > 0.99
+        # Stint points add up to the real final score, and stint seconds to the game length, in every reconciled game.
+        cur.execute("""SELECT COUNT(*) FROM (SELECT game_id, SUM(home_pts) hp, SUM(away_pts) ap, SUM(seconds) secs
+                                             FROM lineup_stints GROUP BY 1) x
+                       JOIN lineup_stint_games g USING (game_id)
+                       WHERE g.game_ok AND (x.hp <> g.final_home OR x.ap <> g.final_away OR ABS(x.secs - g.game_length) > 0.5)""")
+        assert cur.fetchone()[0] == 0
+        # Possession components equal team_game_totals (same credit rules) in every reconciled game.
+        cur.execute("""SELECT COUNT(*) FROM (
+                           SELECT game_id, home_team AS team, SUM(home_fga) fga, SUM(home_fta) fta, SUM(home_oreb) oreb, SUM(home_tov) tov
+                           FROM lineup_stints GROUP BY 1, 2
+                           UNION ALL
+                           SELECT game_id, away_team, SUM(away_fga), SUM(away_fta), SUM(away_oreb), SUM(away_tov)
+                           FROM lineup_stints GROUP BY 1, 2) s
+                       JOIN lineup_stint_games g USING (game_id)
+                       JOIN team_game_totals t ON t.game_id = s.game_id AND t.team_abbreviation = s.team
+                       WHERE g.game_ok AND (s.fga, s.fta, s.oreb, s.tov) <> (t.fga, t.fta, t.oreb, t.tov)""")
+        assert cur.fetchone()[0] == 0
+        # Every player's stint seconds equal his player_game_lines seconds (one parser), bar the 9 player-games with a
+        # substitution ESPN tagged to no team (the lines credit those twice).
+        cur.execute("""WITH s AS (SELECT game_id, pid, SUM(seconds) secs FROM (
+                                    SELECT game_id, unnest(home_ids) pid, seconds FROM lineup_stints
+                                    UNION ALL SELECT game_id, unnest(away_ids), seconds FROM lineup_stints) x GROUP BY 1, 2)
+                       SELECT COUNT(*) FILTER (WHERE ABS(s.secs - l.seconds) > 0.2), COUNT(*)
+                       FROM s JOIN player_game_lines l ON l.game_id = s.game_id AND l.player_id = s.pid""")
+        off, n = cur.fetchone()
+        assert n > 150000 and off <= 9
+        # Tracked stints have five a side; the 2025-26 Thunder's most-used lineup agrees with lineup_stats within 15 minutes.
+        cur.execute("SELECT COUNT(*) FROM lineup_stints WHERE tracked_ok AND (n_home <> 5 OR n_away <> 5)")
+        assert cur.fetchone()[0] == 0
+        cur.execute("""SELECT l.minutes, t.minutes FROM lineup_stats t
+                       JOIN lineup_seasons l ON l.season = t.season AND l.team_abbreviation = t.team_abbreviation
+                        AND l.player_ids = (SELECT array_agg(x ORDER BY x) FROM unnest(t.player_ids) x)::integer[]
+                       WHERE t.season = 2026 AND t.team_abbreviation = 'OKC' ORDER BY t.minutes DESC LIMIT 1""")
+        ours, theirs = cur.fetchone()
+        assert theirs > 150 and abs(ours - theirs) < 15
+    finally:
+        conn.close()
+
+    # Pair Chemistry from stints: 2023-24 Nuggets 57-25, Jokić + Murray the biggest-minute star pair and clearly positive.
+    d = client.get("/lineups/pair-grid", params={"season": 2024, "team": "DEN"}).json()
+    _assert_has_source(d)
+    assert d["source"] == "stints" and "lineup_seasons" in d["_source"]["tables"]
+    t = d["team_summary"]
+    assert (t["wins"], t["losses"]) == (57, 25) and 0.9 < t["coverage"] <= 1
+    assert d["coverage"]["games"] == 82 and d["coverage"]["excluded"] == []
+    names = {p["player_id"]: p["player_name"] for p in d["players"]}
+    assert names[d["players"][0]["player_id"]] == "Nikola Jokić"
+    jm = next(c for c in d["pairs"] if {names[c["a"]], names[c["b"]]} == {"Nikola Jokić", "Jamal Murray"})
+    assert jm["qualified"] and 1300 < jm["minutes"] < 1500 and jm["net_rating"] > 10
+    assert all(abs(c["net_rating"] - (c["off_rating"] - c["def_rating"])) < 0.15 for c in d["pairs"])
+    assert d["sources"]["2020"] == "lineup_stats" and d["sources"]["2021"] == "stints"
+    # Before 2020-21 the stored top-2,000 list is still the source (2015-16 Warriors 73-9, partial coverage).
+    g = client.get("/lineups/pair-grid", params={"season": 2016, "team": "GSW"}).json()
+    assert g["source"] == "lineup_stats" and (g["team_summary"]["wins"], g["team_summary"]["losses"]) == (73, 9)
+    assert 0.3 < g["team_summary"]["coverage"] < 1 and g["coverage"] is None
+
+    # Lineup Chemistry: stored both ways, names the source, respects the floor and the order.
+    for season, source in ((2026, "stints"), (2019, "lineup_stats")):
+        l = client.get("/lineups/chemistry", params={"season": season, "min_minutes": 100, "top_n": 5}).json()
+        _assert_has_source(l)
+        assert l["source"] == source and l["lineups_qualified"] <= l["lineups_total"] and len(l["results"]) == 5
+        assert all(r["min"] >= 100 and len(r["players"]) == 5 for r in l["results"])
+        nets = [r["net_rating"] for r in l["results"]]
+        assert nets == sorted(nets, reverse=True)
+        w = client.get("/lineups/chemistry", params={"season": season, "min_minutes": 100, "top_n": 5, "order": "worst"}).json()
+        assert w["results"][0]["net_rating"] <= nets[-1]
+    assert client.get("/lineups/chemistry", params={"season": 1990}).status_code == 404
+
+    # Team page: the lineups block says which source it used.
+    bos = client.get("/team-profile/BOS", params={"season": 2024}).json()
+    assert bos["lineups"]["source"] == "stints" and bos["pairs"]["source"] == "stints" and bos["lineups"]["coverage_share"] > 0.9
+    assert bos["lineups"]["stint_coverage"]["games"] == 82
+    gsw = client.get("/team-profile/GSW", params={"season": 2016}).json()
+    assert gsw["lineups"]["source"] == "lineup_stats" and gsw["pairs"]["available"]

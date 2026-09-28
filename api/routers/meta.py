@@ -351,10 +351,17 @@ COVERAGE_MAP = [
         "used_by": [],
     },
     {
-        "table": "lineup_stats", "label": "Lineup on-court stats", "group": "Teams",
+        "table": "lineup_stats", "label": "Lineup on-court stats (stored top 2,000)", "group": "Teams",
         "range_sql": "SELECT MIN(season), MAX(season) FROM lineup_stats", "range_fmt": "season_int",
         "source": "nba_api lineup endpoint, top lineups by minutes per team-season.",
-        "gap": "Only the top 2,000 lineups a season are stored — 31-89% of a team's minutes depending on rotation depth, not full coverage.",
+        "gap": "Only the top 2,000 lineups a season are stored — 31-89% of a team's minutes depending on rotation depth, not full coverage. Since 2026-09-28 Pair Chemistry, Lineup Chemistry and the team page use it only before 2020-21; later seasons come from lineup_stints.",
+        "used_by": [],
+    },
+    {
+        "table": "lineup_stints", "label": "Five-man stints from play-by-play", "group": "Teams",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM lineup_stints", "range_fmt": "season_int",
+        "source": "ESPN play-by-play (pbp_events) rebuilt by scripts/build_lineup_stints.py with the same lineup parser as player_game_lines; aggregated into lineup_seasons and pair_seasons.",
+        "gap": "Every stint of every regular-season game 2020-21 on, reconciled per game against the real final score, game length and team totals (lineup_stint_games says which games fail). Stints where a player had no id in the play-by-play (two-way and 10-day players missing from player_season_stats) are left out and counted: 2-6% of minutes in 2020-21 to 2024-25, almost none in 2025-26.",
         "used_by": [],
     },
     {

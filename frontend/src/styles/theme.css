@@ -1076,6 +1076,21 @@ select,
 }
 
 /* Pair chemistry grid (PairChemistrySection.jsx) */
+.pc-coverage {
+  margin: var(--space-2) 0 0;
+  font-size: 0.85rem;
+  color: var(--text-2);
+}
+.pc-coverage summary {
+  cursor: pointer;
+  color: var(--brand-text);
+}
+.pc-coverage ul {
+  margin: 6px 0 0;
+  padding-left: 1.2rem;
+}
+.pc-coverage li { margin: 2px 0; }
+
 .pc-legend {
   display: flex;
   flex-wrap: wrap;
