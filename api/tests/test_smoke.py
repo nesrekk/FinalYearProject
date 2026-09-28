@@ -1329,3 +1329,53 @@ def test_era_translator_known_seasons():
     assert any("estimated by this app" in n for n in mikan["notes"])
     assert client.get("/era/translate", params={"player_id": wilt, "season": 1950}).status_code == 404
     assert client.get("/era/translate", params={"player_id": wilt, "season": 1962, "target": 1947}).status_code == 400
+
+
+def test_role_finder_presets_land_known_players():
+    """Role Player Finder: the presets' weights are a judgment call, so the
+    check is that well-known role players land near the top of their role
+    (2024-25, the last season with full data and salaries)."""
+    from impact_api import app
+    client = TestClient(app)
+    opts = client.get("/roles/finder/options").json()
+    _assert_has_source(opts)
+    assert opts["seasons"]["from"] == 2018 and opts["seasons"]["to"] >= 2026
+    assert {p["key"] for p in opts["presets"]} >= {"three_and_d", "rim_protector", "point_of_attack", "floor_spacer"}
+    assert all(p["weights"] for p in opts["presets"])  # every preset shows its weights
+
+    def top(preset, n=5, **params):
+        d = client.get("/roles/finder", params={"preset": preset, "season": 2025, "top_n": n, **params}).json()
+        return d, [r["player_name"] for r in d["results"]]
+
+    d, names = top("rim_protector")
+    _assert_has_source(d)
+    assert {"Victor Wembanyama", "Walker Kessler"} <= set(names)
+    row = d["results"][0]
+    assert abs(row["score"] - sum(p["contribution"] for p in row["parts"].values())) < 0.01
+    assert row["position"] in ("F", "F-C", "C-F", "C") and d["pool"] < d["pool_total"]
+    assert all(r["salary"] is not None for r in d["results"]) and d["filters"]["salary_available"]
+
+    assert {"Luguentz Dort", "Dorian Finney-Smith"} <= set(top("three_and_d")[1])
+    assert {"Alex Caruso", "Dyson Daniels"} <= set(top("point_of_attack")[1])
+    assert top("floor_spacer")[1][0] == "Malik Beasley"
+    assert {"Walker Kessler", "Steven Adams"} <= set(top("glass_cleaner")[1])
+    # Usage cap on the secondary-creator preset is on the percent scale (usage is stored as a fraction).
+    d, _ = top("secondary_creator", n=50)
+    assert d["filters"]["max_usg"] == 24 and all(r["context"]["usg_pct"] <= 24 for r in d["results"])
+    # Stretch big compares within the chosen positions: Turner and Porzingis in the top 10.
+    d, names = top("stretch_big", n=10)
+    assert d["filters"]["relative"] == "positions" and {"Myles Turner", "Kristaps Porziņģis"} <= set(names)
+
+    # Salary filter applies only where contract data exists.
+    d, _ = top("three_and_d", n=10, max_salary=5_000_000)
+    assert d["filters"]["max_salary"] == 5_000_000 and all(r["salary"] <= 5_000_000 for r in d["results"])
+    d = client.get("/roles/finder", params={"preset": "three_and_d", "season": 2026, "max_salary": 5_000_000}).json()
+    assert d["filters"]["max_salary"] is None and any("salary" in n for n in d["notes"])
+
+    # Custom weights and guards.
+    d = client.get("/roles/finder", params={"preset": "custom", "weights": "blk36:1,reb_pct:1", "positions": "C"}).json()
+    assert d["results"] and all(r["position"] == "C" for r in d["results"])
+    for params in ({"preset": "nope"}, {"preset": "custom"}, {"preset": "custom", "weights": "x:1"},
+                   {"positions": "PG"}, {"relative": "team"}):
+        assert client.get("/roles/finder", params=params).status_code == 400
+    assert client.get("/roles/finder", params={"season": 2015}).status_code == 404

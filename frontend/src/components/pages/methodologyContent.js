@@ -121,6 +121,19 @@ export const SECTIONS = [
                 ],
             },
             {
+                id: 'rolefinder',
+                name: 'Role Player Finder',
+                open: { page: 'rolefinder', label: 'Role Player Finder' },
+                answers: 'Which players best fit a role such as 3-and-D wing or rim protector?',
+                method: 'Score = the sum of weight × z-score over a role\'s components, within one season among players with 500+ minutes (2017-18 on, when every input exists). DAD and Gravity components use those tables\' stored z-scores; blocks and steals per 36, rebound, assist, usage and turnover rates, true shooting, BPM parts and the defended-FG% differential are z-scored here. "Compare with the chosen positions" re-scores everything within the selected positions. Scouting Report findings are shown as fit flags, not scored.',
+                checked: 'The presets\' weights are a judgment call, written down and shown in full on the page, not fitted to anything. Sniff tests on 2024-25: rim protector puts Wembanyama, Holmgren and Kessler 1-2-3; point-of-attack puts Caruso, Ausar Thompson and Dyson Daniels 1-2-3; floor spacer starts Beasley, Isaiah Joe, Curry; 3-and-D starts Dort, Finney-Smith, Caruso, with Anunoby 2nd in 2025-26.',
+                limits: [
+                    'Known misses: Rudy Gobert ranks about 20th as a rim protector because his deterrence shows up as few blocks and a modest defended-FG% effect; Brook Lopez sits mid-pack as a stretch big on 2024-25 volume.',
+                    'A player missing a weighted component (under 1,000 tracked defensive possessions, or under 2 three-point attempts a game for 3P%) is left out, not treated as average; the page counts them.',
+                    'Salary filtering only exists for the seasons with contract data (2017-18 to 2019-20 and 2024-25).',
+                ],
+            },
+            {
                 id: 'garbage',
                 name: 'Garbage-Time Deflator',
                 open: { page: 'analytics', hash: 'garbage', label: 'Garbage-Time Deflator' },

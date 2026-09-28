@@ -700,6 +700,19 @@ export async function fetchCompositeLeaderboard(params) {
     return response.data;
 }
 
+export async function fetchRoleFinderOptions() {
+    return getWithCache('role_finder_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/roles/finder/options`);
+        return response.data;
+    });
+}
+
+// params: { preset, weights: 'dad_pos:1,cs_pct:1', season, positions: 'G,F', relative, max_usg, max_salary, top_n }
+export async function fetchRoleFinder(params) {
+    const response = await axios.get(`${IMPACT_BASE}/roles/finder`, { params });
+    return response.data;
+}
+
 export async function fetchCustomLeaderboard(params) {
     const response = await axios.get(`${IMPACT_BASE}/leaderboard/custom`, { params });
     return response.data;

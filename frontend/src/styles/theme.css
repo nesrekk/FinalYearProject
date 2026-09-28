@@ -1076,3 +1076,69 @@ select,
 .era-method { margin-top: var(--space-5); color: var(--text); font-size: 0.9rem; line-height: 1.55; }
 .era-method h3 { font-size: 1rem; margin: 0 0 var(--space-2); }
 .era-method p { margin: 0 0 var(--space-2); }
+
+/* Role Player Finder (pages/RoleFinder.jsx) */
+.lb-presets button[aria-pressed='true'] {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--on-brand);
+}
+.rf-blurb {
+  margin: var(--space-2) 0 0;
+  color: var(--text-2);
+  font-size: 0.9rem;
+}
+.rf-weights-card { margin-top: var(--space-4); }
+.rf-weights-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.rf-weights-head h3 { margin: 0; font-size: 1rem; }
+.rf-component-notes {
+  margin: var(--space-3) 0 0;
+  padding-left: 1.1em;
+  color: var(--text-2);
+  font-size: 0.8rem;
+  columns: 2;
+  column-gap: var(--space-5);
+}
+.rf-component-notes li { break-inside: avoid; margin-bottom: 4px; }
+.rf-positions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.rf-positions-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.rf-positions .lb-presets { margin-top: 0; }
+.rf-salary-note { display: block; margin-top: var(--space-3); font-size: 0.85rem; }
+.rf-table .rf-role { white-space: nowrap; color: var(--text-2); font-size: 0.85rem; }
+.rf-table .rf-contrib {
+  display: block;
+  color: var(--text-2);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+.rf-flags { min-width: 160px; }
+.rf-flag {
+  display: inline-block;
+  margin: 0 6px 2px 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rf-flag--strength { color: var(--positive); }
+.rf-flag--weakness { color: var(--negative); }
+@media (max-width: 640px) {
+  .rf-component-notes { columns: 1; }
+}

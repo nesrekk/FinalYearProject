@@ -55,6 +55,7 @@ from routers import (
     playtype_hustle,
     radar,
     referee_tendencies,
+    role_finder,
     root,
     schedule_fatigue,
     scouting_report,
@@ -94,6 +95,7 @@ for _router_module in (
     team_comparison, hall_of_fame, garbage_time, dad_index, scouting_report,
     spacing_lab, contract_value, learn, college, greats, leaderboard, explore, era,
     pair_chemistry,
+    role_finder,
 ):
     app.include_router(_router_module.router)
 
