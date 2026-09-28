@@ -5,6 +5,8 @@ import InfoTooltip from '../common/InfoTooltip';
 import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import CopyLinkButton from '../common/CopyLinkButton';
+import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const FORMATS = {
@@ -17,23 +19,52 @@ const FORMATS = {
 const fmt = (format, v) => (v == null ? '—' : FORMATS[format](v));
 const signed = (v, d = 2) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`;
 const DEFAULT_STATS = ['pts', 'ts_pct', 'usg_pct', 'ast_pct', 'reb_pct', 'bpm'];
+const TOP_N = [10, 25, 50, 100];
+
+// The form from a shared link (utils/useUrlState.js). season null = the
+// latest season the API has.
+function formFromParams(p, o) {
+    const usable = new Set(o.stats.filter((s) => s.key !== 'age').map((s) => s.key));
+    const stats = [...new Set(parseParam.list(p, 'stats') ?? [])].filter((k) => usable.has(k)).slice(0, 8);
+    const n = parseParam.int(p, 'n');
+    return {
+        season: parseParam.int(p, 'season', { min: o.seasons.from + 1, max: o.seasons.to }),
+        stats: stats.length ? stats : DEFAULT_STATS,
+        direction: parseParam.oneOf(p, 'dir', ['up', 'down']) ?? 'up',
+        minGp: parseParam.int(p, 'gp', { min: 0, max: 82 }) ?? 30,
+        minMpg: parseParam.num(p, 'mpg', { min: 0, max: 48 }) ?? 15,
+        topN: TOP_N.includes(n) ? n : 25,
+    };
+}
 
 export default function BreakoutDetector() {
+    const params = useInitialParams();
     const [options, setOptions] = useState(null);
     const [optionsError, setOptionsError] = useState('');
-    const [form, setForm] = useState({ season: null, stats: DEFAULT_STATS, direction: 'up', minGp: 30, minMpg: 15, topN: 25 });
+    const [form, setForm] = useState(null);
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
         fetchLeaderboardOptions()
-            .then(setOptions)
+            .then((o) => {
+                setOptions(o);
+                setForm(formFromParams(params, o));
+            })
             .catch(() => setOptionsError('The stat list couldn\'t load. Is the impact API (port 8002) running?'));
-    }, []);
+    }, [params]);
+
+    // The season is written once known, so a link keeps showing the same
+    // season after a newer one is loaded.
+    const shownSeason = form?.season ?? data?.season ?? null;
+    useUrlSync(form && {
+        season: shownSeason, dir: form.direction, stats: form.stats,
+        gp: form.minGp || 0, mpg: form.minMpg || 0, n: form.topN,
+    });
 
     useEffect(() => {
-        if (!options) return undefined;
+        if (!options || !form) return undefined;
         const timer = setTimeout(async () => {
             if (!form.stats.length) {
                 setData(null);
@@ -58,7 +89,7 @@ export default function BreakoutDetector() {
     }, [options, form]);
 
     if (optionsError) return <section className="dashboard-card"><p className="error-message">{optionsError}</p></section>;
-    if (!options) return <Loader />;
+    if (!options || !form) return <Loader />;
 
     const set = (patch) => setForm((f) => ({ ...f, ...patch }));
     const toggleStat = (key) => set({
@@ -79,6 +110,7 @@ export default function BreakoutDetector() {
                     so roughly 45% of players show a year older than on Basketball-Reference.
                 </InfoTooltip>
                 <SourceBadge source={data?._source ?? options._source} />
+                <CopyLinkButton />
             </h2>
             <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
                 Biggest season-over-season changes in a player&apos;s standing in the league, across the stats you pick.
@@ -127,7 +159,7 @@ export default function BreakoutDetector() {
                 <label>
                     <span>Show</span>
                     <select className="input-field" value={form.topN} onChange={(e) => set({ topN: Number(e.target.value) })}>
-                        {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+                        {TOP_N.map((n) => <option key={n} value={n}>{n}</option>)}
                     </select>
                 </label>
             </div>

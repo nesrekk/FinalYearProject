@@ -5,7 +5,7 @@
  * Each microservice (ports 8000, 8001, 8002) needs CORSMiddleware.
  */
 
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import TopNav from './components/layout/TopNav';
 import Footer from './components/layout/Footer';
@@ -14,6 +14,7 @@ import DashboardHome from './components/pages/DashboardHome';
 import LandingPage from './components/pages/LandingPage';
 import Loader from './components/Loader';
 import { prefetchCoreData } from './services/api';
+import { PAGE_PARAM, currentPageParam, pushPage } from './utils/useUrlState';
 import './styles/dashboard.css';
 import './styles/theme.css';
 
@@ -43,54 +44,98 @@ const LeaderboardBuilder = lazy(() => import('./components/pages/LeaderboardBuil
 const RegressionExplorer = lazy(() => import('./components/pages/RegressionExplorer'));
 const BreakoutDetector = lazy(() => import('./components/pages/BreakoutDetector'));
 
+// Every page the app can show, by the id used in navConfig and `?page=`.
+const PAGES = {
+  dashboard: DashboardHome,
+  scores: LiveScores,
+  news: NewsSection,
+  standings: StandingsSection,
+  teams: TeamComparison,
+  players: PlayerStats,
+  compare: PlayerComparison,
+  shotcharts: ShotCharts,
+  analytics: AnalyticsSection,
+  leaders: StatLeaders,
+  trade: TradeAnalyzer,
+  draft: DraftValueGuide,
+  hof: HallOfFame,
+  greats: GreatsOfTheGame,
+  rookies: RookieClassTracker,
+  games: GamesHub,
+  learn: LearnTheGame,
+  methodology: Methodology,
+  builder: LeaderboardBuilder,
+  regression: RegressionExplorer,
+  breakouts: BreakoutDetector,
+};
+
+// Which view the URL asks for. No `page` = the landing page, except that an
+// old-style Analytics link (`/#wpa`, from before pages were in the URL)
+// still opens Analytics on that tab.
+function routeFromUrl() {
+  const page = currentPageParam();
+  if (page) return { landing: false, page: PAGES[page] ? page : 'dashboard' };
+  if (window.location.hash.length > 1) return { landing: false, page: 'analytics' };
+  return { landing: true, page: 'dashboard' };
+}
+
 export default function App() {
-  const [activePage, setActivePage] = useState('dashboard');
-  const [showLanding, setShowLanding] = useState(true);
+  const [route, setRoute] = useState(routeFromUrl);
+  const activePage = route.page;
+  const showLanding = route.landing;
 
   useEffect(() => {
     prefetchCoreData();
   }, []);
 
-  const enterApp = (page, hash) => {
-    setShowLanding(false);
-    setActivePage(page || 'dashboard');
-    if (hash) requestAnimationFrame(() => { window.location.hash = hash; });
-  };
+  // Make the URL say which page is open (e.g. an old `/#wpa` link becomes
+  // `?page=analytics#wpa`) without adding a history entry.
+  useEffect(() => {
+    if (!showLanding && currentPageParam() !== activePage) {
+      const url = new URL(window.location.href);
+      url.searchParams.set(PAGE_PARAM, activePage);
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    }
+  }, [showLanding, activePage]);
+
+  // Back / forward.
+  useEffect(() => {
+    const onPopState = () => {
+      setRoute(routeFromUrl());
+      // Entries that differ only in the Analytics tab: let the open
+      // AnalyticsSection pick the tab up.
+      window.dispatchEvent(new Event('hashchange'));
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  // `hash` is an Analytics tab id (e.g. 'wpa').
+  const navigate = useCallback((page, hash) => {
+    const target = PAGES[page] ? page : 'dashboard';
+    // Re-picking the open page from the menu keeps its inputs and link.
+    if (!hash && currentPageParam() === target) return;
+    pushPage(target, hash);
+    setRoute({ landing: false, page: target });
+  }, []);
+
+  const goToLanding = useCallback(() => {
+    pushPage(null);
+    setRoute({ landing: true, page: activePage });
+  }, [activePage]);
 
   const renderPage = () => {
-    switch (activePage) {
-      case 'dashboard': return <DashboardHome onNavigate={setActivePage} />;
-      case 'scores': return <LiveScores />;
-      case 'news': return <NewsSection />;
-      case 'standings': return <StandingsSection />;
-      case 'teams': return <TeamComparison />;
-      case 'players': return <PlayerStats />;
-      case 'compare': return <PlayerComparison />;
-      case 'shotcharts': return <ShotCharts />;
-      case 'analytics': return <AnalyticsSection />;
-      case 'leaders': return <StatLeaders />;
-      case 'trade': return <TradeAnalyzer />;
-      case 'draft': return <DraftValueGuide />;
-      case 'hof': return <HallOfFame />;
-      case 'greats': return <GreatsOfTheGame />;
-      case 'rookies': return <RookieClassTracker />;
-      case 'games': return <GamesHub />;
-      case 'learn': return <LearnTheGame onNavigate={setActivePage} />;
-      case 'methodology': return <Methodology onNavigate={setActivePage} />;
-      case 'builder': return <LeaderboardBuilder />;
-      case 'regression': return <RegressionExplorer />;
-      case 'breakouts': return <BreakoutDetector />;
-      default: return <DashboardHome onNavigate={setActivePage} />;
-    }
+    const Page = PAGES[activePage] || DashboardHome;
+    return <Page onNavigate={navigate} />;
   };
 
   if (showLanding) {
-    return <LandingPage onOpenToday={() => enterApp('dashboard')} onNavigate={enterApp} />;
+    return <LandingPage onOpenToday={() => navigate('dashboard')} onNavigate={navigate} />;
   }
 
   return (
     <div className="top-shell">
-      <TopNav activePage={activePage} onNavigate={setActivePage} onGoToLanding={() => setShowLanding(true)} />
+      <TopNav activePage={activePage} onNavigate={navigate} onGoToLanding={goToLanding} />
       <main className="top-shell-main">
         <PageHeader activePage={activePage} />
         <AnimatePresence mode="wait">

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { fetchTradeTeams, fetchTradeRoster, simulateTrade } from '../../services/api';
 import TradeContractValue from '../common/TradeContractValue';
@@ -10,6 +10,8 @@ import PlayerHeadshot from '../common/PlayerHeadshot';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import TableExport from '../common/TableExport';
+import CopyLinkButton from '../common/CopyLinkButton';
+import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 function StatLabel({ statKey, children }) {
     const def = STAT_GLOSSARY[statKey];
@@ -123,16 +125,24 @@ function TeamPanel({ side, isAdvanced, preset }) {
     );
 }
 
+// Keep a player id only if they're on the roster that just loaded.
+const onRoster = (roster) => (id) => (roster.some((p) => String(p.player_id) === id) ? id : '');
+
 export default function TradeAnalyzer() {
-    const [season, setSeason] = useState(2024);
+    // A shared link carries ?season=&ta=&pa=&tb=&pb= (utils/useUrlState.js).
+    const params = useInitialParams();
+    const linkedId = (key) => (parseParam.int(params, key, { min: 1 }) ?? '').toString();
+    const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: 2026 }) ?? 2024);
     const [teams, setTeams] = useState([]);
 
-    const [teamA, setTeamA] = useState('');
-    const [teamB, setTeamB] = useState('');
+    const [teamA, setTeamA] = useState(() => parseParam.str(params, 'ta')?.toUpperCase() ?? '');
+    const [teamB, setTeamB] = useState(() => parseParam.str(params, 'tb')?.toUpperCase() ?? '');
     const [rosterA, setRosterA] = useState([]);
     const [rosterB, setRosterB] = useState([]);
-    const [playerAId, setPlayerAId] = useState('');
-    const [playerBId, setPlayerBId] = useState('');
+    const [playerAId, setPlayerAId] = useState(() => linkedId('pa'));
+    const [playerBId, setPlayerBId] = useState(() => linkedId('pb'));
+    // A link with a full trade runs it once both rosters have loaded.
+    const autoRun = useRef(Boolean(playerAId && playerBId));
 
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -149,27 +159,43 @@ export default function TradeAnalyzer() {
         return () => { active = false; };
     }, [season]);
 
+    // Changing a team or the season clears the players it affects (in the
+    // handlers below, not here, so a linked player survives the first load).
     useEffect(() => {
-        setPlayerAId('');
         if (!teamA) { setRosterA([]); return; }
         let active = true;
         fetchTradeRoster(teamA, season)
-            .then((data) => { if (active) setRosterA(data.roster || []); })
+            .then((data) => {
+                if (!active) return;
+                setRosterA(data.roster || []);
+                setPlayerAId(onRoster(data.roster || []));
+            })
             .catch(() => { if (active) setRosterA([]); });
         return () => { active = false; };
     }, [teamA, season]);
 
     useEffect(() => {
-        setPlayerBId('');
         if (!teamB) { setRosterB([]); return; }
         let active = true;
         fetchTradeRoster(teamB, season)
-            .then((data) => { if (active) setRosterB(data.roster || []); })
+            .then((data) => {
+                if (!active) return;
+                setRosterB(data.roster || []);
+                setPlayerBId(onRoster(data.roster || []));
+            })
             .catch(() => { if (active) setRosterB([]); });
         return () => { active = false; };
     }, [teamB, season]);
 
+    useUrlSync({ season, ta: teamA, pa: playerAId, tb: teamB, pb: playerBId });
+
+    const changeSeason = (value) => { setSeason(value); setPlayerAId(''); setPlayerBId(''); };
+    const changeTeamA = (value) => { setTeamA(value); setPlayerAId(''); };
+    const changeTeamB = (value) => { setTeamB(value); setPlayerBId(''); };
+
     const canSimulate = teamA && teamB && playerAId && playerBId && teamA !== teamB;
+    const rostersReady = rosterA.some((p) => String(p.player_id) === playerAId)
+        && rosterB.some((p) => String(p.player_id) === playerBId);
 
     async function handleSimulate() {
         setLoading(true);
@@ -186,6 +212,13 @@ export default function TradeAnalyzer() {
             setLoading(false);
         }
     }
+
+    useEffect(() => {
+        if (!autoRun.current || !canSimulate || !rostersReady) return;
+        autoRun.current = false;
+        handleSimulate();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [canSimulate, rostersReady]);
 
     const panels = useMemo(() => {
         if (!result) return null;
@@ -208,6 +241,7 @@ export default function TradeAnalyzer() {
                         in the new context — read it as a roster production balance estimate, not a real
                         on-court projection.
                     </InfoTooltip>
+                    <CopyLinkButton />
                 </h2>
                 <p className="page-subtitle">
                     Pick a season and two teams, then a player from each roster to propose a straight
@@ -219,15 +253,15 @@ export default function TradeAnalyzer() {
                         type="number"
                         className="input-field"
                         value={season}
-                        onChange={(e) => setSeason(Number(e.target.value))}
+                        onChange={(e) => changeSeason(Number(e.target.value))}
                         min={2010}
                         max={2026}
                     />
-                    <select className="input-field" value={teamA} onChange={(e) => setTeamA(e.target.value)}>
+                    <select className="input-field" value={teamA} onChange={(e) => changeTeamA(e.target.value)}>
                         <option value="">Team A…</option>
                         {teams.map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>
-                    <select className="input-field" value={teamB} onChange={(e) => setTeamB(e.target.value)}>
+                    <select className="input-field" value={teamB} onChange={(e) => changeTeamB(e.target.value)}>
                         <option value="">Team B…</option>
                         {teams.map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>

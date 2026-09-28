@@ -132,8 +132,7 @@ function jumpTo(id) {
 
 function ModelCard({ item, live, onNavigate }) {
     const open = () => {
-        onNavigate(item.open.page);
-        if (item.open.hash) requestAnimationFrame(() => { window.location.hash = item.open.hash; });
+        onNavigate(item.open.page, item.open.hash);
     };
     return (
         <article className="meth-card" id={`m-${item.id}`}>

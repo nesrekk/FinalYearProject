@@ -10,6 +10,8 @@ import ScoutingReportCard from '../common/ScoutingReportCard';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import TableExport from '../common/TableExport';
+import CopyLinkButton from '../common/CopyLinkButton';
+import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 const COLOR_A = '#f87171';
 const COLOR_B = '#38bdf8';
@@ -200,7 +202,9 @@ function BioCard({ profile, color }) {
 }
 
 export default function PlayerComparison() {
-    const [season, setSeason] = useState(2025);
+    // A shared link carries ?season=&a=&b= (utils/useUrlState.js).
+    const params = useInitialParams();
+    const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: 2026 }) ?? 2025);
     const { isAdvanced } = useMotionMode();
     const preset = motionPreset(isAdvanced);
 
@@ -238,6 +242,22 @@ export default function PlayerComparison() {
         setSearchB(name); setSuggestB([]);
         loadProfile(name, setProfileB, setErrorB);
     }
+
+    // Open the players named in the link.
+    useEffect(() => {
+        const a = parseParam.str(params, 'a');
+        const b = parseParam.str(params, 'b');
+        if (a) pickA(a);
+        if (b) pickB(b);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [params]);
+
+    // A linked name stays in the URL while it loads and is dropped if it fails.
+    useUrlSync({
+        season,
+        a: profileA?.player_name ?? (errorA ? null : parseParam.str(params, 'a')),
+        b: profileB?.player_name ?? (errorB ? null : parseParam.str(params, 'b')),
+    });
 
     // Re-fetch both slots when season changes.
     useEffect(() => {
@@ -279,6 +299,7 @@ export default function PlayerComparison() {
                         weight, or wingspan data anywhere in its pipeline, so those are omitted rather than
                         guessed.
                     </InfoTooltip>
+                    <CopyLinkButton />
                 </h2>
                 <p className="page-subtitle">Pick a season and two players to compare their full statistical profile.</p>
 

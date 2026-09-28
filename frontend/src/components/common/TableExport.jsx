@@ -25,7 +25,7 @@ export default function TableExport({ name }) {
             .pop();
         if (heading) {
             const copy = heading.cloneNode(true);
-            copy.querySelectorAll('[aria-hidden="true"], button, [role="tooltip"], .it-wrap, .pill-badge').forEach((n) => n.remove());
+            copy.querySelectorAll('[aria-hidden="true"], button, [role="tooltip"], .it-wrap, .pill-badge, .copy-link').forEach((n) => n.remove());
             return slugify(copy.textContent);
         }
         return 'nba-hub-table';

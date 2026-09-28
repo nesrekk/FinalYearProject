@@ -5,6 +5,8 @@ import InfoTooltip from '../common/InfoTooltip';
 import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import CopyLinkButton from '../common/CopyLinkButton';
+import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import CompositeBuilder from './CompositeBuilder';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
@@ -27,6 +29,29 @@ const CONTEXT_COLUMNS = [
     { key: 'ts_pct', label: 'TS%', format: 'pct' },
 ];
 const ATTEMPT_LABELS = { fga: 'FGA', fg3a: '3PA', fta: 'FTA' };
+const TOP_N = [10, 25, 50, 100];
+
+// The form from a shared link (utils/useUrlState.js), falling back to the
+// defaults for anything missing or no longer valid.
+function formFromParams(p, o) {
+    const first = o.seasons.from;
+    const last = o.seasons.to;
+    const stat = o.stats.find((s) => s.key === p.get('stat')) ?? o.stats.find((s) => s.key === 'pts');
+    const floor = Math.max(first, stat.first_season);
+    const season = (key) => Math.max(floor, parseParam.int(p, key, { min: first, max: last }) ?? last);
+    const n = parseParam.int(p, 'n');
+    return {
+        stat: stat.key,
+        from: season('from'),
+        to: season('to'),
+        minGp: parseParam.int(p, 'gp', { min: 0, max: 82 }) ?? 30,
+        minMpg: parseParam.num(p, 'mpg', { min: 0, max: 48 }) ?? 20,
+        minAttempts: stat.attempts ? parseParam.num(p, 'att', { min: 0, max: 40 }) : null,
+        team: parseParam.oneOf(p, 'team', o.teams.map((t) => t.team)) ?? '',
+        order: parseParam.oneOf(p, 'order', ['high', 'low']) ?? '',
+        topN: TOP_N.includes(n) ? n : 25,
+    };
+}
 
 // One-click starting points; every control stays editable afterwards.
 const PRESETS = [
@@ -37,28 +62,36 @@ const PRESETS = [
 ];
 
 export default function LeaderboardBuilder() {
+    const params = useInitialParams();
     const [options, setOptions] = useState(null);
     const [optionsError, setOptionsError] = useState('');
     const [form, setForm] = useState(null);
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [mode, setMode] = useState('single'); // 'single' | 'composite'
+    const [mode, setMode] = useState(() => (params.get('mode') === 'metric' ? 'composite' : 'single'));
 
     useEffect(() => {
         fetchLeaderboardOptions()
             .then((o) => {
                 setOptions(o);
-                const last = o.seasons.to;
-                setForm({
-                    stat: 'pts', from: last, to: last, minGp: 30, minMpg: 20,
-                    minAttempts: null, team: '', order: '', topN: 25,
-                });
+                setForm(formFromParams(params, o));
             })
             .catch(() => setOptionsError('The leaderboard options couldn\'t load. Is the impact API (port 8002) running?'));
-    }, []);
+    }, [params]);
 
     const stat = useMemo(() => options?.stats.find((s) => s.key === form?.stat), [options, form?.stat]);
+
+    // Keep the link in step with the controls. The composite mode writes its
+    // own inputs (CompositeBuilder); each mode clears the other's keys.
+    useUrlSync(!form ? null : mode === 'composite'
+        ? { mode: 'metric', stat: null, att: null, order: null }
+        : {
+            mode: null, w: null, stat: form.stat, from: form.from, to: form.to,
+            gp: form.minGp || 0, mpg: form.minMpg || 0,
+            att: stat?.attempts ? form.minAttempts : null,
+            team: form.team, order: form.order, n: form.topN,
+        });
 
     // Re-run whenever a control changes (debounced for typing in number boxes).
     useEffect(() => {
@@ -144,7 +177,7 @@ export default function LeaderboardBuilder() {
             </div>
             {mode === 'composite' ? (
                 <>
-                    <h2 className="card-title hb-page-title">Build your own metric</h2>
+                    <h2 className="card-title hb-page-title">Build your own metric<CopyLinkButton /></h2>
                     <CompositeBuilder stats={options.stats} seasons={options.seasons} teams={options.teams} />
                 </>
             ) : (
@@ -159,6 +192,7 @@ export default function LeaderboardBuilder() {
                             of attempts per game. {options.notes.join(' ')}
                         </InfoTooltip>
                         <SourceBadge source={data?._source ?? options._source} />
+                        <CopyLinkButton />
                     </h2>
 
                     <div className="lb-presets" aria-label="Presets">
@@ -227,7 +261,7 @@ export default function LeaderboardBuilder() {
                         <label>
                             <span>Show</span>
                             <select className="input-field" value={form.topN} onChange={(e) => set({ topN: Number(e.target.value) })}>
-                                {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+                                {TOP_N.map((n) => <option key={n} value={n}>{n}</option>)}
                             </select>
                         </label>
                     </div>

@@ -5,6 +5,7 @@ import InfoTooltip from '../common/InfoTooltip';
 import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const FORMATS = {
@@ -17,6 +18,7 @@ const FORMATS = {
 const fmt = (format, v) => (v == null ? '—' : FORMATS[format](v));
 const signed = (v, d = 2) => `${v > 0 ? '+' : ''}${v.toFixed(d)}`;
 const MAX_STATS = 8;
+const TOP_N = [10, 25, 50, 100];
 
 const PRESETS = [
     { label: 'Efficient scorer', weights: [['pts', 1], ['ts_pct', 1]] },
@@ -26,22 +28,49 @@ const PRESETS = [
     { label: 'Careful playmaker', weights: [['ast_pct', 2], ['tov_pct', 1]] },
 ];
 
+// `w=pts:1,ts_pct:2` from a shared link: known stats, once each, weights
+// in the slider's range and steps. null if nothing usable is left.
+function weightsFromParam(raw, byKey) {
+    const seen = new Set();
+    const out = [];
+    for (const part of raw ?? []) {
+        const [key, w] = part.split(':');
+        const weight = Number(w);
+        if (!byKey[key] || seen.has(key) || !Number.isFinite(weight) || Math.abs(weight) > 3 || (weight * 2) % 1 !== 0) continue;
+        seen.add(key);
+        out.push([key, weight]);
+    }
+    return out.length ? out.slice(0, MAX_STATS) : null;
+}
+
 // stats: the catalogue from /leaderboard/options; seasons: { from, to }.
 export default function CompositeBuilder({ stats, seasons, teams }) {
     const usable = stats.filter((s) => s.key !== 'age');
     const byKey = Object.fromEntries(usable.map((s) => [s.key, s]));
-    const [weights, setWeights] = useState(PRESETS[0].weights);
-    const [range, setRange] = useState({ from: seasons.to, to: seasons.to });
-    const [minGp, setMinGp] = useState(30);
-    const [minMpg, setMinMpg] = useState(20);
-    const [team, setTeam] = useState('');
-    const [topN, setTopN] = useState(25);
+    // Inputs start from the link (utils/useUrlState.js); switching over from
+    // the single-stat mode carries its seasons, floors, team and size along.
+    const params = useInitialParams();
+    const season = (key) => parseParam.int(params, key, { min: seasons.from, max: seasons.to }) ?? seasons.to;
+    const [weights, setWeights] = useState(() => weightsFromParam(parseParam.list(params, 'w'), byKey) ?? PRESETS[0].weights);
+    const [range, setRange] = useState(() => ({ from: season('from'), to: season('to') }));
+    const [minGp, setMinGp] = useState(() => parseParam.int(params, 'gp', { min: 0, max: 82 }) ?? 30);
+    const [minMpg, setMinMpg] = useState(() => parseParam.num(params, 'mpg', { min: 0, max: 48 }) ?? 20);
+    const [team, setTeam] = useState(() => parseParam.oneOf(params, 'team', teams.map((t) => t.team)) ?? '');
+    const [topN, setTopN] = useState(() => {
+        const n = parseParam.int(params, 'n');
+        return TOP_N.includes(n) ? n : 25;
+    });
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
     const active = weights.filter(([, w]) => Number(w) !== 0);
     const weightString = active.map(([k, w]) => `${k}:${w}`).join(',');
+
+    useUrlSync({
+        w: weights.map(([k, w]) => `${k}:${w}`), from: range.from, to: range.to,
+        gp: minGp || 0, mpg: minMpg || 0, team, n: topN,
+    });
 
     useEffect(() => {
         if (!weightString) {
@@ -169,7 +198,7 @@ export default function CompositeBuilder({ stats, seasons, teams }) {
                 <label>
                     <span>Show</span>
                     <select className="input-field" value={topN} onChange={(e) => setTopN(Number(e.target.value))}>
-                        {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+                        {TOP_N.map((n) => <option key={n} value={n}>{n}</option>)}
                     </select>
                 </label>
             </div>

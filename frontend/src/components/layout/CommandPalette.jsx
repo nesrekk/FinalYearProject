@@ -66,8 +66,7 @@ export default function CommandPalette({ open, onClose, onNavigate }) {
     const select = (result) => {
         if (!result) return;
         if (result.kind === 'page') {
-            onNavigate(result.id);
-            if (result.hash) requestAnimationFrame(() => { window.location.hash = result.hash; });
+            onNavigate(result.id, result.hash);
         } else if (result.kind === 'team') {
             onNavigate('teams');
         } else if (result.kind === 'player') {

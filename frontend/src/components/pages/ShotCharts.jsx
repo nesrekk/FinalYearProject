@@ -3,6 +3,8 @@ import { fetchLivePlayerSuggestions, fetchPlayerShots } from '../../services/api
 import Icon from '../common/Icon';
 import PlayerName from '../common/PlayerName';
 import TableExport from '../common/TableExport';
+import CopyLinkButton from '../common/CopyLinkButton';
+import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
@@ -164,7 +166,9 @@ function computeZoneStats(shots) {
 }
 
 export default function ShotCharts() {
-  const [searchInput, setSearchInput] = useState('Stephen Curry');
+  // A shared link carries ?player=&season=&view= (utils/useUrlState.js).
+  const params = useInitialParams();
+  const [searchInput, setSearchInput] = useState(() => parseParam.str(params, 'player') ?? 'Stephen Curry');
   const [suggestions, setSuggestions] = useState([]);
   const [searchingSuggestions, setSearchingSuggestions] = useState(false);
 
@@ -174,7 +178,7 @@ export default function ShotCharts() {
   const [seasons, setSeasons] = useState([]);
   const [season, setSeason] = useState('');
   const [source, setSource] = useState('');
-  const [viewMode, setViewMode] = useState('dots'); // 'dots' | 'heatmap'
+  const [viewMode, setViewMode] = useState(() => parseParam.oneOf(params, 'view', ['heatmap']) ?? 'dots'); // 'dots' | 'heatmap'
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -228,10 +232,16 @@ export default function ShotCharts() {
     }
   }
 
-  // Load Curry by default on first mount (already cached — instant).
+  // Load the linked player and season, or Curry by default (already cached — instant).
   useEffect(() => {
-    loadPlayer('Stephen Curry');
-  }, []);
+    const linkedSeason = params.get('season');
+    loadPlayer(parseParam.str(params, 'player') ?? 'Stephen Curry',
+      /^\d{4}-\d{2}$/.test(linkedSeason ?? '') ? linkedSeason : undefined);
+  }, [params]);
+
+  // Nothing is written until a player has loaded, so a slow first load
+  // doesn't wipe the link it came from.
+  useUrlSync(resolvedPlayer ? { player: resolvedPlayer, season, view: viewMode === 'heatmap' ? 'heatmap' : null } : null);
 
   function handleSeasonChange(newSeason) {
     setSeason(newSeason);
@@ -269,6 +279,7 @@ export default function ShotCharts() {
         <h2 className="card-title hb-page-title">
           <span className="card-icon"><Icon name="adjust" /></span>
           Shot Chart
+          <CopyLinkButton />
         </h2>
 
         <div className="input-row" style={{ marginBottom: 0 }}>

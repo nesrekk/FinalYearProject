@@ -564,6 +564,25 @@ select,
   margin-right: auto;
 }
 
+/* Copy link (common/CopyLinkButton.jsx): sits at the end of a tool's title row. */
+.copy-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  font-family: var(--font);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.4;
+}
+.copy-link-status {
+  color: var(--negative);
+}
+.copy-link-status:empty {
+  display: none;
+}
+
 /* Season Similarity (SimilaritySection.jsx) */
 .sim-filters {
   display: flex;

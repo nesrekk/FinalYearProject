@@ -5,6 +5,8 @@ import InfoTooltip from '../common/InfoTooltip';
 import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import CopyLinkButton from '../common/CopyLinkButton';
+import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const FORMATS = {
@@ -192,7 +194,24 @@ function OutlierTable({ title, rows, data }) {
     );
 }
 
+// The form from a shared link (utils/useUrlState.js), with defaults for
+// anything missing or invalid.
+function formFromParams(p, o) {
+    const keys = o.stats.map((s) => s.key);
+    const season = (key, fallback) => parseParam.int(p, key, { min: o.seasons.from, max: o.seasons.to }) ?? fallback;
+    return {
+        x: parseParam.oneOf(p, 'x', keys) ?? 'usg_pct',
+        y: parseParam.oneOf(p, 'y', keys) ?? 'ts_pct',
+        from: season('from', 2016),
+        to: season('to', o.seasons.to),
+        minGp: parseParam.int(p, 'gp', { min: 0, max: 82 }) ?? 30,
+        minMpg: parseParam.num(p, 'mpg', { min: 0, max: 48 }) ?? 20,
+        within: p.get('within') !== '0',
+    };
+}
+
 export default function RegressionExplorer() {
+    const params = useInitialParams();
     const [options, setOptions] = useState(null);
     const [optionsError, setOptionsError] = useState('');
     const [form, setForm] = useState(null);
@@ -204,10 +223,15 @@ export default function RegressionExplorer() {
         fetchLeaderboardOptions()
             .then((o) => {
                 setOptions(o);
-                setForm({ x: 'usg_pct', y: 'ts_pct', from: 2016, to: o.seasons.to, minGp: 30, minMpg: 20, within: true });
+                setForm(formFromParams(params, o));
             })
             .catch(() => setOptionsError('The stat list couldn\'t load. Is the impact API (port 8002) running?'));
-    }, []);
+    }, [params]);
+
+    useUrlSync(form && {
+        x: form.x, y: form.y, from: form.from, to: form.to,
+        gp: form.minGp || 0, mpg: form.minMpg || 0, within: form.within ? null : 0,
+    });
 
     useEffect(() => {
         if (!form) return undefined;
@@ -261,6 +285,7 @@ export default function RegressionExplorer() {
                     {data?.method ?? 'Least squares of one stat on another across player-seasons, with standard errors clustered by player.'}
                 </InfoTooltip>
                 <SourceBadge source={data?._source ?? options._source} />
+                <CopyLinkButton />
             </h2>
 
             <div className="lb-presets" aria-label="Presets">

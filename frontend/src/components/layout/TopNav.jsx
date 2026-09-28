@@ -20,13 +20,8 @@ function NavItem({ group, isActive, onNavigate }) {
 
     const go = (pageId, hash) => {
         setOpen(false);
-        onNavigate(pageId);
-        if (hash) {
-            // AnalyticsSection reads location.hash on mount/hashchange to
-            // pick its initial tab — set it after navigation so the page
-            // has mounted and can pick it up.
-            requestAnimationFrame(() => { window.location.hash = hash; });
-        }
+        // `hash` is an Analytics tab; App puts it in the URL with the page.
+        onNavigate(pageId, hash);
     };
 
     return (
@@ -92,8 +87,8 @@ export default function TopNav({ activePage, onNavigate, onGoToLanding }) {
         return () => document.removeEventListener('keydown', onKeyDown);
     }, []);
 
-    const navigate = (pageId) => {
-        onNavigate(pageId);
+    const navigate = (pageId, hash) => {
+        onNavigate(pageId, hash);
         setMobileOpen(false);
     };
 
