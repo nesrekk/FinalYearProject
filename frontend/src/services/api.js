@@ -693,6 +693,26 @@ export async function fetchHotStreaks(params) {
     return response.data;
 }
 
+// ─── Situational Splits (player_situational_splits, situational_split_league) ───
+export async function fetchSituationalOptions() {
+    return getWithCache('situational_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/splits/situational/options`);
+        return response.data;
+    });
+}
+
+// params: { season, split, stat, sort, order, team, limit, offset }
+export async function fetchSituationalLeaderboard(params) {
+    const response = await axios.get(`${IMPACT_BASE}/splits/situational/leaderboard`, { params });
+    return response.data;
+}
+
+export async function fetchSituationalPlayer(playerId, season) {
+    const response = await axios.get(`${IMPACT_BASE}/splits/situational/player/${playerId}`,
+        { params: season ? { season } : {} });
+    return response.data;
+}
+
 // ─── Gravity Index & Spacing Lab ─────────────────────────────────
 export async function fetchGravity(season, topN = 25) {
     const response = await axios.get(

@@ -287,6 +287,10 @@ def get_player_profile(player_id: int):
                                                AND f.game_date = l.game_date
                        WHERE l.player_id = %s AND l.seconds > 0 GROUP BY 1 ORDER BY 1""", (player_id,))
         game_log_seasons = [{"season": s, "games": n} for s, n in cur.fetchall()]
+        # ── Situational splits (home/away, rest, travel, opponent strength): seasons on file ──
+        cur.execute("""SELECT season, count(*) FILTER (WHERE qualified) FROM player_situational_splits
+                       WHERE player_id = %s GROUP BY 1 ORDER BY 1""", (player_id,))
+        split_seasons = [{"season": s, "qualified_rows": n} for s, n in cur.fetchall()]
         # ── On/off: the team with him on vs. off the floor, from the play-by-play lines ──
         cur.execute("""SELECT season, team_abbreviation, games, team_games, minutes_on, minutes_off, poss_on, poss_off,
                               ortg_on, drtg_on, net_on, ortg_off, drtg_off, net_off, on_off_net, on_off_ci_low,
@@ -349,6 +353,7 @@ def get_player_profile(player_id: int):
         "on_off": {"rows": on_off, "qualified_minutes": ON_OFF_MIN_MINUTES, "few_off_minutes": ON_OFF_FEW_OFF},
         "similarity": {"seasons": sim_seasons},
         "game_log": {"seasons": game_log_seasons},
+        "situational_splits": {"seasons": split_seasons},
         "projections": {"rows": projections, "season": projections[0]["season"] if projections else None,
                         "low_weight": PROJECTION_LOW_WEIGHT},
         "breakouts": {
@@ -359,7 +364,7 @@ def get_player_profile(player_id: int):
         "_source": make_source(
             ["player_season_stats", "player_team_stints", "player_bio", "player_awards", "draft_history",
              "player_roles", "greats", "player_shots", "scouting_splits", "defender_dad", "player_gravity",
-             "contract_value", "player_wpa_totals", "player_shot_making", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue", "player_projections"],
+             "contract_value", "player_wpa_totals", "player_shot_making", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue", "player_situational_splits", "player_projections"],
             "nba_api (stats.nba.com), Basketball-Reference via Kaggle, ESPN play-by-play, Kaggle salary datasets",
         ),
     }

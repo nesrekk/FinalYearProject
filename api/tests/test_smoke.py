@@ -1795,3 +1795,54 @@ def test_projections_baseline_beats_last_season_and_covers():
     p = client.get("/player-profile/203999").json()
     assert p["projections"]["season"] == d["season"]
     assert {r["stat"] for r in p["projections"]["rows"]} >= {"min", "pts", "bpm"}
+
+def test_situational_splits_league_effects_and_noise():
+    """player_situational_splits + situational_split_league (scripts/build_situational_splits.py)."""
+    from impact_api import app
+    from situational_splits import SPLITS, STATS
+    client = TestClient(app)
+    opts = client.get("/splits/situational/options").json()
+    _assert_has_source(opts)
+    pooled = {(r["split"], r["stat"]): r for r in opts["pooled"]}
+    assert set(pooled) == {(sp, st) for sp in SPLITS for st in STATS}  # script and API share one catalogue
+    # Home court: small but positive; strong opponents cost points and efficiency.
+    home = pooled[("home", "pts")]
+    assert 0 < home["league_ci_low"] and home["league_diff"] < 1.0
+    assert pooled[("home", "ts_pct")]["league_ci_low"] > 0
+    assert pooled[("opp", "pts")]["league_ci_high"] < 0 and pooled[("opp", "ts_pct")]["league_ci_high"] < 0
+    # 2020-21 was played mostly without fans: its home effect is below the pooled one.
+    lb21 = client.get("/splits/situational/leaderboard", params={"season": 2021, "split": "home", "stat": "pts"}).json()
+    assert lb21["league"]["league_diff"] < home["league_diff"]
+    # Travel is confounded with home/away (long trips end at home less often); the controlled fit is reported.
+    assert pooled[("travel", "pts")]["home_share_a"] < pooled[("travel", "pts")]["home_share_b"]
+    assert pooled[("travel", "pts")]["venue_adj_diff"] is not None and pooled[("home", "pts")]["venue_adj_diff"] is None
+    for r in pooled.values():
+        assert r["chance_outside_95"] > 0 and r["players"] > 300
+        assert r["league_ci_low"] <= r["league_diff"] <= r["league_ci_high"]
+    # Shooting splits are noise: no more standouts than the shuffle, and nothing carries into next season.
+    for sp in SPLITS:
+        assert pooled[(sp, "ts_pct")]["yoy_r"] < 0.15, sp
+    assert pooled[("rest", "ts_pct")]["outside_95"] <= 1.25 * pooled[("rest", "ts_pct")]["chance_outside_95"]
+
+    # Leaderboard: qualified rows only, sorted, bad inputs rejected.
+    lb = client.get("/splits/situational/leaderboard",
+                    params={"season": 2025, "split": "rest", "stat": "pts", "sort": "z", "limit": 30}).json()
+    _assert_has_source(lb)
+    zs = [r["z"] for r in lb["results"]]
+    assert zs == sorted(zs, reverse=True) and all(r["qualified"] for r in lb["results"])
+    assert all(r["games_a"] >= 10 and r["games_b"] >= 10 for r in lb["results"])
+    assert lb["qualified"] == lb["total"] <= lb["stored"]
+    assert client.get("/splits/situational/leaderboard", params={"split": "nope"}).status_code == 400
+    assert client.get("/splits/situational/leaderboard", params={"season": 2010}).status_code == 404
+
+    # One player: the two home/away sides add back to his game log (Jokić, 2024-25).
+    p = client.get("/splits/situational/player/203999", params={"season": 2025}).json()
+    _assert_has_source(p)
+    log = client.get("/games/player-log/203999", params={"season": 2025}).json()
+    home_pts = next(s for s in next(x for x in p["splits"] if x["split"] == "home")["stats"] if s["stat"] == "pts")["row"]
+    assert home_pts["games_a"] + home_pts["games_b"] == log["games"]
+    pts = (home_pts["value_a"] * home_pts["minutes_a"] + home_pts["value_b"] * home_pts["minutes_b"]) / 36
+    assert abs(pts - log["averages"]["pts"] * log["games"]) < 1
+    assert client.get("/splits/situational/player/977").status_code == 404  # Kobe: before the play-by-play lines
+    assert client.get("/player-profile/203999").json()["situational_splits"]["seasons"]
+    assert client.get("/player-profile/977").json()["situational_splits"]["seasons"] == []

@@ -95,6 +95,20 @@ export const SECTIONS = [
                 ],
             },
             {
+                id: 'splits',
+                name: 'Situational splits',
+                open: { page: 'splits', label: 'Situational Splits' },
+                answers: 'Does a player do better at home, worse on back-to-backs, after long trips, or against strong teams, by more than the average player does?',
+                method: 'Every player-season 2020-21 to 2025-26 (player lines rebuilt from play-by-play, joined to the schedule on team and date), four splits: home vs. away; the second night of a back-to-back he also played the first night of vs. 1+ days of team rest; 1,000+ miles traveled since the previous game vs. under 300; that season\'s top-10 vs. bottom-10 teams by average margin. Each side is the ratio of its sums (points per 36 = 36 × points ÷ minutes), the gap is side A minus side B, and its 95% interval treats each game as one draw. The league effect is the average qualified player\'s gap (10+ games a side), weighted by playing time on the smaller side, with a bootstrap interval that resamples whole team-seasons. Two honesty checks per split and stat: how many players stand outside 95% of the league effect against how many do when each player\'s own games are shuffled between the two sides (50 shuffles: what chance produces with these sample sizes), and how well a player\'s gap (vs. average) predicts his gap the next season.',
+                checked: 'League effects, all six seasons pooled: home court is worth +0.23 points per 36 (95% +0.16 to +0.30) and +0.9 TS points, and it was smallest in 2020-21, played mostly without fans (+0.07, range crossing zero). Against top-10 teams players score 1.08 fewer points per 36 and shoot 2.2 TS points worse than against bottom-10 teams. On back-to-backs, the players who play both nights get 0.65 more minutes and shoot the same (TS -0.2 points, range crossing zero): the stars rested on second nights leave minutes to others. Across the 44 split-and-stat pairs, 4,949 player-seasons stood out against 4,551 with the games shuffled (and 3,671 at a flat 5%: a dozen back-to-backs is a small sample, so the shuffle is the fair baseline). 41 of the 44 year-to-year correlations are below 0.1; the highest are blocks (0.19) and three-point attempts (0.16) against strong vs. weak teams, and minutes on back-to-backs (0.17). Checked 2026-09-28.',
+                limits: [
+                    'Descriptive, not causal: a split mixes the situation with who else played (load management on back-to-backs), the score (blowouts against weak teams cut starters\' minutes) and the schedule.',
+                    'Long trips end in a home game 38% of the time, short ones 77%, so the travel split partly measures home court; the page also shows the league effect with home/away held equal (points per 36: -0.28 raw, -0.15 held equal).',
+                    'Opponent strength is the whole season\'s margin, including the game itself. Rest and travel are the team\'s schedule; a back-to-back he sat the first night of is in neither side.',
+                    'Game-by-game data exists only from 2020-21, regular season only.',
+                ],
+            },
+            {
                 id: 'madness',
                 name: 'March Madness model',
                 open: { page: 'analytics', hash: 'madness', label: 'March Madness' },

@@ -67,6 +67,7 @@ from routers import (
     scouting_report,
     shot_charts,
     shot_making,
+    situational_splits,
     spacing_lab,
     team_comparison,
     trade_analyzer,
@@ -111,6 +112,7 @@ for _router_module in (
     aging,
     on_off,
     hot_streaks,
+    situational_splits,
     projections,
 ):
     app.include_router(_router_module.router)

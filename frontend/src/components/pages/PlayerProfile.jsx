@@ -9,6 +9,7 @@ import PlayerHeadshot from '../common/PlayerHeadshot';
 import PlayerName from '../common/PlayerName';
 import ScoutingReportCard from '../common/ScoutingReportCard';
 import ShotMixHistory from '../common/ShotMixHistory';
+import SituationalSplitsBlock from '../common/SituationalSplitsBlock';
 import { ShotMakingInfo, ShotMakingTable } from '../common/ShotMaking';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
@@ -779,6 +780,11 @@ function missingReasons(d) {
             ? `Play-by-play lines cover ${span(cov.on_off)}; ${career}.`
             : `No game with on-court minutes in the play-by-play lines (${span(cov.on_off)}).`]);
     }
+    if (d.situational_splits && !d.situational_splits.seasons.length) {
+        out.push(['Situational splits', endedBefore(cov.game_lines.from)
+            ? `Game-by-game lines start in ${label(cov.game_lines.from)} (rebuilt from ESPN play-by-play); ${career}.`
+            : `Needs a season with 3+ games on both sides of a split (home and away, say) in the play-by-play lines (${span(cov.game_lines)}).`]);
+    }
     if (!d.similarity.seasons.length) {
         out.push(['Similar seasons', endedBefore(2010)
             ? `Needs usage, net rating, assist % and rebound %, recorded from 2009-10 on; ${career}.`
@@ -844,6 +850,7 @@ export default function PlayerProfile({ onNavigate }) {
         ['clutch', 'Clutch', !!d.clutch],
         ['projection', 'Next season', (d.projections?.rows.length ?? 0) > 0],
         ['onoff', 'On/off', (d.on_off?.rows.length ?? 0) > 0],
+        ['splits', 'Splits', (d.situational_splits?.seasons.length ?? 0) > 0],
         ['similar', 'Similar', d.similarity.seasons.length > 0],
         ['breakouts', 'Breakouts', d.breakouts.flags.length > 0],
     ].filter(([, , ok]) => ok);
@@ -886,6 +893,9 @@ export default function PlayerProfile({ onNavigate }) {
             {d.clutch && <Clutch c={d.clutch} coverage={d.coverage.clutch} onNavigate={onNavigate} />}
             {(d.projections?.rows.length ?? 0) > 0 && <NextSeason block={d.projections} player={d.player} onNavigate={onNavigate} />}
             {(d.on_off?.rows.length ?? 0) > 0 && <OnOff block={d.on_off} coverage={d.coverage.on_off} onNavigate={onNavigate} />}
+            {(d.situational_splits?.seasons.length ?? 0) > 0 && (
+                <SituationalSplitsBlock key={d.player.player_id} playerId={d.player.player_id} seasons={d.situational_splits.seasons} />
+            )}
             {d.similarity.seasons.length > 0 && <Similar player={d.player} seasons={d.similarity.seasons} />}
             {d.breakouts.flags.length > 0 && <Breakouts block={d.breakouts} />}
 

@@ -1,0 +1,38 @@
+/* Situational Splits: the page (pages/SituationalSplits.jsx) and the
+   profile block (common/SituationalSplitsBlock.jsx). Paper/Ink tokens only. */
+
+.sp-tabs { margin: 0; flex-wrap: wrap; }
+.sp-def { margin: var(--space-2) 0 0; font-size: 0.85rem; line-height: 1.5; }
+.sp-h3 { margin: var(--space-6) 0 0; font-size: 1.05rem; font-weight: 700; color: var(--text); }
+
+.sp-league {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+}
+.sp-league > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  min-width: 0;
+}
+.sp-league dt {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.sp-league dd { margin: 0; font-size: 1.6rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.sp-league span { font-size: 0.78rem; color: var(--text-2); line-height: 1.4; }
+
+.sp-table td { font-variant-numeric: tabular-nums; }
+.sp-table tr.sp-noise td { color: var(--text-3); }
+.sp-table tr.sp-noise .lb-stat { font-weight: 400; }
+.sp-table td.sp-pos, .sp-table td.pp-pos { color: var(--positive); }
+.sp-table td.sp-neg, .sp-table td.pp-neg { color: var(--negative); }
+.sp-table tr.sp-current td { background: var(--surface-2, var(--surface)); font-weight: 600; }
