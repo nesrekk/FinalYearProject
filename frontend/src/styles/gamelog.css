@@ -89,3 +89,56 @@
 /* Table cells default to --text (theme.css); keep the result colour. */
 .gl-table td.pp-pos { color: var(--positive); }
 .gl-table td.pp-neg { color: var(--negative); }
+
+/* ── Hot streak card (common/HotStreakCard.jsx) ── */
+.hs-card {
+  margin: 0 0 var(--space-5);
+  padding: var(--space-4);
+  border: 1.5px solid var(--line);
+  background: var(--surface-2);
+}
+.hs-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.hs-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.hs-asof .input-field { min-width: 150px; }
+.hs-verdict { margin: var(--space-3) 0; color: var(--text-2); line-height: 1.55; }
+.hs-verdict--unusual { color: var(--text); font-weight: 600; }
+.hs-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+.hs-tiles > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  min-width: 0;
+}
+.hs-tiles dt {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.hs-tiles dd { margin: 0; font-size: 1.6rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.hs-tiles dd.pp-pos { color: var(--positive); }
+.hs-tiles dd.pp-neg { color: var(--negative); }
+.hs-tiles span { font-size: 0.78rem; color: var(--text-2); line-height: 1.4; }

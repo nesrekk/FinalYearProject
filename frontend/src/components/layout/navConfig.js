@@ -27,6 +27,7 @@ export const NAV_GROUPS = [
             { id: 'aging', label: 'Aging Curves', icon: 'timeline' },
             { id: 'statline', label: 'Stat Line Finder', icon: 'manage_search' },
             { id: 'gamefinder', label: 'Game Finder', icon: 'event_note' },
+            { id: 'hotstreaks', label: 'Hot Streak Checker', icon: 'local_fire_department' },
             { id: 'shotcharts', label: 'Shot Charts', icon: 'adjust' },
             { id: 'draft', label: 'Draft Value Guide', icon: 'school' },
             { id: 'rookies', label: 'Rookie Class Tracker', icon: 'eco' },

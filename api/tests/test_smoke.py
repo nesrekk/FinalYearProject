@@ -1390,6 +1390,52 @@ def test_game_log_and_finder_match_known_games():
     for bad in ({"f": "pts;drop table x:gte:1"}, {"f": "pts:like:1"}, {"sort": "pts desc"}, {"team": "XXX"},
                 {"mode": "streaks"}):
         assert client.get("/games/finder", params=bad).status_code in (400, 422), bad
+
+
+def test_hot_streak_checker_persistence_and_noise():
+    """hot_streak_persistence (scripts/build_hot_streak_persistence.py) + /games/hot-streak(s)."""
+    from impact_api import app
+    from hot_streaks import STATS, WINDOWS
+    client = TestClient(app)
+    opts = client.get("/games/hot-streak/options").json()
+    _assert_has_source(opts)
+    per = {(r["stat"], r["window_games"]): r for r in opts["persistence"]}
+    assert set(per) == {(s, w) for s in STATS for w in WINDOWS}  # script and API share one catalogue
+    for r in per.values():
+        # Held out 2024-25 and 2025-26: beats "stays at baseline" and "keeps his last-N rate".
+        assert r["rmse_model"] < r["rmse_baseline"] and r["rmse_model"] < r["rmse_window"], r["stat"]
+        assert r["slope_lo"] <= r["slope"] <= r["slope_hi"]
+    for w in WINDOWS:
+        # Shooting runs are mostly noise; minutes (role) carry on far more.
+        assert per[("fg3_pct", w)]["slope"] < 0.35 and per[("ts_pct", w)]["slope"] < 0.35
+        assert per[("min", w)]["slope"] > per[("fg3_pct", w)]["slope"] + 0.3
+    assert per[("fg3_pct", 5)]["slope"] < 0.15
+
+    # One player, mid-season, with his next games to compare.
+    d = client.get("/games/hot-streak/201939", params={"season": 2025, "stat": "fg3_pct", "window": 10,
+                                                       "as_of": "2025-01-20"}).json()
+    _assert_has_source(d)
+    assert d["qualified"] and d["window"]["games"] == 10 and d["what_happened_next"]["games"] == 10
+    per_d = d["persistence"]
+    assert abs(per_d["expected_next"] - (d["baseline"]["value"] + per_d["intercept"] + per_d["share"] * d["gap"])) < 1e-3
+    assert 0 <= d["unusual"]["p"] <= 1 and d["verdict"]
+    early = client.get("/games/hot-streak/201939", params={"season": 2025, "window": 10, "as_of": "2024-11-01"}).json()
+    assert early["qualified"] is False and "baseline" in early["reason"]
+
+    # League list: 10-game 3P% runs are about as often "significant" as chance alone predicts.
+    lg = client.get("/games/hot-streaks", params={"season": 2025, "stat": "fg3_pct", "window": 10,
+                                                  "as_of": "2025-01-15"}).json()
+    s = lg["summary"]
+    assert s["tested"] > 150 and s["significant"] <= 1.5 * s["expected_by_chance"]
+    assert lg["next_games"] and lg["next_games"]["share_carried"] < 0.3
+    zs = [r["unusual"]["z"] for r in lg["results"]]
+    assert zs == sorted(zs, reverse=True) and all(r["gap"] > 0 for r in lg["results"])
+    cold = client.get("/games/hot-streaks", params={"season": 2025, "stat": "pts", "direction": "cold"}).json()
+    assert all(r["gap"] < 0 for r in cold["results"])
+    assert client.get("/games/hot-streaks", params={"stat": "nope"}).status_code == 400
+    assert client.get("/games/hot-streaks", params={"window": 7}).status_code == 400
+    assert client.get("/games/hot-streaks", params={"season": 2010}).status_code == 404
+    assert client.get("/player-profile/resolve", params={"name": "jokic"}).json()["player_id"] == 203999
     assert client.get("/player-profile/resolve", params={"name": "jokic"}).json()["player_id"] == 203999
     assert client.get("/player-profile/resolve", params={"name": "jokic"}).json()["player_id"] == 203999
 

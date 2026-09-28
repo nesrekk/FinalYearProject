@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchPlayerGameLog } from '../../services/api';
 import Loader from '../Loader';
+import HotStreakCard from './HotStreakCard';
 import InfoTooltip from './InfoTooltip';
 import TableExport from './TableExport';
 import TeamLogo from './TeamLogo';
@@ -34,7 +35,7 @@ const CHART_STATS = {
         (w) => ratio(sum(w, 'pts'), 2 * (sum(w, 'fga') + 0.44 * sum(w, 'fta'))), 'pct'],
     fg3_pct: ['3P%', (r) => (r.fg3a ? r.fg3m / r.fg3a : null), (w) => ratio(sum(w, 'fg3m'), sum(w, 'fg3a')), 'pct'],
 };
-const WINDOWS = [5, 10];
+const WINDOWS = [5, 10, 20];
 
 // 1, 2, 2.5 or 5 times a power of ten, at least `raw`.
 function niceStep(raw) {
@@ -192,6 +193,7 @@ export default function GameLogBlock({ playerId, seasons, nbaGp = {} }) {
                         )}
                     </p>
                     {data.rows.length > 1 && <RollingChart rows={data.rows} stat={stat} win={win} seasonValue={seasonValue} />}
+                    <HotStreakCard key={season} playerId={playerId} season={season} stat={stat} win={win} dates={data.rows.map((r) => r.date)} />
                     <TableExport name={`${data.player_name} game log ${label(season)}`} />
                     <div className="table-wrapper pp-scroll">
                         <table className="data-table lb-table pp-table gl-table">

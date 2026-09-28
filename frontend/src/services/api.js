@@ -673,6 +673,26 @@ export async function fetchGameFinder(params) {
     return response.data;
 }
 
+// ─── Hot Streak Checker (hot_streak_persistence) ─────────────────
+export async function fetchHotStreakOptions() {
+    return getWithCache('hot_streak_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/games/hot-streak/options`);
+        return response.data;
+    });
+}
+
+// params: { season, stat, window, as_of }
+export async function fetchHotStreak(playerId, params) {
+    const response = await axios.get(`${IMPACT_BASE}/games/hot-streak/${playerId}`, { params });
+    return response.data;
+}
+
+// params: { season, stat, window, as_of, direction, limit }
+export async function fetchHotStreaks(params) {
+    const response = await axios.get(`${IMPACT_BASE}/games/hot-streaks`, { params });
+    return response.data;
+}
+
 // ─── Gravity Index & Spacing Lab ─────────────────────────────────
 export async function fetchGravity(season, topN = 25) {
     const response = await axios.get(

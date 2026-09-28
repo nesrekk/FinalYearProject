@@ -32,6 +32,7 @@ from routers import (
     games_misc,
     greats,
     garbage_time,
+    hot_streaks,
     guess_the_game,
     guess_the_player,
     hall_of_fame,
@@ -108,6 +109,7 @@ for _router_module in (
     game_log,
     aging,
     on_off,
+    hot_streaks,
 ):
     app.include_router(_router_module.router)
 
