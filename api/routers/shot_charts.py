@@ -152,3 +152,84 @@ def get_league_shot_zones(season: int):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Live league shot fetch failed: {e}")
     return {"season": season_label, "zones": zones}
+
+
+# A season with fewer tracked attempts than this is shown greyed out: one
+# zone's share can swing by 5+ points on a couple of dozen shots.
+ZONE_HISTORY_MIN_FGA = 200
+
+
+@router.get("/shots/player/{player_name}/zone-history")
+def get_player_zone_history(player_name: str):
+    """A player's shot mix season by season: attempts, makes and share of
+    their shots in each of the five zones, regular season only (game_id
+    '002…'), from the stored player_shots rows (no live fetch). Each season
+    carries the league's own share per zone (league_zone_mix) for context.
+    A season with several teams is one row (player_shots is per player)."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        player_id, resolved_name = find_player(cur, player_name)
+        cur.execute(
+            """SELECT season, loc_x, loc_y, shot_distance, shot_type, shot_zone_basic, shot_made_flag
+               FROM player_shots WHERE player_id = %s AND game_id LIKE '002%%'""",
+            (int(player_id),),
+        )
+        cols = ["season", "loc_x", "loc_y", "shot_distance", "shot_type", "shot_zone_basic", "shot_made_flag"]
+        by_season = {}
+        for row in cur.fetchall():
+            s = dict(zip(cols, row))
+            by_season.setdefault(s["season"], []).append(s)
+        cur.execute("SELECT season, zone, fgm, fga FROM league_zone_mix")
+        league = {}
+        for season, zone, fgm, fga in cur.fetchall():
+            league.setdefault(season, {})[zone] = (fgm, fga)
+        cur.execute("SELECT min(season), max(season) FROM league_zone_mix")
+        coverage = cur.fetchone()
+        cur.execute(
+            "SELECT count(DISTINCT season) FROM player_season_stats WHERE player_id = %s AND season < %s",
+            (int(player_id), int(coverage[0][:4]) + 1),
+        )
+        seasons_before = cur.fetchone()[0]
+
+    if not by_season:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No regular-season shot locations stored for {resolved_name}. "
+                   f"Shot data covers {coverage[0]} to {coverage[1]}.",
+        )
+
+    seasons = []
+    for season in sorted(by_season):
+        zones = shots_lib.compute_zone_stats(by_season[season])
+        fga = sum(z["fga"] for z in zones)
+        fgm = sum(z["fgm"] for z in zones)
+        lg = league.get(season, {})
+        lg_fga = sum(v[1] for v in lg.values())
+        for z in zones:
+            z["share"] = round(z["fga"] / fga, 4) if fga else None
+            lz = lg.get(z["zone"])
+            z["league_share"] = round(lz[1] / lg_fga, 4) if lz and lg_fga else None
+            z["league_fg_pct"] = round(lz[0] / lz[1], 3) if lz and lz[1] else None
+        seasons.append({
+            "season": season,
+            "fga": fga,
+            "fgm": fgm,
+            "fg_pct": round(fgm / fga, 3) if fga else None,
+            "small_sample": fga < ZONE_HISTORY_MIN_FGA,
+            "zones": zones,
+        })
+
+    return {
+        "player_id": int(player_id),
+        "player_name": resolved_name,
+        "zones": shots_lib.ZONES,
+        "min_fga": ZONE_HISTORY_MIN_FGA,
+        "coverage": {"first": coverage[0], "last": coverage[1]},
+        # Career seasons before shot locations were recorded (none are shown).
+        "seasons_before_coverage": int(seasons_before),
+        "seasons": seasons,
+        "_source": make_source(
+            ["player_shots", "league_zone_mix"],
+            "stats.nba.com shot locations, regular season",
+        ),
+    }

@@ -4,6 +4,7 @@ import Icon from '../common/Icon';
 import PlayerName from '../common/PlayerName';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
+import ShotMixHistory from '../common/ShotMixHistory';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 function clamp(n, lo, hi) {
@@ -499,6 +500,8 @@ export default function ShotCharts() {
           Showing up to 5,000 shots for performance.
         </p>
       </div>
+
+      {resolvedPlayer && <ShotMixHistory key={resolvedPlayer} playerName={resolvedPlayer} />}
     </div>
   );
 }

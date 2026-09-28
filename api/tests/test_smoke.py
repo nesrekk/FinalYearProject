@@ -1175,3 +1175,31 @@ def test_breakout_detector_known_seasons():
     assert all(x["score"] < 0 for x in down["results"])
     assert client.get("/explore/breakouts", params={"season": 1950}).status_code == 404
     assert client.get("/explore/breakouts", params={"stats": "age"}).status_code == 400
+
+
+def test_shot_zone_history_matches_box_scores():
+    """Shot mix over a career: regular-season shots per season by zone, with
+    the league's own mix. Stored shots should match box-score FGA closely."""
+    from impact_api import app
+    client = TestClient(app)
+    data = client.get("/shots/player/Stephen Curry/zone-history").json()
+    _assert_has_source(data)
+    assert data["zones"] == ["Restricted Area", "In The Paint (Non-RA)", "Mid-Range", "Corner 3", "Above the Break 3"]
+    seasons = {s["season"]: s for s in data["seasons"]}
+    assert data["seasons_before_coverage"] == 0
+    # 2015-16: 1,598 FGA (Basketball-Reference); more than half of them threes.
+    s16 = seasons["2015-16"]
+    assert abs(s16["fga"] - 1598) <= 5
+    assert sum(z["fga"] for z in s16["zones"]) == s16["fga"]
+    assert abs(sum(z["share"] for z in s16["zones"]) - 1) < 0.01
+    threes = sum(z["share"] for z in s16["zones"] if z["zone"].endswith("3"))
+    assert threes > 0.5
+    # League 3PA share 2015-16 was 0.285 (Basketball-Reference 3PAr).
+    lg3 = sum(z["league_share"] for z in s16["zones"] if z["zone"].endswith("3"))
+    assert abs(lg3 - 0.285) < 0.01
+    # 2019-20: five games, flagged as a small sample.
+    assert seasons["2019-20"]["small_sample"] and not s16["small_sample"]
+
+    hakeem = client.get("/shots/player/Hakeem Olajuwon/zone-history").json()
+    assert hakeem["seasons_before_coverage"] == 12
+    assert client.get("/shots/player/Magic Johnson/zone-history").status_code == 404

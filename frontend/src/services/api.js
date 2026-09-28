@@ -791,6 +791,14 @@ export async function fetchPlayerShots(playerName, season) {
     return response.data;
 }
 
+// Stored shots only (no live fetch), so it's a normal quick call.
+export async function fetchShotZoneHistory(playerName) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/shots/player/${encodeURIComponent(playerName)}/zone-history`
+    );
+    return response.data;
+}
+
 export async function fetchHofCareerLeaders(stat, limit = 50) {
     return getWithCache(`hof_career_${stat}_${limit}`, 10 * 60 * 1000, async () => {
         const response = await axios.get(`${IMPACT_BASE}/hof/career-leaders`, { params: { stat, limit } });
