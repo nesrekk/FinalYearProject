@@ -388,6 +388,14 @@ export async function fetchClutchWpaLeaderboard(topN = 25) {
     return response.data;
 }
 
+export async function fetchClutchSplit(minClutchChances = 100) {
+    const response = await axios.get(
+        `${IMPACT_BASE}/players/clutch-split`,
+        { params: { min_clutch_chances: minClutchChances } }
+    );
+    return response.data;
+}
+
 // ─── Game Win-Probability Replay ───────────────────────────────────
 export async function fetchWpReplayList(season) {
     const response = await axios.get(

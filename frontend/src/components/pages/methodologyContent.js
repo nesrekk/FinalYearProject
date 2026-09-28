@@ -208,6 +208,20 @@ export const SECTIONS = [
         blurb: 'What happened, measured carefully. None of these claims a cause.',
         items: [
             {
+                id: 'clutch',
+                name: 'Clutch vs. non-clutch',
+                open: { page: 'analytics', hash: 'wpa', label: 'Clutch WPA' },
+                answers: 'Does a player do better or worse in clutch time than in the rest of the game?',
+                method: 'Each play\'s WPA divided by its leverage (the win-probability value of one point at that moment, from the win-probability model), summed over a player\'s shots, free throws and turnovers: WPA per scoring chance, in points, at equal leverage. Clutch lift = clutch rate − non-clutch rate − the league\'s own change (0.843 vs 0.914), with a 95% interval clustered by game.',
+                checked: 'The unit reads as points: the league\'s 0.914 per chance outside clutch time sits inside its real points per (FGA + FTA + TOV), 0.90-0.93 in 2020-21 to 2025-26. With 100+ clutch chances, 14 of 186 players land outside zero at 95%, where about 9 would by chance; lift divided by its standard error has an SD of 1.09 (1.0 would be pure noise). Checked 2026-09-28.',
+                limits: [
+                    'Clutch plays swing win probability 3.7 times as much as an average play, so raw clutch WPA mostly counts how many clutch plays a player got; the lift removes that.',
+                    'The model doesn\'t know who has the ball, so a miss or turnover costs nothing: this measures scoring, not defense or decisions.',
+                    'Pooled over 2020-21 to 2025-26, not per season.',
+                    'About 1 in 20 players clears the 95% bar by chance, so one "better" or "worse" verdict is weak evidence.',
+                ],
+            },
+            {
                 id: 'pipeline',
                 name: 'College → NBA Pipeline',
                 open: { page: 'analytics', hash: 'pipeline', label: 'College Pipeline' },

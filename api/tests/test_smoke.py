@@ -238,6 +238,27 @@ def test_impact_clutch_wpa():
     assert "results" in data
 
 
+def test_impact_clutch_split():
+    from impact_api import app
+    client = TestClient(app)
+    assert client.get("/players/clutch-split", params={"min_clutch_chances": 7}).status_code == 400
+    resp = client.get("/players/clutch-split", params={"min_clutch_chances": 100})
+    assert resp.status_code == 200
+    data = resp.json()
+    league = data["league"]
+    # Leverage-neutral WPA per scoring chance is in points; the league's real
+    # points / (FGA + FTA + TOV) was 0.90-0.93 in 2020-21 to 2025-26.
+    assert 0.85 < league["nonclutch_pts_rate"] < 0.97
+    assert league["clutch_pts_rate"] < league["nonclutch_pts_rate"]
+    assert league["clutch_leverage_ratio"] > 2
+    results = data["results"]
+    assert len(results) == data["n_players"] > 50
+    assert all(r["clutch_chances"] >= 100 for r in results)
+    assert all(r["ci_low"] <= r["clutch_lift"] <= r["ci_high"] for r in results)
+    # Clutch differences are mostly noise: few players clear 95%.
+    assert data["n_outside_zero"] < 0.2 * data["n_players"]
+
+
 def test_impact_lineup_chemistry():
     from impact_api import app
     resp = TestClient(app).get("/lineups/chemistry", params={"top_n": 5})

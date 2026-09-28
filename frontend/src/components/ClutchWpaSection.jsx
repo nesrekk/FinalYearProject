@@ -7,6 +7,7 @@ import PlayerHeadshot from './common/PlayerHeadshot';
 import TeamLogo from './common/TeamLogo';
 import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
+import ClutchSplitSection from './ClutchSplitSection';
 
 function wpaColor(v) {
     if (v == null) return 'var(--text-muted)';
@@ -108,6 +109,8 @@ export default function ClutchWpaSection() {
                     </div>
                 </div>
             )}
+
+            <ClutchSplitSection />
         </div>
     );
 }
