@@ -7,6 +7,8 @@ Endpoints:
     GET /similarity/season/{player_name}/{season}  — Top 10 similar seasons
     GET /similarity/season-profile/{player_name}/{season} — Same method, computed
         live, with filters and each season's stat profile
+    GET /similarity/stat-line?line=pts:25,ts_pct:0.6,ast:8 — Closest real
+        player-seasons to a typed stat line
     GET /similarity/career/{player_name}           — Top 10 similar careers
 
 Usage:
@@ -594,6 +596,223 @@ def get_season_similarity_profile(player_name: str, season: int, top_n: int = 10
             "usage and net rating exist."
         ),
         "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com)"),
+    }
+
+
+# ─── Similar seasons from a typed stat line ─────────────────────────────────
+# "25 pts, 60% TS, 8 ast" -> the closest real player-seasons. Same idea as the
+# season matrix above (each stat z-scored within its own season, over every
+# player-season that has it, ddof=1), but with the box-score stats people
+# actually type. The typed line is z-scored against one chosen season, so
+# "25 points in 2025-26" matches seasons with the same standing in their own
+# year, not the same raw number.
+
+# key -> (label, format, first_season, attempts_column). First seasons and
+# attempt floors match routers/leaderboard.py STATS / ATTEMPT_DEFAULTS
+# (a smoke test checks they agree).
+LINE_STATS = {
+    "pts": ("Points", "num1", 1950, None),
+    "reb": ("Rebounds", "num1", 1951, None),
+    "ast": ("Assists", "num1", 1950, None),
+    "stl": ("Steals", "num1", 1974, None),
+    "blk": ("Blocks", "num1", 1974, None),
+    "tov": ("Turnovers", "num1", 1978, None),
+    "fg3a": ("3-point attempts", "num1", 1980, None),
+    "fg3_pct": ("3-point %", "pct", 1980, "fg3a"),
+    "ft_pct": ("Free-throw %", "pct", 1950, "fta"),
+    "ts_pct": ("True shooting %", "pct", 1950, "fga"),
+    "usg_pct": ("Usage %", "pct", 1978, None),
+    "ast_pct": ("Assist %", "pct", 1965, None),
+    "reb_pct": ("Rebound %", "pct", 1971, None),
+    "net_rating": ("Net rating", "signed1", 2010, None),
+    "min": ("Minutes", "num1", 1952, None),
+    "age": ("Age", "int", 1950, None),
+}
+LINE_ATTEMPTS = {"fga": 5.0, "fg3a": 2.0, "fta": 2.0}  # per game, as in the Leaderboard Builder
+LINE_MAX_STATS = 10
+
+
+@lru_cache(maxsize=1)
+def _line_matrix():
+    """Every player-season with each LINE_STATS stat as raw value and
+    within-season z (NaN where it isn't recorded yet, or a shooting % is
+    below its attempts floor), plus each season's mean and SD per stat."""
+    keys = list(LINE_STATS)
+    att = sorted(LINE_ATTEMPTS)
+    cols = keys + [a for a in att if a not in keys]
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT player_id, player_name, season, team_abbreviation, gp, {", ".join(cols)}
+            FROM player_season_stats ORDER BY player_id, season;
+        """)
+        rows = cur.fetchall()
+    meta = [r[:5] for r in rows]
+    vals = np.array([[np.nan if v is None else float(v) for v in r[5:]] for r in rows])
+    ci = {c: i for i, c in enumerate(cols)}
+    seasons = np.array([m[2] for m in meta])
+    raw = vals[:, :len(keys)].copy()
+    for k, key in enumerate(keys):
+        _label, _fmt, first, attempts = LINE_STATS[key]
+        raw[seasons < first, k] = np.nan
+        if attempts:
+            raw[~(np.nan_to_num(vals[:, ci[attempts]]) >= LINE_ATTEMPTS[attempts]), k] = np.nan
+    z = np.full_like(raw, np.nan)
+    norms = {}  # season -> (mean, SD, n) per stat
+    for s in np.unique(seasons):
+        mask = seasons == s
+        block = raw[mask]
+        mean = np.full(len(keys), np.nan)
+        std = np.full(len(keys), np.nan)
+        n = (~np.isnan(block)).sum(axis=0)
+        for k in range(len(keys)):
+            v = block[:, k][~np.isnan(block[:, k])]
+            if len(v) >= 2 and v.std(ddof=1) > 0:
+                mean[k], std[k] = v.mean(), v.std(ddof=1)
+        z[mask] = (block - mean) / std
+        norms[int(s)] = (mean, std, n)
+    return meta, raw, z, norms
+
+
+def _parse_line(line: str):
+    parsed = {}
+    for part in (line or "").split(","):
+        if not part.strip():
+            continue
+        key, _, value = part.partition(":")
+        key = key.strip()
+        if key not in LINE_STATS:
+            raise HTTPException(status_code=400, detail=f"Unknown stat '{key}'. Use: {', '.join(LINE_STATS)}.")
+        if key in parsed:
+            raise HTTPException(status_code=400, detail=f"'{key}' is given twice.")
+        try:
+            v = float(value)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"'{key}' needs a number, e.g. {key}:25.")
+        if not np.isfinite(v):
+            raise HTTPException(status_code=400, detail=f"'{key}' needs a finite number.")
+        if LINE_STATS[key][1] == "pct" and not 0 <= v <= 1:
+            raise HTTPException(status_code=400, detail=f"'{key}' is a share between 0 and 1 (0.6 = 60%).")
+        parsed[key] = v
+    if not parsed:
+        raise HTTPException(status_code=400, detail="Type at least one stat, e.g. line=pts:25,ts_pct:0.6,ast:8.")
+    if len(parsed) > LINE_MAX_STATS:
+        raise HTTPException(status_code=400, detail=f"At most {LINE_MAX_STATS} stats.")
+    return parsed
+
+
+def _line_catalogue():
+    return [{"key": k, "label": v[0], "format": v[1], "first_season": v[2],
+             "attempts": v[3], "min_attempts": LINE_ATTEMPTS.get(v[3])}
+            for k, v in LINE_STATS.items()]
+
+
+@app.get("/similarity/stat-line/options")
+def stat_line_options():
+    """The stats a line can use and the seasons it can be read in."""
+    _meta, _raw, _z, norms = _line_matrix()
+    return {"stats": _line_catalogue(), "seasons": {"from": min(norms), "to": max(norms)},
+            "max_stats": LINE_MAX_STATS,
+            "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Basketball-Reference")}
+
+
+@app.get("/similarity/stat-line")
+def similar_to_stat_line(line: str, season: int | None = None, season_from: int | None = None,
+                         season_to: int | None = None, min_gp: int = 20, one_per_player: bool = True,
+                         top_n: int = 25):
+    """
+    Closest real player-seasons to a typed stat line.
+
+    line = comma-separated key:value pairs (percentages as shares:
+    ts_pct:0.6). season = the season the line is read in (default: latest).
+    Distance = root-mean-square gap in within-season z-scores over the
+    typed stats: 0 = the same standing on every stat, 1 = one standard
+    deviation apart on a typical stat.
+    """
+    parsed = _parse_line(line)
+    keys = list(LINE_STATS)
+    cols = [keys.index(k) for k in parsed]
+    top_n = max(1, min(top_n, 100))
+    min_gp = max(0, min_gp)
+
+    meta, raw, z, norms = _line_matrix()
+    first = max(LINE_STATS[k][2] for k in parsed)
+    last = max(norms)
+    label = lambda y: f"{y - 1}-{str(y)[-2:]}"  # noqa: E731
+    limiting = max(parsed, key=lambda k: LINE_STATS[k][2])
+    if season is None:
+        season = last
+    if not first <= season <= last:
+        raise HTTPException(status_code=400, detail=(
+            f"{LINE_STATS[limiting][0]} is recorded from {label(first)} on; pick a season from "
+            f"{label(first)} to {label(last)}."))
+    lo = max(first, season_from or first)
+    hi = min(last, season_to or last)
+    if lo > hi:
+        raise HTTPException(status_code=400, detail="The season range is empty.")
+
+    mean, std, n_season = norms[season]
+    x = np.array([parsed[k] for k in parsed])
+    xz = (x - mean[cols]) / std[cols]
+
+    seasons = np.array([m[2] for m in meta])
+    gp = np.array([m[4] or 0 for m in meta])
+    zc = z[:, cols]
+    keep = (~np.isnan(zc).any(axis=1)) & (seasons >= lo) & (seasons <= hi) & (gp >= min_gp)
+    cand = np.flatnonzero(keep)
+    gaps = zc[cand] - xz
+    dist = np.sqrt((gaps ** 2).mean(axis=1))
+    order = np.argsort(dist, kind="stable")
+    if one_per_player:
+        seen = set()
+        order = [o for o in order if not (meta[cand[o]][0] in seen or seen.add(meta[cand[o]][0]))]
+    order = order[:top_n]
+
+    results = []
+    for rank, o in enumerate(order, start=1):
+        j = cand[o]
+        pid, name, s, team, g = meta[j]
+        g_row = gaps[o]
+        results.append({
+            "rank": rank,
+            "player_id": pid,
+            "player_name": name,
+            "season": s,
+            "team": team,
+            "gp": g,
+            "distance": round(float(dist[o]), 3),
+            "stats": {k: {"value": round(float(raw[j, c]), 4), "z": round(float(z[j, c]), 2),
+                          "gap_z": round(float(g_row[n]), 2)}
+                      for n, (k, c) in enumerate(zip(parsed, cols))},
+            # Shares of the squared distance: which stats the match is (not) close on.
+            "share_of_distance": {k: (round(float(g_row[n] ** 2 / (g_row ** 2).sum()), 3)
+                                      if (g_row ** 2).sum() > 0 else 0.0)
+                                  for n, k in enumerate(parsed)},
+        })
+
+    return {
+        "line": [
+            {"key": k, "label": LINE_STATS[k][0], "format": LINE_STATS[k][1], "value": parsed[k],
+             "z": round(float(xz[n]), 2), "season_mean": round(float(mean[c]), 4),
+             "season_sd": round(float(std[c]), 4), "season_n": int(n_season[c])}
+            for n, (k, c) in enumerate(zip(parsed, cols))
+        ],
+        "season": season,
+        "range": {"from": lo, "to": hi},
+        "filters": {"min_gp": min_gp, "one_per_player": one_per_player, "top_n": top_n},
+        "pool": int(len(cand)),
+        "results": results,
+        "stats": _line_catalogue(),
+        "seasons": {"from": min(norms), "to": last},
+        "method": (
+            "Each stat is z-scored within its own season (how many standard deviations from that season's "
+            "average, over every player-season that has it; shooting percentages only for players above an "
+            "attempts floor). Your line is z-scored against the season you pick, and every real player-season "
+            "is compared on the stats you typed only. Distance = root-mean-square gap in those z-scores: 0 = "
+            "the same standing on every stat, 1 = a typical stat one standard deviation away. Season Similarity "
+            "uses the cosine, which rewards a similar overall profile; this matches levels, stat by stat."
+        ),
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Basketball-Reference"),
     }
 
 

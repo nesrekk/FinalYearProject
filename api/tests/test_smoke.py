@@ -143,6 +143,47 @@ def test_similarity_season_profile_matches_stored_and_filters():
     assert "2009-10" in resp.json()["detail"]
 
 
+def test_similarity_stat_line_finds_real_seasons():
+    from similarity_api import app, LINE_STATS, LINE_ATTEMPTS
+    from routers.leaderboard import STATS, ATTEMPT_DEFAULTS
+    # First seasons and attempt floors must match the Leaderboard catalogue.
+    for k, (_label, _fmt, first, att) in LINE_STATS.items():
+        assert STATS[k][3] == first and STATS[k][5] == att, k
+    assert LINE_ATTEMPTS == ATTEMPT_DEFAULTS
+    client = TestClient(app)
+
+    # A real season's own line, read in its own season, finds itself at 0.
+    resp = client.get("/similarity/stat-line", params={
+        "line": "pts:30.1,ast:6.7,ts_pct:0.669,fg3a:11.2", "season": 2016})
+    assert resp.status_code == 200
+    data = resp.json()
+    _assert_has_source(data)
+    top = data["results"][0]
+    assert (top["player_name"], top["season"], top["distance"]) == ("Stephen Curry", 2016, 0.0)
+    assert [x["key"] for x in data["line"]] == ["pts", "ast", "ts_pct", "fg3a"]
+    assert all(x["season_n"] > 100 for x in data["line"])
+    dists = [r["distance"] for r in data["results"]]
+    assert dists == sorted(dists)
+    ids = [r["player_id"] for r in data["results"]]
+    assert len(ids) == len(set(ids))  # one season per player by default
+    assert all(r["gp"] >= 20 for r in data["results"])
+    assert all(abs(sum(r["share_of_distance"].values()) - 1) < 0.01 for r in data["results"][1:])
+
+    data = client.get("/similarity/stat-line", params={"line": "pts:50.4,reb:25.7", "season": 1962}).json()
+    assert (data["results"][0]["player_name"], data["results"][0]["season"]) == ("Wilt Chamberlain", 1962)
+
+    # Season range: every match inside it.
+    data = client.get("/similarity/stat-line", params={
+        "line": "blk:3,reb:12", "season_from": 2015, "season_to": 2020}).json()
+    assert all(2015 <= r["season"] <= 2020 for r in data["results"])
+
+    # Clear errors: a stat not recorded in the chosen season, bad keys, percent as 60.
+    resp = client.get("/similarity/stat-line", params={"line": "stl:2,pts:20", "season": 1970})
+    assert resp.status_code == 400 and "1973-74" in resp.json()["detail"]
+    assert client.get("/similarity/stat-line", params={"line": "foo:2"}).status_code == 400
+    assert client.get("/similarity/stat-line", params={"line": "ts_pct:60"}).status_code == 400
+
+
 # ─── impact_api (port 8002) ─────────────────────────────────────────────────
 
 def test_impact_playoff_comparison_shape():

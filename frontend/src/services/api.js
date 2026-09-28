@@ -86,6 +86,17 @@ export async function fetchSeasonSimilarityProfile(
     return response.data;
 }
 
+export async function fetchStatLineOptions() {
+    const response = await axios.get(`${SIMILARITY_BASE}/similarity/stat-line/options`);
+    return response.data;
+}
+
+// params: { line: 'pts:25,ts_pct:0.6', season, season_from, season_to, min_gp, one_per_player, top_n }
+export async function fetchStatLineMatches(params) {
+    const response = await axios.get(`${SIMILARITY_BASE}/similarity/stat-line`, { params });
+    return response.data;
+}
+
 export async function fetchPlayerTrajectory(player, season, topNComps = 5, projectYears = 3) {
     const response = await axios.get(
         `${SIMILARITY_BASE}/players/trajectory/${encodeURIComponent(player)}`,

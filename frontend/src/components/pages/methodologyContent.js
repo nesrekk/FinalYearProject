@@ -161,6 +161,19 @@ export const SECTIONS = [
                 ],
             },
             {
+                id: 'statline',
+                name: 'Stat Line Finder',
+                open: { page: 'statline', label: 'Stat Line Finder' },
+                answers: 'Which real player-seasons are closest to a stat line I type?',
+                method: 'Each stat (points, rebounds, assists, steals, blocks, turnovers, 3PA, 3P%, FT%, TS%, usage, assist %, rebound %, net rating, minutes, age) is z-scored within its own season over every player-season that has it; shooting percentages only over players above the Leaderboard Builder\'s attempts floor. The typed line is z-scored against the season the user picks, and every player-season is ranked by the root-mean-square gap in z-scores over the typed stats only (0 = the same standing on every stat). Levels are matched, not the shape of the profile as in Season Similarity.',
+                checked: 'Typing a real season\'s own line in its own season returns that season first at distance 0 (Curry 2015-16, LeBron James 2012-13, Wilt Chamberlain 1961-62; checked 2026-09-28, and a smoke test re-checks Curry and Wilt on every run). 3 blocks and 12 rebounds today returns Olajuwon 1992-93, Camby, Mutombo, Wembanyama and Robinson.',
+                limits: [
+                    'Standing is era-relative, so a match from another era can show raw numbers unlike the typed ones (60% TS today matches 52% TS in 1975-76, when the league shot worse).',
+                    'Each stat counts equally; there are no weights. A stat is only usable from its first well-recorded season (steals and blocks 1973-74, threes 1979-80, net rating 2009-10).',
+                    'A line far outside anything real (Wilt\'s 50 and 26 read in 2025-26) still returns the nearest seasons; the page warns when the best match is more than one standard deviation away.',
+                ],
+            },
+            {
                 id: 'roles',
                 name: 'Player Roles',
                 open: { page: 'analytics', hash: 'archetypes', label: 'Player Archetypes' },

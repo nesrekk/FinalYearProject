@@ -43,6 +43,7 @@ const Methodology = lazy(() => import('./components/pages/Methodology'));
 const LeaderboardBuilder = lazy(() => import('./components/pages/LeaderboardBuilder'));
 const RegressionExplorer = lazy(() => import('./components/pages/RegressionExplorer'));
 const BreakoutDetector = lazy(() => import('./components/pages/BreakoutDetector'));
+const StatLineFinder = lazy(() => import('./components/pages/StatLineFinder'));
 
 // Every page the app can show, by the id used in navConfig and `?page=`.
 const PAGES = {
@@ -67,6 +68,7 @@ const PAGES = {
   builder: LeaderboardBuilder,
   regression: RegressionExplorer,
   breakouts: BreakoutDetector,
+  statline: StatLineFinder,
 };
 
 // Which view the URL asks for. No `page` = the landing page, except that an

@@ -857,3 +857,50 @@ select,
 }
 .sm-detail h4 { margin: 0 0 var(--space-2); font-size: 1rem; color: var(--text); }
 .sm-detail p { margin: 0 0 var(--space-2); color: var(--text-2); font-size: 0.85rem; }
+
+/* Stat Line Finder (pages/StatLineFinder.jsx) */
+.sl-examples { margin-top: var(--space-4); }
+.sl-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  border: 0;
+}
+.sl-line legend {
+  margin-bottom: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.sl-row {
+  display: grid;
+  grid-template-columns: minmax(0, 200px) minmax(0, 200px) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+.sl-row label { color: var(--text); font-weight: 600; }
+.sl-input { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.sl-input .input-field { flex: 1 1 auto; width: 100%; min-width: 0; }
+.sl-unit { color: var(--text-2); font-size: 0.8rem; white-space: nowrap; }
+.sl-add.input-field { flex: none; align-self: flex-start; width: auto; max-width: 100%; }
+.sl-note { margin-top: var(--space-3); font-size: 0.82rem; }
+.sl-read { margin-top: var(--space-4); }
+.sl-read caption {
+  caption-side: top;
+  text-align: left;
+  padding-bottom: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.lb-table tr.sl-short td { color: var(--text-2); }
+@media (max-width: 560px) {
+  .sl-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .sl-row label { grid-column: 1 / -1; }
+}

@@ -27,6 +27,7 @@ const pageTitles = {
     builder: 'Leaderboard Builder',
     regression: 'Regression Explorer',
     breakouts: 'Breakout Detector',
+    statline: 'Stat Line Finder',
 };
 
 const pageDescriptions = {
@@ -50,6 +51,7 @@ const pageDescriptions = {
     builder: 'Rank any player-season by any stat, 1949-50 to today, with your own filters',
     regression: 'Pick two stats and see how they move together, with honest error bars',
     breakouts: 'The biggest season-over-season jumps and drops, and how much usually sticks',
+    statline: 'Type a stat line, get the real player-seasons closest to it',
 };
 
 function greeting() {
