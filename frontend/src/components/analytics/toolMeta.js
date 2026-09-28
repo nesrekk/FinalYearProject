@@ -122,6 +122,12 @@ export const TOOL_META = {
         tagline: 'Every pair of teammates: how the team did with both on the floor.',
         about: 'A team-and-season grid of every pair of its most-used players, built from the stored real 5-man lineups (the 2,000 most-used each season, 2013-14 onward). A pair’s minutes are summed over every stored lineup with both players; its ratings are those lineups’ ratings weighted by possessions. Lineups outside the top 2,000, mostly short bench units, are missing, and the share of the team’s minutes covered is shown. Pairs under the minutes floor are greyed out. Descriptive only: not adjusted for opponents or for the other three players.',
     },
+    onoff: {
+        group: 'Teams & Markets',
+        visual: 'bar',
+        tagline: 'How the team did with each player on the floor, and without him.',
+        about: 'Every minute of every regular-season game since 2020-21, rebuilt from play-by-play into who was on the floor. On-court: the team’s net rating while he played; off-court: the team’s game totals minus his, over the games he played. The on-minus-off gap carries a 95% interval from resampling his games, and most gaps sit inside it. Descriptive on/off, not RAPM: it includes who he played with and against, and who his backups were. The Stars view shows each team with and without its top-usage player.',
+    },
     replay: {
         group: 'Teams & Markets',
         visual: 'line',

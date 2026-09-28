@@ -609,6 +609,57 @@ function Breakouts({ block }) {
     );
 }
 
+function OnOff({ block, coverage, onNavigate }) {
+    const rows = block.rows;
+    const thin = rows.some((r) => r.few_off_minutes);
+    return (
+        <Section id="onoff" title="On/off"
+            info={(
+                <InfoTooltip label="How on/off is computed" title="With him on the floor, and without">
+                    Team net rating (points per 100 possessions) with him on the floor, and without him in the games he
+                    played, from every minute of play-by-play. The interval comes from resampling his games; a gap
+                    whose interval includes zero is within normal noise. Descriptive: not adjusted for teammates or
+                    opponents, so it also reflects who his backups were.
+                </InfoTooltip>
+            )}
+            meta={<>Play-by-play lines cover {span(coverage)}; a traded season shows each team. Seasons under{' '}
+                {block.qualified_minutes} minutes on the floor are greyed.{' '}
+                <button type="button" className="pp-link" onClick={() => onNavigate('analytics', 'onoff')}>Open On/Off</button></>}>
+            <TableExport />
+            <div className="table-wrapper">
+                <table className="data-table lb-table pp-table">
+                    <thead>
+                        <tr><th>Season</th><th>Team</th><th className="lb-num">GP</th><th className="lb-num">Min on</th>
+                            <th className="lb-num">Min off</th><th className="lb-num">Net on</th><th className="lb-num">Net off</th>
+                            <th className="lb-num">On − Off</th><th className="lb-num">95% interval</th><th className="lb-num">Usage</th></tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((r) => (
+                            <tr key={`${r.season}-${r.team}`} className={r.qualified ? undefined : 'sl-short'}
+                                title={r.qualified ? undefined : `Under ${block.qualified_minutes} minutes on the floor: treat as noise`}>
+                                <td>{label(r.season)}</td>
+                                <td>{r.team}</td>
+                                <td className="lb-num">{r.games}</td>
+                                <td className="lb-num">{r.minutes_on == null ? '—' : Math.round(r.minutes_on).toLocaleString()}</td>
+                                <td className="lb-num">{r.minutes_off == null ? '—' : Math.round(r.minutes_off).toLocaleString()}</td>
+                                <td className={`lb-num ${tone(r.net_on)}`}>{signed(r.net_on)}</td>
+                                <td className={`lb-num ${tone(r.net_off)}`}>{signed(r.net_off)}</td>
+                                <td className={`lb-num lb-stat ${tone(r.on_off_net)}`}>{signed(r.on_off_net)}</td>
+                                <td className="lb-num">{r.ci_low == null ? '—' : `${signed(r.ci_low)} to ${signed(r.ci_high)}`}</td>
+                                <td className="lb-num">{pct(r.usg_pct)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <p className="page-subtitle pp-foot">
+                Off-court = the team&apos;s minutes without him in games he played (games he missed aren&apos;t counted).
+                {thin && ` A season with under ${block.few_off_minutes} off-court minutes has a thin off-court side.`}
+            </p>
+        </Section>
+    );
+}
+
 // Why each block is missing for this player, in plain words.
 function missingReasons(d) {
     const p = d.player;
@@ -652,6 +703,11 @@ function missingReasons(d) {
         out.push(['Clutch', endedBefore(cov.clutch.from)
             ? `Play-by-play covers ${span(cov.clutch)}; ${career}.`
             : `No clutch plays in the play-by-play (${span(cov.clutch)}).`]);
+    }
+    if (d.on_off && !d.on_off.rows.length) {
+        out.push(['On/off', endedBefore(cov.on_off.from)
+            ? `Play-by-play lines cover ${span(cov.on_off)}; ${career}.`
+            : `No game with on-court minutes in the play-by-play lines (${span(cov.on_off)}).`]);
     }
     if (!d.similarity.seasons.length) {
         out.push(['Similar seasons', endedBefore(2010)
@@ -715,6 +771,7 @@ export default function PlayerProfile({ onNavigate }) {
         ['gravity', 'Gravity', d.gravity.rows.length > 0],
         ['contract', 'Contract', d.contracts.rows.length > 0],
         ['clutch', 'Clutch', !!d.clutch],
+        ['onoff', 'On/off', (d.on_off?.rows.length ?? 0) > 0],
         ['similar', 'Similar', d.similarity.seasons.length > 0],
         ['breakouts', 'Breakouts', d.breakouts.flags.length > 0],
     ].filter(([, , ok]) => ok);
@@ -751,6 +808,7 @@ export default function PlayerProfile({ onNavigate }) {
             {d.gravity.rows.length > 0 && <Gravity rows={d.gravity.rows} onNavigate={onNavigate} />}
             {d.contracts.rows.length > 0 && <Contracts rows={d.contracts.rows} coverage={d.coverage.contracts} onNavigate={onNavigate} />}
             {d.clutch && <Clutch c={d.clutch} coverage={d.coverage.clutch} onNavigate={onNavigate} />}
+            {(d.on_off?.rows.length ?? 0) > 0 && <OnOff block={d.on_off} coverage={d.coverage.on_off} onNavigate={onNavigate} />}
             {d.similarity.seasons.length > 0 && <Similar player={d.player} seasons={d.similarity.seasons} />}
             {d.breakouts.flags.length > 0 && <Breakouts block={d.breakouts} />}
 

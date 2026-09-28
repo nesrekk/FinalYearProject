@@ -316,6 +316,20 @@ export const SECTIONS = [
                 limits: ['Only the league\'s 2,000 most-used lineups a season are stored: 31-89% of a team\'s minutes (median 65%), with bench units missing most, so a team\'s figure over these lineups runs above its real net rating.', 'Descriptive: not adjusted for opponents or for the other three players on the floor.'],
             },
             {
+                id: 'onoff',
+                name: 'On/Off for every player',
+                open: { page: 'analytics', hash: 'onoff', label: 'On/Off' },
+                answers: 'How did a team do with a player on the floor, and without him, over every minute of the season?',
+                method: 'Every regular-season game 2020-21 to 2025-26 rebuilt from ESPN play-by-play into who was on the floor for each event (the same player lines as Stat Stability). On-court: the team\'s and the opponent\'s points and possessions while he played. Off-court: the team\'s game totals minus his on-court totals, game by game, over the games he played. Possessions = FGA + 0.44 FTA − OREB + TOV, averaged over the two sides. The on − off net rating carries a 95% interval from resampling his games 2,000 times (a game-clustered bootstrap); rows under 500 minutes are flagged, not hidden. The Stars view names each team\'s top-usage player with 1,000+ minutes and shows the team with and without him.',
+                checked: 'On + off possessions equal the team\'s game total by construction, and the rebuilt lineups track 99.1-100% of player-minutes a season. The league\'s possession-weighted on-court net rating is within ±0.07 of zero every season, and 2023-24 records come out right (Celtics 64-18, Nuggets 57-25, Pistons 14-68). Known cases: among players with 1,000+ minutes Jokić has the league\'s biggest on − off in 2022-23 (+26.9, interval +18.5 to +35.5), 2023-24 (+22.1) and 2024-25 (+23.3), and the Nuggets were a net negative without him in every season from 2021-22 on; Wembanyama leads 2025-26 (+18.7). Of players with 500+ minutes, 11-15% a season have an interval clear of zero, against 5% by chance. Checked on 2026-09-28.',
+                limits: [
+                    'Descriptive on/off, not RAPM: a player is credited with everything his lineups did, including who he played with and against, and off-court numbers depend on his backups and on when he sat (bench units, garbage time).',
+                    'Ratings run about 3 points under NBA.com\'s because this possession estimate counts about 3% more possessions than the NBA\'s; on − off differences don\'t depend on the scale.',
+                    'Games a player missed entirely are not off-court minutes (a different roster played them); With/Without a Star covers those. 26 player-games where the tracked on-court total exceeded the team\'s were clipped to zero off-court.',
+                    'Off-court samples are thin for players who rarely sit; the interval is wide then, and the row is flagged under 300 off-court minutes.',
+                ],
+            },
+            {
                 id: 'scouting',
                 name: 'Scouting Report',
                 open: { page: 'compare', label: 'Player Comparison' },

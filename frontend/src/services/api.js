@@ -435,6 +435,19 @@ export async function fetchPairGrid(params) {
     return response.data;
 }
 
+// On/off from the play-by-play lines (every minute, 2020-21 on): one team's
+// players, or the league's qualified players. params: { season, team, min_minutes }
+export async function fetchOnOff(params) {
+    const response = await axios.get(`${IMPACT_BASE}/lineups/on-off`, { params });
+    return response.data;
+}
+
+// Each team's top-usage player: the team with him on vs. off the floor. params: { season }
+export async function fetchOnOffStars(params) {
+    const response = await axios.get(`${IMPACT_BASE}/lineups/on-off/stars`, { params });
+    return response.data;
+}
+
 // ─── Vegas vs. Machine: Championship Odds Scanner ───────────────
 export async function fetchChampionshipOdds() {
     const response = await axios.get(`${IMPACT_BASE}/odds/championship`);

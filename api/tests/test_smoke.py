@@ -1622,3 +1622,44 @@ def test_aging_curves_peaks_and_player_overlay():
     assert wilt["qualified_seasons"] == 0 and wilt["path"] is None
     assert client.get("/aging/curves", params={"stat": "nope"}).status_code == 400
     assert client.get("/aging/curves", params={"stat": "pts", "era": "x"}).status_code == 400
+
+
+def test_on_off_known_cases():
+    """On/off for every player (api/routers/on_off.py, scripts/build_player_on_off.py):
+    every minute of every regular-season game 2020-21 on, from the play-by-play lines."""
+    from impact_api import app
+    client = TestClient(app)
+    d = client.get("/lineups/on-off", params={"season": 2024, "team": "DEN"}).json()
+    _assert_has_source(d)
+    t = d["team_summary"]
+    # 2023-24 Nuggets: 57-25; the rebuilt lineups track nearly every player-minute.
+    assert (t["wins"], t["losses"]) == (57, 25) and abs(t["net_rating"] - (t["ortg"] - t["drtg"])) < 0.15
+    assert 0.98 < t["tracked_share"] <= 1
+    jokic = next(p for p in d["players"] if p["player_name"] == "Nikola Jokić")
+    assert d["star"]["player_id"] == jokic["player_id"]
+    # A famously large on/off: the Nuggets were a net negative without him.
+    assert jokic["qualified"] and jokic["net_off"] < 0 and jokic["on_off_net"] > 15 and jokic["on_off_ci_low"] > 5
+    assert abs(jokic["on_off_net"] - (jokic["net_on"] - jokic["net_off"])) < 0.05
+    for p in d["players"]:
+        assert p["qualified"] == (p["minutes_on"] >= d["min_minutes"])
+        if p["on_off_ci_low"] is not None:
+            assert p["on_off_ci_low"] <= p["on_off_net"] <= p["on_off_ci_high"]
+    # League view: only rows over the floor, best on-off first; the league's
+    # possession-weighted on-court net is about zero (each side's five players share every possession).
+    lg = client.get("/lineups/on-off", params={"season": 2024, "min_minutes": 1000}).json()
+    assert lg["players"] and all(p["minutes_on"] >= 1000 and p["qualified"] for p in lg["players"])
+    assert lg["players"][0]["player_name"] == "Nikola Jokić"
+    assert abs(lg["season_summary"]["league_net_on_weighted"]) < 0.1
+    assert lg["noise"]["ci_excludes_zero"] > lg["noise"]["expected_by_chance"]
+    # Stars: at most one top-usage player per team, every team accounted for.
+    st = client.get("/lineups/on-off/stars", params={"season": 2024}).json()
+    _assert_has_source(st)
+    assert len(st["stars"]) + len(st["teams_without_star"]) == 30
+    assert len({s["team_abbreviation"] for s in st["stars"]}) == len(st["stars"])
+    den = next(s for s in st["stars"] if s["team_abbreviation"] == "DEN")
+    assert den["player_name"] == "Nikola Jokić" and den["team"]["wins"] == 57
+    # Profile block, and guards.
+    prof = client.get("/player-profile/203999").json()["on_off"]
+    assert {r["season"] for r in prof["rows"]} >= {2021, 2022, 2023, 2024, 2025, 2026}
+    assert client.get("/lineups/on-off", params={"season": 2010}).status_code == 404
+    assert client.get("/lineups/on-off", params={"team": "XXX"}).status_code == 404

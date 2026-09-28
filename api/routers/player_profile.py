@@ -28,6 +28,7 @@ from routers.dad_index import MIN_DFGA_RELIABLE
 from routers.explore import BREAKOUT_DEFAULT, BREAKOUT_DEFAULT_GP, BREAKOUT_DEFAULT_MPG, BREAKOUT_FLAG_TOP, \
     breakout_flags, breakout_persistence
 from routers.leaderboard import STATS
+from routers.on_off import DEFAULT_MIN_MINUTES as ON_OFF_MIN_MINUTES, FEW_OFF_MINUTES as ON_OFF_FEW_OFF
 from source_badge import make_source
 
 router = APIRouter()
@@ -73,6 +74,7 @@ def _coverage():
             "defense": _span(cur, "SELECT min(season), max(season) FROM defender_dad"),
             "gravity": _span(cur, "SELECT min(season), max(season) FROM player_gravity WHERE gravity IS NOT NULL"),
             "clutch": _span(cur, "SELECT min(season), max(season) FROM pbp_games"),
+            "on_off": _span(cur, "SELECT min(season), max(season) FROM player_on_off"),
             "game_lines": _span(cur, "SELECT min(season), max(season) FROM player_game_lines"),
             "awards": _span(cur, "SELECT min(season), max(season) FROM player_awards WHERE award <> 'All-Star'"),
             "all_star": _span(cur, "SELECT min(season), max(season) FROM player_awards WHERE award = 'All-Star'"),
@@ -274,6 +276,23 @@ def get_player_profile(player_id: int):
                                                AND f.game_date = l.game_date
                        WHERE l.player_id = %s AND l.seconds > 0 GROUP BY 1 ORDER BY 1""", (player_id,))
         game_log_seasons = [{"season": s, "games": n} for s, n in cur.fetchall()]
+        # ── On/off: the team with him on vs. off the floor, from the play-by-play lines ──
+        cur.execute("""SELECT season, team_abbreviation, games, team_games, minutes_on, minutes_off, poss_on, poss_off,
+                              ortg_on, drtg_on, net_on, ortg_off, drtg_off, net_off, on_off_net, on_off_ci_low,
+                              on_off_ci_high, usg_pct
+                       FROM player_on_off WHERE player_id = %s ORDER BY season, minutes_on DESC""", (player_id,))
+        okeys = ["season", "team", "games", "team_games", "minutes_on", "minutes_off", "poss_on", "poss_off",
+                 "ortg_on", "drtg_on", "net_on", "ortg_off", "drtg_off", "net_off", "on_off_net", "ci_low", "ci_high",
+                 "usg_pct"]
+        on_off = []
+        for x in cur.fetchall():
+            o = {k: (_num(v, 2) if isinstance(v, float) else v) for k, v in zip(okeys, x)}
+            o["usg_pct"] = _num(x[17], 4)
+            o["qualified"] = (o["minutes_on"] or 0) >= ON_OFF_MIN_MINUTES
+            o["few_off_minutes"] = (o["minutes_off"] or 0) < ON_OFF_FEW_OFF
+            o["ci_excludes_zero"] = None if o["ci_low"] is None else bool(o["ci_low"] > 0 or o["ci_high"] < 0)
+            on_off.append(o)
+
         zones = _zones(cur, player_id, shot_seasons[-1]["season"]) if shot_seasons else None
 
         # Seasons the similarity service can compare (all eight inputs present).
@@ -303,6 +322,7 @@ def get_player_profile(player_id: int):
         "gravity": {"rows": gravity},
         "contracts": {"rows": contracts},
         "clutch": clutch,
+        "on_off": {"rows": on_off, "qualified_minutes": ON_OFF_MIN_MINUTES, "few_off_minutes": ON_OFF_FEW_OFF},
         "similarity": {"seasons": sim_seasons},
         "game_log": {"seasons": game_log_seasons},
         "breakouts": {
@@ -313,7 +333,7 @@ def get_player_profile(player_id: int):
         "_source": make_source(
             ["player_season_stats", "player_team_stints", "player_bio", "player_awards", "draft_history",
              "player_roles", "greats", "player_shots", "scouting_splits", "defender_dad", "player_gravity",
-             "contract_value", "player_wpa_totals", "league_zone_mix", "player_game_lines", "team_game_fatigue"],
+             "contract_value", "player_wpa_totals", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue"],
             "nba_api (stats.nba.com), Basketball-Reference via Kaggle, ESPN play-by-play, Kaggle salary datasets",
         ),
     }

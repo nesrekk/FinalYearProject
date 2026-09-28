@@ -47,6 +47,7 @@ from routers import (
     media,
     meta,
     news,
+    on_off,
     pair_chemistry,
     pair_synergy,
     player_comparison,
@@ -104,6 +105,7 @@ for _router_module in (
     player_profile,
     game_log,
     aging,
+    on_off,
 ):
     app.include_router(_router_module.router)
 

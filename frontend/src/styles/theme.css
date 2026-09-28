@@ -1261,3 +1261,35 @@ select,
 @media (max-width: 640px) {
   .rf-component-notes { columns: 1; }
 }
+
+/* On/Off (OnOffSection.jsx) */
+.oo-pos { color: var(--positive); }
+.oo-neg { color: var(--negative); }
+.oo-sort {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.oo-sort:hover,
+.oo-sort:focus-visible { color: var(--brand-text); }
+.oo-ci-cell { white-space: nowrap; }
+.oo-ci { vertical-align: middle; margin-right: 6px; }
+.oo-ci-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.oo-flag { margin-left: 4px; color: var(--text-3); font-size: 11px; cursor: help; }
+.oo-team { white-space: nowrap; }
+.oo-team > * { vertical-align: middle; }
+.oo-foot { margin-top: var(--space-3); }
+@media (max-width: 640px) {
+  .oo-ci { display: none; }
+}
