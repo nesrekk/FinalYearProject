@@ -1153,3 +1153,25 @@ def test_regression_explorer_known_relationships():
     assert client.get("/explore/regression", params={
         "x": "net_rating", "y": "bpm", "season_from": 1990, "season_to": 2000}).status_code == 404
     assert client.get("/explore/regression", params={"x": "pts", "y": "pts"}).status_code == 400
+
+
+def test_breakout_detector_known_seasons():
+    from impact_api import app
+    client = TestClient(app)
+    d = client.get("/explore/breakouts", params={"season": 2017, "top_n": 10}).json()
+    _assert_has_source(d)
+    names = [r["player_name"] for r in d["results"]]
+    # 2016-17: Giannis won Most Improved Player; Jokic broke out.
+    assert "Giannis Antetokounmpo" in names and "Nikola Jokić" in names
+    scores = [r["score"] for r in d["results"]]
+    assert scores == sorted(scores, reverse=True)
+    # Score is the mean of the per-stat changes in standing.
+    r = d["results"][0]
+    assert abs(r["score"] - sum(v["delta_z"] for v in r["stats"].values()) / len(r["stats"])) < 0.02
+    # Breakouts partly regress: historically well under 100% of the jump is kept.
+    assert 0.3 < d["persistence"]["median_share_kept"] < 0.95
+
+    down = client.get("/explore/breakouts", params={"season": 2017, "direction": "down", "top_n": 5}).json()
+    assert all(x["score"] < 0 for x in down["results"])
+    assert client.get("/explore/breakouts", params={"season": 1950}).status_code == 404
+    assert client.get("/explore/breakouts", params={"stats": "age"}).status_code == 400

@@ -20,6 +20,7 @@ export const NAV_GROUPS = [
             { id: 'leaders', label: 'Stat Leaders', icon: 'leaderboard' },
             { id: 'builder', label: 'Leaderboard Builder', icon: 'tune' },
             { id: 'regression', label: 'Regression Explorer', icon: 'scatter_plot' },
+            { id: 'breakouts', label: 'Breakout Detector', icon: 'trending_up' },
             { id: 'shotcharts', label: 'Shot Charts', icon: 'adjust' },
             { id: 'draft', label: 'Draft Value Guide', icon: 'school' },
             { id: 'rookies', label: 'Rookie Class Tracker', icon: 'eco' },

@@ -26,6 +26,7 @@ const pageTitles = {
     methodology: 'Methodology',
     builder: 'Leaderboard Builder',
     regression: 'Regression Explorer',
+    breakouts: 'Breakout Detector',
 };
 
 const pageDescriptions = {
@@ -48,6 +49,7 @@ const pageDescriptions = {
     methodology: 'How every model works, how it was checked, and where it falls short',
     builder: 'Rank any player-season by any stat, 1949-50 to today, with your own filters',
     regression: 'Pick two stats and see how they move together, with honest error bars',
+    breakouts: 'The biggest season-over-season jumps and drops, and how much usually sticks',
 };
 
 function greeting() {

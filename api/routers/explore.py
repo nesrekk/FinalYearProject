@@ -2,6 +2,7 @@
 Regression Explorer: how two player-season stats move together.
 
     GET /explore/regression?x=usg_pct&y=ts_pct&season_from=2016&season_to=2026
+    GET /explore/breakouts?season=2026&direction=up   (see the Breakout section)
 
 Fits y = a + b*x over player-seasons (player_season_stats), with the
 Leaderboard Builder's stat catalogue, first-season rules and attempt floors.
@@ -17,6 +18,8 @@ Two things keep the answer honest:
 
 Association only: the page says so.
 """
+
+from functools import lru_cache
 
 import numpy as np
 from fastapi import APIRouter, HTTPException, Query
@@ -155,6 +158,172 @@ def explore_regression(
             "with a t-based 95% interval. The line on the chart runs through the overall averages with the fitted "
             "slope. This shows association, not cause, and the filters choose who is in the pool: older players "
             "in it are the ones good enough to stay in the league, so age can look like it helps."
+        ),
+        "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Basketball-Reference"),
+    }
+
+
+# ─── Breakout Detector ──────────────────────────────────────────────────────
+# A breakout is a jump in a player's standing within the league from one
+# season to the next: each stat is z-scored within its own season among
+# qualified players, and the score is the average change in z across the
+# chosen stats (lower-is-better stats flipped). Comparing standings, not raw
+# numbers, keeps league-wide shifts (pace, the three-point boom) out.
+
+BREAKOUT_DEFAULT = ["pts", "ts_pct", "usg_pct", "ast_pct", "reb_pct", "bpm"]
+BREAKOUT_TOP = 20  # size of the historical breakout lists used for the persistence check
+
+
+@lru_cache(maxsize=32)
+def _season_z(stats: tuple, min_gp: int, min_mpg: float):
+    """{season: {player_id: (z array, raw array, name, team, age, gp, min)}} for every
+    season where all stats are recorded; z within that season's qualified pool.
+    A shooting percentage below its attempts floor gets z = 0 (average)."""
+    first = max(STATS[k][3] for k in stats)
+    att_cols = sorted({STATS[k][5] for k in stats if STATS[k][5]})
+    cols = ["player_id", "player_name", "season", "team_abbreviation", "age", "gp", "min"] + \
+        [c for c in list(stats) + att_cols if c not in ("gp", "min", "age")]
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(f"SELECT {', '.join(cols)} FROM player_season_stats "
+                    f"WHERE season >= %s AND gp >= %s AND min >= %s;", (first, min_gp, min_mpg))
+        rows = cur.fetchall()
+    idx = {c: i for i, c in enumerate(cols)}
+    by_season = {}
+    for r in rows:
+        by_season.setdefault(int(r[idx["season"]]), []).append(r)
+
+    out = {}
+    for season, rs in by_season.items():
+        n = len(rs)
+        raw = np.full((n, len(stats)), np.nan)
+        z = np.zeros((n, len(stats)))
+        for j, k in enumerate(stats):
+            vals = np.array([np.nan if r[idx[k]] is None else float(r[idx[k]]) for r in rs])
+            ok = ~np.isnan(vals)
+            att = STATS[k][5]
+            if att:
+                ok &= np.array([(r[idx[att]] or 0) >= ATTEMPT_DEFAULTS[att] for r in rs])
+            raw[:, j] = vals
+            if ok.sum() >= 2 and vals[ok].std() > 0:
+                z[ok, j] = (vals[ok] - vals[ok].mean()) / vals[ok].std()
+            if not STATS[k][4]:
+                z[:, j] = -z[:, j]
+        out[season] = {
+            int(r[idx["player_id"]]): (z[i], raw[i], r[idx["player_name"]], r[idx["team_abbreviation"]],
+                                       r[idx["age"]], r[idx["gp"]], r[idx["min"]])
+            for i, r in enumerate(rs)
+        }
+    return out
+
+
+def _jumps(zs, season):
+    """(player_id, score, per-stat delta z) for players qualified in season and season-1."""
+    prev, cur = zs.get(season - 1, {}), zs.get(season, {})
+    res = []
+    for pid, now in cur.items():
+        if pid in prev:
+            d = now[0] - prev[pid][0]
+            res.append((pid, float(d.mean()), d))
+    return res
+
+
+@lru_cache(maxsize=32)
+def _persistence(stats: tuple, min_gp: int, min_mpg: float):
+    """How much of a top-20 breakout survives the next season, historically."""
+    zs = _season_z(stats, min_gp, min_mpg)
+    seasons = sorted(zs)
+    kept, n_players, used = [], 0, []
+    for s in seasons[1:-1]:
+        top = sorted(_jumps(zs, s), key=lambda t: -t[1])[:BREAKOUT_TOP]
+        nxt = zs.get(s + 1, {})
+        before = zs[s - 1]
+        fr = []
+        for pid, score, _d in top:
+            if pid in nxt and score > 0:
+                later = float((nxt[pid][0] - before[pid][0]).mean())
+                fr.append(later / score)
+        if fr:
+            kept.append(float(np.median(fr)))
+            n_players += len(fr)
+            used.append(s)
+    if not kept:
+        return None
+    return {"median_share_kept": round(float(np.median(kept)), 3), "seasons": len(used),
+            "from": used[0], "to": used[-1], "players": n_players}
+
+
+@router.get("/explore/breakouts")
+def breakouts(
+    season: int | None = None,
+    stats: str | None = None,
+    direction: str = "up",
+    min_gp: int = Query(30, ge=0),
+    min_mpg: float = Query(15.0, ge=0),
+    top_n: int = Query(25, ge=1, le=100),
+):
+    """
+    Biggest season-over-season jumps (direction=up) or drops (down) in a
+    player's standing within the league. stats = comma-separated keys
+    (default pts,ts_pct,usg_pct,ast_pct,reb_pct,bpm). Both seasons must pass
+    min_gp/min_mpg.
+    """
+    keys = [k.strip() for k in (stats or ",".join(BREAKOUT_DEFAULT)).split(",") if k.strip()]
+    keys = list(dict.fromkeys(keys))
+    bad = [k for k in keys if k not in STATS or k == "age"]
+    if bad or not keys:
+        raise HTTPException(status_code=400, detail=f"Unknown or unusable stats: {', '.join(bad) or '(none)'}.")
+    if len(keys) > 8:
+        raise HTTPException(status_code=400, detail="At most 8 stats.")
+    if direction not in ("up", "down"):
+        raise HTTPException(status_code=400, detail="direction must be 'up' or 'down'.")
+    stats_t = tuple(keys)
+    zs = _season_z(stats_t, min_gp, float(min_mpg))
+    seasons = sorted(zs)
+    if len(seasons) < 2:
+        raise HTTPException(status_code=404, detail="Not enough seasons with these stats.")
+    season = seasons[-1] if season is None else season
+    if season not in zs or season - 1 not in zs:
+        first = STATS[max(keys, key=lambda k: STATS[k][3])][3]
+        raise HTTPException(status_code=404, detail=(
+            f"Pick a season from {_label(first + 1)} on: these stats start in {_label(first)} "
+            f"and a breakout needs the season before."))
+
+    jumps = _jumps(zs, season)
+    jumps.sort(key=lambda t: -t[1] if direction == "up" else t[1])
+    prev, cur = zs[season - 1], zs[season]
+
+    def num(v, d=4):
+        return None if v is None or (isinstance(v, float) and np.isnan(v)) else round(float(v), d)
+
+    results = []
+    for rank, (pid, score, d) in enumerate(jumps[:top_n], start=1):
+        now, before = cur[pid], prev[pid]
+        results.append({
+            "rank": rank, "player_id": pid, "player_name": now[2], "team": now[3],
+            "age": num(now[4], 0), "gp": int(now[5]), "min": num(now[6], 1), "min_before": num(before[6], 1),
+            "score": round(score, 3),
+            "stats": {k: {"before": num(before[1][j]), "now": num(now[1][j]), "delta_z": round(float(d[j]), 2)}
+                      for j, k in enumerate(keys)},
+        })
+
+    return {
+        "season": season,
+        "seasons_available": [s for s in seasons if s - 1 in zs],
+        "direction": direction,
+        "stats": [{"key": k, "label": STATS[k][0], "format": STATS[k][2], "higher_is_better": STATS[k][4]}
+                  for k in keys],
+        "filters": {"min_gp": min_gp, "min_mpg": min_mpg, "top_n": top_n},
+        "pool": len(jumps),
+        "persistence": _persistence(stats_t, min_gp, float(min_mpg)),
+        "results": results,
+        "method": (
+            "Each stat is z-scored within its season among players with the games and minutes shown, so a "
+            "player's number is his standing in that season's league. The score is the average change in "
+            "standing across the chosen stats from the season before (lower-is-better stats flipped; a shooting "
+            "percentage on too few attempts counts as average). Both seasons must qualify. Big one-year jumps "
+            "partly regress: the historical line shows how much of a top-20 breakout the same players kept the "
+            "following season (median across seasons)."
         ),
         "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Basketball-Reference"),
     }

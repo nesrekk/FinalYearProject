@@ -41,6 +41,7 @@ const LearnTheGame = lazy(() => import('./components/pages/LearnTheGame'));
 const Methodology = lazy(() => import('./components/pages/Methodology'));
 const LeaderboardBuilder = lazy(() => import('./components/pages/LeaderboardBuilder'));
 const RegressionExplorer = lazy(() => import('./components/pages/RegressionExplorer'));
+const BreakoutDetector = lazy(() => import('./components/pages/BreakoutDetector'));
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
@@ -78,6 +79,7 @@ export default function App() {
       case 'methodology': return <Methodology onNavigate={setActivePage} />;
       case 'builder': return <LeaderboardBuilder />;
       case 'regression': return <RegressionExplorer />;
+      case 'breakouts': return <BreakoutDetector />;
       default: return <DashboardHome onNavigate={setActivePage} />;
     }
   };
