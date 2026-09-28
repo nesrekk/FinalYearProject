@@ -1297,3 +1297,35 @@ def test_pair_chemistry_grid_known_team():
     assert client.get("/lineups/pair-grid", params={"season": 1990}).status_code == 404
     assert client.get("/lineups/pair-grid", params={"team": "XXX"}).status_code == 404
     assert client.get("/lineups/pair-grid", params={"max_players": 7}).status_code == 400
+
+
+def test_era_translator_known_seasons():
+    from impact_api import app
+    client = TestClient(app)
+    hits = client.get("/era/players", params={"q": "wilt chamb"}).json()["results"]
+    wilt = hits[0]["player_id"]
+    d = client.get("/era/translate", params={"player_id": wilt, "season": 1962, "target": 2026}).json()
+    _assert_has_source(d)
+    rows = {r["key"]: r for r in d["rows"]}
+    # 1961-62 pace 126.2 vs 2025-26 99.4 (Basketball-Reference): 50.4 points shrinks to about 40.
+    assert d["environment"]["source"]["pace"] == 126.2 and d["environment"]["source"]["pace_source"] == "bref_estimate"
+    pts = rows["pts"]
+    assert pts["original"] == 50.4 and 38 < pts["pace_adjusted"] < 41
+    assert abs(pts["pace_adjusted"] - 50.4 * d["environment"]["pace_factor"]) < 0.01
+    # Same share of league scoring: league points a team game, 118.8 then.
+    assert abs(pts["league_adjusted"] - 50.4 * pts["league_target"] / 118.8) < 0.01
+    # He led the league in scoring; steals weren't recorded yet.
+    assert pts["standing"]["rank"] == 1 and rows["stl"]["original"] is None
+    # Walt Bellamy led 1961-62 in FG%, so Wilt is second.
+    assert rows["fg_pct"]["standing"]["rank"] == 2
+    # Percentages move by the change in league average; no three-point line in 1961-62.
+    ts = rows["ts_pct"]
+    assert abs(ts["league_adjusted"] - (0.536 - ts["league_source"] + ts["league_target"])) < 1e-6
+    back = client.get("/era/translate", params={"player_id": 201566, "season": 2017, "target": 1962}).json()
+    assert {r["key"]: r for r in back["rows"]}["fg3m"]["pace_adjusted"] is None
+    # 1949-50 has no published pace: estimated here and said so.
+    mikan = client.get("/era/translate", params={"player_id": 600012, "season": 1950}).json()
+    assert mikan["environment"]["source"]["pace_source"] == "estimated_here"
+    assert any("estimated by this app" in n for n in mikan["notes"])
+    assert client.get("/era/translate", params={"player_id": wilt, "season": 1950}).status_code == 404
+    assert client.get("/era/translate", params={"player_id": wilt, "season": 1962, "target": 1947}).status_code == 400

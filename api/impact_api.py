@@ -25,6 +25,7 @@ from routers import (
     dad_index,
     draft_prospects,
     draft_value,
+    era,
     explore,
     games_misc,
     greats,
@@ -91,7 +92,7 @@ for _router_module in (
     players_table, impact_rankings, draft_value, player_impact, meta, media,
     players_search_profile, leaders, games_misc, news, vegas_scanner,
     team_comparison, hall_of_fame, garbage_time, dad_index, scouting_report,
-    spacing_lab, contract_value, learn, college, greats, leaderboard, explore,
+    spacing_lab, contract_value, learn, college, greats, leaderboard, explore, era,
     pair_chemistry,
 ):
     app.include_router(_router_module.router)

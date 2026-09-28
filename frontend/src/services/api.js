@@ -872,3 +872,15 @@ export async function fetchGreats() {
     const response = await axios.get(`${IMPACT_BASE}/greats`);
     return response.data;
 }
+
+// ─── Era Translator ───────────────────────────────────────────────
+export async function fetchEraPlayers(q) {
+    const response = await axios.get(`${IMPACT_BASE}/era/players`, { params: { q } });
+    return response.data;
+}
+
+// params: { player_id, season, target }
+export async function fetchEraTranslation(params) {
+    const response = await axios.get(`${IMPACT_BASE}/era/translate`, { params });
+    return response.data;
+}

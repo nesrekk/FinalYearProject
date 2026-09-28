@@ -21,6 +21,7 @@ export const NAV_GROUPS = [
             { id: 'builder', label: 'Leaderboard Builder', icon: 'tune' },
             { id: 'regression', label: 'Regression Explorer', icon: 'scatter_plot' },
             { id: 'breakouts', label: 'Breakout Detector', icon: 'trending_up' },
+            { id: 'era', label: 'Era Translator', icon: 'history' },
             { id: 'statline', label: 'Stat Line Finder', icon: 'manage_search' },
             { id: 'shotcharts', label: 'Shot Charts', icon: 'adjust' },
             { id: 'draft', label: 'Draft Value Guide', icon: 'school' },

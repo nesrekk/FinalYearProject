@@ -141,6 +141,19 @@ export const SECTIONS = [
                 checked: 'Descriptive only; the weights are equal on purpose and disclosed.',
                 limits: ['Not predictive and not a measure of value: a high score can be good or bad for a team.'],
             },
+            {
+                id: 'era',
+                name: 'Era Translator',
+                open: { page: 'era', label: 'Era Translator' },
+                answers: 'What would a season from one era look like in another season\'s game?',
+                method: 'Two restatements. Pace only: each per-game count × (target league pace ÷ source league pace), percentages unchanged. Pace + league: each count × (target ÷ source league average per team game for that stat), so the player keeps the same share of an average team\'s output; percentages move by the change in league average; threes stay pace-only. Beside them, the era-free view: z-score and percentile within the player\'s own season. League averages are Basketball-Reference\'s.',
+                checked: 'Checked 2026-09-28: Oscar Robertson 1961-62 (30.8 / 12.5 / 11.4) restates to 24.3 / 9.8 / 9.0 at 2025-26\'s pace, against 24.5 / 9.9 / 9.1 from Neil Paine\'s published per-100-possession line at the same pace and minutes; Wilt\'s 50.4 points becomes 39.7.',
+                limits: [
+                    'Pace before 1973-74 is an estimate (offensive rebounds and turnovers weren\'t recorded); 1949-50 is estimated by this app.',
+                    'League pace, not the team\'s: Wilt\'s 1961-62 Warriors played faster than the league, so his restated line is about 4% too high.',
+                    'The two answers differ a lot for points (39.7 vs 49.0 for Wilt): neither says how a player would have adapted to another era\'s rules, spacing or athletes.',
+                ],
+            },
         ],
     },
     {

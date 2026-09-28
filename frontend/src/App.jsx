@@ -43,6 +43,7 @@ const Methodology = lazy(() => import('./components/pages/Methodology'));
 const LeaderboardBuilder = lazy(() => import('./components/pages/LeaderboardBuilder'));
 const RegressionExplorer = lazy(() => import('./components/pages/RegressionExplorer'));
 const BreakoutDetector = lazy(() => import('./components/pages/BreakoutDetector'));
+const EraTranslator = lazy(() => import('./components/pages/EraTranslator'));
 const StatLineFinder = lazy(() => import('./components/pages/StatLineFinder'));
 
 // Every page the app can show, by the id used in navConfig and `?page=`.
@@ -68,6 +69,7 @@ const PAGES = {
   builder: LeaderboardBuilder,
   regression: RegressionExplorer,
   breakouts: BreakoutDetector,
+  era: EraTranslator,
   statline: StatLineFinder,
 };
 

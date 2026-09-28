@@ -1032,3 +1032,47 @@ select,
 }
 .pc-detail em { color: var(--text-2); }
 .pc-list-title { margin-top: var(--space-5); }
+
+/* Era Translator (pages/EraTranslator.jsx) */
+.era-search { position: relative; }
+.era-note {
+  margin: var(--space-2) 0 0;
+  color: var(--text-2);
+  font-size: 0.85rem;
+}
+.era-note--warn { color: var(--negative); font-weight: 600; }
+.era-env {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.era-env-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+}
+.era-env-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.era-env-values { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.era-env-factor { color: var(--brand-text); font-family: var(--font-mono); font-size: 0.85rem; }
+.era-chart { margin-top: var(--space-4); }
+.era-line { fill: none; stroke: var(--text); stroke-width: 2; }
+.era-line--est { stroke: var(--text-2); stroke-dasharray: 5 4; }
+.era-mark circle { stroke: var(--surface); stroke-width: 2; }
+.era-mark--source circle { fill: var(--brand); }
+.era-mark--target circle { fill: var(--text); }
+.era-mark-label { fill: var(--text); font-size: 12px; font-weight: 700; }
+.era-chart-key { margin: var(--space-2) 0 var(--space-4); color: var(--text-2); font-size: 0.8rem; }
+.era-key-est { text-decoration: underline dashed; text-underline-offset: 3px; }
+.era-table .era-row-note { color: var(--text-2); font-size: 0.8rem; min-width: 16ch; }
+.era-method { margin-top: var(--space-5); color: var(--text); font-size: 0.9rem; line-height: 1.55; }
+.era-method h3 { font-size: 1rem; margin: 0 0 var(--space-2); }
+.era-method p { margin: 0 0 var(--space-2); }
