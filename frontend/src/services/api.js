@@ -732,6 +732,14 @@ export async function fetchStatStability() {
     });
 }
 
+// Data Coverage page: live row counts + season span + source/gaps per table.
+export async function fetchDataCoverage() {
+    return getWithCache('data_coverage', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/meta/coverage`);
+        return response.data;
+    });
+}
+
 // params: { x, y, season_from, season_to, min_gp, min_mpg, within_season }
 export async function fetchRegression(params) {
     const response = await axios.get(`${IMPACT_BASE}/explore/regression`, { params });

@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 
 from fastapi import APIRouter
 
@@ -252,5 +253,278 @@ def get_current_meta():
             }
             if top_scorer_row
             else None
+        ),
+    }
+
+
+def _season_label(season):
+    """End-year int -> 'YYYY-YY' label, e.g. 2026 -> '2025-26'."""
+    if season is None:
+        return None
+    return f"{season - 1}-{str(season)[-2:]}"
+
+
+def _fmt_season_int(v):
+    return _season_label(v) if v is not None else None
+
+
+def _fmt_year_int(v):
+    return str(v) if v is not None else None
+
+
+_RANGE_FORMATTERS = {
+    "season_int": _fmt_season_int,
+    "season_text": lambda v: v,
+    "year_int": _fmt_year_int,
+    None: lambda v: v,
+}
+
+# Hand-maintained coverage map: one entry per table that backs a real
+# feature. Row counts and first/last-season are computed live below (never
+# hand-typed, so they can't drift); `source` and `gap` are hand-written and
+# reuse the same wording as README "Known real gaps" and the Methodology
+# page rather than inventing new phrasing. `used_by` are page ids from
+# navConfig.js / App.jsx PAGES so the frontend can link each row to the
+# feature(s) that read it.
+COVERAGE_MAP = [
+    {
+        "table": "player_season_stats", "label": "Player season stats", "group": "Core",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM player_season_stats", "range_fmt": "season_int",
+        "source": "Basketball-Reference (pre-2010) / NBA.com via a Kaggle historical export, extended each season with nba_api loads.",
+        "gap": "Two age conventions: 2009-10+ uses NBA.com's age, pre-2010 uses Basketball-Reference's Feb-1 age (about 45% of players a year apart). Models trained on it as-is.",
+        "used_by": ["players", "compare", "leaders", "builder", "regression", "breakouts", "stability", "statline", "era"],
+    },
+    {
+        "table": "player_shots", "label": "Shot chart locations", "group": "Shooting",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM player_shots", "range_fmt": "season_text",
+        "source": "nba_api shot-chart endpoint, bulk-loaded per season.",
+        "gap": "shot_zone_basic is NULL on bulk-loaded rows (zones come from api/shots_lib.classify_zone()); mixes regular season/playoffs/play-in — regular season only is game_id LIKE '002%'. No defender distance or shot type (catch-and-shoot vs. pull-up) per shot.",
+        "used_by": ["shotcharts"],
+    },
+    {
+        "table": "player_game_lines", "label": "Per player-game lines", "group": "Games",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM player_game_lines", "range_fmt": "season_int",
+        "source": "Rebuilt from ESPN play-by-play (scripts/build_player_game_lines.py); minutes rebuilt from substitutions.",
+        "gap": "Regular season only, 2020-21 on (no earlier seasons, no playoffs). game_id is ESPN's (espn_...), not the NBA 002... ids used elsewhere.",
+        "used_by": ["stability"],
+    },
+    {
+        "table": "team_game_fatigue", "label": "Team game log (rest/travel)", "group": "Teams",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM team_game_fatigue", "range_fmt": "season_int",
+        "source": "Built from the NBA schedule; one row per team-game with rest days, back-to-backs and travel.",
+        "gap": "Margin only — no points for/against stored per team-game.",
+        "used_by": [],
+    },
+    {
+        "table": "game_team_box", "label": "Team box scores", "group": "Teams",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM game_team_box", "range_fmt": "season_int",
+        "source": "nba_api team box score, bulk-loaded per season.",
+        "gap": "2020-21 on only. No points column (FGA/FTA/OREB/TOV/possession estimate).",
+        "used_by": [],
+    },
+    {
+        "table": "lineup_stats", "label": "Lineup on-court stats", "group": "Teams",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM lineup_stats", "range_fmt": "season_int",
+        "source": "nba_api lineup endpoint, top lineups by minutes per team-season.",
+        "gap": "Only the top 2,000 lineups a season are stored — 31-89% of a team's minutes depending on rotation depth, not full coverage.",
+        "used_by": [],
+    },
+    {
+        "table": "player_wpa_totals", "label": "Win-probability-added totals", "group": "Models",
+        "range_sql": None, "range_fmt": None,
+        "source": "compute_wpa.py over deduplicated play-by-play (scripts/wpa_lib.PBP_DEDUP_WHERE).",
+        "gap": "Clutch plays carry 3.7x the leverage of non-clutch plays — never compare raw clutch and non-clutch WPA per play. Most players are statistically indistinguishable from zero on the clutch split.",
+        "used_by": [],
+    },
+    {
+        "table": "player_gravity", "label": "Gravity Index / Spacing", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM player_gravity", "range_fmt": "season_int",
+        "source": "scripts/build_gravity_index.py, from shot-location and lineup data.",
+        "gap": None,
+        "used_by": ["rolefinder"],
+    },
+    {
+        "table": "defender_dad", "label": "Defensive Adjusted Deflections (DAD)", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM defender_dad", "range_fmt": "season_int",
+        "source": "scripts/build_dad_index.py.",
+        "gap": "Pair Synergy still reads dbpm_repro (not the published BPM) until it's retrained.",
+        "used_by": ["rolefinder"],
+    },
+    {
+        "table": "scouting_splits", "label": "Scouting report shot-diet splits", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM scouting_splits", "range_fmt": "season_int",
+        "source": "scripts/build_scouting_report.py.",
+        "gap": "Only ~180 players a season have enough tracked possessions — treated as fit flags, not scored, in Role Player Finder.",
+        "used_by": ["rolefinder"],
+    },
+    {
+        "table": "contract_value", "label": "Contract Value (salary vs. production)", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM contract_value", "range_fmt": "season_int",
+        "source": "scripts/build_contract_value.py over third-party salary CSVs (see README for where to get them) joined to impact score.",
+        "gap": "Non-contiguous seasons only (salary data isn't loaded for every year) — no 2021-24, no 2026. The salary filter on Role Player Finder only works for seasons this table actually has.",
+        "used_by": ["tradeimpact", "rolefinder"],
+    },
+    {
+        "table": "player_roles", "label": "Player Roles (10 archetypes)", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM player_roles", "range_fmt": "season_int",
+        "source": "scripts/build_player_roles.py.",
+        "gap": "Distinct from player_clusters (6 archetypes) below — Pair Synergy and Trivia hard-code the 6-cluster names and haven't moved to this table.",
+        "used_by": ["rolefinder"],
+    },
+    {
+        "table": "player_clusters", "label": "Player Clusters (6 archetypes)", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM player_clusters", "range_fmt": "season_int",
+        "source": "Older clustering model, kept in place because Pair Synergy and Trivia hard-code its archetype names.",
+        "gap": None,
+        "used_by": [],
+    },
+    {
+        "table": "draft_history", "label": "Draft history", "group": "Draft",
+        "range_sql": "SELECT MIN(draft_year), MAX(draft_year) FROM draft_history", "range_fmt": "year_int",
+        "source": "Basketball-Reference (scripts/load_draft_history_bref.py) — stats.nba.com has been unreachable from this machine since 2026-09-26.",
+        "gap": "105 of 3,747 drafted players who played aren't matched to an NBA id: they keep a placeholder id, have no photo, but still have Win Shares.",
+        "used_by": ["draft"],
+    },
+    {
+        "table": "draft_pick_outcomes", "label": "Draft pick outcomes (Win Shares)", "group": "Draft",
+        "range_sql": "SELECT MIN(draft_year), MAX(draft_year) FROM draft_pick_outcomes", "range_fmt": "year_int",
+        "source": "Basketball-Reference Win Shares, first five seasons, classes 1980-2021 (scripts/load_draft_history_bref.py).",
+        "gap": None,
+        "used_by": ["draft"],
+    },
+    {
+        "table": "college_team_seasons", "label": "College team ratings (Torvik)", "group": "College",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM college_team_seasons", "range_fmt": "season_int",
+        "source": "Owner's Kaggle Torvik team-ratings export (nba_data/college_teams/, gitignored).",
+        "gap": "These ratings include the tournament — never train the March Madness model on this table.",
+        "used_by": [],
+    },
+    {
+        "table": "cbb_games", "label": "College basketball game results", "group": "College",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM cbb_games", "range_fmt": "season_int",
+        "source": "Every D1 game from CollegeBasketballData.com.",
+        "gap": "A few known data quirks handled in code and disclosed on the March Madness page (2017 First Four, 2021 Oregon-VCU no-contest, an LIU name split) — see README Known real gaps.",
+        "used_by": [],
+    },
+    {
+        "table": "league_season_averages", "label": "League season averages (pace)", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM league_season_averages", "range_fmt": "season_int",
+        "source": "scripts/build_league_averages.py, from the Kaggle historical export.",
+        "gap": "Pace before 1973-74 is an estimate (1949-50 estimated as the anchor).",
+        "used_by": ["era"],
+    },
+    {
+        "table": "player_awards", "label": "Player awards history", "group": "Core",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM player_awards", "range_fmt": "season_int",
+        "source": "scripts/build_player_profile_data.py, from Basketball-Reference.",
+        "gap": None,
+        "used_by": ["player"],
+    },
+    {
+        "table": "player_team_stints", "label": "Traded-season team stints", "group": "Core",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM player_team_stints", "range_fmt": "season_int",
+        "source": "scripts/build_player_profile_data.py.",
+        "gap": None,
+        "used_by": ["player"],
+    },
+    {
+        "table": "greats", "label": "Greats of the Game", "group": "Players",
+        "range_sql": "SELECT MIN(first_season), MAX(last_season) FROM greats", "range_fmt": "season_int",
+        "source": "scripts/build_greats.py: 75th Anniversary Team + today's stars by a stated rule, facts from Basketball-Reference data.",
+        "gap": "Trivia only ships when proven by league-wide records in the data or checked against a linked Wikipedia article.",
+        "used_by": ["greats"],
+    },
+    {
+        "table": "stat_stability", "label": "Stat reliability (stabilization points)", "group": "Models",
+        "range_sql": "SELECT MIN(season_from), MAX(season_to) FROM stat_stability", "range_fmt": "season_int",
+        "source": "scripts/build_stat_stability.py, split-half reliability over player_game_lines and player_shots.",
+        "gap": "Per-game and play-by-play estimates only cover the player_game_lines era (2020-21 on); applying them to other eras assumes a similar spread of players.",
+        "used_by": ["stability", "builder", "breakouts"],
+    },
+    {
+        "table": "referee_crew_tendencies", "label": "Referee crew tendencies", "group": "Games",
+        "range_sql": None, "range_fmt": None,
+        "source": "scripts/build_referee_tendencies.py, grouped by the exact real 3-official crew per game.",
+        "gap": "Only 514 of 5,373 tracked crews ever worked together more than once — most rows sit at the 10-game small-sample floor. This is a real, disclosed null result, not a bug.",
+        "used_by": [],
+    },
+    {
+        "table": "player_first_season", "label": "Player first NBA/BAA season", "group": "Models",
+        "range_sql": "SELECT MIN(first_season), MAX(first_season) FROM player_first_season", "range_fmt": "season_int",
+        "source": "scripts/build_first_nba_season.py — earlier of Basketball-Reference's first season and the first season in player_season_stats. Feeds ROY rookie eligibility.",
+        "gap": None,
+        "used_by": [],
+    },
+    {
+        "table": "league_zone_mix", "label": "League shot-zone mix by season", "group": "Shooting",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM league_zone_mix", "range_fmt": "season_text",
+        "source": "scripts/build_league_zone_mix.py, from player_shots.",
+        "gap": "Regular season only, same coverage as player_shots.",
+        "used_by": ["shotcharts", "player"],
+    },
+]
+
+
+@lru_cache(maxsize=1)
+def _coverage():
+    """
+    Live row counts and first/last-season per table in COVERAGE_MAP — never
+    hand-typed, so a stale gap description can't also carry a stale count.
+    Cached per process (same pattern as the rest of the app's lru_cache
+    endpoints): restart impact_api after a rebuild changes these tables.
+    """
+    rows = []
+    with get_db() as conn:
+        cursor = conn.cursor()
+        for entry in COVERAGE_MAP:
+            table = entry["table"]
+            cursor.execute("SELECT to_regclass(%s);", (f"public.{table}",))
+            if cursor.fetchone()[0] is None:
+                rows.append({**entry, "exists": False, "n_rows": 0, "season_from": None, "season_to": None})
+                continue
+
+            cursor.execute(f"SELECT COUNT(*) FROM {table};")  # nosec: table from our own hand-written map, never user input
+            n_rows = cursor.fetchone()[0]
+
+            season_from = season_to = None
+            if entry["range_sql"]:
+                cursor.execute(entry["range_sql"])  # nosec: hand-written SQL in COVERAGE_MAP, never user input
+                raw_from, raw_to = cursor.fetchone()
+                fmt = _RANGE_FORMATTERS[entry["range_fmt"]]
+                season_from, season_to = fmt(raw_from), fmt(raw_to)
+
+            rows.append({
+                "table": table,
+                "label": entry["label"],
+                "group": entry["group"],
+                "source": entry["source"],
+                "gap": entry["gap"],
+                "used_by": entry["used_by"],
+                "exists": True,
+                "n_rows": n_rows,
+                "season_from": season_from,
+                "season_to": season_to,
+            })
+    return tuple(rows)
+
+
+@router.get("/meta/coverage")
+def get_data_coverage():
+    """
+    Data Coverage page: for every table in the hand-maintained COVERAGE_MAP,
+    a live row count and season span, plus its source and known gaps in the
+    same wording as README "Known real gaps" and the Methodology page.
+    """
+    rows = list(_coverage())
+    groups = []
+    for row in rows:
+        if row["group"] not in groups:
+            groups.append(row["group"])
+    return {
+        "tables": rows,
+        "groups": groups,
+        "_source": make_source(
+            [r["table"] for r in rows],
+            "Postgres COUNT/MIN/MAX over this project's own real tables, cached per process",
         ),
     }

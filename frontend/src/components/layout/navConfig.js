@@ -52,6 +52,7 @@ export const NAV_GROUPS = [
             { id: 'analytics', label: 'Teams & Markets', icon: 'storefront', hash: 'vegas' },
             { id: 'analytics', label: 'College & Draft', icon: 'school', hash: 'prospects' },
             { id: 'methodology', label: 'Methodology', icon: 'fact_check' },
+            { id: 'coverage', label: 'Data Coverage', icon: 'table_chart' },
         ],
     },
     {

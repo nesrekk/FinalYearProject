@@ -1523,3 +1523,22 @@ def test_trade_impact_combines_wins_spacing_and_payroll():
     # Guards.
     assert client.get("/trade/impact", params={**params, "team_b": "NYK"}).status_code == 400
     assert client.get("/trade/impact", params={**params, "player_b_id": 1628404}).status_code == 400
+
+
+# ─── Round 3, Phase 12: Data Coverage page ───────────────────────────────────
+
+def test_meta_coverage():
+    from impact_api import app
+    from routers.meta import COVERAGE_MAP
+    resp = TestClient(app).get("/meta/coverage")
+    assert resp.status_code == 200
+    data = resp.json()
+    _assert_has_source(data)
+    assert len(data["tables"]) == len(COVERAGE_MAP)
+    assert set(data["groups"]) == {row["group"] for row in data["tables"]}
+    for row in data["tables"]:
+        # Every table in the hand-maintained map must actually exist in this
+        # database and return a real row count, not a placeholder.
+        assert row["exists"] is True, f"{row['table']} is in COVERAGE_MAP but missing from the database"
+        assert row["n_rows"] > 0
+        assert isinstance(row["used_by"], list)

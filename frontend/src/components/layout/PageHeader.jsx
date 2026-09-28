@@ -33,6 +33,7 @@ const pageTitles = {
     era: 'Era Translator',
     statline: 'Stat Line Finder',
     watchlist: 'Watchlist',
+    coverage: 'Data Coverage',
 };
 
 const pageDescriptions = {
@@ -62,6 +63,7 @@ const pageDescriptions = {
     era: 'Any player-season restated in another season\'s pace and league',
     statline: 'Type a stat line, get the real player-seasons closest to it',
     watchlist: 'Your starred players, side by side',
+    coverage: 'Every table this app reads: live row counts, season span, source and known gaps',
 };
 
 function greeting() {
