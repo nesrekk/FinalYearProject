@@ -2,8 +2,10 @@
 Custom leaderboards: rank player-seasons by any stat in player_season_stats,
 with the filters an analyst needs to keep small samples out.
 
-    GET /leaderboard/options  — the stat catalogue, season range, team codes
-    GET /leaderboard/custom   — the ranked player-seasons
+    GET /leaderboard/options    — the stat catalogue, season range, team codes
+    GET /leaderboard/custom     — the ranked player-seasons
+    GET /leaderboard/stability  — how big a sample each stat needs (stat_stability,
+                                  built by scripts/build_stat_stability.py)
 
 Every stat is per game unless it's a rate. Each stat has the first season it
 is recorded for at least 90% of player-seasons (checked in the data: steals
@@ -17,6 +19,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from impact_core import get_db
 from source_badge import make_source
+from stat_samples import SEASON_SAMPLE_SQL
 
 router = APIRouter()
 
@@ -150,11 +153,13 @@ def custom_leaderboard(
         direction = "DESC" if order == "high" else "ASC"
         cols = ["player_id", "player_name", "team_abbreviation", "season", stat] + \
             [c for c in CONTEXT + ([attempts] if attempts else []) if c != stat]
+        stability = stable_samples(cur).get(stat)
+        sample_sql = f", ({SEASON_SAMPLE_SQL[stat]})::float AS sample_n" if stability else ""
 
         cur.execute(f"SELECT COUNT(*) FROM player_season_stats WHERE {' AND '.join(where)};", params)
         qualified = cur.fetchone()[0]
         cur.execute(
-            f"""SELECT {', '.join(cols)} FROM player_season_stats
+            f"""SELECT {', '.join(cols)}{sample_sql} FROM player_season_stats
                 WHERE {' AND '.join(where)}
                 ORDER BY {stat} {direction}, gp DESC, player_name
                 LIMIT %s;""",
@@ -168,7 +173,7 @@ def custom_leaderboard(
     results = []
     for rank, r in enumerate(rows, start=1):
         row = dict(zip(cols, r))
-        results.append({
+        item = {
             "rank": rank,
             "player_id": int(row.pop("player_id")),
             "player_name": row.pop("player_name"),
@@ -176,11 +181,15 @@ def custom_leaderboard(
             "season": row.pop("season"),
             "value": val(row.pop(stat)),
             "context": {k: val(v) for k, v in row.items()},
-        })
+        }
+        if stability:
+            item["sample"] = _sample(r[len(cols)], stability["stable_n"])
+        results.append(item)
 
     return {
         "stat": {"key": stat, "label": label, "format": _fmt, "higher_is_better": higher_is_better,
                  "attempts": attempts},
+        "stability": stability,
         "filters": {"season_from": clipped_from, "season_to": season_to, "min_gp": min_gp, "min_mpg": min_mpg,
                     "min_attempts": min_attempts if attempts else None, "team": team.upper() if team else None,
                     "order": order, "top_n": top_n},
@@ -188,6 +197,124 @@ def custom_leaderboard(
         "notes": notes,
         "results": results,
         "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Basketball-Reference"),
+    }
+
+
+# ─── Stat stability ─────────────────────────────────────────────────────────
+# A sample of size n has reliability n / (n + M), M being the sample where
+# half of a player's number is signal (scripts/build_stat_stability.py). Rows
+# below RELIABLE are flagged "mostly noise" on the Leaderboard and Breakout
+# pages.
+RELIABLE = 0.5
+
+
+def stable_samples(cur):
+    """{stat: {stable_n, unit, unit_label}} with stable_n in the season-table
+    units of stat_samples.py; {} if the stability tables were never built."""
+    cur.execute("SELECT to_regclass('stat_stability');")
+    if cur.fetchone()[0] is None:
+        return {}
+    cur.execute("""SELECT stat, stable_n / nba_unit_scale, unit, unit_label FROM stat_stability
+                   WHERE variant = 'catalogue' AND stable_n IS NOT NULL AND nba_unit_scale > 0;""")
+    return {k: {"stable_n": round(float(m), 1), "unit": u, "unit_label": ul}
+            for k, m, u, ul in cur.fetchall() if k in SEASON_SAMPLE_SQL}
+
+
+def _sample(n, stable_n):
+    if n is None:
+        return None
+    rel = n / (n + stable_n) if n > 0 else 0.0
+    return {"n": round(float(n), 1), "reliability": round(rel, 3), "noisy": rel < RELIABLE}
+
+
+def sample_reliability(cur, keys, player_seasons):
+    """{(player_id, season): {stat: {n, reliability, noisy}}} for the given stats
+    (those with a split-half estimate); used by the Breakout Detector."""
+    stable = stable_samples(cur)
+    keys = [k for k in keys if k in stable]
+    if not keys or not player_seasons:
+        return {}
+    exprs = ", ".join(f"({SEASON_SAMPLE_SQL[k]})::float" for k in keys)
+    ids = sorted({int(p) for p, _ in player_seasons})
+    seasons = sorted({int(s) for _, s in player_seasons})
+    cur.execute(f"SELECT player_id, season, {exprs} FROM player_season_stats "
+                f"WHERE player_id = ANY(%s) AND season = ANY(%s);", (ids, seasons))
+    wanted = {(int(p), int(s)) for p, s in player_seasons}
+    out = {}
+    for r in cur.fetchall():
+        key = (int(r[0]), int(r[1]))
+        if key in wanted:
+            out[key] = {k: _sample(r[2 + j], stable[k]["stable_n"]) for j, k in enumerate(keys)}
+    return out
+
+
+@router.get("/leaderboard/stability")
+def stat_stability():
+    """
+    For every catalogue stat: the sample at which a player's number is half
+    signal, half noise (split-half reliability with the Spearman-Brown
+    formula), the reliability curve behind it, what a typical season gives,
+    and the year-to-year correlation (the only measure for stats that exist
+    only as season totals).
+    """
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT to_regclass('stat_stability');")
+        if cur.fetchone()[0] is None:
+            raise HTTPException(status_code=503, detail="Stat stability hasn't been built: run "
+                                "scripts/build_stat_stability.py.")
+        cur.execute("""SELECT stat, variant, unit, unit_label, source, season_from, season_to, stable_n, ci_lo,
+                              ci_hi, m_min, m_max, fit_points, pool, typical_n, typical_reliability, built_on
+                       FROM stat_stability;""")
+        split = {}
+        for r in cur.fetchall():
+            split.setdefault(r[0], {})[r[1]] = {
+                "unit": r[2], "unit_label": r[3], "source": r[4], "season_from": r[5], "season_to": r[6],
+                "stable_n": r[7], "ci": [r[8], r[9]], "per_target_range": [r[10], r[11]], "fit_points": r[12],
+                "pool": r[13], "typical_n": r[14], "typical_reliability": r[15], "curve": [],
+            }
+            built_on = r[16]
+        cur.execute("""SELECT stat, variant, n_target, pool, n_half, r_half, m_point FROM stat_stability_curve
+                       ORDER BY stat, variant, n_target;""")
+        for stat, variant, n, pool, n_half, r, m in cur.fetchall():
+            split[stat][variant]["curve"].append({"n": n, "pool": pool, "n_half": round(n_half, 1),
+                                                  "r": round(r, 4), "m": None if m is None else round(m, 1)})
+        cur.execute("SELECT stat, r, pairs, season_from, season_to, floors FROM stat_year_to_year;")
+        y2y = {r[0]: {"r": r[1], "pairs": r[2], "season_from": r[3], "season_to": r[4], "floors": r[5]}
+               for r in cur.fetchall()}
+
+    def rnd(v, d=1):
+        return None if v is None else round(float(v), d)
+
+    stats = []
+    for key, (label, group, fmt, *_rest) in STATS.items():
+        if key == "age":
+            continue
+        entry = {"key": key, "label": label, "group": group, "format": fmt,
+                 "split_half": None, "per_minute": None, "year_to_year": y2y.get(key)}
+        for variant, name in (("catalogue", "split_half"), ("per_minute", "per_minute")):
+            v = split.get(key, {}).get(variant)
+            if v:
+                v.update(stable_n=rnd(v["stable_n"]), ci=[rnd(x) for x in v["ci"]],
+                         per_target_range=[rnd(x) for x in v["per_target_range"]], typical_n=rnd(v["typical_n"], 0),
+                         typical_reliability=rnd(v["typical_reliability"], 3))
+                entry[name] = v
+        stats.append(entry)
+    return {
+        "stats": stats,
+        "reliable_at": RELIABLE,
+        "built_on": str(built_on),
+        "method": (
+            "Split-half reliability: each player-season's games are split into odd and even games, the stat is "
+            "worked out on each half once both halves reach the same sample (n attempts, games or possessions), "
+            "each half is centred on its season's average, and the halves are correlated across players. The "
+            "Spearman-Brown formula turns that into reliability = n / (n + M) for a sample of n; M, shown here, "
+            "is the sample where a player's number is half his own level and half luck. Year-to-year correlation "
+            "(value one season vs. the next) also mixes in real change (age, role, team), so it runs lower."
+        ),
+        "_source": make_source(["stat_stability", "stat_stability_curve", "stat_year_to_year",
+                                "player_game_lines", "player_shots", "player_season_stats"],
+                               "ESPN play-by-play + nba_api (stats.nba.com) shot charts + Basketball-Reference"),
     }
 
 

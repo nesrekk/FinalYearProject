@@ -324,6 +324,20 @@ export const SECTIONS = [
                 checked: 'The card always shows how many splits would clear the bar by chance (about 1 in 20 tested).',
                 limits: ['No pick-and-roll coverage or drive-direction data exists here; shot-context splits cover threes only.'],
             },
+            {
+                id: 'stability',
+                name: 'Stat Stability',
+                open: { page: 'stability', label: 'Stat Stability' },
+                answers: 'How big a sample does each stat need before a player\'s number is more his own than luck?',
+                method: 'Split-half reliability: each player-season\'s games split into odd and even games, both halves cut at the same sample (attempts, games, possessions...), centred on their season, and correlated across players. Spearman-Brown gives reliability = n / (n + M); M, the sample where it reaches 0.5, is fitted over every sample size with 100+ player-seasons, with a bootstrap 95% range. Data: play-by-play for every regular-season game 2020-21 to 2025-26 rebuilt into player lines, plus every shot since 1996-97 for FG%, 3P% and eFG%. Year-to-year correlation for every stat alongside.',
+                checked: 'The rebuilt player lines match NBA.com season totals within 1.5% (minutes within 0.3% on average), and rebuilt usage, assist, rebound and turnover % correlate 0.99+ with NBA.com\'s (on-court ratings 0.96-0.99). 3P% needs 476 attempts (95% range 420-531), between the published 242 (Medvedovsky, 2020) and 750 (Blackport, 2014); free-throw % needs 27 attempts and rebound % 51 rebound chances, the fast stabilisers they are known to be; net rating needs about 1,000 possessions, in line with Medvedovsky\'s "over 1,000" for plus-minus. Checked 2026-09-28.',
+                limits: [
+                    'M drifts with sample size for some stats (FG% 80 to 207 attempts): the pool at big samples is only high-volume players, who are more alike. The page shows the range.',
+                    'Estimated on 2020-21 to 2025-26 (shots: 1996-97 on); applying it to other eras assumes a similar spread of players.',
+                    'Per-game stats settle in a game or two because minutes and role barely change; the per-minute view measures the skill. On-court ratings mostly reflect teammates.',
+                    'BPM, VORP and impact score exist only as season totals, so they get only year-to-year correlation, which also counts real change (age, role, team).',
+                ],
+            },
         ],
     },
 ];

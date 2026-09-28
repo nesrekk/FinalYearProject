@@ -44,6 +44,7 @@ const Methodology = lazy(() => import('./components/pages/Methodology'));
 const LeaderboardBuilder = lazy(() => import('./components/pages/LeaderboardBuilder'));
 const RegressionExplorer = lazy(() => import('./components/pages/RegressionExplorer'));
 const BreakoutDetector = lazy(() => import('./components/pages/BreakoutDetector'));
+const StatStability = lazy(() => import('./components/pages/StatStability'));
 const PlayerProfile = lazy(() => import('./components/pages/PlayerProfile'));
 const RoleFinder = lazy(() => import('./components/pages/RoleFinder'));
 const EraTranslator = lazy(() => import('./components/pages/EraTranslator'));
@@ -74,6 +75,7 @@ const PAGES = {
   builder: LeaderboardBuilder,
   regression: RegressionExplorer,
   breakouts: BreakoutDetector,
+  stability: StatStability,
   player: PlayerProfile,
   rolefinder: RoleFinder,
   era: EraTranslator,

@@ -724,6 +724,14 @@ export async function fetchBreakouts(params) {
     return response.data;
 }
 
+// Stat Stability: sample needed per stat (split-half reliability) + year-to-year r.
+export async function fetchStatStability() {
+    return getWithCache('stat_stability', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/leaderboard/stability`);
+        return response.data;
+    });
+}
+
 // params: { x, y, season_from, season_to, min_gp, min_mpg, within_season }
 export async function fetchRegression(params) {
     const response = await axios.get(`${IMPACT_BASE}/explore/regression`, { params });

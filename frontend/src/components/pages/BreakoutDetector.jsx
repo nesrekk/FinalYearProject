@@ -7,6 +7,7 @@ import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import '../../styles/stability.css';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const FORMATS = {
@@ -99,6 +100,7 @@ export default function BreakoutDetector() {
     const seasons = data?.seasons_available ? [...data.seasons_available].reverse() : [];
     const p = data?.persistence;
     const up = form.direction === 'up';
+    const anyNoisy = !!data?.results.some((r) => Object.values(r.stats).some((v) => v.noisy));
 
     return (
         <section className="dashboard-card lb-card">
@@ -180,6 +182,11 @@ export default function BreakoutDetector() {
                         {up ? 'Biggest rises' : 'Biggest drops'} from {seasonLabel(data.season - 1)} to {seasonLabel(data.season)} among{' '}
                         {data.pool.toLocaleString()} players who played {data.filters.min_gp}+ games and {data.filters.min_mpg}+
                         minutes in both. Score = average change in standing, in standard deviations.
+                        {anyNoisy && (
+                            <> Greyed with <span className="ss-flag" aria-hidden="true">*</span>: that stat&apos;s sample in one
+                                of the two seasons is under 0.5 reliability, so most of the change can be luck
+                                (<a className="ss-link" href="?page=stability">Stat Stability</a>).</>
+                        )}
                     </p>
                     {data.results.length === 0 ? (
                         <p className="empty-message">No players qualify in both seasons.</p>
@@ -210,10 +217,13 @@ export default function BreakoutDetector() {
                                                 <td className="lb-num">{fmt('num1', r.min_before)} → {fmt('num1', r.min)}</td>
                                                 {data.stats.map((s) => {
                                                     const v = r.stats[s.key];
+                                                    const rel = v.reliability;
                                                     return (
-                                                        <td key={s.key} className="lb-num">
+                                                        <td key={s.key} className={v.noisy ? 'lb-num ss-noisy-cell' : 'lb-num'}
+                                                            title={rel ? `Reliability ${rel.before.toFixed(2)} → ${rel.now.toFixed(2)}` : undefined}>
                                                             {fmt(s.format, v.before)} → {fmt(s.format, v.now)}{' '}
                                                             <span className="cb-z">({signed(v.delta_z, 1)})</span>
+                                                            {v.noisy && <span className="ss-flag" aria-label="mostly noise">*</span>}
                                                         </td>
                                                     );
                                                 })}

@@ -1265,6 +1265,48 @@ def test_breakout_detector_known_seasons():
     assert client.get("/explore/breakouts", params={"stats": "age"}).status_code == 400
 
 
+def test_stat_stability_known_rules_of_thumb():
+    """Split-half reliability per catalogue stat (scripts/build_stat_stability.py)."""
+    from impact_api import app
+    from routers.leaderboard import STATS
+    client = TestClient(app)
+    resp = client.get("/leaderboard/stability")
+    if resp.status_code == 503:
+        pytest.skip("stat_stability not built (run scripts/build_stat_stability.py)")
+    d = resp.json()
+    _assert_has_source(d)
+    by = {s["key"]: s for s in d["stats"]}
+    # Every catalogue stat but age is covered, and the script's list matches the catalogue.
+    assert set(by) == set(STATS) - {"age"}
+    sys.path.insert(0, os.path.join(os.path.dirname(_API_DIR), "scripts"))
+    import build_stat_stability
+    assert set(build_stat_stability.CATALOGUE) == set(STATS) - {"age"}
+    assert all(s["year_to_year"] for s in d["stats"])
+    # Rules of thumb: 3P% needs hundreds of attempts (published: 242 to 750),
+    # free-throw % and rebound % settle fast.
+    assert 242 <= by["fg3_pct"]["split_half"]["stable_n"] <= 750
+    assert by["ft_pct"]["split_half"]["stable_n"] < 100
+    assert by["reb_pct"]["split_half"]["stable_n"] < 150
+    assert by["fg3_pct"]["year_to_year"]["r"] < by["reb_pct"]["year_to_year"]["r"]
+    for s in d["stats"]:
+        sh = s["split_half"]
+        if sh:
+            assert sh["ci"][0] <= sh["stable_n"] <= sh["ci"][1]
+    assert by["bpm"]["split_half"] is None  # season totals only
+
+    # Fed back into the Leaderboard: reliability = n / (n + M) per row.
+    lb = client.get("/leaderboard/custom", params={"stat": "fg3_pct", "season_from": 2026}).json()
+    m = lb["stability"]["stable_n"]
+    for r in lb["results"]:
+        n = r["sample"]["n"]
+        assert abs(r["sample"]["reliability"] - n / (n + m)) < 0.002
+        assert r["sample"]["noisy"] == (r["sample"]["reliability"] < 0.5)
+    # ... and into the Breakout Detector (BPM has no split-half estimate).
+    b = client.get("/explore/breakouts", params={"season": 2017, "top_n": 5}).json()
+    stats = b["results"][0]["stats"]
+    assert "reliability" in stats["ts_pct"] and "reliability" not in stats["bpm"]
+
+
 def test_player_profile_known_players():
     from impact_api import app
     client = TestClient(app)

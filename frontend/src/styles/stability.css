@@ -1,0 +1,79 @@
+/* Stat Stability page (pages/StatStability.jsx) and the reliability
+   warnings it feeds on the Leaderboard Builder and Breakout Detector. */
+.ss-picked {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--hairline);
+}
+.ss-picked-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-6);
+}
+.ss-picked-head .lb-modes { margin-bottom: 0; }
+.ss-picked-title {
+  margin: 0;
+  font-size: var(--text-headline-size);
+  font-weight: 700;
+  color: var(--text);
+}
+.ss-select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.8rem;
+  color: var(--text-2);
+  min-width: 200px;
+}
+.ss-select .input-field { flex: none; width: 100%; min-width: 0; }
+.ss-picked-line { margin: var(--space-3) 0 0; color: var(--text); line-height: 1.55; }
+.ss-legend { margin: var(--space-2) 0 var(--space-4); font-size: 0.8rem; color: var(--text-2); line-height: 1.5; }
+.ss-half { stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 4 4; }
+.ss-typical { stroke: var(--brand); stroke-width: 1.5; stroke-dasharray: 2 3; }
+.ss-mark {
+  fill: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.ss-fit { fill: none; }
+.ss-points circle { fill: var(--brand); stroke: var(--line); stroke-width: 1; }
+.ss-points circle.ss-thin { fill: var(--surface); }
+.ss-table .ss-group th {
+  text-align: left;
+  font-size: var(--text-eyebrow-size);
+  letter-spacing: var(--text-eyebrow-tracking);
+  text-transform: uppercase;
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+.ss-table tr.ss-on td { background: color-mix(in srgb, var(--brand) 12%, transparent); }
+.ss-pick {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--brand-text);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.ss-unit, .ss-none { color: var(--text-2); font-size: 0.85em; }
+.ss-low { color: var(--negative); font-weight: 700; }
+
+/* Reliability warnings on other pages */
+.lb-table tr.ss-noisy td { color: var(--text-2); }
+.lb-table tr.ss-noisy td.lb-stat { font-weight: 400; }
+.lb-table td.ss-noisy-cell { color: var(--text-2); }
+.ss-flag { color: var(--negative); font-weight: 700; margin-left: 2px; }
+.ss-link {
+  color: var(--brand-text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

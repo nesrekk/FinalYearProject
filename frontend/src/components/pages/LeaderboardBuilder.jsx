@@ -8,6 +8,7 @@ import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import CompositeBuilder from './CompositeBuilder';
+import '../../styles/stability.css';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 
@@ -158,6 +159,10 @@ export default function LeaderboardBuilder() {
     };
 
     const attemptsKey = stat?.attempts;
+    // Reliability column only where it tells you something: per-game stats
+    // are 0.97+ reliable after a handful of games (Stat Stability page).
+    const showReliability = !!data?.stability && data.results.some((r) => r.sample && r.sample.reliability < 0.9);
+    const noisyRows = showReliability ? data.results.filter((r) => r.sample?.noisy).length : 0;
     const range = data && (data.filters.season_from === data.filters.season_to
         ? seasonLabel(data.filters.season_to)
         : `${seasonLabel(data.filters.season_from)} to ${seasonLabel(data.filters.season_to)}`);
@@ -278,6 +283,15 @@ export default function LeaderboardBuilder() {
                                 {' '}{data.filters.order === 'high' ? 'Highest' : 'Lowest'} first.
                                 {data.notes.map((n) => <span key={n} className="lb-note"> {n}</span>)}
                             </p>
+                            {showReliability && (
+                                <p className="page-subtitle lb-summary" style={{ marginTop: '0.25rem' }}>
+                                    Reliability = how much of a player&apos;s number is his own level rather than luck, given
+                                    his sample; {data.stat.label} is half and half at {Math.round(data.stability.stable_n).toLocaleString()}
+                                    {' '}{data.stability.unit_label}.{' '}
+                                    {noisyRows > 0 && <>{noisyRows} of these {data.results.length} rows are under 0.5 (greyed): their order is mostly luck.{' '}</>}
+                                    <a className="ss-link" href={`?page=stability&stat=${data.stat.key}`}>Stat Stability</a> explains.
+                                </p>
+                            )}
                             {data.results.length === 0 ? (
                                 <p className="empty-message">No player-seasons pass these filters.</p>
                             ) : (
@@ -293,6 +307,7 @@ export default function LeaderboardBuilder() {
                                                     <th>Team</th>
                                                     <th className="lb-num lb-stat">{data.stat.label}</th>
                                                     {data.stat.attempts && <th className="lb-num">{ATTEMPT_LABELS[data.stat.attempts]}</th>}
+                                                    {showReliability && <th className="lb-num">Reliability</th>}
                                                     {CONTEXT_COLUMNS.filter((c) => c.key !== data.stat.key).map((c) => (
                                                         <th key={c.key} className="lb-num">{c.label}</th>
                                                     ))}
@@ -300,13 +315,18 @@ export default function LeaderboardBuilder() {
                                             </thead>
                                             <tbody>
                                                 {data.results.map((r) => (
-                                                    <tr key={`${r.player_id}-${r.season}`}>
+                                                    <tr key={`${r.player_id}-${r.season}`} className={showReliability && r.sample?.noisy ? 'ss-noisy' : undefined}>
                                                         <td>{r.rank}</td>
                                                         <td><PlayerName playerId={r.player_id} name={r.player_name} /></td>
                                                         <td>{seasonLabel(r.season)}</td>
                                                         <td>{r.team}</td>
                                                         <td className="lb-num lb-stat">{fmt(data.stat.format, r.value)}</td>
                                                         {data.stat.attempts && <td className="lb-num">{fmt('num1', r.context[data.stat.attempts])}</td>}
+                                                        {showReliability && (
+                                                            <td className="lb-num" title={r.sample ? `${Math.round(r.sample.n).toLocaleString()} ${data.stability.unit_label} this season` : undefined}>
+                                                                {r.sample ? r.sample.reliability.toFixed(2) : '—'}
+                                                            </td>
+                                                        )}
                                                         {CONTEXT_COLUMNS.filter((c) => c.key !== data.stat.key).map((c) => (
                                                             <td key={c.key} className="lb-num">{fmt(c.format, r.context[c.key])}</td>
                                                         ))}

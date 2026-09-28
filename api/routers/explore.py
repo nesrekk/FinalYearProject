@@ -25,7 +25,7 @@ import numpy as np
 from fastapi import APIRouter, HTTPException, Query
 
 from impact_core import get_db  # also puts scripts/ on sys.path
-from routers.leaderboard import ATTEMPT_DEFAULTS, STATS
+from routers.leaderboard import ATTEMPT_DEFAULTS, STATS, sample_reliability
 from source_badge import make_source
 from stats_lib import wls_cluster
 
@@ -323,15 +323,27 @@ def breakouts(
     def num(v, d=4):
         return None if v is None or (isinstance(v, float) and np.isnan(v)) else round(float(v), d)
 
+    shown = jumps[:top_n]
+    # How much of each number is sample noise (stat_stability; stats with a split-half estimate only).
+    with get_db() as conn:
+        rel = sample_reliability(conn.cursor(), keys, [(pid, s) for pid, *_ in shown for s in (season - 1, season)])
+
+    def stat_entry(pid, j, k, d):
+        before, now = rel.get((pid, season - 1), {}).get(k), rel.get((pid, season), {}).get(k)
+        e = {"before": num(prev[pid][1][j]), "now": num(cur[pid][1][j]), "delta_z": round(float(d[j]), 2)}
+        if before and now:
+            e["reliability"] = {"before": before["reliability"], "now": now["reliability"]}
+            e["noisy"] = before["noisy"] or now["noisy"]
+        return e
+
     results = []
-    for rank, (pid, score, d) in enumerate(jumps[:top_n], start=1):
+    for rank, (pid, score, d) in enumerate(shown, start=1):
         now, before = cur[pid], prev[pid]
         results.append({
             "rank": rank, "player_id": pid, "player_name": now[2], "team": now[3],
             "age": num(now[4], 0), "gp": int(now[5]), "min": num(now[6], 1), "min_before": num(before[6], 1),
             "score": round(score, 3),
-            "stats": {k: {"before": num(before[1][j]), "now": num(now[1][j]), "delta_z": round(float(d[j]), 2)}
-                      for j, k in enumerate(keys)},
+            "stats": {k: stat_entry(pid, j, k, d) for j, k in enumerate(keys)},
         })
 
     return {
@@ -350,7 +362,8 @@ def breakouts(
             "standing across the chosen stats from the season before (lower-is-better stats flipped; a shooting "
             "percentage on too few attempts counts as average). Both seasons must qualify. Big one-year jumps "
             "partly regress: the historical line shows how much of a top-20 breakout the same players kept the "
-            "following season (median across seasons)."
+            "following season (median across seasons). A change is marked as mostly noise when either season's "
+            "sample gives that stat a reliability under 0.5 (Stat Stability page)."
         ),
         "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Basketball-Reference"),
     }
