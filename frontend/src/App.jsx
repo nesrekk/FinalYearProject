@@ -54,6 +54,7 @@ const Projections = lazy(() => import('./components/pages/Projections'));
 const StatLineFinder = lazy(() => import('./components/pages/StatLineFinder'));
 const GameFinder = lazy(() => import('./components/pages/GameFinder'));
 const HotStreaks = lazy(() => import('./components/pages/HotStreaks'));
+const Rapm = lazy(() => import('./components/pages/Rapm'));
 const SituationalSplits = lazy(() => import('./components/pages/SituationalSplits'));
 const Watchlist = lazy(() => import('./components/pages/Watchlist'));
 const SavedAnalyses = lazy(() => import('./components/pages/SavedAnalyses'));
@@ -93,6 +94,7 @@ const PAGES = {
   statline: StatLineFinder,
   gamefinder: GameFinder,
   hotstreaks: HotStreaks,
+  rapm: Rapm,
   splits: SituationalSplits,
   watchlist: Watchlist,
   saved: SavedAnalyses,

@@ -365,6 +365,13 @@ COVERAGE_MAP = [
         "used_by": [],
     },
     {
+        "table": "player_rapm", "label": "RAPM (regularized adjusted plus-minus)", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM player_rapm", "range_fmt": "season_int",
+        "source": "Ridge regression on the tracked five-man stints (lineup_stints) by scripts/build_rapm.py: one season, a three-season window, and a BPM-prior version; shrinkage by game-grouped cross-validation, errors from a game bootstrap.",
+        "gap": "Only stints that reconciled with five identified players a side (93.7-99.8% of minutes a season). Single-season RAPM is noisy by nature (about 0.4 year-to-year correlation against 0.75 for BPM), and the held-out tests show it predicts next season's games about as well as BPM, not better; rapm_validation stores every test.",
+        "used_by": ["rapm", "player"],
+    },
+    {
         "table": "player_wpa_totals", "label": "Win-probability-added totals", "group": "Models",
         "range_sql": None, "range_fmt": None,
         "source": "compute_wpa.py over deduplicated play-by-play (scripts/wpa_lib.PBP_DEDUP_WHERE).",

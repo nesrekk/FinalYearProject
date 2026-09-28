@@ -721,6 +721,25 @@ export async function fetchHotStreaks(params) {
     return response.data;
 }
 
+// ─── RAPM (player_rapm, rapm_fits, rapm_lambda_cv, rapm_validation) ───
+export async function fetchRapmOptions() {
+    return getWithCache('rapm_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/rapm/options`);
+        return response.data;
+    });
+}
+
+// params: { version, season, min_poss, team }
+export async function fetchRapm(params) {
+    const response = await axios.get(`${IMPACT_BASE}/rapm`, { params });
+    return response.data;
+}
+
+export async function fetchRapmValidation() {
+    const response = await axios.get(`${IMPACT_BASE}/rapm/validation`);
+    return response.data;
+}
+
 // ─── Situational Splits (player_situational_splits, situational_split_league) ───
 export async function fetchSituationalOptions() {
     return getWithCache('situational_options', 10 * 60 * 1000, async () => {

@@ -729,6 +729,77 @@ function OnOff({ block, coverage, onNavigate }) {
     );
 }
 
+const RAPM_VERSION = { single: 'One season', multi: '3-season window', prior: 'BPM prior' };
+
+function RapmBlock({ block, coverage, onNavigate }) {
+    const rows = block.rows;
+    const bySeason = new Map();
+    rows.forEach((r) => {
+        if (!bySeason.has(r.season)) bySeason.set(r.season, {});
+        bySeason.get(r.season)[r.version] = r;
+    });
+    const seasons = [...bySeason.keys()].sort((a, b) => a - b);
+    const cell = (r) => (r == null ? '—' : (
+        <span className={tone(r.rapm)} title={`${RAPM_VERSION[r.version]}: ORAPM ${signed(r.orapm)} ± ${num(r.orapm_se)}, DRAPM ${signed(r.drapm)} ± ${num(r.drapm_se)}${r.version === 'multi' ? `, ${label(r.seasons_from)} to ${label(r.seasons_to)}` : ''}`}>
+            {signed(r.rapm)} ± {num(r.rapm_se)}{r.rank ? ` (#${r.rank})` : ''}
+        </span>
+    ));
+    return (
+        <Section id="rapm" title="RAPM"
+            info={(
+                <InfoTooltip label="How RAPM is computed" title="The other nine held constant">
+                    Ridge regression on every tracked five-man stint: his offence and defence effect per 100 possessions
+                    with the other nine players on the floor held constant, shrunk toward the league average (or, in the
+                    BPM-prior version, toward his Basketball-Reference BPM). The ± is a standard error from resampling
+                    games; a 95% interval that includes zero is within noise. Spreads are compressed on purpose: a +5 here
+                    is elite. Ranks are among players over the possessions floor, league-wide.
+                </InfoTooltip>
+            )}
+            meta={<>Stints cover {span(coverage)}; ranks among players with {block.qualified_poss?.toLocaleString()}+ possessions. Seasons under
+                the floor are greyed.{' '}
+                <button type="button" className="pp-link" onClick={() => onNavigate('rapm', null, { season: seasons[seasons.length - 1] })}>Open RAPM</button></>}>
+            <TableExport />
+            <div className="table-wrapper">
+                <table className="data-table lb-table pp-table">
+                    <thead>
+                        <tr><th>Season</th><th>Team</th><th className="lb-num">Poss</th><th className="lb-num">ORAPM</th>
+                            <th className="lb-num">DRAPM</th><th className="lb-num">RAPM</th><th className="lb-num">95% interval</th>
+                            <th className="lb-num" title="Three-season window ending this season">3-season</th>
+                            <th className="lb-num" title="One season, shrunk toward his BPM">BPM prior</th>
+                            <th className="lb-num">BPM</th></tr>
+                    </thead>
+                    <tbody>
+                        {seasons.map((s) => {
+                            const v = bySeason.get(s);
+                            const r = v.single ?? v.prior ?? v.multi;
+                            return (
+                                <tr key={s} className={r.qualified ? undefined : 'sl-short'}
+                                    title={r.qualified ? undefined : `Under ${block.qualified_poss} possessions: treat as noise`}>
+                                    <td>{label(s)}</td>
+                                    <td>{r.teams}</td>
+                                    <td className="lb-num">{r.poss == null ? '—' : Math.round(r.poss).toLocaleString()}</td>
+                                    <td className={`lb-num ${tone(v.single?.orapm)}`}>{v.single ? signed(v.single.orapm) : '—'}</td>
+                                    <td className={`lb-num ${tone(v.single?.drapm)}`}>{v.single ? signed(v.single.drapm) : '—'}</td>
+                                    <td className="lb-num lb-stat">{cell(v.single)}</td>
+                                    <td className="lb-num">{v.single ? `${signed(v.single.ci_low)} to ${signed(v.single.ci_high)}` : '—'}</td>
+                                    <td className="lb-num">{cell(v.multi)}</td>
+                                    <td className="lb-num">{cell(v.prior)}</td>
+                                    <td className="lb-num">{signed(r.bpm)}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+            <p className="page-subtitle pp-foot">
+                Points per 100 possessions, the same units as BPM. One-season RAPM is noisy (year to year it correlates about 0.4
+                with itself, BPM about 0.75); the 3-season window and the BPM-prior version are steadier. Descriptive of those
+                minutes, not adjusted for health or role.
+            </p>
+        </Section>
+    );
+}
+
 // Why each block is missing for this player, in plain words.
 function missingReasons(d) {
     const p = d.player;
@@ -789,6 +860,11 @@ function missingReasons(d) {
         out.push(['On/off', endedBefore(cov.on_off.from)
             ? `Play-by-play lines cover ${span(cov.on_off)}; ${career}.`
             : `No game with on-court minutes in the play-by-play lines (${span(cov.on_off)}).`]);
+    }
+    if (d.rapm && !d.rapm.rows.length && cov.rapm?.from) {
+        out.push(['RAPM', endedBefore(cov.rapm.from)
+            ? `Five-man stints from play-by-play cover ${span(cov.rapm)}; ${career}.`
+            : `No tracked stint with him on the floor (${span(cov.rapm)}): his minutes fall in games or stints the play-by-play couldn't place.`]);
     }
     if (d.situational_splits && !d.situational_splits.seasons.length) {
         out.push(['Situational splits', endedBefore(cov.game_lines.from)
@@ -860,6 +936,7 @@ export default function PlayerProfile({ onNavigate }) {
         ['clutch', 'Clutch', !!d.clutch],
         ['projection', 'Next season', (d.projections?.rows.length ?? 0) > 0],
         ['onoff', 'On/off', (d.on_off?.rows.length ?? 0) > 0],
+        ['rapm', 'RAPM', (d.rapm?.rows.length ?? 0) > 0],
         ['splits', 'Splits', (d.situational_splits?.seasons.length ?? 0) > 0],
         ['similar', 'Similar', d.similarity.seasons.length > 0],
         ['breakouts', 'Breakouts', d.breakouts.flags.length > 0],
@@ -903,6 +980,7 @@ export default function PlayerProfile({ onNavigate }) {
             {d.clutch && <Clutch c={d.clutch} coverage={d.coverage.clutch} onNavigate={onNavigate} />}
             {(d.projections?.rows.length ?? 0) > 0 && <NextSeason block={d.projections} player={d.player} onNavigate={onNavigate} />}
             {(d.on_off?.rows.length ?? 0) > 0 && <OnOff block={d.on_off} coverage={d.coverage.on_off} onNavigate={onNavigate} />}
+            {(d.rapm?.rows.length ?? 0) > 0 && <RapmBlock block={d.rapm} coverage={d.coverage.rapm} onNavigate={onNavigate} />}
             {(d.situational_splits?.seasons.length ?? 0) > 0 && (
                 <SituationalSplitsBlock key={d.player.player_id} playerId={d.player.player_id} seasons={d.situational_splits.seasons} />
             )}

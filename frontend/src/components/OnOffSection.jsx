@@ -8,7 +8,7 @@ import CopyLinkButton from './common/CopyLinkButton';
 import PlayerName from './common/PlayerName';
 import TeamLogo from './common/TeamLogo';
 import TeamLink from './common/TeamLink';
-import { currentPageParam, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
+import { currentPageParam, openPage, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
@@ -337,7 +337,9 @@ export default function OnOffSection() {
                     Ratings are points per 100 possessions (FGA + 0.44 FTA − OREB + TOV, the Basketball-Reference convention, so about 3
                     points under NBA.com&apos;s scale). Off-court minutes are the team&apos;s minutes without him in games he played; games he
                     missed are in With/Without a Star instead. † marks a row under the minutes floor or with few off-court minutes.
-                    Descriptive, not adjusted for teammates or opponents: not RAPM.
+                    Descriptive, not adjusted for teammates or opponents: for that, see{' '}
+                    <button type="button" className="oo-link" onClick={() => openPage('rapm', { season })}>RAPM</button>, the regression
+                    that holds the other nine players constant.
                 </p>
             </div>
         </section>

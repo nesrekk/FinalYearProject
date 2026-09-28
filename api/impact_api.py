@@ -61,6 +61,7 @@ from routers import (
     playoff_forecaster,
     playtype_hustle,
     radar,
+    rapm,
     referee_tendencies,
     role_finder,
     root,
@@ -118,6 +119,7 @@ for _router_module in (
     luck_schedule,
     projections,
     team_profile,
+    rapm,
 ):
     app.include_router(_router_module.router)
 

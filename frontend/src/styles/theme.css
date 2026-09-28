@@ -1356,6 +1356,17 @@ select,
 .oo-team { white-space: nowrap; }
 .oo-team > * { vertical-align: middle; }
 .oo-foot { margin-top: var(--space-3); }
+.oo-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--brand-text);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
 @media (max-width: 640px) {
   .oo-ci { display: none; }
 }

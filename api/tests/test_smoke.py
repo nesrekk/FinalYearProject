@@ -2087,3 +2087,81 @@ def test_lineup_stints_reconcile_and_feed_lineup_tools():
     assert bos["lineups"]["stint_coverage"]["games"] == 82
     gsw = client.get("/team-profile/GSW", params={"season": 2016}).json()
     assert gsw["lineups"]["source"] == "lineup_stats" and gsw["pairs"]["available"]
+
+
+# ─── Round 4, Phase 2: RAPM ───────────────────────────────────────────────────
+
+def test_rapm_versions_validation_and_profile():
+    """RAPM (scripts/build_rapm.py, api/routers/rapm.py): ridge regression on every tracked five-man stint,
+    three versions, lambda by game-grouped cross-validation, game-bootstrap errors, held-out and next-season
+    tests against BPM, on/off and everyone-average. The plain single-season version doesn't beat BPM at
+    predicting next season's games; that known result is stored, not hidden."""
+    from impact_api import app
+    client = TestClient(app)
+    o = client.get("/rapm/options").json()
+    _assert_has_source(o)
+    versions = {v["id"]: v for v in o["versions"]}
+    assert set(versions) == {"single", "multi", "prior"} and o["qualified_poss"] == 1000 and o["bootstraps"] >= 200
+    assert versions["single"]["seasons"] == [2021, 2022, 2023, 2024, 2025, 2026]
+    assert versions["multi"]["seasons"] == [2023, 2024, 2025, 2026]   # three seasons on file from 2022-23 on
+
+    # 2023-24 single season: lambda chosen inside the grid, home edge about 2 points per 100, Jokić top 5
+    # among 1,000+ possession players, RAPM = O + D, intervals contain the estimate, correlation with BPM
+    # positive but well under 1.
+    d = client.get("/rapm", params={"version": "single", "season": 2024}).json()
+    _assert_has_source(d)
+    fit = d["fit"]
+    assert fit["lambda_rule"] == "cv_min" and 250 < fit["lambda"] < 128000 and fit["cv_rmse"] < fit["cv_rmse_zero"]
+    assert 1.0 < fit["home_edge_per_100"] < 3.5 and fit["games"] > 1200 and fit["cv_folds"] == 5
+    q = [p for p in d["players"] if p["qualified"]]
+    assert len(q) == d["noise"]["qualified"] and all(p["poss"] >= 1000 for p in q)
+    jokic = next(p for p in q if p["player_name"] == "Nikola Jokić")
+    assert jokic["rapm_rank"] <= 5 and jokic["rapm"] > 4 and jokic["orapm"] > 2
+    for p in d["players"]:
+        assert abs(p["rapm"] - (p["orapm"] + p["drapm"])) < 0.002
+        assert p["rapm_ci_low"] <= p["rapm"] <= p["rapm_ci_high"] and p["rapm_se"] > 0
+    assert 0.4 < d["noise"]["corr_with_bpm"] < 0.8
+    assert d["noise"]["ci_excludes_zero"] > d["noise"]["expected_by_chance"]
+    assert len(d["lambda_curve"]) >= 10 and abs(min(c["cv_rmse"] for c in d["lambda_curve"]) - fit["cv_rmse"]) < 0.001
+    # Team filter keeps the league rank; a bad team is a 404; a possessions floor is applied live.
+    den = client.get("/rapm", params={"version": "single", "season": 2024, "team": "DEN"}).json()
+    assert all("DEN" in p["team_list"] for p in den["players"])
+    assert next(p for p in den["players"] if p["player_id"] == jokic["player_id"])["rapm_rank"] == jokic["rapm_rank"]
+    assert client.get("/rapm", params={"season": 2024, "team": "XXX"}).status_code == 404
+    hi = client.get("/rapm", params={"version": "single", "season": 2024, "min_poss": 4000}).json()
+    assert hi["noise"]["qualified"] < d["noise"]["qualified"] and all(p["qualified"] == (p["poss"] >= 4000) for p in hi["players"])
+
+    # The prior version keeps the single-season lambda and says so; the cross-validation minimum (stored) is
+    # further out. The three-season window ending 2025-26 pools 2023-24 to 2025-26.
+    pr = client.get("/rapm", params={"version": "prior", "season": 2024}).json()
+    assert pr["fit"]["lambda_rule"] == "single_lambda" and pr["fit"]["lambda"] == fit["lambda"]
+    assert pr["fit"]["cv_best_lambda"] >= pr["fit"]["lambda"] and pr["fit"]["cv_best_rmse"] <= pr["fit"]["cv_rmse"]
+    assert pr["fit"]["players_with_prior"] > 400 and any(p["prior_o"] is not None for p in pr["players"])
+    mu = client.get("/rapm", params={"version": "multi", "season": 2026}).json()
+    assert (mu["fit"]["seasons_from"], mu["fit"]["seasons_to"]) == (2024, 2026) and mu["fit"]["players"] > 650
+    assert client.get("/rapm", params={"version": "multi", "season": 2021}).status_code == 404
+    assert client.get("/rapm", params={"version": "nope"}).status_code == 400
+
+    # Validation: every model beats everyone-average on held-out games; next season, on/off used as published is
+    # far too big (its best scale is well under 1) and plain RAPM does not beat BPM; year-to-year, BPM is
+    # steadier than single-season RAPM.
+    v = client.get("/rapm/validation").json()
+    _assert_has_source(v)
+    rows = v["validation"]
+    held = {r["model"]: r for r in rows if r["test"] == "held_out_games" and r["season"] == 2024}
+    assert {"rapm_single", "rapm_multi", "rapm_prior", "bpm", "onoff", "zero"} <= set(held)
+    assert held["rapm_single"]["game_rmse"] < held["zero"]["game_rmse"] and held["rapm_single"]["game_corr"] > 0.3
+    nxt = {r["model"]: r for r in rows if r["test"] == "next_season" and r["season"] == 2025}
+    assert nxt["rapm_single"]["game_rmse"] < nxt["zero"]["game_rmse"] and nxt["bpm"]["game_rmse"] < nxt["zero"]["game_rmse"]
+    assert nxt["onoff"]["scale_fit"] < 0.6 and nxt["onoff"]["game_rmse"] > nxt["zero"]["game_rmse"]
+    assert nxt["rapm_single"]["game_rmse"] >= nxt["bpm"]["game_rmse"] - 0.3   # the known result: no clear win over BPM
+    assert 0.8 < nxt["rapm_single"]["coverage"] <= 1 and nxt["rapm_single"]["coverage_all10"] < nxt["rapm_single"]["coverage"]
+    y2y = {r["model"]: r for r in rows if r["test"] == "year_to_year" and r["season"] == 2025}
+    assert y2y["bpm"]["corr"] > y2y["rapm_single"]["corr"] > y2y["onoff"]["corr"] - 0.05 and y2y["rapm_single"]["players"] > 200
+    # Data Coverage lists the table; the profile carries the block with league ranks.
+    cov = client.get("/meta/coverage").json()
+    assert any(t["table"] == "player_rapm" and t["n_rows"] > 8000 for t in cov["tables"])
+    prof = client.get("/player-profile/203999").json()["rapm"]
+    assert prof["qualified_poss"] == 1000 and {r["version"] for r in prof["rows"]} == {"single", "multi", "prior"}
+    j24 = next(r for r in prof["rows"] if r["version"] == "single" and r["season"] == 2024)
+    assert j24["qualified"] and j24["rank"] == jokic["rapm_rank"] and j24["n_qualified"] == d["noise"]["qualified"]

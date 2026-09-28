@@ -22,6 +22,7 @@ export const NAV_GROUPS = [
             { id: 'regression', label: 'Regression Explorer', icon: 'scatter_plot' },
             { id: 'breakouts', label: 'Breakout Detector', icon: 'trending_up' },
             { id: 'stability', label: 'Stat Stability', icon: 'equalizer' },
+            { id: 'rapm', label: 'RAPM', icon: 'balance' },
             { id: 'rolefinder', label: 'Role Player Finder', icon: 'person_search' },
             { id: 'era', label: 'Era Translator', icon: 'history' },
             { id: 'aging', label: 'Aging Curves', icon: 'timeline' },

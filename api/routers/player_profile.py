@@ -31,6 +31,7 @@ from routers.leaderboard import STATS
 from routers.shot_making import PLAYER_COLS as SM_COLS, _row as sm_row
 from routers.on_off import DEFAULT_MIN_MINUTES as ON_OFF_MIN_MINUTES, FEW_OFF_MINUTES as ON_OFF_FEW_OFF
 from routers.projections import LOW_WEIGHT as PROJECTION_LOW_WEIGHT, PROFILE_STATS as PROJECTION_STATS
+from routers.rapm import _fits as rapm_fits
 from source_badge import make_source
 
 router = APIRouter()
@@ -78,6 +79,7 @@ def _coverage():
             "clutch": _span(cur, "SELECT min(season), max(season) FROM pbp_games"),
             "shot_making": _span(cur, "SELECT min(season), max(season) FROM shot_making_league"),
             "on_off": _span(cur, "SELECT min(season), max(season) FROM player_on_off"),
+            "rapm": _span(cur, "SELECT min(season), max(season) FROM player_rapm"),
             "projections": _span(cur, "SELECT min(season), max(season) FROM player_projections"),
             "game_lines": _span(cur, "SELECT min(season), max(season) FROM player_game_lines"),
             "awards": _span(cur, "SELECT min(season), max(season) FROM player_awards WHERE award <> 'All-Star'"),
@@ -308,6 +310,25 @@ def get_player_profile(player_id: int):
             o["ci_excludes_zero"] = None if o["ci_low"] is None else bool(o["ci_low"] > 0 or o["ci_high"] < 0)
             on_off.append(o)
 
+        # ── RAPM: his effect with the other nine on the floor held constant (player_rapm), every version ──
+        cur.execute("""SELECT version, season, seasons_from, seasons_to, teams, games, minutes, poss, orapm, drapm, rapm,
+                              orapm_se, drapm_se, rapm_se, rapm_ci_low, rapm_ci_high, bpm, qualified, rk, n_qualified, lam
+                       FROM (SELECT p.*, f.lambda AS lam,
+                                    RANK() OVER (PARTITION BY p.version, p.season, p.qualified ORDER BY p.rapm DESC) AS rk,
+                                    COUNT(*) OVER (PARTITION BY p.version, p.season, p.qualified) AS n_qualified
+                             FROM player_rapm p JOIN rapm_fits f USING (version, season)) x
+                       WHERE player_id = %s ORDER BY season, version""", (player_id,))
+        rkeys = ["version", "season", "seasons_from", "seasons_to", "teams", "games", "minutes", "poss", "orapm", "drapm",
+                 "rapm", "orapm_se", "drapm_se", "rapm_se", "ci_low", "ci_high", "bpm", "qualified", "rank", "n_qualified",
+                 "lambda"]
+        rapm = []
+        for x in cur.fetchall():
+            o = {k: (_num(v, 2) if isinstance(v, float) else v) for k, v in zip(rkeys, x)}
+            if not o["qualified"]:
+                o["rank"], o["n_qualified"] = None, None
+            o["ci_excludes_zero"] = None if o["ci_low"] is None else bool(o["ci_low"] > 0 or o["ci_high"] < 0)
+            rapm.append(o)
+
         # ── Next season: the Marcel-style baseline projection (player_projections) ──
         cur.execute("""SELECT p.stat, s.label, s.format, s.higher_is_better, p.projection, p.lo, p.hi, p.own_weight,
                               p.seasons_used, p.last_season, p.last_value, p.age_adjustment, p.age_known, p.age_next,
@@ -351,6 +372,8 @@ def get_player_profile(player_id: int):
         "contracts": {"rows": contracts},
         "clutch": clutch,
         "on_off": {"rows": on_off, "qualified_minutes": ON_OFF_MIN_MINUTES, "few_off_minutes": ON_OFF_FEW_OFF},
+        "rapm": {"rows": rapm,
+                 "qualified_poss": next(iter(rapm_fits().values()))["qualified_poss"] if rapm_fits() else None},
         "similarity": {"seasons": sim_seasons},
         "game_log": {"seasons": game_log_seasons},
         "situational_splits": {"seasons": split_seasons},
@@ -364,7 +387,7 @@ def get_player_profile(player_id: int):
         "_source": make_source(
             ["player_season_stats", "player_team_stints", "player_bio", "player_awards", "draft_history",
              "player_roles", "greats", "player_shots", "scouting_splits", "defender_dad", "player_gravity",
-             "contract_value", "player_wpa_totals", "player_shot_making", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue", "player_situational_splits", "player_projections"],
+             "contract_value", "player_wpa_totals", "player_shot_making", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue", "player_situational_splits", "player_projections", "player_rapm"],
             "nba_api (stats.nba.com), Basketball-Reference via Kaggle, ESPN play-by-play, Kaggle salary datasets",
         ),
     }
