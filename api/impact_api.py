@@ -28,6 +28,7 @@ from routers import (
     draft_value,
     era,
     explore,
+    game_log,
     games_misc,
     greats,
     garbage_time,
@@ -101,6 +102,7 @@ for _router_module in (
     role_finder,
     trade_impact,
     player_profile,
+    game_log,
     aging,
 ):
     app.include_router(_router_module.router)

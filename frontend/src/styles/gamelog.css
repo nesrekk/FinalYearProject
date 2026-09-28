@@ -1,0 +1,91 @@
+/* Game log block on the player profile (common/GameLogBlock.jsx) and the
+   Game Finder page (pages/GameFinder.jsx). Paper/Ink tokens only. */
+
+/* ── Game log ── */
+.gl-controls { align-items: flex-end; flex-wrap: wrap; gap: var(--space-3) var(--space-5); }
+.gl-windows { margin: 0; }
+.gl-find { align-self: center; }
+.gl-summary { margin: var(--space-3) 0; color: var(--text-2); line-height: 1.6; }
+.gl-summary strong { color: var(--text); }
+.gl-gap { display: block; margin-top: var(--space-2); }
+.gl-chart { margin: var(--space-2) 0 var(--space-4); }
+.gl-dots circle { fill: var(--text-3); fill-opacity: 0.55; }
+.gl-roll { fill: none; stroke: var(--brand); stroke-width: 2.5; stroke-linejoin: round; }
+.gl-avg { stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 4 4; }
+.gl-opp { display: inline-flex; align-items: center; gap: 6px; }
+.gl-table td { font-variant-numeric: tabular-nums; }
+
+/* ── Game Finder ── */
+.gf-conds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1.5px solid var(--line);
+}
+.gf-conds legend {
+  padding: 0 var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+}
+.gf-cond {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) 80px minmax(0, 110px) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+.gf-cond .input-field { width: 100%; min-width: 0; }
+.gf-cond-add { flex: none; align-self: flex-start; max-width: 260px; }
+.gf-player { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.gf-player .input-field { flex: none; }
+.gf-player > span {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+}
+.gf-player-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 38px;
+}
+.gf-note { margin: var(--space-3) 0 0; font-size: 0.82rem; }
+.gf-most { margin: var(--space-3) 0 0; color: var(--text-2); font-size: 0.88rem; line-height: 1.6; }
+.gf-most strong { color: var(--text); }
+.gf-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  color: var(--text-2);
+  font-size: 0.88rem;
+}
+.gf-sort {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.gf-sort:hover,
+.gf-sort:focus-visible { color: var(--brand-text); text-decoration: underline; }
+.gf-sort[aria-sort] { color: var(--brand-text); }
+.gf-hit { font-weight: 700; color: var(--text); }
+.gf-active { margin-left: 6px; }
+
+@media (max-width: 560px) {
+  .gf-cond { grid-template-columns: 72px minmax(0, 1fr) auto; }
+  .gf-cond > select:first-child { grid-column: 1 / -1; }
+  .gf-cond + .gf-cond { padding-top: var(--space-2); border-top: 1px solid var(--hairline); }
+}
+
+/* Table cells default to --text (theme.css); keep the result colour. */
+.gl-table td.pp-pos { color: var(--positive); }
+.gl-table td.pp-neg { color: var(--negative); }

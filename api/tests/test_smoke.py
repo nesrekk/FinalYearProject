@@ -1338,6 +1338,59 @@ def test_player_profile_known_players():
     assert sum(z["fga"] for z in zones["zones"]) == zones["fga"]
     assert client.get("/player-profile/203999/shot-zones", params={"season": 1990}).status_code == 404
     assert client.get("/player-profile/999999999").status_code == 404
+
+
+def test_game_log_and_finder_match_known_games():
+    """player_game_lines (ESPN play-by-play rebuild) via /games/finder and /games/player-log."""
+    from impact_api import app
+    client = TestClient(app)
+    opts = client.get("/games/finder/options").json()
+    _assert_has_source(opts)
+    assert opts["seasons"]["from"] == 2021
+    # The three NBA Cup finals are the only lines left out (not in the standings).
+    assert [x["date"] for x in opts["left_out"]] == ["2023-12-09", "2024-12-17", "2025-12-16"]
+    assert opts["accuracy"]["points_mean_abs_error"] < 0.01
+
+    def only(f, **kw):
+        d = client.get("/games/finder", params={"f": f, **kw}).json()
+        assert d["total"] == 1, d["total"]
+        return d["results"][0]
+
+    # Known box scores: Doncic 73 (2024-01-26), Embiid 70 (2024-01-22), Mitchell 71 in OT (2023-01-02).
+    g = only("pts:eq:73")
+    assert (g["player_name"], g["date"], g["opponent"]) == ("Luka Dončić", "2024-01-26", "ATL")
+    assert (g["fgm"], g["fga"], g["fg3m"], g["fg3a"], g["ftm"], g["fta"], g["reb"], g["ast"]) == (25, 33, 8, 13, 15, 16, 10, 7)
+    g = only("pts:gte:70,reb:gte:18")
+    assert (g["player_name"], g["opponent"], g["fgm"], g["fga"], g["ftm"], g["fta"]) == ("Joel Embiid", "SAS", 24, 41, 21, 23)
+    g = only("pts:gte:71,ast:gte:11")
+    assert (g["player_name"], g["fgm"], g["fga"], g["fg3m"], g["fg3a"], g["ftm"], g["fta"]) == \
+        ("Donovan Mitchell", 22, 34, 7, 15, 20, 25)
+    assert g["min"] > 48  # overtime game
+
+    # Known streaks: Curry's 11 straight 30-point games (Mar 29 - Apr 19, 2021), Embiid's 22 in 2023-24.
+    s = client.get("/games/finder", params={"f": "pts:gte:30", "mode": "streaks", "season_from": 2021,
+                                            "season_to": 2021}).json()["results"][0]
+    assert (s["player_name"], s["games"], s["start_date"], s["end_date"]) == ("Stephen Curry", 11, "2021-03-29", "2021-04-19")
+    s = client.get("/games/finder", params={"f": "pts:gte:30", "mode": "streaks", "season_from": 2024,
+                                            "season_to": 2024}).json()["results"][0]
+    assert (s["player_name"], s["games"]) == ("Joel Embiid", 22)
+
+    # Game log: every game NBA.com counts, in date order; the Cup final is left out.
+    log = client.get("/games/player-log/203999", params={"season": 2024}).json()
+    _assert_has_source(log)
+    assert log["games"] == log["nba_gp"] == len(log["rows"]) == 79
+    assert [r["date"] for r in log["rows"]] == sorted(r["date"] for r in log["rows"])
+    lebron = client.get("/games/player-log/2544", params={"season": 2024}).json()
+    assert lebron["cup_final_games"] == 1 and "2023-12-09" not in {r["date"] for r in lebron["rows"]}
+    prof = client.get("/player-profile/203999").json()["game_log"]
+    assert {r["season"] for r in prof["seasons"]} == {2021, 2022, 2023, 2024, 2025, 2026}
+    assert client.get("/games/player-log/203999", params={"season": 2010}).status_code == 404
+
+    # Whitelisted inputs only.
+    for bad in ({"f": "pts;drop table x:gte:1"}, {"f": "pts:like:1"}, {"sort": "pts desc"}, {"team": "XXX"},
+                {"mode": "streaks"}):
+        assert client.get("/games/finder", params=bad).status_code in (400, 422), bad
+    assert client.get("/player-profile/resolve", params={"name": "jokic"}).json()["player_id"] == 203999
     assert client.get("/player-profile/resolve", params={"name": "jokic"}).json()["player_id"] == 203999
 
 

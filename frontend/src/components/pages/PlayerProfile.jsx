@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchPlayerFullProfile, fetchProfileShotZones, fetchSeasonSimilarityProfile } from '../../services/api';
 import Loader from '../Loader';
 import CopyLinkButton from '../common/CopyLinkButton';
+import GameLogBlock from '../common/GameLogBlock';
 import SaveViewButton from '../common/SaveViewButton';
 import InfoTooltip from '../common/InfoTooltip';
 import PlayerHeadshot from '../common/PlayerHeadshot';
@@ -657,6 +658,11 @@ function missingReasons(d) {
             ? `Needs usage, net rating, assist % and rebound %, recorded from 2009-10 on; ${career}.`
             : 'No season with all eight similarity inputs.']);
     }
+    if (!d.game_log.seasons.length) {
+        out.push(['Game log', endedBefore(cov.game_lines.from)
+            ? `Game-by-game lines start in ${label(cov.game_lines.from)} (rebuilt from ESPN play-by-play); ${career}.`
+            : `No regular-season games in the play-by-play for him (${span(cov.game_lines)}).`]);
+    }
     if (!d.breakouts.flags.length) {
         out.push(['Breakouts', p.n_seasons === 1
             ? 'A breakout compares two seasons in a row; this is his first.'
@@ -701,6 +707,7 @@ export default function PlayerProfile({ onNavigate }) {
 
     const sections = [
         ['seasons', 'Seasons', true],
+        ['gamelog', 'Game log', d.game_log.seasons.length > 0],
         ['awards', 'Awards', d.awards.rows.length > 0 || d.player.greats],
         ['shots', 'Shot zones', d.shots.seasons.length > 0],
         ['scouting', 'Scouting', d.scouting.seasons.length > 0],
@@ -726,6 +733,10 @@ export default function PlayerProfile({ onNavigate }) {
             </nav>
 
             <SeasonsTable block={d.seasons} />
+            {d.game_log.seasons.length > 0 && (
+                <GameLogBlock key={d.player.player_id} playerId={d.player.player_id} seasons={d.game_log.seasons}
+                    nbaGp={Object.fromEntries(d.seasons.rows.map((r) => [r.season, r.gp]))} />
+            )}
             {(d.awards.rows.length > 0 || d.player.greats) && (
                 <Awards rows={d.awards.rows} greats={d.player.greats} coverage={d.coverage} onNavigate={onNavigate} />
             )}

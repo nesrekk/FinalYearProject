@@ -635,6 +635,31 @@ export async function resolvePlayerId(name) {
     return response.data;
 }
 
+// ─── Game Log + Game Finder (player_game_lines, 2020-21 on) ──────
+export async function fetchPlayerGameLog(playerId, season) {
+    const response = await axios.get(`${IMPACT_BASE}/games/player-log/${playerId}`, { params: season ? { season } : {} });
+    return response.data;
+}
+
+export async function fetchGameFinderOptions() {
+    return getWithCache('game_finder_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/games/finder/options`);
+        return response.data;
+    });
+}
+
+export async function fetchGameFinderPlayers(q) {
+    const response = await axios.get(`${IMPACT_BASE}/games/finder/players`, { params: { q } });
+    return response.data;
+}
+
+// params: { f: 'pts:gte:30,fga:lt:15', mode, season_from, season_to, team, home, result,
+//           min_minutes, player_id, sort, order, one_per_player, limit, offset }
+export async function fetchGameFinder(params) {
+    const response = await axios.get(`${IMPACT_BASE}/games/finder`, { params });
+    return response.data;
+}
+
 // ─── Gravity Index & Spacing Lab ─────────────────────────────────
 export async function fetchGravity(season, topN = 25) {
     const response = await axios.get(

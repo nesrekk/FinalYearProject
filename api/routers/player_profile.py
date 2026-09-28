@@ -73,6 +73,7 @@ def _coverage():
             "defense": _span(cur, "SELECT min(season), max(season) FROM defender_dad"),
             "gravity": _span(cur, "SELECT min(season), max(season) FROM player_gravity WHERE gravity IS NOT NULL"),
             "clutch": _span(cur, "SELECT min(season), max(season) FROM pbp_games"),
+            "game_lines": _span(cur, "SELECT min(season), max(season) FROM player_game_lines"),
             "awards": _span(cur, "SELECT min(season), max(season) FROM player_awards WHERE award <> 'All-Star'"),
             "all_star": _span(cur, "SELECT min(season), max(season) FROM player_awards WHERE award = 'All-Star'"),
         }
@@ -266,6 +267,13 @@ def get_player_profile(player_id: int):
         }
 
         shot_seasons = _shot_seasons(cur, player_id)
+
+        # ── Game log: seasons with game lines (rows load from /games/player-log) ──
+        cur.execute("""SELECT l.season, count(*) FROM player_game_lines l
+                       JOIN team_game_fatigue f ON f.team_abbreviation = l.team_abbreviation
+                                               AND f.game_date = l.game_date
+                       WHERE l.player_id = %s AND l.seconds > 0 GROUP BY 1 ORDER BY 1""", (player_id,))
+        game_log_seasons = [{"season": s, "games": n} for s, n in cur.fetchall()]
         zones = _zones(cur, player_id, shot_seasons[-1]["season"]) if shot_seasons else None
 
         # Seasons the similarity service can compare (all eight inputs present).
@@ -296,6 +304,7 @@ def get_player_profile(player_id: int):
         "contracts": {"rows": contracts},
         "clutch": clutch,
         "similarity": {"seasons": sim_seasons},
+        "game_log": {"seasons": game_log_seasons},
         "breakouts": {
             "flags": flags, "top": BREAKOUT_FLAG_TOP, "stats": [STATS[k][0] for k in BREAKOUT_DEFAULT],
             "keys": BREAKOUT_DEFAULT, "min_gp": BREAKOUT_DEFAULT_GP, "min_mpg": BREAKOUT_DEFAULT_MPG,
@@ -304,7 +313,7 @@ def get_player_profile(player_id: int):
         "_source": make_source(
             ["player_season_stats", "player_team_stints", "player_bio", "player_awards", "draft_history",
              "player_roles", "greats", "player_shots", "scouting_splits", "defender_dad", "player_gravity",
-             "contract_value", "player_wpa_totals", "league_zone_mix"],
+             "contract_value", "player_wpa_totals", "league_zone_mix", "player_game_lines", "team_game_fatigue"],
             "nba_api (stats.nba.com), Basketball-Reference via Kaggle, ESPN play-by-play, Kaggle salary datasets",
         ),
     }
