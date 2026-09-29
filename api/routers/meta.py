@@ -348,7 +348,7 @@ COVERAGE_MAP = [
         "range_sql": "SELECT MIN(season), MAX(season) FROM game_pregame_odds", "range_fmt": "season_int",
         "source": "scripts/build_season_sim.py: for every game 2010-11 on, P(home wins) as of that morning from ratings (this season's SRS blended with last season's), home court and back-to-backs; held out (coefficients fitted without that season); every form's probability stored.",
         "gap": "Ratings use only games before the game, but the three logistic coefficients and the prior constants are fitted across seasons. No injuries, trades or line-ups: a team is one rating.",
-        "used_by": ["simulator"],
+        "used_by": ["simulator", "bestgames"],
     },
     {
         "table": "season_sim_backtest", "label": "Season simulator backtest", "group": "Models",
@@ -419,6 +419,13 @@ COVERAGE_MAP = [
         "source": "scripts/build_play_finder.py: every regular-season game's ESPN play-by-play through the same parser as player_game_lines (shooter, passer, blocker, stealer, two or three), the score before each play reconciled to the real final (game_scores), shot distance from the NBA shot chart's coordinates (player_shots) where matched; per-game sources in play_finder_games, per-season checks in play_finder_seasons.",
         "gap": "Every player-game's shots (twos and threes), free throws, rebounds, assists, steals, blocks and turnovers equal his player_game_lines line (0 of 152,428 differ). 0.35% of shots have no distance; 0.32% of rows name a player with no id. Team rebounds aren't included; the three NBA Cup finals aren't either.",
         "used_by": ["plays"],
+    },
+    {
+        "table": "best_games", "label": "Best games (win-probability swings, one row per game)", "group": "Games",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM best_games", "range_fmt": "season_int",
+        "source": "scripts/build_best_games.py: every regular-season game's reconciled score after each play (play_finder_events) run through Game Replay's win-probability model; per game the swing, lead changes, comeback, overtimes, the play that moved win probability most and an excitement score (formula in api/best_games.py; weights stored in best_games_meta).",
+        "gap": "2020-21 on only (no earlier play-by-play), regular season only (no playoff games); the three NBA Cup finals are left out. 7 of 7,229 games have play-by-play whose score doesn't reconcile to the real final: stored, but left out of every ranking. The excitement weights are a stated judgment, not fitted.",
+        "used_by": ["bestgames"],
     },
     {
         "table": "player_wpa_totals", "label": "Win-probability-added totals", "group": "Models",

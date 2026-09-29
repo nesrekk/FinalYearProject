@@ -210,6 +210,21 @@ export const SECTIONS = [
                 ],
             },
             {
+                id: 'bestgames',
+                name: 'Best Games and Upsets',
+                open: { page: 'bestgames', label: 'Best Games & Upsets' },
+                answers: 'Which regular-season games were the most exciting, and which were won against the longest odds?',
+                method: 'Best games: every regular-season game 2020-21 to 2025-26 (7,229) is replayed play by play on the reconciled score (the score before each play from the Play Finder table, the real final at the buzzer) and the home team\'s win probability read at every play from the same model as Game Replay. Excitement = swing + 0.10 × lead changes + 1.0 × overtime periods − 0.05 × final margin, where swing is the sum of the absolute win-probability changes from play to play (1.0 = 100 points of swing in all) and a lead change is the lead passing from one team to the other. The three weights are a judgment call, not fitted: nothing on file says which games fans found exciting. Games with a comeback are described by the winner\'s biggest deficit and lowest win probability. Upsets: the Season Simulator\'s pre-game win chance for every game 2010-11 to 2025-26 (19,118), each from a model fitted without that season; an upset is a game the underdog won, and the list runs lowest chance first.',
+                checked: 'Checked 2026-09-29. 7,222 of 7,229 games reconcile and are ranked; 7 with bad play-by-play are stored but left out. Overtime adds swing on its own (mean 5.1 in regulation, 9.3 with one overtime, 11.4 with two), so the overtime weight moves little: ranking by the plain swing instead gives a rank correlation of 0.986 and 41 of the same top 50. Sniff tests against the record: the best game is Lakers 145, Warriors 144 in double overtime (2024-01-27, Curry\'s 28-footer in the second overtime the biggest swing), Kings 176, Clippers 175 in double overtime (2023-02-24, the second-highest-scoring game ever) is 15th, the Clippers\' 35-point comeback at Washington (2022-01-25, 116-115) is the biggest comeback of the six seasons and the Hawks\' 30-point comeback over Boston (2024-03-25) is third; the 73-point Grizzlies win over the Thunder (2021-12-02) is last, and the best of the 437 games decided by 30+ is 3,046th of 7,222. Upsets: favourites won 65.8% of the 19,118 games; games where the underdog had 10% or less (239) were won 8.8% of the time against 8.1% expected, and 15% or less (1,057) 11.2% against 11.7%. The biggest upset on file is the Kings at Golden State on 2017-11-27, played without Curry and Durant; the Warriors\' losses as 2015-16 favourites include the Bucks ending 24-0 (2015-12-12) and the Lakers (2016-03-06).',
+                limits: [
+                    'The weights are a judgment call. Everything else is measured, but "excitement" is not: the score rewards games that swung back and forth, not the ones a fan remembers for one shot.',
+                    'The win-probability model knows only the score and the clock, not who has the ball or who is on the floor, so a late steal-and-score swings it exactly as a made shot does.',
+                    'Regular season only, and best games only from 2020-21: no playoff play-by-play or pre-game odds are on file, so no finals or game sevens appear.',
+                    'Pre-game odds come from ratings, home court and rest, not from injuries or who is playing: a favourite missing its stars is still a favourite, so the two biggest upsets on file (Golden State without Curry and Durant, Oklahoma City without Jalen Williams, Hartenstein and Caruso) are partly that. Early in a season the ratings are mostly last year\'s; the page can drop the first weeks.',
+                    'The score before each play is reconciled to the real final, but ESPN\'s own score fields glitch in some games, so a game\'s swing here can differ a little from the sum read off Game Replay\'s raw chart.',
+                ],
+            },
+            {
                 id: 'gravity',
                 name: 'Gravity Index and Spacing Lab',
                 open: { page: 'analytics', hash: 'spacing', label: 'Spacing Lab' },

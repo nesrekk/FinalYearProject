@@ -1214,3 +1214,24 @@ export async function fetchPlayFinder(params) {
     const response = await axios.get(`${IMPACT_BASE}/plays/finder`, { params });
     return response.data;
 }
+
+// ─── Best Games & Upsets (best_games 2020-21 on; game_pregame_odds 2010-11 on) ────
+export async function fetchBestGamesOptions() {
+    return getWithCache('best_games_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/best-games/options`);
+        return response.data;
+    });
+}
+
+// params: { season, team, sort: 'excitement'|'swing'|'comeback'|'lead_changes'|'close'|'overtime'|'newest',
+//           ot, limit, offset }
+export async function fetchBestGames(params) {
+    const response = await axios.get(`${IMPACT_BASE}/best-games`, { params });
+    return response.data;
+}
+
+// params: { season, team, side: 'won'|'lost' (needs team), min_games, sort: 'chance'|'newest'|'margin', limit, offset }
+export async function fetchUpsets(params) {
+    const response = await axios.get(`${IMPACT_BASE}/upsets`, { params });
+    return response.data;
+}

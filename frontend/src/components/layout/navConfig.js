@@ -50,6 +50,7 @@ export const NAV_GROUPS = [
             { id: 'rotations', label: 'Rotations', icon: 'view_timeline' },
             { id: 'assists', label: 'Assist Network', icon: 'hub' },
             { id: 'simulator', label: 'Season Simulator', icon: 'casino' },
+            { id: 'bestgames', label: 'Best Games & Upsets', icon: 'emoji_events' },
         ],
     },
     {

@@ -59,6 +59,7 @@ const Rapm = lazy(() => import('./components/pages/Rapm'));
 const Rotations = lazy(() => import('./components/pages/Rotations'));
 const AssistNetwork = lazy(() => import('./components/pages/AssistNetwork'));
 const SeasonSimulator = lazy(() => import('./components/pages/SeasonSimulator'));
+const BestGames = lazy(() => import('./components/pages/BestGames'));
 const SituationalSplits = lazy(() => import('./components/pages/SituationalSplits'));
 const Watchlist = lazy(() => import('./components/pages/Watchlist'));
 const SavedAnalyses = lazy(() => import('./components/pages/SavedAnalyses'));
@@ -103,6 +104,7 @@ const PAGES = {
   rotations: Rotations,
   assists: AssistNetwork,
   simulator: SeasonSimulator,
+  bestgames: BestGames,
   splits: SituationalSplits,
   watchlist: Watchlist,
   saved: SavedAnalyses,

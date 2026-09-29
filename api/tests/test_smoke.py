@@ -2560,3 +2560,95 @@ def test_season_simulator_pregame_odds_and_backtest():
     cur.execute("SELECT COUNT(*) FROM postseason_games WHERE stage = 'play-in' AND season = 2026")
     assert cur.fetchone()[0] == 6
     conn.close()
+
+
+def test_best_games_and_upsets():
+    """Best Games & Upsets (scripts/build_best_games.py, api/routers/best_games.py, api/best_games.py): every game
+    2020-21 on scored from win-probability swings on the reconciled score, with the formula on the page being the
+    formula that made the stored numbers; upsets from the Season Simulator's held-out pre-game odds. Famous games
+    sit where they should: the 35-point Clippers comeback tops the comebacks, Warriors-Lakers in double overtime is
+    the best game, no big blowout is near the top."""
+    from impact_api import app
+    from impact_core import get_db
+    import best_games as B
+    client = TestClient(app)
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT to_regclass('best_games')")
+        if cur.fetchone()[0] is None:
+            pytest.skip("best_games not built (run scripts/build_best_games.py)")
+        cur.execute("SELECT COUNT(*), COUNT(*) FILTER (WHERE NOT score_ok) FROM best_games")
+        assert cur.fetchone() == (7229, 7)
+        # The stored score is the page's formula applied to the stored parts, in every game.
+        cur.execute("SELECT swing, lead_changes, periods, final_margin, excitement, pts_home, pts_away, ties, comeback, "
+                    "largest_lead, win_min_wp, peak_dwp FROM best_games")
+        for swing, lc, periods, margin, x, ph, pa, ties, comeback, lead, low, peak in cur.fetchall():
+            assert abs(B.excitement(swing, lc, periods - 4, margin) - x) < 2e-3
+            assert margin == abs(ph - pa) and 0 <= low <= 1 and peak <= swing + 1e-6
+            assert comeback >= 0 and lead >= 0 and ties >= 0 and (periods - 4) in (0, 1, 2, 3)
+        # Every peak play is an event of its own game (event ids are pbp_events ids).
+        cur.execute("""SELECT COUNT(*) FROM best_games b JOIN pbp_events e ON e.id = b.peak_event_id
+                       WHERE e.game_id <> b.game_id""")
+        assert cur.fetchone()[0] == 0
+
+    o = client.get("/best-games/options").json()
+    _assert_has_source(o)
+    assert [s["season"] for s in o["seasons"]["best"]] == list(range(2021, 2027))
+    assert [s["season"] for s in o["seasons"]["upsets"]] == list(range(2011, 2027))
+    assert o["formula"]["rank_corr_swing"] > 0.95 and o["formula"]["lead_change_w"] == B.LEAD_CHANGE_W
+    assert 0.65 < o["favourites"]["won"] < 0.67 and o["favourites"]["games"] == 19118
+    for c in o["calibration"]:
+        if c["games"] >= 200:   # the long shots come in about as often as the model says
+            assert abs(c["expected"] - c["actual"]) < 0.02
+
+    # The best game of six seasons: Lakers 145, Warriors 144 in double overtime (2024-01-27).
+    d = client.get("/best-games", params={"limit": 25}).json()
+    _assert_has_source(d)
+    assert d["total"] == 7222 and d["results"][0]["date"] == "2024-01-27"
+    top = d["results"][0]
+    assert (top["home"], top["away"], top["pts_home"], top["pts_away"], top["overtimes"]) == ("GSW", "LAL", 144, 145, 2)
+    assert top["peak"] and top["peak"]["event_id"] > 0 and "Curry" in top["peak"]["description"]
+    xs = [g["excitement"] for g in d["results"]]
+    assert xs == sorted(xs, reverse=True)
+    # Kings 176, Clippers 175 (2OT, 2023-02-24) is in the top 25.
+    assert any(g["date"] == "2023-02-24" and g["home"] == "LAC" for g in d["results"])
+    # Comebacks: the Clippers' 35 down at Washington (2022-01-25) is the biggest in the six seasons.
+    c = client.get("/best-games", params={"sort": "comeback", "limit": 3}).json()["results"]
+    assert (c[0]["date"], c[0]["winner"], c[0]["comeback"]) == ("2022-01-25", "LAC", 35) and c[0]["win_min_wp"] < 0.01
+    assert {"2024-03-25", "2022-01-25"} <= {g["date"] for g in client.get("/best-games", params={"sort": "comeback", "limit": 12}).json()["results"]}
+    # No 30-point game is anywhere near the top, and the closest finishes are one-point games.
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("""SELECT MIN(rk) FROM (SELECT final_margin, RANK() OVER (ORDER BY excitement DESC) rk
+                       FROM best_games WHERE score_ok) t WHERE final_margin >= 30""")
+        assert cur.fetchone()[0] > 1000
+    assert all(g["final_margin"] == 1 for g in client.get("/best-games", params={"sort": "close", "limit": 10}).json()["results"])
+    ot = client.get("/best-games", params={"ot": "true", "limit": 100}).json()
+    assert ot["total"] == 366   # all 366 overtime games are ranked (the 7 unreconciled games went 48 minutes)
+    assert all(g["overtimes"] >= 1 for g in ot["results"])
+    lal = client.get("/best-games", params={"team": "LAL", "season": 2024, "limit": 100}).json()
+    assert lal["total"] == 82 and all("LAL" in (g["home"], g["away"]) and g["season"] == 2024 for g in lal["results"])
+    assert client.get("/best-games", params={"sort": "nope"}).status_code == 400
+    assert client.get("/best-games", params={"team": "XXX"}).status_code == 400
+    assert client.get("/best-games", params={"season": 2019}).status_code == 404
+    assert client.get("/best-games", params={"limit": 1000}).status_code == 422
+
+    # Upsets: lowest pre-game chance first; the Kings at Golden State without Curry (2017-11-27) is the biggest.
+    u = client.get("/upsets", params={"limit": 25}).json()
+    _assert_has_source(u)
+    assert u["games"] == 19118 and 0.33 < u["upset_rate"] < 0.35
+    assert (u["results"][0]["date"], u["results"][0]["winner"]) == ("2017-11-27", "SAC")
+    ps = [r["winner_chance"] for r in u["results"]]
+    assert ps == sorted(ps) and ps[0] < 0.06 and all(p < 0.5 for p in ps)
+    assert all((r["replay_id"] is None) == (r["season"] < 2021) for r in u["results"])
+    # Franchise codes: the Nets' games as NJN (to 2011-12) and BKN are one team; the 2015-16 Warriors' losses as
+    # favourites include the Bucks ending 24-0 (2015-12-12) and the Lakers (2016-03-06).
+    assert client.get("/upsets", params={"team": "NJN"}).json()["total"] == client.get("/upsets", params={"team": "BKN"}).json()["total"]
+    g = client.get("/upsets", params={"team": "GSW", "side": "lost", "season": 2016, "limit": 50}).json()
+    dates = {r["date"] for r in g["results"]}
+    assert {"2015-12-12", "2016-03-06"} <= dates and all(r["loser"] == "GSW" and r["winner_chance"] < 0.5 for r in g["results"])
+    assert g["games"] == 82 and g["total"] == len(g["results"]) and g["total"] < 15
+    assert client.get("/upsets", params={"side": "won"}).status_code == 400
+    assert client.get("/upsets", params={"season": 2010}).status_code == 404
+    late = client.get("/upsets", params={"min_games": 20, "limit": 100}).json()
+    assert all(min(r["games_played"]) >= 20 for r in late["results"]) and late["total"] < u["total"]

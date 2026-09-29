@@ -1,0 +1,25 @@
+/* Best Games & Upsets (?page=bestgames). Layout pieces shared with Play Finder and Game Finder live in
+   playfinder.css and gamelog.css. */
+.bg-views { margin-top: var(--space-4); }
+.bg-table td { font-variant-numeric: tabular-nums; }
+.bg-score { display: inline-flex; align-items: center; gap: 4px; }
+.bg-score .bg-win { font-weight: 700; color: var(--text); }
+.bg-dash { color: var(--text-3); }
+.bg-bar {
+  display: inline-block;
+  width: 56px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 3px;
+  background: var(--hairline);
+  vertical-align: middle;
+  overflow: hidden;
+}
+.bg-bar > span { display: block; height: 100%; background: var(--brand); }
+.bg-sub { margin-left: 6px; color: var(--text-3); font-size: 0.75rem; }
+.bg-cal { margin-top: var(--space-4); }
+.bg-cal summary { cursor: pointer; color: var(--brand-text); font-weight: 600; }
+.bg-cal summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+@media (max-width: 640px) {
+  .bg-bar { display: none; }
+}
