@@ -291,56 +291,16 @@ def rapm(cur, N):
     N.claim(len(window) == 1, "one window length for the multi-season RAPM")
     N.add("RapmMultiSeasons", word(window[0][0]), "rapm_fits.seasons_to - seasons_from + 1, version multi")
 
-    models = {"bpm": "Bpm", "rapm_prior": "Prior", "rapm_multi": "Multi", "rapm_single": "Single", "zero": "Zero",
-              "onoff": "Onoff"}
-    tests = {"held_out_games": "Held", "next_season": "Next"}
-    got = {}
-    for test, model, rmse, r in rows(cur, """SELECT test, model, avg(game_rmse), avg(game_corr) FROM rapm_validation
-                                             WHERE test IN ('held_out_games', 'next_season') GROUP BY 1, 2"""):
-        got[(test, model)] = (rmse, r)
-    for test, t in tests.items():
-        for model, m in models.items():
-            rmse, r = got[(test, model)]
-            src = f"avg over seasons of rapm_validation.game_rmse / game_corr, test {test}, model {model}"
-            N.add(f"Rapm{t}{m}Rmse", dec(rmse, 2), src)
-            N.add(f"Rapm{t}{m}R", dec(r, 2), src)
-    nx = {m: got[("next_season", m)][0] for m in models}
-    N.claim(nx["onoff"] > nx["zero"], "Results: on/off as published is worse than predicting zero next season")
-    N.claim(nx["rapm_single"] > nx["rapm_prior"], "Results: plain single-season RAPM is worse than RAPM + prior")
-    N.claim(abs(nx["rapm_prior"] - nx["bpm"]) < 0.1, "abstract/Results: RAPM + prior 'as well as' / 'matches' BPM (next season)")
-
-    for test, t in tests.items():
-        lo, hi = one(cur, "SELECT min(scale_fit), max(scale_fit) FROM rapm_validation WHERE model = 'onoff' AND test = %s", (test,))
-        N.add(f"OnoffScale{t}Min", dec(lo, 2), f"min rapm_validation.scale_fit, model onoff, test {test}")
-        N.add(f"OnoffScale{t}Max", dec(hi, 2), f"max of the same")
-
-    yty = dict(rows(cur, "SELECT model, avg(corr) FROM rapm_validation WHERE test = 'year_to_year' GROUP BY 1"))
-    for model, m in (("bpm", "Bpm"), ("rapm_prior", "Prior"), ("rapm_single", "Single"), ("onoff", "Onoff")):
-        N.add(f"RapmYty{m}", dec(yty[model], 2), f"avg over seasons of rapm_validation.corr, test year_to_year, model {model}")
-    N.claim(yty["bpm"] > yty["rapm_prior"] > yty["rapm_single"] > yty["onoff"],
-            "Results: year-to-year order BPM > RAPM+prior > single RAPM > on/off")
+    # The platform's own validation numbers (rapm_validation: within-season cross-validation, next season with
+    # the intercept and home term refitted, year to year) are no longer in the paper: the protocol section below
+    # scores the same models under one split (paper_eval_metrics).
 
 
 def shot_quality(cur, N):
-    N.start("Expected FG% and shot-making (Methods, Table: shot, abstract)")
-    hold = {m: (n, ll, br, auc, as_json(notes)) for m, n, ll, br, auc, notes in rows(cur, """
-        SELECT model_type, n_test, log_loss, brier, roc_auc, notes FROM shot_making_validation WHERE scope = 'holdout'""")}
-    n_test = {v[0] for v in hold.values()}
-    N.claim(len(n_test) == 1, "every holdout model is scored on the same shots")
-    N.add("XfgHoldoutShots", integer(n_test.pop()), "shot_making_validation.n_test, scope holdout")
-    hs = hold["hgb"][4]["holdout_season"]
-    N.add("XfgHoldoutSeason", season(hs), "shot_making_validation.notes.holdout_season")
-    N.add("XfgConstantSeason", season(int(hs[:4])), "the season before the holdout (the constant's league FG%)")
-    for model, m in (("constant", "Const"), ("zone_baseline", "Zone"), ("logreg", "Logreg"), ("hgb", "Hgb")):
-        _, ll, br, auc, _ = hold[model]
-        src = f"shot_making_validation scope holdout, model_type {model}"
-        N.add(f"Xfg{m}LogLoss", dec(ll, 4), src + ": log_loss")
-        N.add(f"Xfg{m}Brier", dec(br, 4), src + ": brier")
-        N.add(f"Xfg{m}Auc", dec(auc, 3), src + ": roc_auc")
-    best = hold["hgb"]
-    N.claim(all(best[1] < v[1] and best[2] < v[2] and best[3] > v[3] for k, v in hold.items() if k != "hgb"),
-            "Table shot: gradient boosting best on log loss, Brier and AUC (bold)")
-
+    N.start("Expected FG% and shot-making, the platform's cross-fit (Methods, Results, abstract)")
+    # The platform's holdout table (shot_making_validation scope 'holdout', 2025-26 chosen after the fact) is no
+    # longer in the paper: the protocol section scores the four families on the validation season and then once on
+    # the test season. The cross-fit numbers below are the platform's deployed values (all seasons).
     cf_notes, bins = one(cur, "SELECT notes, reliability_bins FROM shot_making_validation WHERE scope = 'crossfit' AND model_type = 'hgb'")
     cf_notes, bins = as_json(cf_notes), as_json(bins)
     N.add("XfgFolds", word(cf_notes["folds"]), "shot_making_validation.notes.folds, scope crossfit")
@@ -370,49 +330,17 @@ def shot_quality(cur, N):
 
 
 def pregame_and_sim(cur, N):
-    N.start("Pre-game odds and season simulation (Methods, Results, Table: sim)")
-    carry = one(cur, "SELECT value FROM season_sim_params WHERE name = 'carry'")[0]
-    N.add("SimCarry", dec(carry, 2), "season_sim_params.carry (weight on last season's rating)")
+    N.start("Pre-game odds and season simulation, platform facts (Methods)")
     N.add("SimPlayInFirstSeason", season(season_sim_lib.PLAY_IN_FROM),
           "api/season_sim_lib.PLAY_IN_FROM (the simulator plays the play-in from this season; a rule, not a table)")
-    fits = {f: (b, ll, br, fav, n, ch) for f, b, ll, br, fav, n, ch in rows(cur, """
-        SELECT form, beta, loso_log_loss, loso_brier, favourite_win_rate, n, chosen FROM pregame_model_fit""")}
-    chosen = [f for f, v in fits.items() if v[5]]
-    N.claim(len(chosen) == 1, "one chosen pre-game form")
-    c = fits[chosen[0]]
-    N.add("PregameCoefs", word(len(as_json(c[0]))), f"number of coefficients of the chosen form ({chosen[0]}), pregame_model_fit.beta")
-    N.add("PregameGames", integer(c[4]), "pregame_model_fit.n, chosen form")
-    s0, s1, ng = one(cur, "SELECT min(season), max(season), count(*) FROM game_pregame_odds")
-    N.claim(ng == c[4], "game_pregame_odds holds the games the fit reports")
-    N.add("PregameFirstSeason", season(s0), "min(season) game_pregame_odds")
-    N.add("PregameLastSeason", season(s1), "max(season) game_pregame_odds")
-    N.add("PregameLogLoss", dec(c[1], 4), "pregame_model_fit.loso_log_loss, chosen form")
-    N.add("PregameBrier", dec(c[2], 4), "pregame_model_fit.loso_brier, chosen form")
-    N.add("PregameFavWinPct", pct(c[3], 1), "pregame_model_fit.favourite_win_rate, chosen form")
-    N.add("PregameBaselineLogLoss", dec(fits["baseline"][1], 4), "pregame_model_fit.loso_log_loss, form baseline")
-    N.add("PregameCurrentLogLoss", dec(fits["current"][1], 4), "pregame_model_fit.loso_log_loss, form current")
-    N.claim(c[1] < fits["current"][1] < fits["baseline"][1], "Results: chosen < current-only < baseline on log loss")
-
-    sim = {(m, k): (v, n) for m, k, v, n in rows(cur, """SELECT method, metric, value, n FROM season_sim_backtest_summary
-                                                        WHERE checkpoint = 'halfway'""")}
-    n = {sim[k][1] for k in sim if k[1] != "top6_brier"}
-    N.claim(len(n) == 1, "one team-season count at the halfway checkpoint")
-    N.add("SimTeamSeasons", integer(n.pop()), "season_sim_backtest_summary.n, checkpoint halfway")
-    fmt = {"playoffs_brier": 4, "playoffs_log_loss": 3, "wins_mae": 2, "wins_rmse": 2, "wins_cover80": 3}
-    names = {"playoffs_brier": "PlayoffBrier", "playoffs_log_loss": "PlayoffLogLoss", "wins_mae": "WinsMae",
-             "wins_rmse": "WinsRmse", "wins_cover80": "CoverEighty"}
-    for metric, d in fmt.items():
-        for method, m in (("model", "Model"), ("record", "Record")):
-            N.add(f"Sim{m}{names[metric]}", dec(sim[(method, metric)][0], d),
-                  f"season_sim_backtest_summary halfway, method {method}, metric {metric}")
-    for method, m in (("model", "Model"), ("record", "Record")):
-        N.add(f"Sim{m}CoverPct", pct(sim[(method, "wins_cover80")][0], 1), f"same, wins_cover80 as a percentage")
-    g = lambda m, k: sim[(m, k)][0]  # noqa: E731
-    N.claim(g("record", "playoffs_brier") < g("model", "playoffs_brier"), "Table sim: record-only wins on playoff Brier (bold)")
-    N.claim(all(g("model", k) < g("record", k) for k in ("playoffs_log_loss", "wins_mae", "wins_rmse")),
-            "Table sim: simulator wins on log loss, win-total MAE and RMSE (bold)")
-    N.claim(abs(g("model", "wins_cover80") - 0.8) < abs(g("record", "wins_cover80") - 0.8),
-            "Table sim: simulator's 80% range closer to nominal (bold)")
+    fits = {f: (b, ch) for f, b, ch in rows(cur, "SELECT form, beta, chosen FROM pregame_model_fit")}
+    chosen = [f for f, v in fits.items() if v[1]]
+    N.claim(len(chosen) == 1, "one chosen pre-game form in the platform's table")
+    N.add("PregameCoefs", word(len(as_json(fits[chosen[0]][0]))), f"number of coefficients of the platform's chosen form ({chosen[0]}), pregame_model_fit.beta")
+    # The platform's leave-one-season-out fit (pregame_model_fit, all seasons) and its simulator backtest
+    # (season_sim_backtest_summary, 480 team-seasons) are no longer in the paper; the protocol section scores
+    # both under the tune / validate / test split (paper_eval_metrics). season_sim_params.carry is fitted on all
+    # seasons, test included, so the paper quotes the protocol's test-phase carry (EvCarry) instead.
 
 
 def luck(cur, N):
@@ -458,7 +386,182 @@ def awards(cur, N):
     N.add("MvpAucMax", dec(max(v[2] for v in mvp.values()), 3), "max roc_auc over MVP models, model_backtest_summary")
 
 
-SECTIONS = (data_and_pipeline, rapm, shot_quality, pregame_and_sim, luck, awards)
+def protocol(cur, N):
+    """Round 5 step 2: one evaluation protocol for every model (scripts/paper_eval.py's tables)."""
+    N.start("Evaluation protocol (Methods: protocol; Results: Tables rapm, shot, sim; abstract)")
+    ch = {(t, m, p): (v, on, as_json(c) if c is not None else None, note)
+          for t, m, p, v, on, c, note in rows(cur, "SELECT task, model, parameter, value, chosen_on, candidates, note FROM paper_eval_choices")}
+    M = {}
+    for task, phase, model, variant, seasons, metric, value, n in rows(
+            cur, "SELECT task, phase, model, variant, seasons, metric, value, n FROM paper_eval_metrics"):
+        M[(task, phase, model, variant, seasons, metric)] = (value, n)
+
+    def pick(task, phase, model, metric, variant=""):
+        """(value, n, seasons) of the phase's summary row: the pooled row for tune, the one season otherwise."""
+        c = [(se, v, n) for (t, ph, m, va, se, me), (v, n) in M.items() if (t, ph, m, va, me) == (task, phase, model, variant, metric)]
+        if phase == "tune" and len(c) > 1:
+            c = [x for x in c if " to " in x[0]]
+        assert len(c) == 1, (task, phase, model, metric, variant, c)
+        se, v, n = c[0]
+        return v, n, se
+
+    tune_first, tune_last = ch[("protocol", "all", "tune_seasons")][0].split(" to ")
+    val, test = ch[("protocol", "all", "validate_season")][0], ch[("protocol", "all", "test_season")][0]
+    N.add("EvTuneFirst", season(tune_first), "paper_eval_choices protocol.tune_seasons (first)")
+    N.add("EvTuneLast", season(tune_last), "paper_eval_choices protocol.tune_seasons (last)")
+    N.add("EvValidate", season(val), "paper_eval_choices protocol.validate_season")
+    N.add("EvTest", season(test), "paper_eval_choices protocol.test_season")
+    src_pairs = pick("impact_next", "tune", "bpm", "game_rmse")[2]
+    N.add("EvNextTunePairs", word(len(range(int(src_pairs[:4]), int(src_pairs[-7:-3]) + 1))), "number of tune next-season pairs (scored seasons in the pooled row)")
+    pre_span = pick("pregame", "tune", "baseline", "log_loss")[2]
+    N.add("EvPregameHistoryFirst", season(pre_span.split(" to ")[0]), "paper_eval_metrics pregame tune pooled seasons (first)")
+    xfg_first = one(cur, "SELECT min(season) FROM player_shots WHERE game_id LIKE '002%%'")[0]
+    N.add("EvXfgHistoryFirst", season(xfg_first), "min(season) of regular-season player_shots (the shot model's first training season)")
+
+    # -- impact: hyperparameters and the three tests -------------------------------
+    N.add("EvLambdaSingle", integer(float(ch[("impact", "rapm_single", "lambda")][0])), "paper_eval_choices impact.rapm_single.lambda (tune)")
+    N.add("EvLambdaMulti", integer(float(ch[("impact", "rapm_multi", "lambda")][0])), "paper_eval_choices impact.rapm_multi.lambda (one tune pair)")
+    N.add("EvPriorScale", dec(ch[("impact", "rapm_prior", "prior_scale")][0], 2), "paper_eval_choices impact.rapm_prior.prior_scale (tune)")
+    free = as_json(ch[("impact", "rapm_prior", "free_minimum")][0])
+    N.add("EvPriorFreeLambda", integer(free["lambda"]), "paper_eval_choices impact.rapm_prior.free_minimum: lambda of the whole-grid minimum")
+    N.add("EvPriorFreeScale", dec(free["prior_scale"], 2), "same: prior scale of the whole-grid minimum")
+    N.add("EvBpmScale", dec(ch[("impact", "bpm_scaled", "scale")][0], 2), "paper_eval_choices impact.bpm_scaled.scale (tune)")
+    N.add("EvOnoffScale", dec(ch[("impact", "onoff_scaled", "scale")][0], 2), "paper_eval_choices impact.onoff_scaled.scale (tune)")
+    lam_app = one(cur, "SELECT DISTINCT lambda FROM rapm_fits WHERE version = 'single'")[0]
+    N.claim(float(ch[("impact", "rapm_single", "lambda")][0]) == lam_app,
+            "Methods: the protocol's lambda for one-season RAPM equals the platform's cross-validated one")
+
+    models = {"bpm": "Bpm", "bpm_scaled": "BpmScaled", "rapm_prior": "Prior", "rapm_multi": "Multi", "rapm_single": "Single",
+              "zero": "Zero", "onoff": "Onoff", "onoff_scaled": "OnoffScaled"}
+    nx = {}
+    for model, m in models.items():
+        for phase, ph in (("tune", "Tune"), ("validate", "Val"), ("test", "Test")):
+            v, n, se = pick("impact_next", phase, model, "game_rmse")
+            nx[(phase, model)] = v
+            N.add(f"EvNext{ph}{m}Rmse", dec(v, 2), f"paper_eval_metrics impact_next {phase} {model} game_rmse ({se}, n {n})")
+        v, n, se = pick("impact_next", "test", model, "game_corr")
+        N.add(f"EvNextTest{m}R", dec(v, 2), f"paper_eval_metrics impact_next test {model} game_corr ({se})")
+        v, n, se = pick("impact_heldout", "test", model, "game_rmse")
+        N.add(f"EvHeldTest{m}Rmse", dec(v, 2), f"paper_eval_metrics impact_heldout test {model} game_rmse ({se}, n {n})")
+    N.add("EvNextTuneGames", integer(pick("impact_next", "tune", "bpm", "game_rmse")[1]), "n of the pooled tune next-season rows (games)")
+    N.add("EvNextTestGames", integer(pick("impact_next", "test", "bpm", "game_rmse")[1]), "n of the test next-season rows (games)")
+    N.add("EvHeldTestGames", integer(pick("impact_heldout", "test", "bpm", "game_rmse")[1]), "n of the test held-out rows (games)")
+    N.claim(all(nx[(p, "onoff")] > nx[(p, "zero")] for p in ("tune", "validate", "test")),
+            "Results: on/off as published is worse than predicting zero in every phase")
+    N.claim(all(nx[(p, "rapm_single")] > nx[(p, "rapm_prior")] for p in ("tune", "validate", "test")),
+            "Results: one-season RAPM is worse than RAPM + prior throughout")
+    N.claim(nx[("test", "bpm")] == min(v for (p, m), v in nx.items() if p == "test"),
+            "Results: on the test season BPM is the best estimator of all")
+    N.claim(nx[("tune", "rapm_prior")] < nx[("tune", "bpm")] and nx[("validate", "rapm_prior")] < nx[("validate", "bpm")]
+            and nx[("test", "rapm_prior")] > nx[("test", "bpm")],
+            "Results/abstract: RAPM + prior edges BPM on the tune and validation seasons but not on the test season")
+    N.claim(nx[("test", "onoff_scaled")] > nx[("test", "zero")], "Results: even rescaled, on/off does not beat zero on the test season")
+    N.claim(nx[("test", "bpm_scaled")] > nx[("test", "bpm")] and nx[("validate", "bpm_scaled")] < nx[("validate", "bpm")],
+            "Results: the tuned BPM scale helps on the validation season and not on the test season")
+    yty = {}
+    for model, m in (("bpm", "Bpm"), ("rapm_prior", "Prior"), ("rapm_single", "Single"), ("onoff", "Onoff")):
+        for phase in ("tune", "test"):
+            v, n, se = pick("impact_reliability", phase, model, "corr")
+            yty[(phase, model)] = v
+            if phase == "test":
+                N.add(f"EvYtyTest{m}", dec(v, 2), f"paper_eval_metrics impact_reliability test {model} corr ({se}, n {n})")
+    N.add("EvYtyTestPlayers", integer(pick("impact_reliability", "test", "bpm", "corr")[1]), "players qualified in both test-pair seasons")
+    N.claim(all(yty[(p, "bpm")] > yty[(p, "rapm_prior")] > yty[(p, "rapm_single")] > yty[(p, "onoff")] for p in ("tune", "test")),
+            "Results: year-to-year order BPM > RAPM+prior > one-season RAPM > on/off holds in tune and test")
+
+    # -- expected FG% -----------------------------------------------------------------
+    cfg = ch[("xfg", "hgb", "config")]
+    chosen = next(c for c in cfg[2] if c["config"] == cfg[0])
+    N.add("EvXfgConfigs", word(len(cfg[2])), "number of boosting configurations compared on the tune season")
+    N.add("EvXfgConfigLeaves", integer(chosen["params"]["max_leaf_nodes"]), "paper_eval_choices xfg.hgb.config: max_leaf_nodes of the chosen configuration")
+    N.add("EvXfgConfigMinLeaf", integer(chosen["params"]["min_samples_leaf"]), "same: min_samples_leaf")
+    N.add("EvXfgConfigLr", dec(chosen["params"]["learning_rate"], 2), "same: learning_rate")
+    lls = sorted(c["log_loss"] for c in cfg[2])
+    N.add("EvXfgConfigSpread", dec(lls[-1] - lls[0], 4, ROUND_CEILING), "largest minus smallest tune log loss over the configurations, rounded up")
+    N.add("EvXfgTuneSeason", season(cfg[1]), "paper_eval_choices xfg.hgb.config chosen_on")
+    N.add("EvXfgTuneTrainLast", season(int(cfg[1][:4])), "the season before it (last training season of the tune fits)")
+    fam = ch[("xfg", "family", "model")]
+    N.claim(fam[0] == "hgb", "Results: the validation season picks gradient boosting")
+    xm = {"constant": "Const", "zone": "Zone", "logreg": "Logreg", "hgb": "Hgb"}
+    xv = {}
+    for model, m in xm.items():
+        for phase, ph in (("validate", "Val"), ("test", "Test")):
+            var = next(va for (t, p_, mo, va, se, me) in M if (t, p_, mo, me) == ("xfg", phase, model, "log_loss"))
+            for metric, mm, d in (("log_loss", "LogLoss", 4), ("brier", "Brier", 4), ("roc_auc", "Auc", 3)):
+                v, n, se = pick("xfg", phase, model, metric, var)
+                xv[(phase, model, metric)] = v
+                if phase == "test" or metric == "log_loss":     # Table shot: validation log loss, test all three
+                    N.add(f"EvXfg{ph}{m}{mm}", dec(v, d), f"paper_eval_metrics xfg {phase} {model} {metric} ({se}, n {n}, variant '{var}')")
+    N.add("EvXfgValShots", integer(pick("xfg", "validate", "constant", "log_loss")[1]), "shots scored in the validation season")
+    N.add("EvXfgTestShots", integer(pick("xfg", "test", "constant", "log_loss")[1]), "shots scored in the test season")
+    for phase in ("validate", "test"):
+        N.claim(all(xv[(phase, "hgb", "log_loss")] < xv[(phase, o, "log_loss")] and xv[(phase, "hgb", "brier")] < xv[(phase, o, "brier")]
+                    and xv[(phase, "hgb", "roc_auc")] > xv[(phase, o, "roc_auc")] for o in ("constant", "zone", "logreg")),
+                f"Table shot: gradient boosting best on all three metrics ({phase})")
+    ry = {}
+    for phase, ph in (("validate", "Val"), ("test", "Test")):
+        for model, m in (("quality", "Quality"), ("shot_making", "Making")):
+            v, n, se = pick("xfg_reliability", phase, model, "corr", "fga>=200")
+            ry[(phase, model)] = v
+            N.add(f"EvXfgYty{ph}{m}", dec(v, 2), f"paper_eval_metrics xfg_reliability {phase} {model} corr, fga>=200 ({se}, n {n})")
+        N.add(f"EvXfgYty{ph}Pairs", integer(pick("xfg_reliability", phase, "quality", "corr", "fga>=200")[1]), f"players with 200+ attempts in both seasons ({phase})")
+    v, n, se = pick("xfg_reliability", "test", "shot_making", "corr", "fga>=500")
+    N.add("EvXfgYtyTestMakingHigh", dec(v, 2), f"paper_eval_metrics xfg_reliability test shot_making corr, fga>=500 ({se}, n {n})")
+    N.add("EvXfgYtyTestPairsHigh", integer(n), "players with 500+ attempts in both test-pair seasons")
+    N.claim(all(ry[(p, "quality")] > ry[(p, "shot_making")] for p in ("validate", "test")),
+            "Results: shot quality more persistent than shot-making, out of sample (validate and test)")
+
+    # -- pre-game odds ----------------------------------------------------------------
+    form = ch[("pregame", "form", "form")]
+    FORM_TEXT = {"baseline": "the shrunk-ratings probit baseline", "current": "this season's ratings alone",
+                 "prior": "ratings blended with last season's", "prior_rest": "the blend plus both back-to-back flags"}
+    N.add("EvPregameForm", FORM_TEXT[form[0]], "paper_eval_choices pregame.form.form (chosen on the validation season)")
+    N.claim("(the same)" in (form[3] or ""), "Methods: leave-one-season-out within the tune seasons picks the same form as the validation season")
+    N.claim(form[0] == "prior_rest", "Results: the chosen form is the blend plus back-to-back flags (the \\pnEvPregame...PriorRest macros name it)")
+    fm = {"baseline": "Baseline", "current": "Current", "prior": "Prior", "prior_rest": "PriorRest"}
+    pg = {}
+    for f, m in fm.items():
+        for phase, ph in (("tune", "Tune"), ("validate", "Val"), ("test", "Test")):
+            v, n, se = pick("pregame", phase, f, "log_loss")
+            pg[(phase, f)] = v
+            if f != "prior":     # the blend without rest flags is not named in the text
+                N.add(f"EvPregame{ph}{m}LogLoss", dec(v, 4), f"paper_eval_metrics pregame {phase} {f} log_loss ({se}, n {n})")
+    for phase, ph in (("tune", "Tune"), ("test", "Test")):
+        N.add(f"EvPregame{ph}Games", integer(pick("pregame", phase, form[0], "log_loss")[1]), f"games scored in the {phase} phase")
+    N.add("EvPregameTestBrier", dec(pick("pregame", "test", form[0], "brier")[0], 4), "paper_eval_metrics pregame test, chosen form, brier")
+    N.add("EvPregameTestFavWinPct", pct(pick("pregame", "test", form[0], "favourite_win_rate")[0], 1), "same, favourite_win_rate")
+    N.claim(pg[("tune", form[0])] < pg[("tune", "current")] < pg[("tune", "baseline")] and pg[("validate", form[0])] < pg[("validate", "current")],
+            "Results: chosen form < current-only < baseline on the tune seasons and the validation season")
+    N.claim(pg[("test", "current")] < pg[("test", form[0])], "Results: on the test season this season's ratings alone edge the chosen form")
+    N.add("EvPregameTestGapCurrent", dec(pg[("test", form[0])] - pg[("test", "current")], 4, ROUND_CEILING),
+          "test log loss, chosen form minus current-only, rounded up")
+    N.add("EvCarry", dec(ch[("pregame", "constants_test", "carry")][0], 2), "paper_eval_choices pregame.constants_test.carry (fitted before the test season)")
+
+    # -- season simulator -------------------------------------------------------------
+    sm = {("sim_playoffs", "brier"): ("Brier", 4), ("sim_playoffs", "log_loss"): ("LogLoss", 3), ("sim_wins", "mae"): ("Mae", 2),
+          ("sim_wins", "rmse"): ("Rmse", 2), ("sim_wins", "cover80"): ("Cover", 3)}
+    sv = {}
+    for (task, metric), (mm, d) in sm.items():
+        for method, me in (("model", "Model"), ("record", "Record")):
+            for phase, ph in (("tune", "Tune"), ("validate", "Val"), ("test", "Test")):
+                v, n, se = pick(task, phase, method, metric, "halfway")
+                sv[(phase, method, metric)] = v
+                if phase != "validate" or metric in ("brier", "mae"):     # the text quotes the validation season's Brier and MAE
+                    N.add(f"EvSim{ph}{me}{mm}", dec(v, d), f"paper_eval_metrics {task} {phase} {method} {metric}, halfway ({se}, n {n})")
+    for phase, ph in (("tune", "Tune"), ("test", "Test")):
+        N.add(f"EvSim{ph}Teams", integer(pick("sim_playoffs", phase, "model", "brier", "halfway")[1]), f"team-seasons at the halfway checkpoint ({phase})")
+    for method, me in (("model", "Model"), ("record", "Record")):
+        N.add(f"EvSimTest{me}CoverPct", pct(sv[("test", method, "cover80")], 1), f"sim_wins test {method} cover80 as a percentage")
+    N.claim(all(sv[("tune", "model", k)] < sv[("tune", "record", k)] for k in ("brier", "log_loss", "mae", "rmse")),
+            "Results: on the tune seasons the simulator beats the record-only baseline on Brier, log loss, MAE and RMSE")
+    N.claim(sv[("tune", "record", "brier")] - sv[("tune", "model", "brier")] < 0.002, "Results: 'narrowly on the playoff Brier score' (tune)")
+    N.claim(all(sv[p, "record", k] < sv[p, "model", k] for p in ("validate", "test") for k in ("brier", "log_loss", "mae", "rmse")),
+            "Results: on the validation and test seasons the record-only baseline beats the simulator on Brier, log loss, MAE and RMSE")
+    N.claim(all(abs(sv[p, "model", "cover80"] - 0.8) < abs(sv[p, "record", "cover80"] - 0.8) for p in ("tune", "validate", "test")),
+            "Results: the simulator's 80% range is closer to nominal in every phase")
+
+
+SECTIONS = (data_and_pipeline, rapm, shot_quality, pregame_and_sim, luck, awards, protocol)
 
 
 def build(conn):
