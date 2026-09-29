@@ -2382,8 +2382,8 @@ def test_assist_network_matches_game_log_and_known_duos():
 
 def test_play_finder_matches_game_log_and_bam_83():
     """Play Finder (scripts/build_play_finder.py, api/routers/play_finder.py): every play from the shared
-    play-by-play parser, so each player-game's counts equal his Game Log line (3PA aside: misses take the NBA
-    shot chart's 2/3 call); Bam Adebayo's 83 on 2026-03-10 comes back whole; filters are whitelisted."""
+    play-by-play parser with the same shot-chart calls on misses, so each player-game's counts equal his Game Log
+    line, threes included; Bam Adebayo's 83 on 2026-03-10 comes back whole; filters are whitelisted."""
     from impact_api import app
     from impact_core import get_db
     client = TestClient(app)
@@ -2392,9 +2392,19 @@ def test_play_finder_matches_game_log_and_bam_83():
         cur.execute("SELECT to_regclass('play_finder_events')")
         if cur.fetchone()[0] is None:
             pytest.skip("play_finder_events not built (run scripts/build_play_finder.py)")
-        cur.execute("SELECT SUM(lines_checked), SUM(lines_differ), SUM(games), SUM(rows) FROM play_finder_seasons")
-        checked, differ, games, rows = cur.fetchone()
-        assert checked > 150_000 and differ == 0 and games == 7229
+        cur.execute("SELECT SUM(lines_checked), SUM(lines_differ), SUM(lines_fg3a_differ), SUM(games), SUM(rows) "
+                    "FROM play_finder_seasons")
+        checked, differ, fg3a_differ, games, rows = cur.fetchone()
+        assert checked > 150_000 and differ == 0 and fg3a_differ == 0 and games == 7229
+        # The Game Log's threes: missed shots take the NBA shot chart's call, so 3PA total NBA.com's within 0.2%
+        # every season (the text alone left them 0.6-1.9% short); Bam went 7-22 from three that night.
+        cur.execute("""WITH l AS (SELECT player_id, season, SUM(fg3a) f FROM player_game_lines GROUP BY 1, 2)
+                       SELECT MIN(r), MAX(r) FROM (SELECT SUM(l.f) / SUM(s.fg3a * s.gp) r FROM l
+                       JOIN player_season_stats s USING (player_id, season) WHERE s.gp >= 20 GROUP BY s.season) x""")
+        lo, hi = cur.fetchone()
+        assert 0.998 < lo <= hi < 1.002
+        cur.execute("SELECT fg3m, fg3a FROM player_game_lines WHERE player_id = 1628389 AND game_date = '2026-03-10'")
+        assert cur.fetchone() == (7, 22)
         cur.execute("SELECT COUNT(*) FROM play_finder_events")
         assert cur.fetchone()[0] == rows
         cur.execute("SELECT SUM(plays) FROM play_finder_games")

@@ -19,10 +19,14 @@ How the play-by-play is read (ESPN text):
   - shots are events whose text says "makes"/"misses", or "X blocks Y's
     ..." (a blocked shot is a missed attempt for the shooter, a block for
     X). Assists and steals are the names in "(X assists)" / "(X steals)".
-    Made shots are worth what the shooter's team score went up by; a miss
-    is a three when the text says "three point", or, when it gives no
-    shot type (common in 2020-21 and 2021-22), when the distance is 23
-    feet or more;
+    Made shots are worth what the shooter's team score went up by. A miss
+    is a three when the NBA shot chart (player_shots) calls the same shot
+    a three (pbp_lineups.miss_three_calls: ~99% of attempts are matched,
+    by order within game, shooter and period); for a miss it can't match,
+    when the text says "three point", or, when it gives no shot type, when
+    the distance is 23 feet or more. (Until 2026-09-29 the text alone
+    decided, and ~8,700 of the chart's missed threes were counted as twos:
+    ESPN often writes "misses 26-foot jumper" with no "three point".);
   - turnovers are events typed "... Turnover" or "Traveling" (not "No
     Turnover"); rebounds and turnovers with no player are team ones: they
     count for possessions but aren't anybody's rebound chance;
@@ -50,7 +54,7 @@ import psycopg2
 import psycopg2.extras
 
 from db_config import DB_CONFIG
-from pbp_lineups import Game, load_espn, load_season_names
+from pbp_lineups import Game, load_espn, load_season_names, miss_three_calls
 
 OWN = ["pts", "fgm", "fga", "fg3m", "fg3a", "ftm", "fta", "oreb", "dreb", "ast", "stl", "blk", "tov"]
 ON = ["tm_fgm", "tm_fga", "tm_fta", "tm_oreb", "tm_dreb", "tm_tov", "tm_pts",
@@ -63,13 +67,18 @@ def main():
     season_names, all_names = load_season_names(cur)
     games, grouped = load_espn(conn)
     print(f"{len(games)} games, {sum(len(v) for v in grouped.values())} events")
+    calls, misses = miss_three_calls(conn, games, grouped, season_names, all_names)
+    flipped = misses[misses.text_three != misses.nba_three]
+    print(f"NBA shot chart's call on {len(misses):,} missed shots; differs from the text's on {len(flipped):,} "
+          f"({int((flipped.nba_three).sum()):,} threes the text calls twos, {int((~flipped.nba_three).sum()):,} the other way)")
 
     out, unmatched, fixes, periods = [], Counter(), 0, 0
     for i, g in enumerate(games.itertuples(index=False)):
         ev = grouped.get(g.game_id)
         if ev is None:
             continue
-        game = Game(g.game_id, int(g.season), g.game_date, ev, season_names[int(g.season)], all_names)
+        game = Game(g.game_id, int(g.season), g.game_date, ev, season_names[int(g.season)], all_names,
+                    miss_threes=calls.get(g.game_id))
         rows, played = game.run(g.home_team)
         unmatched.update(game.unmatched)
         fixes += game.lineup_fixes

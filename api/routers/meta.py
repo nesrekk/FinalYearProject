@@ -304,7 +304,7 @@ COVERAGE_MAP = [
     {
         "table": "player_game_lines", "label": "Per player-game lines", "group": "Games",
         "range_sql": "SELECT MIN(season), MAX(season) FROM player_game_lines", "range_fmt": "season_int",
-        "source": "Rebuilt from ESPN play-by-play (scripts/build_player_game_lines.py); minutes rebuilt from substitutions.",
+        "source": "Rebuilt from ESPN play-by-play (scripts/build_player_game_lines.py); minutes rebuilt from substitutions; a missed shot is a two or a three as the NBA shot chart (player_shots) calls the same shot where it can be matched (~99%).",
         "gap": "Regular season only, 2020-21 on (no earlier seasons, no playoffs). game_id is ESPN's (espn_...), not the NBA 002... ids used elsewhere.",
         "used_by": ["stability"],
     },
@@ -396,7 +396,7 @@ COVERAGE_MAP = [
         "table": "play_finder_events", "label": "Play Finder (every play, one row per player per play)", "group": "Games",
         "range_sql": "SELECT MIN(season), MAX(season) FROM play_finder_games", "range_fmt": "season_int",
         "source": "scripts/build_play_finder.py: every regular-season game's ESPN play-by-play through the same parser as player_game_lines (shooter, passer, blocker, stealer, two or three), the score before each play reconciled to the real final (game_scores), shot distance from the NBA shot chart's coordinates (player_shots) where matched; per-game sources in play_finder_games, per-season checks in play_finder_seasons.",
-        "gap": "Every player-game's shots, free throws, rebounds, assists, steals, blocks and turnovers equal his player_game_lines line (0 of 152,428 differ); missed shots take the NBA shot chart's two-or-three call, so three-point attempts differ from the Game Log in 9,297 player-games. 0.35% of shots have no distance; 0.32% of rows name a player with no id. Team rebounds aren't included; the three NBA Cup finals aren't either.",
+        "gap": "Every player-game's shots (twos and threes), free throws, rebounds, assists, steals, blocks and turnovers equal his player_game_lines line (0 of 152,428 differ). 0.35% of shots have no distance; 0.32% of rows name a player with no id. Team rebounds aren't included; the three NBA Cup finals aren't either.",
         "used_by": ["plays"],
     },
     {

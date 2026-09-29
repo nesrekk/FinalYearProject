@@ -85,7 +85,7 @@ import psycopg2
 import psycopg2.extras
 
 from db_config import DB_CONFIG
-from pbp_lineups import DIST_RE, PERIOD_SECONDS, Game, load_espn, load_season_names
+from pbp_lineups import DIST_RE, PERIOD_SECONDS, Game, load_espn, load_season_names, match_coordinates
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -141,38 +141,6 @@ def collect_shots(conn, cur):
     shots = pd.DataFrame(rows, columns=["game_id", "season", "action_number", "team", "pid", "period", "secs",
                                         "made", "val", "description", "action_type"])
     shots["action_type"] = shots["action_type"].str.replace("\n", " ", regex=False)
-    return shots
-
-
-def match_coordinates(conn, shots):
-    """Attach the NBA shot chart's coordinates to each ESPN attempt matched by
-    order within (game, shooter, period) with identical make/miss sequences."""
-    link = pd.read_sql_query(
-        "SELECT DISTINCT 'espn_' || espn_id AS game_id, game_id AS nba_id FROM game_scores WHERE espn_id IS NOT NULL", conn)
-    shots = shots.merge(link, on="game_id", how="left")
-    nba = pd.read_sql_query(
-        """SELECT id, game_id AS nba_id, player_id AS pid, period, minutes_remaining * 60 + seconds_remaining AS clock,
-                  shot_made_flag = 1 AS made, loc_x, loc_y, shot_type
-           FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2020-21'""", conn)
-    keys = ["nba_id", "pid", "period"]
-    s = shots[shots.nba_id.notna() & shots.pid.notna()].copy()
-    s["pid"] = s["pid"].astype(int)
-    s = s.sort_values(keys + ["action_number"])
-    nba["pid"] = nba["pid"].astype("int64")
-    nba = nba.sort_values(keys + ["clock", "id"], ascending=[True, True, True, False, True])
-    s["k"] = s.groupby(keys).cumcount()
-    nba["k"] = nba.groupby(keys).cumcount()
-
-    def seq(df):
-        return df.groupby(keys)["made"].agg(lambda x: "".join("1" if v else "0" for v in x))
-
-    same = pd.concat([seq(s).rename("a"), seq(nba).rename("b")], axis=1, join="inner")
-    same = same[same.a == same.b].index
-    ok = pd.MultiIndex.from_frame(s[keys]).isin(same)
-    m = s[ok].merge(nba[keys + ["k", "loc_x", "loc_y", "shot_type"]], on=keys + ["k"], how="inner")
-    m["coord_ft"] = np.hypot(m.loc_x, m.loc_y) / 10.0
-    shots = shots.merge(m[["game_id", "action_number", "coord_ft", "shot_type"]], on=["game_id", "action_number"],
-                        how="left")
     return shots
 
 

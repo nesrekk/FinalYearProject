@@ -22,11 +22,10 @@ player's part in every play becomes a row:
                 shooter's team score step; the NBA shot chart agrees on
                 99.97% of matched makes); for misses, the NBA shot chart's
                 shot type where the shot is matched (below), else the
-                parser's call ("three point" in the text, or 23+ ft). The
-                parser calls ~8,700 of the NBA's missed threes twos (median
-                26 ft: ESPN's text often doesn't say "three point") and
-                ~1,500 twos threes, so the finder's missed-three counts can
-                differ from player_game_lines' three-point attempts;
+                parser's call ("three point" in the text, or 23+ ft): the
+                parser's `miss_threes` input, exactly as player_game_lines
+                (the text alone calls ~8,700 of the NBA's missed threes
+                twos, median 26 ft);
   free throw    made / missed;
   rebound       offensive / defensive, players only (team rebounds aren't
                 anybody's play: the team_game_totals convention);
@@ -70,8 +69,8 @@ Tables written (dropped and rebuilt):
 
 Checks printed (and stored per season): every player-game's shots, free
 throws, rebounds, assists, steals, blocks and turnovers here against his
-player_game_lines line (same parser, so they must match; three-point
-attempts are counted apart, since misses take the NBA's shot type), and
+player_game_lines line (same parser and the same shot-chart calls, so
+they must match, three-point attempts included), and
 Bam Adebayo's 83 on 2026-03-10 (20 field goals, 7 threes, 36 free throws).
 
 Usage:
@@ -93,9 +92,9 @@ import numpy as np
 import pandas as pd
 import psycopg2
 
-from build_rim_deterrence import match_coordinates
 from db_config import DB_CONFIG
-from pbp_lineups import ASSIST_RE, BLOCK_RE, DIST_RE, PERIOD_SECONDS, STEAL_RE, Game, load_espn, load_season_names
+from pbp_lineups import (ASSIST_RE, BLOCK_RE, DIST_RE, PERIOD_SECONDS, STEAL_RE, Game, load_espn, load_season_names,
+                         match_coordinates, miss_three_calls)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 from play_finder import CATS, CODE, SHOT_CODES, is_foul  # noqa: E402
@@ -193,6 +192,11 @@ def collect(conn, cur):
     final = {(r.game_id, r.team): int(r.pts_for) for r in ref.itertuples()}
     nba_id = dict(zip(ref.game_id, ref.nba_game_id))
     periods = dict(zip(ref.game_id, ref.periods))
+    calls, misses = miss_three_calls(conn, games, grouped, season_names, all_names)
+    flipped = misses[(misses.text_three != misses.nba_three) & misses.game_id.isin(nba_id)]
+    retyped = flipped.groupby("season").size()
+    print(f"misses where the NBA shot chart's two-or-three call differs from the text's: {len(flipped)} "
+          f"({retyped.to_dict()})")
     left_out = sorted(set(games.game_id) - set(nba_id))
     print(f"left out: {len(left_out)} ESPN games with no regular-season result in game_scores (the NBA Cup finals): "
           f"{', '.join(left_out)}")
@@ -203,7 +207,8 @@ def collect(conn, cur):
         if ev is None or g.game_id not in nba_id:
             continue
         game_no += 1
-        game = Game(g.game_id, int(g.season), g.game_date, ev, season_names[int(g.season)], all_names)
+        game = Game(g.game_id, int(g.season), g.game_date, ev, season_names[int(g.season)], all_names,
+                    miss_threes=calls.get(g.game_id))
         fh, fa = final[(g.game_id, g.home_team)], final[(g.game_id, g.away_team)]
         r, f, method, ok, d = game_rows(game, g, game_no, ev, (fh, fa))
         rows.extend(r)
@@ -219,7 +224,7 @@ def collect(conn, cur):
                                                 "score_ok", "plays"])
     fg_df = pd.DataFrame(fgs, columns=["game_id", "action_number", "event_id", "pid", "period", "made"])
     ev_df["player_id"] = pd.to_numeric(ev_df["player_id"]).astype("Int64")
-    return ev_df, games_df, fg_df, diag
+    return ev_df, games_df, fg_df, diag, retyped
 
 
 def distances(conn, ev_df, games_df, fg_df):
@@ -237,15 +242,7 @@ def distances(conn, ev_df, games_df, fg_df):
     ev_df["dist"] = ev_df["event_id"].map(feet).where(shot_rows).round().astype("Int64")
     season_of = m.merge(games_df[["game_id", "season"]], on="game_id")
     src = season_of.groupby(["season", "src"]).size().unstack(fill_value=0)
-    # Misses: two or three from the NBA's shot type where matched.
-    nba3 = m[m.shot_type.notna()].set_index("event_id")["shot_type"].str.startswith("3")
-    miss = ev_df.cat.isin((CODE["miss2"], CODE["miss3"]))
-    call = ev_df["event_id"].map(nba3).where(miss)
-    retype = call.notna() & ((call == True) != (ev_df.cat == CODE["miss3"]))  # noqa: E712
-    ev_df.loc[retype, "cat"] = np.where(call[retype] == True, CODE["miss3"], CODE["miss2"])  # noqa: E712
-    retyped = ev_df[retype].merge(games_df[["game_no", "season"]], on="game_no").groupby("season").size()
-    print(f"misses retyped by the NBA shot type: {int(retype.sum())} ({retyped.to_dict()})")
-    return ev_df, src, retyped
+    return ev_df, src
 
 
 def check_lines(conn, ev_df, games_df):
@@ -264,11 +261,10 @@ def check_lines(conn, ev_df, games_df):
         d = both[stat] != both[stat + "_pf"]
         if d.any():
             print(f"  {stat}: {int(d.sum())} player-games differ")
-        if stat != "fg3a":
-            differ |= d.values
+        differ |= d.values
     both["differ"] = differ
     both["fg3a_differ"] = both["fg3a"] != both["fg3a_pf"]
-    print(f"player-games checked: {len(both):,}, differing on anything but 3PA: {int(differ.sum())}")
+    print(f"player-games checked: {len(both):,}, differing: {int(differ.sum())}")
     if differ.any():
         print(both[both.differ].head(10).to_string())
     return both.groupby("season").agg(lines_checked=("differ", "size"), lines_differ=("differ", "sum"),
@@ -286,9 +282,9 @@ def main():
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
-    ev_df, games_df, fg_df, diag = collect(conn, cur)
+    ev_df, games_df, fg_df, diag, retyped = collect(conn, cur)
     print(f"{len(games_df):,} games, {len(ev_df):,} rows ({time.time() - t0:.0f}s); {dict(diag)}")
-    ev_df, src, retyped = distances(conn, ev_df, games_df, fg_df)
+    ev_df, src = distances(conn, ev_df, games_df, fg_df)
     print("shot distances by source:\n" + src.to_string())
 
     # Score source: must agree with lineup_stint_games' own per-game choice.

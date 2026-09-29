@@ -187,9 +187,9 @@ def _notes(meta):
                      "project has for those seasons and no earlier."),
         "accuracy": (f"Rebuilt season totals match NBA.com's within {a['points_mean_abs_error'] * 100:.1f}% "
                      f"on points for the average player-season (95% within {a['points_p95_abs_error'] * 100:.1f}%; "
-                     f"{a['player_seasons']:,} player-seasons with 20+ games). Three-point attempts are "
-                     f"{(1 - a['fg3a_total_ratio']) * 100:.1f}% short overall: early seasons' play-by-play often "
-                     "doesn't say whether a missed shot was a three."),
+                     f"{a['player_seasons']:,} player-seasons with 20+ games). Three-point attempts total "
+                     f"{a['fg3a_total_ratio'] * 100:.2f}% of NBA.com's: a missed shot is a two or a three as the "
+                     "NBA shot chart calls the same shot (ESPN's text often doesn't say), else as the text does."),
         "left_out": ("NBA Cup finals are left out: they don't count in regular-season stats or the standings "
                      f"({', '.join(f'{x['date']} {'-'.join(x['teams'])}' for x in meta['left_out'])})."),
     }

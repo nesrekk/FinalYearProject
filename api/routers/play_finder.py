@@ -21,7 +21,8 @@ Filter meanings:
            within 5 points before the play), as the Clutch WPA leaderboard;
   clock    seconds left in the period;
   cat      made/missed 2s and 3s: makes as the parser scores them, misses by
-           the NBA shot chart's shot type where matched (build script);
+           the NBA shot chart's shot type where matched (the parser's
+           miss_threes input, the same as player_game_lines);
   dist     feet, shot rows only (made/missed shots and the assists and blocks
            on them): the NBA shot chart's coordinates where the two feeds
            match, else ESPN's text; shots with neither never match a distance.
@@ -112,20 +113,18 @@ def _notes():
     differ = sum(x["lines_differ"] for x in s)
     unid = sum(x["unidentified_rows"] for x in s)
     retyped = sum(x["misses_retyped"] for x in s)
-    fg3a_differ = sum(x["lines_fg3a_differ"] for x in s)
     rows = sum(x["rows"] for x in s)
     lo, hi = g["season_range"]
     return {
         "coverage": (f"Every regular-season game {label(lo)} to {label(hi)} ({games:,} games, {rows:,} player-plays, "
                      f"through {g['last'].isoformat()}), from ESPN's play-by-play: the project has none earlier. "
                      "The three NBA Cup finals are left out (they don't count in regular-season stats)."),
-        "accuracy": (f"Same parser as the game logs: in {checked - differ:,} of {checked:,} player-games every made "
-                     "and missed shot, made three, free throw, rebound, assist, steal, block and turnover here adds up "
-                     "to his Game Log line. Missed shots take the NBA shot chart's two-or-three call where it has the "
-                     f"shot ({retyped:,} misses differ from the play-by-play text, mostly 25-27 ft threes the text "
-                     f"doesn't call threes), so three-point attempts differ from the Game Log in {fg3a_differ:,} "
-                     f"player-games. The score before each play is reconciled to the real final in {games - bad:,} of "
-                     f"{games:,} games ({bad} with bad play-by-play keep ESPN's own)."),
+        "accuracy": (f"Same parser as the game logs: in {checked - differ:,} of {checked:,} player-games "
+                     "every made and missed shot, two and three, free throw, rebound, assist, steal, block and turnover "
+                     "here adds up to his Game Log line. A missed shot is a two or a three as the NBA shot chart calls "
+                     f"it where it has the shot ({retyped:,} misses where ESPN's text says otherwise, mostly 25-27 ft "
+                     "threes the text doesn't call threes). The score before each play is reconciled to the real final "
+                     f"in {games - bad:,} of {games:,} games ({bad} with bad play-by-play keep ESPN's own)."),
         "distance": (f"Distances: the NBA shot chart's coordinates for {coords / shots:.1%} of shots (matched to the "
                      f"same shot), ESPN's text for most of the rest; {none:,} shots ({none / shots:.2%}) have neither "
                      "and never match a distance filter."),
