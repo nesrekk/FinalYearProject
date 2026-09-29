@@ -16,6 +16,7 @@ const PAGE_LABELS = {
     stability: 'Stat Stability', statline: 'Stat Line Finder', era: 'Era Translator',
     shotcharts: 'Shot Charts', tradeimpact: 'Trade Impact', rolefinder: 'Role Player Finder',
     draft: 'Draft Value Guide', greats: 'Greats of the Game', player: 'Player Profile',
+    rotations: 'Rotations',
 };
 
 function CoverageRow({ row, onNavigate }) {

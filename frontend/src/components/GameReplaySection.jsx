@@ -7,6 +7,7 @@ import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
+import { currentPageParam, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
 
 const CHART_W = 760;
 const CHART_H = 300;
@@ -49,6 +50,19 @@ export default function GameReplaySection() {
     const [games, setGames] = useState(null);
     const [gamesError, setGamesError] = useState('');
     const [selectedGameId, setSelectedGameId] = useState('');
+    // A link to one game (?page=analytics&game=<id>#replay, e.g. from the
+    // Rotations page) opens it; without the parameter nothing changes.
+    const params = useInitialParams();
+    const [linkedGame] = useState(() => parseParam.str(params, 'game'));
+    useUrlSync(linkedGame ? { game: selectedGameId || linkedGame } : null);
+    const [page] = useState(currentPageParam);
+    useEffect(() => () => {
+        if (!linkedGame) return;
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('page') !== page) return;
+        url.searchParams.delete('game');
+        window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    }, [linkedGame, page]);
 
     const [replay, setReplay] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -61,15 +75,17 @@ export default function GameReplaySection() {
 
     useEffect(() => {
         let active = true;
-        fetchWpReplayList()
+        fetchWpReplayList(undefined, linkedGame ?? undefined)
             .then((data) => {
                 if (!active) return;
                 setGames(data);
-                if (data.games?.length) setSelectedGameId(data.games[0].game_id);
+                const linked = linkedGame && data.games?.find((g) => g.game_id === linkedGame);
+                if (linked) setSelectedGameId(linked.game_id);
+                else if (data.games?.length) setSelectedGameId(data.games[0].game_id);
             })
             .catch((e) => { if (active) setGamesError(e?.response?.data?.detail || 'Could not load the game list.'); });
         return () => { active = false; };
-    }, []);
+    }, [linkedGame]);
 
     useEffect(() => {
         if (!selectedGameId) return;

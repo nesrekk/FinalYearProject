@@ -10,6 +10,7 @@ import TableExport from '../common/TableExport';
 import ChartExport from '../common/ChartExport';
 import TeamLink from '../common/TeamLink';
 import TeamLogo from '../common/TeamLogo';
+import TeamRotationBlock from '../common/TeamRotationBlock';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/profile.css';
 import '../../styles/teamprofile.css';
@@ -492,6 +493,19 @@ function Lineups({ l, pairs, season, abbr, onNavigate }) {
     );
 }
 
+function Rotations({ r, season, abbr, onNavigate }) {
+    return (
+        <Section id="rotations" title="Rotation" meta={`${r.coverage} · every stint rebuilt from play-by-play`}
+            info={<InfoTooltip label="How the rotation is built" title="Rotation">
+                Each cell is the share of the team&apos;s games in which the player was on the floor in that minute of regulation, in
+                seconds. Only games whose play-by-play reconciled with the real result count. A close game is within five points at
+                5:00 left in the fourth; the closing stretch is from there to the final horn.
+            </InfoTooltip>}>
+            <TeamRotationBlock abbr={abbr} season={season} onNavigate={onNavigate} />
+        </Section>
+    );
+}
+
 function OnOff({ o, season, abbr, onNavigate }) {
     const row = (x) => (
         <tr key={x.player_id}>
@@ -585,7 +599,7 @@ function ShotMix({ m, season, abbr }) {
 
 const BLOCKS = [
     ['games', 'Game by game'], ['luck', 'Luck & schedule'], ['roster', 'Roster'], ['payroll', 'Payroll'],
-    ['lineups', 'Lineups'], ['on_off', 'On/off'], ['shot_mix', 'Shot mix'],
+    ['lineups', 'Lineups'], ['rotations', 'Rotation'], ['on_off', 'On/off'], ['shot_mix', 'Shot mix'],
 ];
 
 export default function TeamProfile({ onNavigate }) {
@@ -654,6 +668,7 @@ export default function TeamProfile({ onNavigate }) {
             {d.roster.available && <Roster r={d.roster} season={d.season} abbr={d.abbreviation} />}
             {d.payroll.available && <Payroll p={d.payroll} season={d.season} abbr={d.abbreviation} onNavigate={onNavigate} />}
             {d.lineups.available && <Lineups l={d.lineups} pairs={d.pairs} season={d.season} abbr={d.abbreviation} onNavigate={onNavigate} />}
+            {d.rotations?.available && <Rotations r={d.rotations} season={d.season} abbr={d.abbreviation} onNavigate={onNavigate} />}
             {d.on_off.available && <OnOff o={d.on_off} season={d.season} abbr={d.abbreviation} onNavigate={onNavigate} />}
             {d.shot_mix.available && <ShotMix m={d.shot_mix} season={d.season} abbr={d.abbreviation} />}
 

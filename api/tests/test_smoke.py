@@ -2165,3 +2165,92 @@ def test_rapm_versions_validation_and_profile():
     assert prof["qualified_poss"] == 1000 and {r["version"] for r in prof["rows"]} == {"single", "multi", "prior"}
     j24 = next(r for r in prof["rows"] if r["version"] == "single" and r["season"] == 2024)
     assert j24["qualified"] and j24["rank"] == jokic["rapm_rank"] and j24["n_qualified"] == d["noise"]["qualified"]
+
+
+def test_rotations_minutes_closing_and_team_block():
+    """Rotations (api/routers/rotations.py, scripts/build_rotations.py): per-game rotation charts, team-season
+    heatmaps and closing lineups from the play-by-play stints; the closing stretch is the stints cut at 5:00 left in
+    the fourth, which must glue back into lineup_stints exactly."""
+    from impact_api import app
+    client = TestClient(app)
+    conn = psycopg2.connect(**DB_CONFIG)
+    try:
+        cur = conn.cursor()
+        # The cut stints equal lineup_stints in every game, and score at 5:00 + closing stretch = real final.
+        cur.execute("""SELECT COUNT(*), COUNT(*) FILTER (WHERE matches_stints),
+                              COUNT(*) FILTER (WHERE game_ok), COUNT(*) FILTER (WHERE game_ok AND final_matches)
+                       FROM rotation_closing_games""")
+        n, glued, ok, final_ok = cur.fetchone()
+        assert n == glued and n > 7000 and ok == final_ok
+        cur.execute("""SELECT COUNT(*) FROM rotation_closing_games g JOIN (
+                           SELECT game_id, SUM(home_pts) hp, SUM(away_pts) ap FROM rotation_closing_stints GROUP BY 1) c
+                       USING (game_id)
+                       WHERE g.game_ok AND (g.home_at_cut + c.hp <> g.home_final OR g.away_at_cut + c.ap <> g.away_final)""")
+        assert cur.fetchone()[0] == 0
+        # Stint seconds per player-game equal player_game_lines everywhere except 9 player-games, one in each of the
+        # 9 ESPN games with a substitution logged with no team: the lines count that player twice (README Known
+        # real gaps). The stints are right there.
+        cur.execute("""WITH s AS (SELECT game_id, pid, SUM(seconds) secs FROM (
+                           SELECT game_id, unnest(home_ids) pid, seconds FROM lineup_stints
+                           UNION ALL SELECT game_id, unnest(away_ids), seconds FROM lineup_stints) x GROUP BY 1, 2)
+                       SELECT COUNT(*), COUNT(*) FILTER (WHERE l.seconds > s.secs + 0.2), COUNT(DISTINCT s.game_id),
+                              COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM pbp_events e WHERE e.game_id = s.game_id
+                                                             AND e.action_type = 'Substitution' AND e.team_tricode IS NULL))
+                       FROM s JOIN player_game_lines l ON l.game_id = s.game_id AND l.player_id = s.pid
+                       WHERE ABS(s.secs - l.seconds) > 0.2""")
+        diff, lines_higher, games, teamless = cur.fetchone()
+        assert diff == lines_higher == games == teamless and diff <= 9
+    finally:
+        conn.close()
+
+    o = client.get("/rotations/options").json()
+    _assert_has_source(o)
+    assert o["seasons"] == [2021, 2022, 2023, 2024, 2025, 2026] and all(len(t) == 30 for t in o["teams"].values())
+
+    # Opening night 2023-24: DEN 119, LAL 107; LeBron played 29 minutes. Every player's minutes equal his Game Log's,
+    # and each side's player-seconds (plus unidentified slots) fill five places for the whole game.
+    g = client.get("/rotations/game/espn_401584689").json()
+    _assert_has_source(g)
+    assert (g["home_team"], g["away_team"], g["final"]["home"], g["final"]["away"]) == ("DEN", "LAL", 119, 107)
+    assert g["margin"][-1]["home"] - g["margin"][-1]["away"] == 12
+    lebron = next(p for p in g["away"]["players"] if p["player_id"] == 2544)
+    assert 29 <= lebron["minutes"] < 30 and lebron["starter"]
+    conn = psycopg2.connect(**DB_CONFIG)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT player_id, seconds FROM player_game_lines WHERE game_id = 'espn_401584689' AND seconds > 0")
+        lines = {int(p): float(s) for p, s in cur.fetchall()}
+    finally:
+        conn.close()
+    mine = {p["player_id"]: p["seconds"] for side in ("home", "away") for p in g[side]["players"]}
+    assert mine.keys() == lines.keys() and all(abs(mine[k] - lines[k]) < 0.2 for k in lines)
+    for side in ("home", "away"):
+        filled = sum(p["seconds"] for p in g[side]["players"]) + sum((u["to"] - u["from"]) * u["missing"] for u in g[side]["unidentified"])
+        assert abs(filled - 5 * g["length"]) < 1
+    assert g["nba_game_id"] == "0022300061" and client.get("/rotations/game/0022300061").json()["game_id"] == g["game_id"]
+
+    # Denver 2023-24: Jokic started all 79 games he played; the real starting five started together most; starters
+    # are on the floor at the start of both halves; every heatmap column adds up to five players.
+    t = client.get("/rotations/team", params={"team": "DEN", "season": 2024}).json()
+    _assert_has_source(t)
+    assert t["games"] == 82 and t["games_counted"] == 82 and not t["excluded"]
+    jokic = next(p for p in t["players"] if p["player_id"] == 203999)
+    assert jokic["games"] == 79 and jokic["starts"] == 79
+    assert {p["player_id"] for p in t["starting_five"]["players"]} == {203999, 1627750, 1629008, 203932, 203484}
+    assert jokic["share"][0] > 0.9 and jokic["share"][24] > 0.85 and jokic["share"][12] < 0.3
+    for m in range(48):
+        assert abs(sum(p["share"][m] for p in t["players"]) + t["unidentified"][m] - 5) < 0.02
+    c = t["closing"]
+    assert c["available"] and c["record"]["wins"] + c["record"]["losses"] == c["close_games"] > 10
+    assert c["lineups"] and all(x["minutes"] >= c["min_minutes"] for x in c["lineups"])
+    assert c["stretch_minutes"] >= sum(x["minutes"] for x in c["lineups"])   # the table is a subset
+    assert client.get("/rotations/team", params={"team": "DEN", "season": 2019}).status_code == 404
+    assert client.get("/rotations/team", params={"team": "PHO", "season": 2024}).json()["team"] == "PHX"
+
+    # Team page: the block is there from 2020-21 and "Not on file" before; Game Replay opens a linked game's season.
+    assert client.get("/team-profile/DEN", params={"season": 2024}).json()["rotations"]["available"]
+    assert not client.get("/team-profile/DEN", params={"season": 2019}).json()["rotations"]["available"]
+    lst = client.get("/games/wp-replay/list", params={"game_id": "espn_401584689"}).json()
+    assert lst["season"] == 2024 and any(x["game_id"] == "espn_401584689" for x in lst["games"])
+    cov = client.get("/meta/coverage").json()
+    assert any(x["table"] == "rotation_closing_games" and x["n_rows"] > 7000 for x in cov["tables"])

@@ -471,6 +471,10 @@ export const OPEN_ISSUES = [
         body: 'From 2020-21 on, 3 to 5 player-seasons a year in player_season_stats carry a team the player never played for that season (2024-25: Desmond Bane under ORL, Cole Anthony and Kentavious Caldwell-Pope under MEM, a later team). The team page and its payroll use the play-by-play\'s per-game teams instead and list who was left out; other tools that show a player\'s team (Player Stats, Role Player Finder, leaderboards) still show the listed one.',
     },
     {
+        title: 'The Game Log overcounts minutes in 9 player-games',
+        body: 'In 9 ESPN games (2020-21 to 2023-24) one substitution is logged with no team, and the per-game player lines count that player twice for the rest of the period (Luka Dončić shows 45.4 minutes on 2022-01-30; he played 37.1). The Rotations page reads the five-man stints, which only track the two real teams, so its minutes are right there and differ from the Game Log in exactly those 9 player-games. Fixing the lines means rebuilding them and everything built on them (on/off, Stat Stability, Hot Streaks, Situational Splits, Projections), so it is planned as one deliberate rebuild.',
+    },
+    {
         title: 'Some models can\'t be retrained right now',
         body: 'stats.nba.com has been unreachable from the build machine since 2026-09-26, so Pair Synergy still uses the old in-house defensive BPM it was trained on.',
     },

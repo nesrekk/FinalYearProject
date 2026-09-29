@@ -359,7 +359,7 @@ class Game:
             if e.get("steal"):
                 rows[e["steal"]]["stl"] += 1
 
-    def stints(self, home):
+    def stints(self, home, split_at=None):
         """Every stretch of a game with the same ten players on the floor.
 
         Returns (stints, diag). Each stint is a dict: period, t0/t1 (seconds
@@ -373,7 +373,20 @@ class Game:
         count, rebounds don't). Stints with no time and no counted event
         (two substitutions at the same clock) are dropped. `diag` counts
         events whose actor wasn't on his team's tracked floor and events
-        with no team (skipped)."""
+        with no team (skipped).
+
+        `split_at` (optional, seconds since tip-off) also cuts a stint where
+        the clock passes each of those moments, with the same ten players on
+        both sides of the cut; events at exactly that clock stay before it.
+        build_rotations.py cuts at 5:00 left in the fourth quarter to get
+        the score there and the closing stretch exactly. Without it the
+        output is unchanged (build_lineup_stints.py doesn't pass it)."""
+        splits = defaultdict(list)
+        for x in split_at or ():
+            period = 1 + int(x // PERIOD_SECONDS) if x < REGULATION_SECONDS else 5 + int((x - REGULATION_SECONDS) // OT_SECONDS)
+            t = x - elapsed(period, 0.0)
+            if t > 0:
+                splits[period].append(t)
         away = None
         out = []
         cur = None
@@ -418,6 +431,14 @@ class Game:
             close()
 
         def on_time(period, t0, t1, lineups):
+            nonlocal cur
+            for x in splits.get(period, ()):
+                if cur["t0"] < x < t1:
+                    cur["t1"] = x
+                    k = cur["_key"]
+                    close()
+                    cur = fresh(period, x, lineups)
+                    cur["_key"] = k
             cur["t1"] = t1
 
         def on_event(e, lineups, period, t):

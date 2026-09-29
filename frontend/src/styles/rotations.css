@@ -1,0 +1,58 @@
+/* Rotations page (pages/Rotations.jsx), common/RotationHeatmap.jsx,
+   common/GameRotationChart.jsx and the team page's rotation block.
+   Paper/Ink tokens only; builds on theme.css (.rx-*, .lb-*) and rapm.css. */
+.rot-chart { min-width: 0; margin: var(--space-3) 0; }
+.rot-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.rot-label { fill: var(--text-2); font-size: 11px; }
+.rot-label--starter { fill: var(--text); font-weight: 700; }
+.rot-label--unknown { fill: var(--text-3); font-style: italic; }
+.rot-label--on { fill: var(--brand-text); }
+.rot-right { fill: var(--text-2); font-family: var(--font-mono); font-size: 10px; }
+.rot-team { fill: var(--text); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.rot-team--mine { fill: var(--brand-text); }
+.rot-sep { stroke: var(--hairline); stroke-width: 1; }
+.rot-row-line { stroke: var(--hairline); stroke-width: 1; }
+.rot-quarter { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.8; }
+.rot-cell { fill: var(--brand); }
+.rot-cell--unknown { fill: var(--text-3); }
+.rot-hot { fill: none; stroke: var(--text); stroke-width: 2; pointer-events: none; }
+.rot-bar { fill: var(--text-3); }
+.rot-bar--mine { fill: var(--brand); }
+.rot-bar--unknown { fill: none; stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 2 2; }
+.rot-margin--pos { fill: var(--positive); opacity: 0.75; }
+.rot-margin--neg { fill: var(--negative); opacity: 0.75; }
+.rot-tip-five { white-space: normal; max-width: min(320px, 70vw); margin-top: 2px; }
+.rot-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: var(--space-2); font-size: 0.75rem; color: var(--text-2); }
+.rot-legend-bar {
+  display: inline-block;
+  width: 90px;
+  height: 10px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brand) 4%, transparent), var(--brand));
+  border: 1px solid var(--hairline);
+}
+.rot-legend-gs { margin-left: var(--space-3); }
+.rot-controls { align-items: flex-end; }
+.rot-game-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: var(--space-3) 0 0; }
+.rot-game-score { font-family: var(--font-mono); font-weight: 700; font-size: 1.05rem; }
+.rot-nav { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.rot-flag {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--text-3);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.rot-fives { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-4); margin: var(--space-4) 0; }
+.rot-five-card { border: 1px solid var(--hairline); border-radius: 10px; padding: var(--space-3); min-width: 0; }
+.rot-five-card h3 { margin: 0 0 var(--space-2); }
+.rot-five-list { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.rot-five-meta { margin: var(--space-2) 0 0; color: var(--text-2); font-size: 0.82rem; line-height: 1.5; }
+.rot-excluded { margin-top: var(--space-3); font-size: 0.85rem; color: var(--text-2); }
+.rot-excluded summary { cursor: pointer; color: var(--text); font-weight: 600; }
+.rot-excluded ul { margin: var(--space-2) 0 0; padding-left: 1.2rem; }
+.rot-five-cell { display: flex; flex-wrap: wrap; gap: 4px 10px; min-width: 240px; }
+.rot-toggle { margin-top: var(--space-2); }
+.rot-nav button:disabled { opacity: 0.45; cursor: default; text-decoration: none; }

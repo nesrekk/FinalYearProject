@@ -19,7 +19,7 @@ router = APIRouter()
 
 
 @router.get("/games/wp-replay/list")
-def get_wp_replay_list(season: int = None):
+def get_wp_replay_list(season: int = None, game_id: str = None):
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT to_regclass('public.pbp_games');")
@@ -28,6 +28,11 @@ def get_wp_replay_list(season: int = None):
                 status_code=503,
                 detail="No play-by-play data yet — run scripts/fetch_play_by_play.py first.",
             )
+        if season is None and game_id:
+            # A link to one game (?game=<id>#replay) lists that game's season.
+            cursor.execute("SELECT season FROM pbp_games WHERE game_id = %s;", (game_id,))
+            row = cursor.fetchone()
+            season = row[0] if row else None
         if season is None:
             cursor.execute("SELECT MAX(season) FROM pbp_games;")
             season = cursor.fetchone()[0]

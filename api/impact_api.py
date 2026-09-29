@@ -63,6 +63,7 @@ from routers import (
     radar,
     rapm,
     referee_tendencies,
+    rotations,
     role_finder,
     root,
     schedule_fatigue,
@@ -120,6 +121,7 @@ for _router_module in (
     projections,
     team_profile,
     rapm,
+    rotations,
 ):
     app.include_router(_router_module.router)
 

@@ -444,6 +444,20 @@ def _lineups(cur, season, abbr, team_minutes):
     }
 
 
+def _rotations(cur, season, abbr):
+    """Only says whether the Rotations block has data; the block fetches
+    GET /rotations/team itself (routers/rotations.py)."""
+    cov = _coverage()["stints"]
+    if not _in(cov, season):
+        return _missing(f"Rotations are rebuilt from play-by-play stints, on file from {label(cov['from'])}.",
+                        cov["label"])
+    cur.execute("SELECT 1 FROM lineup_stint_games WHERE season = %s AND (home_team = %s OR away_team = %s) LIMIT 1",
+                (season, abbr, abbr))
+    if cur.fetchone() is None:
+        return _missing("No game of this team-season is in the play-by-play stints.", cov["label"])
+    return {"available": True, "coverage": cov["label"], "reason": None}
+
+
 def _on_off(cur, season, abbr):
     cov = _coverage()["on_off"]
     if not _in(cov, season):
@@ -535,6 +549,7 @@ def team_profile(abbr: str, season: Optional[int] = None):
                       "coverage": _coverage()["stints" if pair_source == "stints" else "lineups"]["label"],
                       "reason": None if has_pairs else "Pair Chemistry is built from the stored lineups, which "
                                                        f"start in {label(_coverage()['lineups']['from'])}."},
+            "rotations": _rotations(cur, season, code),
             "on_off": _on_off(cur, season, code),
             "shot_mix": _shot_mix(cur, season, code),
         }

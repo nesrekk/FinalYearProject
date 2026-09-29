@@ -398,11 +398,11 @@ export async function fetchClutchSplit(minClutchChances = 100) {
 }
 
 // ─── Game Win-Probability Replay ───────────────────────────────────
-export async function fetchWpReplayList(season) {
-    const response = await axios.get(
-        `${IMPACT_BASE}/games/wp-replay/list`,
-        { params: season ? { season } : {} }
-    );
+export async function fetchWpReplayList(season, gameId) {
+    const params = {};
+    if (season) params.season = season;
+    if (gameId) params.game_id = gameId;
+    const response = await axios.get(`${IMPACT_BASE}/games/wp-replay/list`, { params });
     return response.data;
 }
 
@@ -1122,5 +1122,28 @@ export async function fetchProjectionBacktest() {
 
 export async function fetchPlayerProjections(playerId) {
     const response = await axios.get(`${IMPACT_BASE}/projections/player/${playerId}`);
+    return response.data;
+}
+
+// ─── Rotations (lineup_stints, rotation_closing_games/stints) ─────
+export async function fetchRotationOptions() {
+    return getWithCache('rotation_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/rotations/options`);
+        return response.data;
+    });
+}
+
+export async function fetchRotationGames(team, season) {
+    const response = await axios.get(`${IMPACT_BASE}/rotations/games`, { params: { team, season } });
+    return response.data;
+}
+
+export async function fetchRotationGame(gameId) {
+    const response = await axios.get(`${IMPACT_BASE}/rotations/game/${encodeURIComponent(gameId)}`);
+    return response.data;
+}
+
+export async function fetchTeamRotation(team, season) {
+    const response = await axios.get(`${IMPACT_BASE}/rotations/team`, { params: { team, season } });
     return response.data;
 }

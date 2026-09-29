@@ -362,7 +362,14 @@ COVERAGE_MAP = [
         "range_sql": "SELECT MIN(season), MAX(season) FROM lineup_stints", "range_fmt": "season_int",
         "source": "ESPN play-by-play (pbp_events) rebuilt by scripts/build_lineup_stints.py with the same lineup parser as player_game_lines; aggregated into lineup_seasons and pair_seasons.",
         "gap": "Every stint of every regular-season game 2020-21 on, reconciled per game against the real final score, game length and team totals (lineup_stint_games says which games fail). Stints where a player had no id in the play-by-play (two-way and 10-day players missing from player_season_stats) are left out and counted: 2-6% of minutes in 2020-21 to 2024-25, almost none in 2025-26.",
-        "used_by": [],
+        "used_by": ["rotations"],
+    },
+    {
+        "table": "rotation_closing_games", "label": "Closing stretch of every game (score at 5:00 left in the fourth)", "group": "Teams",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM rotation_closing_games", "range_fmt": "season_int",
+        "source": "scripts/build_rotations.py: the lineup_stints parser rerun with the stint in progress at 5:00 left in the fourth cut in two; closing pieces in rotation_closing_stints.",
+        "gap": "Close game = within 5 points at 5:00 left in the fourth, checked once (the NBA's own clutch stats re-check the margin at every moment). Games whose play-by-play didn't reconcile (12 of 7,232) are left out of the closing lineups; one game has only three periods in the play-by-play and no 5:00 mark.",
+        "used_by": ["rotations"],
     },
     {
         "table": "player_rapm", "label": "RAPM (regularized adjusted plus-minus)", "group": "Models",
