@@ -1,0 +1,362 @@
+/* Report builder (pages/Reports.jsx, common/AddToReport.jsx). */
+
+.report-note {
+  color: var(--text-2);
+  font-size: 13px;
+  margin: var(--space-2) 0 var(--space-3);
+}
+.report-printonly { display: none; }
+
+/* "Report" button feedback next to the export buttons */
+.report-add-status {
+  color: var(--text-2);
+  margin-right: auto;
+}
+.report-add-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--brand-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.report-add-link:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Picker */
+.report-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.report-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.report-pill:hover { border-color: var(--brand); }
+.report-pill:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.report-pill--on {
+  background: var(--surface-2);
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+.report-pill-n {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.report-pill-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  padding: 0 6px;
+}
+.report-msg {
+  min-height: 1.4em;
+  margin: var(--space-2) 0 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+/* Header of the open report */
+.report-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--hairline);
+}
+.report-name-input {
+  flex: 1 1 260px;
+  min-width: 0;
+  font: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  padding: 4px 8px;
+}
+.report-name-input:hover { border-color: var(--hairline); }
+.report-name-input:focus-visible { border-color: var(--brand); outline: none; background: var(--surface-2); }
+.report-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.report-collecting {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--positive);
+  font-weight: 600;
+}
+.report-confirm {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--negative);
+  font-weight: 600;
+}
+.table-export-btn:disabled,
+.chart-export-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Items */
+.report-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.report-item {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  background: var(--surface);
+}
+.report-item--text {
+  border-style: dashed;
+  border-color: var(--hairline);
+}
+.report-item-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.report-item-kind {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+.report-item-buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: 12px;
+}
+.report-caption-input,
+.report-text-input {
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-control);
+  padding: 6px 8px;
+}
+.report-caption-input { font-weight: 700; margin-bottom: var(--space-3); }
+.report-text-input { resize: vertical; line-height: 1.5; }
+.report-caption-input:focus-visible,
+.report-text-input:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.report-caption-print,
+.report-text-print { display: none; }
+
+.report-chart {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-control);
+  padding: var(--space-2);
+  overflow-x: auto;
+  text-align: center;
+}
+.report-chart img {
+  max-width: 100%;
+  height: auto;
+  display: inline-block;
+  vertical-align: top;
+}
+.report-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-control);
+  max-height: 520px;
+  overflow-y: auto;
+}
+.report-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.report-table th,
+.report-table td {
+  padding: 4px 8px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--hairline);
+}
+.report-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  font-weight: 700;
+}
+.report-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin: var(--space-2) 0 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.report-source-link {
+  margin-left: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--brand-text);
+  font-weight: 600;
+}
+.report-source-url {
+  word-break: break-all;
+}
+
+@media (max-width: 640px) {
+  .report-item-buttons .table-export-btn { padding: 3px 8px; }
+}
+
+/* ── Print: A4, light, one chart or table per page ─────────────────────
+   Everything except the report itself is hidden, and the report is given
+   the Paper (light) colour tokens whichever theme is on screen. Charts were
+   captured in the light theme already. */
+@page {
+  size: A4;
+  margin: 16mm 14mm;
+}
+
+@media print {
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .top-nav,
+  .app-footer,
+  .page-header,
+  .report-noprint {
+    display: none !important;
+  }
+  .report-printonly { display: block !important; }
+  .top-shell-main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .page-report {
+    --bg: #fff;
+    --surface: #fff;
+    --surface-2: #eee;
+    --text: #000;
+    --text-2: #333;
+    --text-3: #555;
+    --hairline: rgba(0, 0, 0, 0.2);
+    --line: #000;
+    --brand-text: #000;
+    color: #000;
+  }
+  .page-report .dashboard-card {
+    border: none !important;
+    box-shadow: none !important;
+    background: none !important;
+    padding: 0 !important;
+  }
+  .page-report .dashboard-card::before { display: none !important; }
+  .report-head { display: none !important; }
+  .report-print-title {
+    margin: 0 0 8mm;
+    padding-bottom: 3mm;
+    border-bottom: 1.5pt solid #000;
+  }
+  .report-print-title h1 {
+    margin: 0;
+    font-size: 22pt;
+    color: #000;
+  }
+  .report-print-title p {
+    margin: 2mm 0 0;
+    font-size: 9pt;
+    color: #444;
+  }
+  .report-items { display: block; }
+  .report-item {
+    border: none !important;
+    border-radius: 0;
+    background: none !important;
+    padding: 0 !important;
+    margin: 0;
+    color: #000;
+  }
+  /* Each chart or table starts a page; a text section stays with the item after it. */
+  .report-item--data { break-before: page; page-break-before: always; }
+  .report-items > .report-item:first-child { break-before: auto; page-break-before: auto; }
+  .report-item--text + .report-item--data { break-before: auto; page-break-before: auto; }
+  .report-item--text { break-after: avoid; page-break-after: avoid; break-inside: avoid; margin: 5mm 0 4mm; }
+  .report-item--chart { break-inside: avoid; }
+  .report-caption-print {
+    display: block;
+    margin: 0 0 3mm;
+    font-size: 13pt;
+    color: #000;
+  }
+  .report-text-print {
+    display: block;
+    margin: 0;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    color: #000;
+  }
+  .report-chart {
+    border: none;
+    padding: 0;
+    overflow: visible;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .report-chart img { max-width: 100%; max-height: 220mm; width: auto; height: auto; }
+  .report-table-wrap { border: none; max-height: none; overflow: visible; }
+  .report-table { font-size: 8.5pt; color: #000; }
+  .report-table thead { display: table-header-group; }
+  .report-table tr { break-inside: avoid; page-break-inside: avoid; }
+  .report-table th { position: static; background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .report-table th, .report-table td { border-bottom: 0.5pt solid #bbb; white-space: normal; padding: 1.2mm 1.6mm; }
+  .report-source {
+    display: block;
+    margin: 3mm 0 0;
+    font-size: 8pt;
+    color: #444;
+  }
+  .report-source-sep { display: inline; }
+}

@@ -96,3 +96,39 @@ export function downloadChartPng(svgEl, filename, scale = 2) {
         img.src = url;
     });
 }
+
+// A chart as it will look on paper, for the report builder
+// (utils/reportStore.js). Reports print on a light page, so a chart seen in
+// Ink (dark) is captured as Paper: the theme attribute is flipped for the
+// length of this synchronous call (transitions switched off so the computed
+// values are the final ones; nothing paints in between, so there is no
+// flicker) and then put back. Every chart here colours itself through CSS
+// variables, which is why this reaches all of them.
+function effectivelyDark() {
+    const theme = document.documentElement.getAttribute('data-theme');
+    return theme === 'dark' || (theme === 'system' && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+}
+
+export function snapshotChart(svgEl) {
+    const root = document.documentElement;
+    const flip = effectivelyDark();
+    const previous = root.getAttribute('data-theme');
+    let freeze = null;
+    if (flip) {
+        freeze = document.createElement('style');
+        freeze.textContent = '*,*::before,*::after{transition:none!important;animation:none!important}';
+        document.head.appendChild(freeze);
+        root.setAttribute('data-theme', 'light');
+        void root.offsetHeight; // apply the light tokens now
+    }
+    try {
+        const { markup, width, height } = serializeSvg(svgEl);
+        const bg = getComputedStyle(root).getPropertyValue('--surface').trim() || '#ffffff';
+        return { markup, width: Math.round(width), height: Math.round(height), bg };
+    } finally {
+        if (flip) {
+            root.setAttribute('data-theme', previous);
+            freeze.remove();
+        }
+    }
+}

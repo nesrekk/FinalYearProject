@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Icon from './Icon';
-import { downloadChartPng, downloadChartSvg } from '../../utils/chartExport';
+import AddToReport from './AddToReport';
+import { downloadChartPng, downloadChartSvg, snapshotChart } from '../../utils/chartExport';
 import { slugify } from '../../utils/tableExport';
 
 // Place near a chart's <svg ref={svgRef}>. Downloads exactly what's
@@ -27,6 +28,11 @@ export default function ChartExport({ svgRef, name }) {
         }
     };
 
+    const snapshot = () => {
+        const svg = svgRef?.current;
+        return svg ? { title: name || 'Chart', svg: snapshotChart(svg) } : null;
+    };
+
     return (
         <div className="chart-export" data-export-skip>
             {error && <span className="table-export-error" role="status">{error}</span>}
@@ -36,6 +42,7 @@ export default function ChartExport({ svgRef, name }) {
             <button type="button" className="chart-export-btn" onClick={() => run('svg')} aria-label="Download this chart as an SVG image">
                 <Icon name="download" size={15} /> SVG
             </button>
+            <AddToReport kind="chart" getSnapshot={snapshot} />
         </div>
     );
 }

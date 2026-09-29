@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import Icon from './Icon';
+import AddToReport from './AddToReport';
 import { downloadText, slugify, tableToRows, toCsv, toJson } from '../../utils/tableExport';
 
 // Place directly before a table (or its .table-wrapper). Exports the table
@@ -16,8 +17,10 @@ export default function TableExport({ name }) {
         return next.tagName === 'TABLE' ? next : next.querySelector('table');
     };
 
-    const baseName = () => {
-        if (name) return slugify(name);
+    // The name the reader would give this table: the `name` prop, else the
+    // nearest heading above it.
+    const titleText = () => {
+        if (name) return name;
         // The last heading before this toolbar in document order.
         const here = ref.current;
         const heading = here && [...document.querySelectorAll('h1, h2, h3, h4')]
@@ -26,9 +29,18 @@ export default function TableExport({ name }) {
         if (heading) {
             const copy = heading.cloneNode(true);
             copy.querySelectorAll('[aria-hidden="true"], button, [role="tooltip"], .it-wrap, .pill-badge, .copy-link').forEach((n) => n.remove());
-            return slugify(copy.textContent);
+            return copy.textContent.replace(/\s+/g, ' ').trim();
         }
-        return 'nba-hub-table';
+        return '';
+    };
+
+    const baseName = () => (titleText() ? slugify(titleText()) : 'nba-hub-table');
+
+    const snapshot = () => {
+        const table = findTable();
+        const data = table && tableToRows(table);
+        if (!data || data.rows.length === 0) return null;
+        return { title: titleText() || 'Table', table: data };
     };
 
     const run = (format) => {
@@ -55,6 +67,7 @@ export default function TableExport({ name }) {
             <button type="button" className="table-export-btn" onClick={() => run('json')} aria-label="Download this table as JSON">
                 <Icon name="data_object" size={15} /> JSON
             </button>
+            <AddToReport kind="table" getSnapshot={snapshot} />
         </div>
     );
 }

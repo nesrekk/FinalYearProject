@@ -46,6 +46,7 @@ const pageTitles = {
     watchlist: 'Watchlist',
     coverage: 'Data Coverage',
     saved: 'Saved Analyses',
+    report: 'Report Builder',
 };
 
 const pageDescriptions = {
@@ -88,6 +89,7 @@ const pageDescriptions = {
     watchlist: 'Your starred players, side by side',
     coverage: 'Every table this app reads: live row counts, season span, source and known gaps',
     saved: 'Every tool view you\'ve saved, exactly as you left it',
+    report: 'Collect charts and tables from any page, add your own notes, and print or save the result as a PDF',
 };
 
 function greeting() {

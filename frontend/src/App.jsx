@@ -63,6 +63,7 @@ const BestGames = lazy(() => import('./components/pages/BestGames'));
 const SituationalSplits = lazy(() => import('./components/pages/SituationalSplits'));
 const Watchlist = lazy(() => import('./components/pages/Watchlist'));
 const SavedAnalyses = lazy(() => import('./components/pages/SavedAnalyses'));
+const Reports = lazy(() => import('./components/pages/Reports'));
 const DataCoverage = lazy(() => import('./components/pages/DataCoverage'));
 
 // Every page the app can show, by the id used in navConfig and `?page=`.
@@ -108,6 +109,7 @@ const PAGES = {
   splits: SituationalSplits,
   watchlist: Watchlist,
   saved: SavedAnalyses,
+  report: Reports,
   coverage: DataCoverage,
 };
 

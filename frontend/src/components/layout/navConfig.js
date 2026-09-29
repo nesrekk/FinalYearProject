@@ -88,7 +88,10 @@ export const NAV_GROUPS = [
         id: 'saved',
         label: 'Saved',
         icon: 'bookmark',
-        items: [],
+        items: [
+            { id: 'saved', label: 'Saved analyses', icon: 'bookmark' },
+            { id: 'report', label: 'Report builder', icon: 'description' },
+        ],
     },
 ];
 
