@@ -57,6 +57,16 @@ impact (RAPM, BPM, on/off; scripts/build_rapm.py's design matrix and fits)
                   number would use); zero predicts the home edge only.
   On/off in the held-out task is recomputed from the training folds (the
   published full-season number would see the scored games).
+  xrapm_single, xrapm_prior (round 5 step 4; scripts/paper_xrapm.py) are the
+  same regression on the same rows with the target replaced by each side's
+  expected points (paper_xrapm_stints.home_xpts / away_xpts: P(make) x value
+  over the attempts, expected FT%, plus the unpriced residual). Their lambda
+  and prior scale are chosen exactly like rapm_single's and rapm_prior's, on
+  the tune pairs' *actual* next-season margins; the intercept and home term
+  that carry into the next season, and the nuisance in the held-out folds,
+  are refitted on actual points with the player ratings held fixed (as for
+  BPM), so every model is scored on the same actual outcomes. No multi-season
+  window version (the paper compares the one-season forms).
 
 xfg (the expected-FG model; scripts/build_shot_making.py's features and fits)
   A model that scores season T is trained on every regular-season shot
@@ -116,11 +126,12 @@ Usage (Python: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3):
     cd scripts && python3 paper_eval.py                    # everything
     cd scripts && python3 paper_eval.py --only impact,sim  # some stages
 Then rerun paper_numbers.py. Rerun this after build_lineup_stints.py,
-load_bref_bpm_vorp.py, a player_shots reload, or a game_scores / postseason
-refresh.
+load_bref_bpm_vorp.py, paper_xrapm.py, a player_shots reload, or a game_scores /
+postseason refresh.
 """
 
 import argparse
+import copy
 import io
 import json
 import sys
@@ -277,6 +288,19 @@ def impact_stage(conn, out):
     grams = {s: designs[s].gram() for s in seasons}
     all_of = {s: np.ones(designs[s].n, bool) for s in seasons}
     log(f"impact: {n_stints} tracked stints, {len(rows)} side-rows ({dropped} dropped), seasons {seasons[0]}-{seasons[-1]}")
+    # Expected-points target (step 4): the same rows, the same design, only y differs.
+    xp = pd.read_sql_query("SELECT stint_id, home_xpts, away_xpts FROM paper_xrapm_stints", conn).set_index("stint_id")
+    assert len(xp), "paper_xrapm_stints is empty: run scripts/paper_xrapm.py first"
+    xpts = np.where(rows.home.to_numpy() == 1, xp.home_xpts.reindex(rows.stint_id).to_numpy(), xp.away_xpts.reindex(rows.stint_id).to_numpy())
+    assert not np.isnan(xpts).any(), "every tracked stint needs expected points"
+    xdesigns = {}
+    for s in seasons:
+        d = copy.copy(designs[s])          # shares X, w, folds and games; its own target
+        m = (rows.season == s).to_numpy()
+        d.y = 100.0 * xpts[m] / rows.poss.to_numpy(float)[m]
+        xdesigns[s] = d
+    xgrams = {s: xdesigns[s].gram() for s in seasons}
+    log(f"impact: expected-points target loaded ({len(xp):,} stints)")
 
     def prior_vec(s):
         d = designs[s]
@@ -293,6 +317,16 @@ def impact_stage(conn, out):
                    z.intercept, z.home)
 
     onoff_full = {s: R.on_off_from_rows(designs[s], all_of[s]) for s in seasons}
+
+    def xfit(s, beta):
+        """Player ratings from a fit on expected points; the intercept and home term refitted on season s's
+        actual points with those ratings held fixed (the BPM treatment), so the carried nuisance is on the
+        scale of what is scored."""
+        d = designs[s]
+        o = {p: float(beta[i]) for p, i in d.pidx.items()}
+        dd = {p: float(beta[d.P + i]) for p, i in d.pidx.items()}
+        nb, _ = R.fit_nuisance(d, all_of[s], d.rating_vector(o, dd), False)
+        return Fit(o, dd, *nuisance_of(d, nb))
 
     def onoff_fit(s):
         z = zero_fit(s)
@@ -373,8 +407,41 @@ def impact_stage(conn, out):
                grid)
     log(f"impact: lambda multi = {lam_multi}")
 
+    # ---- tune: lambda for expected-points RAPM (step 4), the same way as rapm_single -----
+    log("impact: tuning lambda (xrapm_single)")
+    grid = []
+    for lam in R.LAMBDAS:
+        fits = {s: xfit(s, xdesigns[s].solve(xgrams[s][0], xgrams[s][1], lam)) for s, _ in tune_pairs}
+        v, n = pooled_next(fits)
+        grid.append({"lambda": lam, "game_rmse": round(v, 4)})
+        out.metric("impact_next", "tune", "xrapm_single", [n_ for _, n_ in tune_pairs], "game_rmse", v, n, variant=f"lambda={lam}",
+                   note="tune grid: pooled next-season game RMSE (actual margins) at this lambda, expected-points target")
+    lam_x = min(grid, key=lambda g: g["game_rmse"])["lambda"]
+    out.choice("impact", "xrapm_single", "lambda", lam_x, span(TUNE),
+               "pooled next-season game-margin RMSE (actual margins) over the tune pairs; ratings fitted on expected points (paper_xrapm_stints)", grid)
+    log(f"impact: lambda xrapm_single = {lam_x}")
+    grid = []
+    for lam in R.LAMBDAS:
+        for sc in R.PRIOR_SCALES:
+            fits = {s: xfit(s, xdesigns[s].solve(xgrams[s][0], xgrams[s][1], lam, pv[s] * sc)) for s, _ in tune_pairs}
+            v, n = pooled_next(fits)
+            grid.append({"lambda": lam, "prior_scale": sc, "game_rmse": round(v, 4)})
+            out.metric("impact_next", "tune", "xrapm_prior", [n_ for _, n_ in tune_pairs], "game_rmse", v, n,
+                       variant=f"lambda={lam},scale={sc}", note="tune grid: pooled next-season game RMSE at this lambda and prior scale, expected-points target")
+    at_rule = [g for g in grid if g["lambda"] == lam_x]
+    scale_x = min(at_rule, key=lambda g: g["game_rmse"])["prior_scale"]
+    free_x = min(grid, key=lambda g: g["game_rmse"])
+    out.choice("impact", "xrapm_prior", "prior_scale", scale_x, span(TUNE),
+               f"pooled next-season game-margin RMSE over the tune pairs at lambda = {lam_x} (the expected-points single-season lambda, by rule)",
+               at_rule, note=f"with lambda free the grid minimum is lambda {free_x['lambda']}, scale {free_x['prior_scale']} (RMSE {free_x['game_rmse']})")
+    out.choice("impact", "xrapm_prior", "lambda", lam_x, span(TUNE), "rule: the expected-points single-season lambda (build_rapm.py's rule)",
+               note=f"free grid minimum: lambda {free_x['lambda']}, scale {free_x['prior_scale']}")
+    log(f"impact: xrapm prior scale = {scale_x} at lambda {lam_x}; free minimum lambda {free_x['lambda']} scale {free_x['prior_scale']}")
+
     # ---- fits at the chosen hyperparameters, every season ----------------------
     single = {s: Fit.from_beta(designs[s], designs[s].solve(grams[s][0], grams[s][1], lam_single)) for s in seasons}
+    xsingle = {s: xfit(s, xdesigns[s].solve(xgrams[s][0], xgrams[s][1], lam_x)) for s in seasons}
+    xprior = {s: xfit(s, xdesigns[s].solve(xgrams[s][0], xgrams[s][1], lam_x, pv[s] * scale_x)) for s in seasons}
     prior = {s: Fit.from_beta(designs[s], designs[s].solve(grams[s][0], grams[s][1], lam_single, pv[s] * scale_prior)) for s in seasons}
     multi = {s: Fit.from_beta(d, d.solve(multi_grams[s][0], multi_grams[s][1], lam_multi)) for s, d in multi_designs.items()}
     zero = {s: zero_fit(s) for s in seasons}
@@ -398,7 +465,8 @@ def impact_stage(conn, out):
 
     def models_for(s):
         m = {"rapm_single": single[s], "rapm_prior": prior[s], "zero": zero[s], "bpm": bpmf[s], "onoff": onof[s],
-             "bpm_scaled": bpmf[s].scaled(scales["bpm"]), "onoff_scaled": onof[s].scaled(scales["onoff"])}
+             "bpm_scaled": bpmf[s].scaled(scales["bpm"]), "onoff_scaled": onof[s].scaled(scales["onoff"]),
+             "xrapm_single": xsingle[s], "xrapm_prior": xprior[s]}
         if s in multi:
             m["rapm_multi"] = multi[s]
         return m
@@ -436,7 +504,11 @@ def impact_stage(conn, out):
         folds = sorted(set(d.fold))
         fold_grams = {k: d.gram(mask=d.fold == k) for k in folds}
         G_all, b_all = grams[s][0], grams[s][1]
-        preds = {m: np.zeros(d.n) for m in ("rapm_single", "rapm_prior", "zero", "bpm", "bpm_scaled", "onoff", "onoff_scaled")}
+        preds = {m: np.zeros(d.n) for m in ("rapm_single", "rapm_prior", "zero", "bpm", "bpm_scaled", "onoff", "onoff_scaled",
+                                             "xrapm_single", "xrapm_prior")}
+        xd = xdesigns[s]
+        xfold_grams = {k: xd.gram(mask=xd.fold == k) for k in folds}
+        xG_all, xb_all = xgrams[s][0], xgrams[s][1]
         if s in multi_designs:
             preds["rapm_multi"] = np.zeros(d.n)
             md = multi_designs[s]
@@ -456,6 +528,11 @@ def impact_stage(conn, out):
                 preds["rapm_multi"][test] = md.X[mt] @ beta
             beta, _ = R.fit_nuisance(d, train, np.zeros(d.ncol), False)
             preds["zero"][test] = d.X[test] @ beta
+            # expected-points ratings from the training folds, nuisance refitted on the training folds' actual points
+            xG, xb = xG_all - xfold_grams[k][0], xb_all - xfold_grams[k][1]
+            for name, xbeta in (("xrapm_single", xd.solve(xG, xb, lam_x)), ("xrapm_prior", xd.solve(xG, xb, lam_x, pv[s] * scale_x))):
+                beta, _ = R.fit_nuisance(d, train, xbeta, False)
+                preds[name][test] = d.X[test] @ beta
             bvec = d.rating_vector(bpmf[s].o, bpmf[s].d)
             for name, vec in (("bpm", bvec), ("bpm_scaled", bvec * scales["bpm"])):
                 beta, _ = R.fit_nuisance(d, train, vec, False)
@@ -498,6 +575,8 @@ def impact_stage(conn, out):
             "rapm_prior": (prior[s].total(), prior[nxt].total()),
             "bpm": ({p: v[2] for (p, ss), v in bpm.items() if ss == s}, {p: v[2] for (p, ss), v in bpm.items() if ss == nxt}),
             "onoff": (onoff_full[s], onoff_full[nxt]),
+            "xrapm_single": (xsingle[s].total(), xsingle[nxt].total()),
+            "xrapm_prior": (xprior[s].total(), xprior[nxt].total()),
         }
         for model, (a, b) in series.items():
             pairs = [(p, a[p], b[p]) for p in both if p in a and p in b]

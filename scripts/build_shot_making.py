@@ -54,7 +54,20 @@ totals reconcile with player_shot_making. This adds tables only: player_shot_mak
 shot_making_league and shot_making_validation come out identical to a run
 without it (checked against a snapshot).
 
-Runtime: about 15-25 minutes (six boosting fits on ~5M shots each).
+Per-shot probabilities (added 2026-09-29, round 5 step 4): the cross-fitted
+P(make) of every regular-season shot from 2020-21 on is also stored, one row
+per player_shots.id (shot_xfg: shot_id, season, fold, p_make; ~1.28M rows,
+about 85 MB with its index), so that the expected-points RAPM of
+scripts/paper_xrapm.py can price every field-goal attempt without refitting
+the model. Earlier seasons are not stored (they would triple the table and
+nothing reads them). Adding it changed no other output: player_shot_making,
+shot_making_league, player_shot_hex, shot_hex_league and shot_hex_meta hash
+identically before and after, and shot_making_validation differs only in the
+fit timings its notes record (checked 2026-09-29; every paper number read from
+it was unchanged).
+
+Runtime: about 3-4 minutes on the M3 Air with OMP_NUM_THREADS=4 (3.2 min on
+2026-09-29; six boosting fits on ~5M shots each, early stopping).
 
 Usage:
     /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 scripts/build_shot_making.py
@@ -87,6 +100,7 @@ N_FOLDS = 5              # cross-fitting folds, split by player
 HOLDOUT_SEASON = 2026    # 2025-26: scored by models trained on every earlier season
 LOGREG_SAMPLE = 3_000_000  # logistic regression fits on a random subset of training shots (memory)
 SEED = 0
+XFG_FROM_SEASON = 2021   # shot_xfg keeps the cross-fitted P(make) of every regular-season shot from 2020-21 on
 
 HGB_PARAMS = dict(
     max_iter=600, learning_rate=0.08, max_leaf_nodes=63, min_samples_leaf=500,
@@ -112,7 +126,7 @@ def load_shots(conn):
     buf = io.StringIO()
     with conn.cursor() as cur:
         cur.copy_expert(
-            """COPY (SELECT player_id, player_name, substr(season, 1, 4)::int + 1 AS season,
+            """COPY (SELECT id, player_id, player_name, substr(season, 1, 4)::int + 1 AS season,
                             loc_x, loc_y, shot_made_flag AS made,
                             (shot_type = '3PT Field Goal')::int AS is3, period,
                             minutes_remaining * 60 + seconds_remaining AS clock
@@ -121,8 +135,9 @@ def load_shots(conn):
             buf,
         )
     buf.seek(0)
+    # `id` (player_shots.id) is only the key of shot_xfg; every model and aggregate below names its columns.
     df = pd.read_csv(buf, dtype={
-        "player_id": "int32", "player_name": "string", "season": "int16", "loc_x": "int32", "loc_y": "int32",
+        "id": "int64", "player_id": "int32", "player_name": "string", "season": "int16", "loc_x": "int32", "loc_y": "int32",
         "made": "int8", "is3": "int8", "period": "int8", "clock": "int16",
     })
     del buf
@@ -483,6 +498,30 @@ def save_hex(conn, rows, league, meta):
     conn.commit()
 
 
+def save_xfg(conn, df, p, fold):
+    """shot_xfg: the cross-fitted P(make) per regular-season shot from XFG_FROM_SEASON on, keyed by player_shots.id."""
+    m = df.season.to_numpy() >= XFG_FROM_SEASON
+    buf = io.StringIO()
+    for sid, season, k, pm in zip(df.id.to_numpy()[m].tolist(), df.season.to_numpy()[m].tolist(), fold[m].tolist(),
+                                  p[m].astype(np.float64).tolist()):
+        buf.write(f"{sid},{season},{k},{pm!r}\n")
+    buf.seek(0)
+    with conn.cursor() as cur:
+        cur.execute("""
+            DROP TABLE IF EXISTS shot_xfg;
+            CREATE TABLE shot_xfg (
+                shot_id bigint PRIMARY KEY,       -- player_shots.id
+                season smallint NOT NULL,         -- end year (2021 = 2020-21), regular season only
+                fold smallint NOT NULL,           -- the by-player cross-fit fold the shot was scored in
+                p_make real NOT NULL              -- P(make) from the model trained on the other folds
+            );
+        """)
+        cur.copy_expert("COPY shot_xfg (shot_id, season, fold, p_make) FROM STDIN WITH (FORMAT CSV)", buf)
+        cur.execute("CREATE INDEX shot_xfg_season_idx ON shot_xfg (season);")
+    conn.commit()
+    return int(m.sum())
+
+
 def save(conn, g, league, validation):
     def f(v):
         return None if v is None or (isinstance(v, float) and math.isnan(v)) else float(v)
@@ -636,9 +675,10 @@ def main():
     sniff_hex(hex_rows, hex_league, g)
     save(conn, g, league, validation)
     save_hex(conn, hex_rows, hex_league, hex_meta)
+    n_xfg = save_xfg(conn, df, p, fold)
     print(f"\nplayer_shot_making: {len(g):,} player-seasons ({int(g.qualified.sum()):,} with {MIN_FGA}+ FGA); "
-          f"shot_making_league: {len(league)} seasons; shot_making_validation: {len(validation)} rows. "
-          f"{(time.time() - t0) / 60:.1f} min")
+          f"shot_making_league: {len(league)} seasons; shot_making_validation: {len(validation)} rows; "
+          f"shot_xfg: {n_xfg:,} shots from {label(XFG_FROM_SEASON)}. {(time.time() - t0) / 60:.1f} min")
     conn.close()
 
 

@@ -541,8 +541,9 @@ def load_espn(conn):
 
 
 def match_coordinates(conn, shots):
-    """Attach the NBA shot chart's coordinates to each ESPN attempt matched by
-    order within (game, shooter, period) with identical make/miss sequences."""
+    """Attach the NBA shot chart's coordinates (coord_ft, shot_type) and row id
+    (nba_shot_id) to each ESPN attempt matched by order within (game, shooter,
+    period) with identical make/miss sequences; NaN where unmatched."""
     link = pd.read_sql_query(
         "SELECT DISTINCT 'espn_' || espn_id AS game_id, game_id AS nba_id FROM game_scores WHERE espn_id IS NOT NULL", conn)
     shots = shots.merge(link, on="game_id", how="left")
@@ -565,10 +566,12 @@ def match_coordinates(conn, shots):
     same = pd.concat([seq(s).rename("a"), seq(nba).rename("b")], axis=1, join="inner")
     same = same[same.a == same.b].index
     ok = pd.MultiIndex.from_frame(s[keys]).isin(same)
-    m = s[ok].merge(nba[keys + ["k", "loc_x", "loc_y", "shot_type"]], on=keys + ["k"], how="inner")
+    m = s[ok].merge(nba[keys + ["k", "id", "loc_x", "loc_y", "shot_type"]], on=keys + ["k"], how="inner")
     m["coord_ft"] = np.hypot(m.loc_x, m.loc_y) / 10.0
-    shots = shots.merge(m[["game_id", "action_number", "coord_ft", "shot_type"]], on=["game_id", "action_number"],
-                        how="left")
+    # nba_shot_id (player_shots.id of the matched shot; added 2026-09-29 for paper_xrapm.py) rides along as an
+    # extra column: every caller names the columns it reads.
+    shots = shots.merge(m[["game_id", "action_number", "coord_ft", "shot_type", "id"]].rename(columns={"id": "nba_shot_id"}),
+                        on=["game_id", "action_number"], how="left")
     return shots
 
 

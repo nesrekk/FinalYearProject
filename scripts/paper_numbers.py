@@ -185,6 +185,15 @@ class Numbers:
         return "\n".join(out).lstrip("\n") + "\n"
 
 
+def _corr(x, y):
+    n = len(x)
+    mx, my = sum(x) / n, sum(y) / n
+    sxy = sum((a - mx) * (b - my) for a, b in zip(x, y))
+    sxx = sum((a - mx) ** 2 for a in x)
+    syy = sum((b - my) ** 2 for b in y)
+    return sxy / math.sqrt(sxx * syy)
+
+
 def one(cur, sql, args=None):
     cur.execute(sql, args)
     return cur.fetchone()
@@ -743,7 +752,184 @@ def tests(cur, N):
             "Methods: the sign-flip permutation test agrees with the bootstrap interval, at the 5% level, on every comparison reported")
 
 
-SECTIONS = (data_and_pipeline, rapm, shot_quality, pregame_and_sim, luck, awards, protocol, tests)
+def xrapm(cur, N):
+    """Round 5 step 4: expected-points RAPM (scripts/paper_xrapm.py's tables, the xrapm_* models of paper_eval / paper_tests)."""
+    N.start("Expected-points RAPM (Methods: xrapm; Results: xrapm; Tables rapm, tests) -- paper_xrapm_*, paper_eval_*, paper_eval_tests")
+    meta = {(k, se): v for k, se, v in rows(cur, "SELECT key, season, value FROM paper_xrapm_meta WHERE value IS NOT NULL")}
+    seasons = sorted({se for _, se in meta if se > 0})
+    N.claim(len(seasons) == 6, "Methods: expected points for every stint of the six seasons")
+    N.add("XrFgaMatchedPct", pct(meta[("matched_share", 0)], 1), "paper_xrapm_meta matched_share (all seasons): tracked attempts priced by the shot chart")
+    lo_s = min(seasons, key=lambda se: meta[("matched_share", se)])
+    N.add("XrFgaMatchedMinPct", pct(meta[("matched_share", lo_s)], 1), f"paper_xrapm_meta matched_share, lowest season ({lo_s})")
+    N.add("XrFgaMatchedMinSeason", season(lo_s), "that season")
+    N.add("XrFgaMatchedOtherMinPct", pct(min(meta[("matched_share", se)] for se in seasons if se != lo_s), 1), "lowest matched share among the other seasons")
+    N.add("XrFgaFallback", integer(meta[("fga_fallback", 0)]), "paper_xrapm_meta fga_fallback (all seasons): unmatched attempts priced by the fallback")
+    N.add("XrFgaTrackedMillion", millions(meta[("fga", 0)], 2), "paper_xrapm_meta fga (all seasons): tracked field-goal attempts, millions")
+    N.add("XrFtShrink", dec(meta[("ft_shrink_attempts", 0)], 0), "paper_xrapm_meta ft_shrink_attempts: stat_stability ft_pct stable_n (split-half reliability 0.5)")
+    N.add("XrResidualAbsPts", integer(meta[("residual_abs_pts", 0)]), "paper_xrapm_meta residual_abs_pts: unpriced points (absolute), all seasons")
+    N.add("XrResidualStints", integer(meta[("residual_stints", 0)]), "paper_xrapm_meta residual_stints")
+    N.add("XrPtsMillion", millions(meta[("pts", 0)], 2), "paper_xrapm_meta pts: stored points of tracked stints, millions")
+    dev = max(abs(meta[("xpts_over_pts", se)] - 1) for se in seasons)
+    N.add("XrXptsDevMaxPct", ceil_pct(dev, 1), "largest |expected / stored points - 1| over the seasons, rounded up")
+    cut = [1 - meta[("sd_xpts100", se)] / meta[("sd_pts100", se)] for se in seasons]
+    N.add("XrSpreadCutMinPct", pct(min(cut), 0), "1 - sd_xpts100 / sd_pts100, smallest season (possession-weighted SDs of a side's points per 100 across tracked stints)")
+    N.add("XrSpreadCutMaxPct", pct(max(cut), 0), "the same, largest season")
+    N.add("XrSdPtsMin", dec(min(meta[("sd_pts100", se)] for se in seasons), 0), "paper_xrapm_meta sd_pts100, smallest season")
+    N.add("XrSdPtsMax", dec(max(meta[("sd_pts100", se)] for se in seasons), 0), "the same, largest season")
+    N.add("XrSdXptsMin", dec(min(meta[("sd_xpts100", se)] for se in seasons), 0), "paper_xrapm_meta sd_xpts100, smallest season")
+    N.add("XrSdXptsMax", dec(max(meta[("sd_xpts100", se)] for se in seasons), 0), "the same, largest season")
+    N.claim(all(meta[("sd_xpts100", se)] < meta[("sd_pts100", se)] for se in seasons), "Results: the expected-points target has less spread in every season")
+    fits = {(v, se): (lam, r, sdx, sdr) for v, se, lam, r, sdx, sdr in rows(cur, "SELECT version, season, lambda, r_with_rapm, sd_xrapm, sd_rapm FROM paper_xrapm_fits")}
+    lams = sorted({int(fits[("single", se)][0]) for se in seasons})
+    N.add("XrCvLambdaMin", integer(lams[0]), "paper_xrapm_fits single.lambda (5-fold game-grouped CV on the expected-points target), smallest")
+    N.add("XrCvLambdaMax", integer(lams[-1]), "the same, largest")
+    for v, V in (("single", "Single"), ("prior", "Prior")):
+        rs = [fits[(v, se)][1] for se in seasons]
+        ratio = [fits[(v, se)][2] / fits[(v, se)][3] for se in seasons]
+        N.add(f"XrCorr{V}Min", dec(min(rs), 2), f"paper_xrapm_fits {v}.r_with_rapm (qualified players), smallest season")
+        N.add(f"XrCorr{V}Max", dec(max(rs), 2), "the same, largest season")
+        N.add(f"XrSdRatio{V}Min", dec(min(ratio), 2), f"paper_xrapm_fits {v}: sd_xrapm / sd_rapm over qualified players, smallest season")
+        N.add(f"XrSdRatio{V}Max", dec(max(ratio), 2), "the same, largest season")
+    N.claim(all(fits[(v, se)][2] < fits[(v, se)][3] for v in ("single", "prior") for se in seasons),
+            "Results: expected-points ratings are less spread out than actual-points ones in every season and version")
+    missing = rows(cur, """WITH charted AS (SELECT DISTINCT game_id FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2020-21')
+                          SELECT season, count(*) FROM lineup_stint_games
+                          WHERE game_ok AND nba_game_id IS NOT NULL AND nba_game_id NOT IN (SELECT game_id FROM charted) GROUP BY 1""")
+    N.claim(len(missing) == 1 and missing[0][0] == lo_s, "Methods: the games missing from the shot chart are all in the season with the lowest matched share")
+    N.add("XrChartMissingGames", word(missing[0][1]), "reconciled games (lineup_stint_games.game_ok) whose NBA game id has no player_shots row at all")
+    # the rating change tracks shot-making: the expected-points target removes shooting skill, not only luck
+    mk = {}
+    for v in ("single", "prior"):
+        b = rows(cur, """SELECT m.shot_making, p.rapm, p.xrapm FROM paper_xrapm_players p
+                         JOIN player_shot_making m ON m.player_id = p.player_id AND m.season = p.season
+                         WHERE p.version = %s AND p.qualified AND p.rapm IS NOT NULL AND m.fga >= 200""", (v,))
+        sm, ra, xa = (list(c) for c in zip(*b))
+        d = [x - r for x, r in zip(xa, ra)]
+        mk[v] = (_corr(sm, d), _corr(sm, ra), _corr(sm, xa), len(b))
+    N.add("XrMakingPairs", integer(mk["single"][3]), "qualified player-seasons (1,000+ possessions) with 200+ attempts in player_shot_making, both versions")
+    N.add("XrMakingDeltaCorrSingle", dec(mk["single"][0], 2), "corr(shot-making, expected-points RAPM - RAPM), one-season version, over those player-seasons")
+    N.add("XrMakingDeltaCorrPrior", dec(mk["prior"][0], 2), "the same, prior version")
+    N.add("XrMakingCorrRapm", dec(mk["single"][1], 2), "corr(shot-making, one-season RAPM) over the same player-seasons")
+    N.add("XrMakingCorrXrapm", dec(mk["single"][2], 2), "corr(shot-making, one-season expected-points RAPM) over the same player-seasons")
+    N.claim(mk["single"][0] < -0.3 and mk["prior"][0] < -0.3, "Results: the drop in a player's rating tracks his shot-making (r below -0.3 in both versions)")
+    N.claim(abs(mk["single"][2]) < abs(mk["single"][1]) and mk["single"][1] > 0.2,
+            "Results: RAPM rewards shot-making and the expected-points version barely does")
+
+    # -- the protocol's numbers (paper_eval) ------------------------------------------
+    ch = {(t, m, p): (v, on, as_json(c) if c is not None else None, note)
+          for t, m, p, v, on, c, note in rows(cur, "SELECT task, model, parameter, value, chosen_on, candidates, note FROM paper_eval_choices WHERE model LIKE 'xrapm%%'")}
+    N.add("EvLambdaXsingle", integer(float(ch[("impact", "xrapm_single", "lambda")][0])), "paper_eval_choices impact.xrapm_single.lambda (tune, actual next-season margins)")
+    N.add("EvPriorScaleX", dec(ch[("impact", "xrapm_prior", "prior_scale")][0], 2), "paper_eval_choices impact.xrapm_prior.prior_scale (tune)")
+    note = ch[("impact", "xrapm_prior", "lambda")][3]
+    m_ = re.search(r"lambda (\d+), scale ([\d.]+)", note)
+    N.add("EvPriorFreeLambdaX", integer(int(m_.group(1))), "paper_eval_choices impact.xrapm_prior.lambda note: lambda of the whole-grid minimum")
+    N.add("EvPriorFreeScaleX", dec(float(m_.group(2)), 2), "same: prior scale of the whole-grid minimum")
+    M = {}
+    for task, phase, model, variant, seasons_, metric, value, n in rows(
+            cur, "SELECT task, phase, model, variant, seasons, metric, value, n FROM paper_eval_metrics WHERE task LIKE 'impact%%' AND variant = ''"):
+        M[(task, phase, model, seasons_, metric)] = (value, n)
+
+    def pick(task, phase, model, metric):
+        c = [(se, v, n) for (t, ph, m, se, me), (v, n) in M.items() if (t, ph, m, me) == (task, phase, model, metric)]
+        if phase == "tune" and len(c) > 1:
+            c = [x for x in c if " to " in x[0]]
+        assert len(c) == 1, (task, phase, model, metric, c)
+        return c[0][1], c[0][2], c[0][0]
+
+    nx, yty = {}, {}
+    for model, m in (("xrapm_single", "Xsingle"), ("xrapm_prior", "Xprior"), ("rapm_single", "Single"), ("rapm_prior", "Prior"), ("bpm", "Bpm")):
+        for phase, ph in (("tune", "Tune"), ("validate", "Val"), ("test", "Test")):
+            v, n, se = pick("impact_next", phase, model, "game_rmse")
+            nx[(phase, model)] = v
+            if model.startswith("x"):
+                N.add(f"EvNext{ph}{m}Rmse", dec(v, 2), f"paper_eval_metrics impact_next {phase} {model} game_rmse ({se}, n {n})")
+            v, n, se = pick("impact_reliability", phase, model, "corr")
+            yty[(phase, model)] = v
+            if model.startswith("x"):
+                N.add(f"EvYty{ph}{m}", dec(v, 2), f"paper_eval_metrics impact_reliability {phase} {model} corr ({se}, n {n})")
+        if model.startswith("x"):
+            v, n, se = pick("impact_next", "test", model, "game_corr")
+            N.add(f"EvNextTest{m}R", dec(v, 2), f"paper_eval_metrics impact_next test {model} game_corr ({se})")
+            v, n, se = pick("impact_heldout", "test", model, "game_rmse")
+            N.add(f"EvHeldTest{m}Rmse", dec(v, 2), f"paper_eval_metrics impact_heldout test {model} game_rmse ({se}, n {n})")
+    N.claim(all(nx[(p, "xrapm_single")] > nx[(p, "rapm_single")] for p in ("tune", "validate", "test")),
+            "Results: expected-points RAPM (one season) predicts next season's margins worse than actual-points RAPM in every phase")
+    N.claim(nx[("tune", "xrapm_prior")] > nx[("tune", "rapm_prior")] and nx[("validate", "xrapm_prior")] > nx[("validate", "rapm_prior")]
+            and nx[("test", "xrapm_prior")] < nx[("test", "rapm_prior")],
+            "Results: with a prior, the expected-points version is behind on the tune and validation seasons and marginally ahead on the test season")
+    N.claim(all(nx[(p, "xrapm_prior")] > nx[(p, "bpm")] for p in ("tune", "validate", "test")),
+            "Results: expected-points RAPM with a prior never beats BPM on next-season margins")
+    N.claim(all(yty[(p, "xrapm_prior")] > yty[(p, "rapm_prior")] for p in ("tune", "validate", "test")),
+            "Results: with a prior, the expected-points ratings are more reliable year to year in every phase")
+    N.claim(all(yty[(p, "xrapm_prior")] < yty[(p, "bpm")] for p in ("tune", "validate", "test")), "Results: BPM stays the most reliable")
+
+    # -- the tests (paper_eval_tests) --------------------------------------------------
+    cols = ("task", "phase", "metric", "model_a", "model_b", "seasons", "n", "n_clusters", "value_a", "value_b", "diff", "ci_lo", "ci_hi", "p_boot", "p_perm", "dm_p")
+    T = {}
+    for r in rows(cur, f"SELECT {', '.join(cols)} FROM paper_eval_tests WHERE variant = '' AND (model_a LIKE 'xrapm%%' OR model_b LIKE 'xrapm%%')"):
+        r = dict(zip(cols, r))
+        T[(r["task"], r["phase"], r["metric"], r["model_a"], r["model_b"])] = r
+
+    def excludes_zero(r):
+        return r["ci_lo"] > 0 or r["ci_hi"] < 0
+
+    def diff(name, task, phase, metric, a, b, d, dm=False, cell=False, lo_hi=True, p=True):
+        r = T[(task, phase, metric, a, b)]
+        where = f"paper_eval_tests {task} {phase} {metric} {a} - {b} ({r['seasons']}, n {r['n']}, {r['n_clusters']} clusters)"
+        N.add(name, dec(r["diff"], d), where + ": diff")
+        if lo_hi:
+            N.add(name + "Lo", dec(r["ci_lo"], d), where + ": ci_lo")
+            N.add(name + "Hi", dec(r["ci_hi"], d), where + ": ci_hi")
+        if p:
+            N.add(name + "P", pval(r["p_boot"]), where + ": p_boot")
+        if dm:
+            N.add(name + "DmP", pval(r["dm_p"]), where + ": dm_p")
+        if cell:
+            N.add(name + "Pv", pcell(r["p_boot"]), where + ": p_boot as a table cell")
+            if dm:
+                N.add(name + "DmPv", pcell(r["dm_p"]), where + ": dm_p as a table cell")
+        return r
+
+    def interval(name, task, phase, metric, model, d):
+        r = T[(task, phase, metric, model, "")]
+        N.add(name + "Lo", dec(r["ci_lo"], d), f"paper_eval_tests {task} {phase} {metric} {model} ({r['seasons']}): ci_lo")
+        N.add(name + "Hi", dec(r["ci_hi"], d), "same: ci_hi")
+
+    xs = {ph: diff(f"EvDNext{P}XsingleSingleRmse", "impact_next", ph, "game_rmse", "xrapm_single", "rapm_single", 2, dm=True, cell=(ph == "test"))
+          for ph, P in (("tune", "Tune"), ("validate", "Val"), ("test", "Test"))}
+    xp = {ph: diff(f"EvDNext{P}XpriorPriorRmse", "impact_next", ph, "game_rmse", "xrapm_prior", "rapm_prior", 2, dm=True, cell=(ph == "test"))
+          for ph, P in (("tune", "Tune"), ("validate", "Val"), ("test", "Test"))}
+    diff("EvDNextTestXpriorBpmRmse", "impact_next", "test", "game_rmse", "xrapm_prior", "bpm", 2, dm=True, cell=True)
+    diff("EvDHeldTestXsingleSingleRmse", "impact_heldout", "test", "game_rmse", "xrapm_single", "rapm_single", 2)
+    diff("EvDHeldTestXpriorPriorRmse", "impact_heldout", "test", "game_rmse", "xrapm_prior", "rapm_prior", 2)
+    ys = {ph: diff(f"EvDYty{P}XsingleSingle", "impact_reliability", ph, "corr", "xrapm_single", "rapm_single", 2, cell=(ph == "test"))
+          for ph, P in (("tune", "Tune"), ("validate", "Val"), ("test", "Test"))}
+    yp = {ph: diff(f"EvDYty{P}XpriorPrior", "impact_reliability", ph, "corr", "xrapm_prior", "rapm_prior", 2, cell=(ph == "test"))
+          for ph, P in (("tune", "Tune"), ("validate", "Val"), ("test", "Test"))}
+    for model, m in (("xrapm_single", "Xsingle"), ("xrapm_prior", "Xprior")):
+        interval(f"EvYtyTest{m}", "impact_reliability", "test", "corr", model, 2)
+        interval(f"EvNextTest{m}Rmse", "impact_next", "test", "game_rmse", model, 2)
+    xb = {ph: T[("impact_next", ph, "game_rmse", "xrapm_prior", "bpm")] for ph in ("tune", "validate", "test")}
+    bp = {ph: T[("impact_reliability", ph, "corr", "bpm", "xrapm_prior")] for ph in ("tune", "validate", "test")}
+    hs = T[("impact_heldout", "test", "game_rmse", "xrapm_single", "rapm_single")]
+    hp = T[("impact_heldout", "test", "game_rmse", "xrapm_prior", "rapm_prior")]
+    for d_, what in ((xs, "one-season"), (xp, "prior")):
+        N.claim(d_["tune"]["diff"] > 0 and excludes_zero(d_["tune"]) and d_["validate"]["diff"] > 0 and excludes_zero(d_["validate"]),
+                f"Results: expected-points RAPM ({what}) is behind its actual-points twin on the tune pairs and the validation season by more than its interval")
+        N.claim(not excludes_zero(d_["test"]), f"Results: expected-points RAPM ({what}) is indistinguishable from its actual-points twin on the test season")
+    N.claim(all(r["diff"] > 0 for r in xb.values()) and not excludes_zero(xb["test"]),
+            "Results: expected-points RAPM with a prior is never ahead of BPM, and level with it on the test season")
+    N.claim(hs["diff"] > 0 and excludes_zero(hs) and hp["diff"] > 0 and excludes_zero(hp),
+            "Results: on the test season's held-out games both expected-points versions are behind by more than their intervals")
+    N.claim(all(not excludes_zero(r) for r in ys.values()), "Results: without the prior, the reliability gain is inside its interval in every phase")
+    N.claim(all(r["diff"] > 0 and excludes_zero(r) for r in yp.values()), "Results: with the prior, the reliability gain is outside its interval in every phase")
+    N.claim(all(r["diff"] > 0 and excludes_zero(r) for r in bp.values()), "Results: BPM is more reliable than expected-points RAPM + prior by more than its interval in every phase")
+    reported = [*xs.values(), *xp.values(), xb["test"], hs, hp]
+    N.claim(all((r["p_perm"] < 0.05) == excludes_zero(r) for r in reported if r["p_perm"] is not None),
+            "Methods: the sign-flip permutation test agrees with the bootstrap interval at 5% on every expected-points comparison reported")
+
+
+SECTIONS = (data_and_pipeline, rapm, shot_quality, pregame_and_sim, luck, awards, protocol, tests, xrapm)
 
 
 def build(conn):
