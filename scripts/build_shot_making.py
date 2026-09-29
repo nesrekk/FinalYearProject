@@ -16,8 +16,8 @@ read by GET /shots/shot-making/* (routers/shot_making.py) and the player
 profile.
 
 Data: every regular-season shot in player_shots (game_id '002…'), 1996-97
-to 2025-26 (~5.93M shots). shot_distance is not used: about 7% of threes
-carry 0 there while their coordinates say 23 ft, so distance is computed
+to 2025-26 (~5.93M shots). shot_distance is not used: 11-17% of threes a
+season carry 0 there while their coordinates say 23 ft, so distance is computed
 from loc_x/loc_y. Before 2010-11 about a quarter of shots (nearly all at
 the rim) have no exact location and sit at (0, 0); they are kept, and the
 season input lets the model treat them era by era.

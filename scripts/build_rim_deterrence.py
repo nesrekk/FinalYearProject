@@ -21,7 +21,7 @@ Distance, in this order:
            there (about 99% of attempts). The clocks can't be used to match:
            the two feeds' clocks for the same shot differ by 0-26 seconds.
            Distance is sqrt(x^2 + y^2), never player_shots.shot_distance
-           (it is 0 on 7% of threes);
+           (it is 0 on 11-17% of threes a season);
   text     ESPN's "N-foot" when the shot wasn't matched;
   rule     a layup, dunk, tip, finger roll, putback or alley-oop with neither
            counts as 0-3 ft (the rule the plan asked for). Measured on the
