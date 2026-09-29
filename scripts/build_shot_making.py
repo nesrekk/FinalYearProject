@@ -42,6 +42,18 @@ own makes can't raise the bar he's measured against. The cross-fit
 predictions are scored again over all seasons (scope 'crossfit'), with
 per-season calibration in shot_making_league.
 
+Shot quality map (added 2026-09-29): while the cross-fitted predictions are
+in memory, every shot with a recorded location is also binned into the
+hexagon grid of api/shot_hex.py (2.08 ft across) and, per qualified
+player-season (200+ FGA) and per league season, the cell's attempts, makes and
+expected makes are stored (player_shot_hex, shot_hex_league, shot_hex_meta:
+per-cell arrays keep it ~20 MB instead of ~100). Shots beyond half court and,
+before 2010-11, the ~25% the NBA gave no location (stored at exactly (0, 0))
+are in no cell; each player-season keeps their counts ("off the map") so the
+totals reconcile with player_shot_making. This adds tables only: player_shot_making,
+shot_making_league and shot_making_validation come out identical to a run
+without it (checked against a snapshot).
+
 Runtime: about 15-25 minutes (six boosting fits on ~5M shots each).
 
 Usage:
@@ -67,6 +79,7 @@ from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 from db_config import DB_CONFIG
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "api"))
+import shot_hex as H  # noqa: E402
 from shots_lib import ZONES, classify_zone  # noqa: E402
 
 MIN_FGA = 200            # a season below this is stored but not ranked (greyed out in the UI)
@@ -92,6 +105,9 @@ def label(season):
 # ─── Load ───────────────────────────────────────────────────────────────────
 
 def load_shots(conn):
+    # ORDER BY id: the boosting bin thresholds and the logistic-regression subsample depend on row order,
+    # so reading in the table's physical order made two builds of the same data differ slightly (found
+    # 2026-09-29); id order makes a rebuild reproducible whatever the physical order.
     t = time.time()
     buf = io.StringIO()
     with conn.cursor() as cur:
@@ -100,7 +116,7 @@ def load_shots(conn):
                             loc_x, loc_y, shot_made_flag AS made,
                             (shot_type = '3PT Field Goal')::int AS is3, period,
                             minutes_remaining * 60 + seconds_remaining AS clock
-                     FROM player_shots WHERE game_id LIKE '002%')
+                     FROM player_shots WHERE game_id LIKE '002%' ORDER BY id)
                TO STDOUT WITH (FORMAT CSV, HEADER)""",
             buf,
         )
@@ -394,7 +410,78 @@ def year_to_year(g):
     return out
 
 
+# ─── Shot quality map: hexagon aggregates ───────────────────────────────────
+
+def hex_tables(df, p, g):
+    """(player rows, league rows, meta rows) for the map. Cells hold makes and
+    expected makes (the cross-fitted P(make) summed), so FG% - expected FG% and
+    FG% - league FG% can both be read per cell."""
+    cid = H.cell_id(df.loc_x.to_numpy(), df.loc_y.to_numpy())
+    off = H.off_map(df.loc_x.to_numpy(), df.loc_y.to_numpy(), df.season.to_numpy())
+    d = pd.DataFrame({"player_id": df.player_id.to_numpy(), "season": df.season.to_numpy().astype(np.int32),
+                      "cell": cid, "made": df.made.to_numpy().astype(np.int32), "xm": p.astype(np.float64), "off": off})
+    on = d[~d.off]
+    print(f"map: {len(on):,} of {len(d):,} shots in a cell; off the map {int(d.off.sum()):,} "
+          f"({int((df.loc_y.to_numpy() > H.Y_MAX).sum()):,} beyond half court, "
+          f"{int((d.off & (df.loc_y.to_numpy() <= H.Y_MAX)).sum()):,} with no recorded location)")
+
+    league = on.groupby(["season", "cell"], as_index=False).agg(fga=("made", "size"), fgm=("made", "sum"), xm=("xm", "sum"))
+
+    qual = g[g.qualified][["player_id", "season"]]
+    dq = d.merge(qual, on=["player_id", "season"])
+    offs = dq[dq.off].groupby(["player_id", "season"]).agg(off_fga=("made", "size"), off_fgm=("made", "sum"), off_xm=("xm", "sum"))
+    cells = dq[~dq.off].groupby(["player_id", "season", "cell"], as_index=False).agg(
+        fga=("made", "size"), fgm=("made", "sum"), xm=("xm", "sum")).sort_values(["player_id", "season", "cell"])
+    rows = []
+    for (pid, season), c in cells.groupby(["player_id", "season"], sort=False):
+        o = offs.loc[(pid, season)] if (pid, season) in offs.index else None
+        rows.append((int(pid), int(season), c.cell.astype(int).tolist(), c.fga.astype(int).tolist(),
+                     c.fgm.astype(int).tolist(), [float(v) for v in c.xm],
+                     int(o.off_fga) if o is not None else 0, int(o.off_fgm) if o is not None else 0,
+                     float(o.off_xm) if o is not None else 0.0))
+    seen = {(r[0], r[1]) for r in rows}
+    for (pid, season), o in offs.iterrows():   # a player-season with every shot off the map
+        if (pid, season) not in seen:
+            rows.append((int(pid), int(season), [], [], [], [], int(o.off_fga), int(o.off_fgm), float(o.off_xm)))
+    n_cells = int(cells.shape[0])
+    print(f"player_shot_hex: {len(rows):,} player-seasons, {n_cells:,} cells; shot_hex_league: {len(league):,} rows")
+    # Every cell count must fit the column types used below.
+    assert cells.fga.max() < 32767 and league.fga.max() < 2**31
+    meta = [("size_tenths", H.SIZE, "hexagon circumradius, tenths of a foot"),
+            ("y_max_tenths", H.Y_MAX, "half court: shots beyond this are off the map"),
+            ("q_min", H.Q_MIN, "axial q of id 0"), ("q_span", H.Q_SPAN, "cells per row in the id packing"),
+            ("r_min", H.R_MIN, "axial r of the first row"),
+            ("last_unlocated_season", H.LAST_UNLOCATED_SEASON,
+             "seasons up to this (end year) have shots with no recorded location, stored at (0, 0) and left off the map"),
+            ("min_fga", MIN_FGA, "attempts a player-season needs to have a map")]
+    return rows, league, meta
+
+
 # ─── Store ──────────────────────────────────────────────────────────────────
+
+def save_hex(conn, rows, league, meta):
+    with conn.cursor() as cur:
+        cur.execute("""
+            DROP TABLE IF EXISTS player_shot_hex, shot_hex_league, shot_hex_meta;
+            CREATE TABLE player_shot_hex (
+                player_id integer NOT NULL, season smallint NOT NULL,
+                cells smallint[] NOT NULL, fga smallint[] NOT NULL, fgm smallint[] NOT NULL, xm real[] NOT NULL,
+                off_fga integer NOT NULL, off_fgm integer NOT NULL, off_xm real NOT NULL,
+                PRIMARY KEY (player_id, season)
+            );
+            CREATE TABLE shot_hex_league (
+                season smallint NOT NULL, cell smallint NOT NULL, fga integer NOT NULL, fgm integer NOT NULL, xm real NOT NULL,
+                PRIMARY KEY (season, cell)
+            );
+            CREATE TABLE shot_hex_meta (name text PRIMARY KEY, value double precision NOT NULL, note text NOT NULL);
+        """)
+        psycopg2.extras.execute_values(cur, "INSERT INTO player_shot_hex VALUES %s", rows, page_size=500)
+        psycopg2.extras.execute_values(
+            cur, "INSERT INTO shot_hex_league VALUES %s",
+            [(int(r.season), int(r.cell), int(r.fga), int(r.fgm), float(r.xm)) for r in league.itertuples()], page_size=5000)
+        psycopg2.extras.execute_values(cur, "INSERT INTO shot_hex_meta VALUES %s", meta)
+    conn.commit()
+
 
 def save(conn, g, league, validation):
     def f(v):
@@ -488,6 +575,36 @@ def sniff(g, league):
     print(f"  league-wide points above expected per shot, all seasons: {total:+.5f}")
 
 
+def sniff_hex(rows, league, g):
+    """Curry from 26-30 ft, Korver's corners, a rim-runner: read off the stored cells."""
+    by = {(r[0], r[1]): r for r in rows}
+    name = g.drop_duplicates("player_id").set_index("player_id").player_name
+
+    def region(player, season, pred, label_):
+        pid = g[(g.player_name == player) & (g.season == season)].player_id
+        if pid.empty or (int(pid.iloc[0]), season) not in by:
+            print(f"  {player} {label(season)}: not found")
+            return
+        _, _, cells, fga, fgm, xm, *_ = by[(int(pid.iloc[0]), season)]
+        cx, cy = H.center(np.array(cells))
+        m = pred(cx / 10, cy / 10)
+        a, k, e = int(np.array(fga)[m].sum()), int(np.array(fgm)[m].sum()), float(np.array(xm)[m].sum())
+        lg = league[(league.season == season)]
+        lcx, lcy = H.center(lg.cell.to_numpy())
+        lm = pred(lcx / 10, lcy / 10)
+        la, lk = int(lg.fga.to_numpy()[lm].sum()), int(lg.fgm.to_numpy()[lm].sum())
+        print(f"  {player} {label(season)} {label_}: {k}-{a} ({k / a:.3f}), expected {e / a:.3f}, league {lk / la:.3f}" if a else
+              f"  {player} {label(season)} {label_}: no shots")
+
+    dist = lambda x, y: np.hypot(x, y)  # noqa: E731
+    print("\nHex sniff tests:")
+    region("Stephen Curry", 2016, lambda x, y: (dist(x, y) >= 26) & (dist(x, y) < 30), "26-30 ft")
+    region("Kyle Korver", 2015, lambda x, y: (np.abs(x) > 21) & (y < 9), "corner threes")
+    region("Rudy Gobert", 2025, lambda x, y: dist(x, y) <= 4, "0-4 ft")
+    region("Rudy Gobert", 2025, lambda x, y: dist(x, y) > 10, "beyond 10 ft")
+    region("DeAndre Jordan", 2015, lambda x, y: dist(x, y) <= 4, "0-4 ft")
+
+
 def main():
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
@@ -515,7 +632,10 @@ def main():
     print("year-to-year r:", json.dumps(y2y))
 
     sniff(g, league)
+    hex_rows, hex_league, hex_meta = hex_tables(df, p, g)
+    sniff_hex(hex_rows, hex_league, g)
     save(conn, g, league, validation)
+    save_hex(conn, hex_rows, hex_league, hex_meta)
     print(f"\nplayer_shot_making: {len(g):,} player-seasons ({int(g.qualified.sum()):,} with {MIN_FGA}+ FGA); "
           f"shot_making_league: {len(league)} seasons; shot_making_validation: {len(validation)} rows. "
           f"{(time.time() - t0) / 60:.1f} min")

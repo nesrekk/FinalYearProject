@@ -323,6 +323,13 @@ COVERAGE_MAP = [
         "used_by": [],
     },
     {
+        "table": "player_shot_hex", "label": "Shot quality map (per player-season hexagon cells)", "group": "Shooting",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM player_shot_hex", "range_fmt": "season_int",
+        "source": "scripts/build_shot_making.py: every regular-season shot binned into 2-foot hexagons of the half court (api/shot_hex.py), per qualified player-season (200+ FGA) the attempts, makes and expected makes (the cross-fitted shot-making model) per cell as arrays; shot_hex_league holds the league's attempts and makes per cell and season, shot_hex_meta the grid.",
+        "gap": "Shots beyond half court (0.14%) and, through 2009-10, the ~25% of shots the NBA gave no location (stored at (0, 0), nearly all at the rim) are in no cell; each player-season keeps their counts off the map so cells + off-map equal his attempts and makes (0 of 9,026 differ). No defender distance or shot type, as in player_shots.",
+        "used_by": ["shotcharts"],
+    },
+    {
         "table": "team_zone_mix", "label": "Team shot mix", "group": "Shooting",
         "range_sql": "SELECT MIN(LEFT(season, 4)::int + 1), MAX(LEFT(season, 4)::int + 1) FROM team_zone_mix", "range_fmt": "season_int",
         "source": "Every located regular-season shot in player_shots, placed on a team game by game (scripts/build_team_zone_mix.py).",

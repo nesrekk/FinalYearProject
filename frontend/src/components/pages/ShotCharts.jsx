@@ -8,6 +8,7 @@ import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import ShotMixHistory from '../common/ShotMixHistory';
 import { ShotMakingLeaderboard, ShotMakingModel, ShotMakingPlayer } from '../common/ShotMaking';
+import ShotQualityMap from '../common/ShotQualityMap';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 function clamp(n, lo, hi) {
@@ -183,7 +184,15 @@ export default function ShotCharts() {
   const [seasons, setSeasons] = useState([]);
   const [season, setSeason] = useState('');
   const [source, setSource] = useState('');
-  const [viewMode, setViewMode] = useState(() => parseParam.oneOf(params, 'view', ['heatmap', 'shotmaking']) ?? 'dots'); // 'dots' | 'heatmap' | 'shotmaking'
+  const [viewMode, setViewMode] = useState(() => parseParam.oneOf(params, 'view', ['heatmap', 'shotmaking', 'quality']) ?? 'dots'); // 'dots' | 'heatmap' | 'shotmaking' | 'quality'
+  // Quality map tab: colour reference, the player's season, an optional second player and cell floor (qm=, qs=, vs=, vss=, qmin=).
+  const [quality, setQuality] = useState(() => ({
+    mode: parseParam.oneOf(params, 'qm', ['expected', 'league']) ?? 'expected',
+    season: parseParam.int(params, 'qs', { min: 1997, max: 2100 }),
+    vs: parseParam.str(params, 'vs'),
+    vsSeason: parseParam.int(params, 'vss', { min: 1997, max: 2100 }),
+    minShots: [1, 2, 3, 5, 10].includes(parseParam.int(params, 'qmin')) ? parseParam.int(params, 'qmin') : 2,
+  }));
   // Shot-making tab: the leaderboard's season, ranking and order (rank=, by=, order= in the link).
   const [rank, setRank] = useState(() => ({
     season: parseParam.int(params, 'rank', { min: 1997, max: 2100 }),
@@ -253,11 +262,17 @@ export default function ShotCharts() {
   // Nothing is written until a player has loaded, so a slow first load
   // doesn't wipe the link it came from.
   const onShotMaking = viewMode === 'shotmaking';
+  const onQuality = viewMode === 'quality';
   useUrlSync(resolvedPlayer ? {
     player: resolvedPlayer, season, view: viewMode === 'dots' ? null : viewMode,
     rank: onShotMaking ? rank.season : null,
     by: onShotMaking && rank.sort !== 'shot_making' ? rank.sort : null,
     order: onShotMaking && rank.order !== 'desc' ? rank.order : null,
+    qm: onQuality && quality.mode !== 'expected' ? quality.mode : null,
+    qs: onQuality ? quality.season : null,
+    vs: onQuality ? quality.vs : null,
+    vss: onQuality && quality.vs ? quality.vsSeason : null,
+    qmin: onQuality && quality.minShots !== 2 ? quality.minShots : null,
   } : null);
 
   function handleSeasonChange(newSeason) {
@@ -402,6 +417,13 @@ export default function ShotCharts() {
           >
             Shot-making
           </button>
+          <button
+            type="button"
+            className={`tab-btn ${viewMode === 'quality' ? 'tab-btn--active' : ''}`}
+            onClick={() => setViewMode('quality')}
+          >
+            Quality map
+          </button>
         </div>
         {viewMode === 'heatmap' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: '0.75rem' }}>
@@ -416,7 +438,7 @@ export default function ShotCharts() {
         )}
       </div>
 
-      {!onShotMaking && (<>
+      {!onShotMaking && !onQuality && (<>
       <div className="court-container">
         <ChartExport svgRef={svgRef} name={`${resolvedPlayer || 'player'} shot chart ${season || ''}`} />
         <svg ref={svgRef} viewBox="0 0 500 470" className="court-svg" role="img" aria-label={viewMode === 'heatmap'
@@ -528,6 +550,11 @@ export default function ShotCharts() {
       </div>
 
       </>)}
+
+      {onQuality && resolvedPlayer && (
+        <ShotQualityMap playerName={resolvedPlayer} state={quality}
+          onChange={(patch) => setQuality((prev) => ({ ...prev, ...patch }))} />
+      )}
 
       {onShotMaking && resolvedPlayer && (
         <>

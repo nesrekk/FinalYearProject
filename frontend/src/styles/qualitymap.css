@@ -1,0 +1,52 @@
+/* Shot quality map (common/ShotQualityMap.jsx): Shot Charts > Quality map tab. Paper/Ink tokens; the two
+   diverging colours are orange (the brand, better than the reference) and a blue for worse. */
+:root { --qm-up: var(--brand); --qm-down: #2b6cb0; }
+:root[data-theme='dark'] { --qm-down: #7db3ff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) { --qm-down: #7db3ff; } }
+
+.qm-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3) var(--space-5); margin: var(--space-3) 0; }
+.qm-toggle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.qm-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); margin-right: 4px; }
+.qm-season { display: flex; flex-direction: column; gap: 4px; }
+.qm-season > span { font-size: var(--text-eyebrow-size); letter-spacing: var(--text-eyebrow-tracking); text-transform: uppercase; color: var(--text-3); }
+.qm-season .input-field { flex: none; min-width: 120px; }
+
+.qm-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+.qm-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 900px) { .qm-grid--two { grid-template-columns: minmax(0, 1fr); } }
+.qm-panel { min-width: 0; }
+.qm-panel--stale { opacity: 0.6; }
+.qm-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-3); }
+.qm-head h4 { margin: 0; font-size: 1.05rem; color: var(--text); }
+.qm-team { color: var(--text-3); font-weight: 400; }
+.qm-stats { margin: var(--space-2) 0; color: var(--text-2); font-size: 0.88rem; }
+.qm-stats strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.qm-gap { color: var(--text-3); }
+
+.qm-chart { position: relative; max-width: 560px; margin-top: var(--space-2); }
+.qm-chart svg { display: block; width: 100%; height: auto; }
+.qm-bg { fill: var(--surface-2); }
+.qm-line { fill: none; stroke: var(--hairline); stroke-width: 1.5; }
+.qm-line--dash { stroke-dasharray: 4 3; }
+.qm-hoop { fill: none; stroke: var(--brand-text); stroke-width: 2; }
+.qm-cell { stroke: var(--surface-2); stroke-width: 0.6; }
+.qm-cell:hover { stroke: var(--text); stroke-width: 1.5; }
+.qm-cell--none { fill: var(--hairline); }
+.qm-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: var(--space-2); color: var(--text-2); font-size: 0.8rem; }
+.qm-ramp {
+  width: 140px; height: 10px; border-radius: 5px;
+  background: linear-gradient(90deg, var(--qm-down), var(--surface-2), var(--qm-up));
+  border: 1px solid var(--hairline);
+}
+.qm-legend-note { margin-left: var(--space-3); color: var(--text-3); }
+.qm-detail { min-height: 2.6em; margin: var(--space-2) 0; color: var(--text-2); font-size: 0.85rem; }
+.qm-detail strong { color: var(--text); }
+.qm-gaps summary { cursor: pointer; color: var(--brand-text); font-weight: 600; font-size: 0.9rem; }
+.qm-gaps summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.qm-table th, .qm-table td { white-space: nowrap; }
+.qm-table .lb-num { text-align: right; font-variant-numeric: tabular-nums; }
+.qm-pos { color: var(--positive); }
+.qm-neg { color: var(--negative); }
+.qm-foot { margin: var(--space-3) 0 0; color: var(--text-3); font-size: 0.8rem; }
+.qm-controls input[type='search'] { flex: 0 1 280px; min-width: 200px; }
+.qm-foot .pill-badge { max-width: 100%; white-space: normal; }

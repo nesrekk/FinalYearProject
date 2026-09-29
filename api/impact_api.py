@@ -75,6 +75,7 @@ from routers import (
     season_sim,
     shot_charts,
     shot_making,
+    shot_quality_map,
     situational_splits,
     spacing_lab,
     team_comparison,
@@ -132,6 +133,7 @@ for _router_module in (
     play_finder,
     season_sim,
     best_games,
+    shot_quality_map,
 ):
     app.include_router(_router_module.router)
 

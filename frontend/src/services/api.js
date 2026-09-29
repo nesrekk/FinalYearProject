@@ -1235,3 +1235,10 @@ export async function fetchUpsets(params) {
     const response = await axios.get(`${IMPACT_BASE}/upsets`, { params });
     return response.data;
 }
+
+// ─── Shot quality map (player_shot_hex, shot_hex_league; regular season, 200+ FGA) ────
+// One player-season on the 2-foot hexagon grid next to the league's; season defaults to the latest.
+export async function fetchQualityMap(player, season) {
+    const response = await axios.get(`${IMPACT_BASE}/shots/quality-map`, { params: { player, ...(season ? { season } : {}) } });
+    return response.data;
+}

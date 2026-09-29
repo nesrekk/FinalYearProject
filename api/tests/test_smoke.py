@@ -2652,3 +2652,80 @@ def test_best_games_and_upsets():
     assert client.get("/upsets", params={"season": 2010}).status_code == 404
     late = client.get("/upsets", params={"min_games": 20, "limit": 100}).json()
     assert all(min(r["games_played"]) >= 20 for r in late["results"]) and late["total"] < u["total"]
+
+
+def test_shot_quality_map_cells_reconcile_and_known_shooters():
+    """Shot quality map (scripts/build_shot_making.py, api/shot_hex.py, api/routers/shot_quality_map.py): every
+    qualified player-season's hexagon cells plus its off-the-map shots equal its player_shot_making attempts and
+    makes, the cells' expected makes equal the model's, and the famous shooting spots show where they should."""
+    import numpy as np
+    from impact_api import app
+    from impact_core import get_db
+    import shot_hex as H
+    client = TestClient(app)
+    # The grid: every cell of the half court gets an id that fits a smallint and a centre within one radius.
+    xs, ys = np.meshgrid(np.arange(-250, 251, 5), np.arange(-52, 471, 5))
+    ids = H.cell_id(xs.ravel(), ys.ravel())
+    assert ids.min() >= 0 and ids.max() < 32767
+    cx, cy = H.center(ids)
+    assert np.hypot(cx - xs.ravel(), cy - ys.ravel()).max() <= H.SIZE + 1e-6
+    assert H.cell_id(0, 0) == H.cell_id(3, -4) and tuple(H.center(H.cell_id(0, 0))) == (0.0, 0.0)
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT to_regclass('player_shot_hex')")
+        if cur.fetchone()[0] is None:
+            pytest.skip("player_shot_hex not built (run scripts/build_shot_making.py)")
+        cur.execute("SELECT COUNT(*) FROM player_shot_hex")
+        assert cur.fetchone()[0] == 9026
+        cur.execute("SELECT COUNT(*) FROM player_shot_making WHERE qualified")
+        assert cur.fetchone()[0] == 9026
+        # Cells + off-map = attempts and makes; expected makes agree with the model's expected FG% (a real column).
+        cur.execute("""SELECT COUNT(*) FROM player_shot_hex h JOIN player_shot_making m USING (player_id, season)
+                       WHERE (SELECT COALESCE(SUM(v), 0) FROM unnest(h.fga) v) + h.off_fga <> m.fga
+                          OR (SELECT COALESCE(SUM(v), 0) FROM unnest(h.fgm) v) + h.off_fgm <> m.fgm
+                          OR ABS((SELECT COALESCE(SUM(v), 0) FROM unnest(h.xm) v) + h.off_xm - m.x_fg_pct * m.fga) > 0.05 + 1e-4 * m.fga""")
+        assert cur.fetchone()[0] == 0
+        cur.execute("""SELECT MIN(cardinality(cells)), MAX(cardinality(cells)) FROM player_shot_hex
+                       WHERE cardinality(cells) > 0""")
+        lo, hi = cur.fetchone()
+        assert lo >= 5 and hi < 800     # the half court has 765 cells
+        # A full location era maps nearly every shot; the unlocated seasons say so.
+        cur.execute("""SELECT l.season, SUM(l.fga)::float / MAX(s.fga) FROM shot_hex_league l
+                       JOIN shot_making_league s USING (season) GROUP BY l.season ORDER BY 1""")
+        share = dict(cur.fetchall())
+        assert all(share[s] > 0.995 for s in range(2011, 2027))
+        assert all(0.6 < share[s] < 0.8 for s in range(1997, 2011))
+
+    o = client.get("/shots/quality-map/options", params={"player": "Kyle Korver"}).json()
+    _assert_has_source(o)
+    assert o["min_fga"] == 200 and 2015 in {s["season"] for s in o["seasons"]}
+
+    def region(cells, pred):
+        rows = [c for c in cells if pred(c["x"], c["y"])]
+        fga, fgm = sum(c["fga"] for c in rows), sum(c["fgm"] for c in rows)
+        return fga, fgm / fga, sum(c["xm"] for c in rows) / fga
+    dist = lambda x, y: (x * x + y * y) ** 0.5  # noqa: E731
+
+    # Curry 2015-16 from 26-30 feet: well above an average shooter on the same shots (as Shot-making says).
+    m = client.get("/shots/quality-map", params={"player": "Stephen Curry", "season": 2016}).json()
+    _assert_has_source(m)
+    assert m["totals"]["fga"] + m["off_map"]["fga"] == 1598 and m["team"] == "GSW"
+    fga, fg, exp = region(m["cells"], lambda x, y: 26 <= dist(x, y) < 30)
+    assert fga > 250 and fg > 0.40 and fg - exp > 0.07
+    # Korver 2014-15 in the corners: very good from the spot every league corner cell is heavily shot.
+    k = client.get("/shots/quality-map", params={"player": "Kyle Korver", "season": 2015}).json()
+    fga, fg, exp = region(k["cells"], lambda x, y: abs(x) > 21 and y < 9)
+    assert fga > 80 and fg > 0.50 and fg - exp > 0.10
+    # Gobert 2024-25: at the rim he makes more than the league does there, and shoots almost nothing away from it.
+    g = client.get("/shots/quality-map", params={"player": "Rudy Gobert", "season": 2025}).json()
+    fga, fg, exp = region(g["cells"], lambda x, y: dist(x, y) <= 4)
+    assert fga > 350 and fg > 0.70
+    assert region(g["cells"], lambda x, y: dist(x, y) > 10)[0] < 0.1 * g["totals"]["fga"]
+    # Before 2010-11 the unlocated shots are off the map, and the response says so.
+    s = client.get("/shots/quality-map", params={"player": "Shaquille O'Neal", "season": 2001}).json()
+    assert s["off_map"]["fga"] > 300 and "no location" in s["off_map"]["reason"] and s["totals"]["fga"] + s["off_map"]["fga"] > 1300
+    # Defaults and errors.
+    assert client.get("/shots/quality-map", params={"player": "Stephen Curry"}).json()["season"] == 2026
+    assert client.get("/shots/quality-map", params={"player": "Stephen Curry", "season": 2000}).status_code == 404
+    assert client.get("/shots/quality-map", params={"player": "zzzzzz"}).status_code == 404
+    assert client.get("/shots/quality-map", params={"player": "x"}).status_code == 422
