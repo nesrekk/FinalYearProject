@@ -74,7 +74,7 @@ LINES_SQL = """
     FROM player_game_lines l
     JOIN team_game_fatigue f ON f.team_abbreviation = l.team_abbreviation AND f.game_date = l.game_date
     WHERE l.seconds > 0 {where}
-    ORDER BY l.player_id, l.season, l.game_date
+    ORDER BY l.player_id, l.season, l.game_date, l.game_id  -- game_id breaks ties: a few ids have two lines on one date
 """
 
 
