@@ -53,6 +53,7 @@ const AgingCurves = lazy(() => import('./components/pages/AgingCurves'));
 const Projections = lazy(() => import('./components/pages/Projections'));
 const StatLineFinder = lazy(() => import('./components/pages/StatLineFinder'));
 const GameFinder = lazy(() => import('./components/pages/GameFinder'));
+const PlayFinder = lazy(() => import('./components/pages/PlayFinder'));
 const HotStreaks = lazy(() => import('./components/pages/HotStreaks'));
 const Rapm = lazy(() => import('./components/pages/Rapm'));
 const Rotations = lazy(() => import('./components/pages/Rotations'));
@@ -95,6 +96,7 @@ const PAGES = {
   projections: Projections,
   statline: StatLineFinder,
   gamefinder: GameFinder,
+  plays: PlayFinder,
   hotstreaks: HotStreaks,
   rapm: Rapm,
   rotations: Rotations,

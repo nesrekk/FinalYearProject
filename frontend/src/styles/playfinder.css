@@ -1,0 +1,75 @@
+/* Play Finder (?page=plays). Layout pieces shared with Game Finder live in gamelog.css. */
+.pf-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-4);
+}
+.pf-periods { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pf-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-right: 4px;
+}
+.pf-pill {
+  min-width: 44px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.pf-pill:hover,
+.pf-pill:focus-visible { border-color: var(--brand); color: var(--brand-text); }
+.pf-pill[aria-pressed='true'] { border-color: var(--brand); background: var(--brand); color: var(--on-brand); }
+.pf-check { display: inline-flex; align-items: center; gap: 8px; font-size: 0.88rem; color: var(--text-2); }
+.pf-game-chip { font-size: 0.88rem; }
+.pf-reset { margin-left: auto; }
+.pf-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--text-2);
+}
+.pf-breakdown strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.pf-table td { font-variant-numeric: tabular-nums; vertical-align: middle; }
+.pf-nowrap { white-space: nowrap; }
+.pf-desc { min-width: 240px; max-width: 420px; color: var(--text-2); font-size: 0.85rem; }
+.pf-vs { margin: 0 6px; color: var(--text-3); font-size: 0.8rem; }
+.pf-unid { color: var(--text-2); font-style: italic; }
+.pf-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--brand);
+  border-radius: 999px;
+  color: var(--brand-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.pf-cat { font-weight: 600; color: var(--text); }
+.pf-cat--made2, .pf-cat--made3, .pf-cat--ftm { color: var(--positive); }
+.pf-cat--miss2, .pf-cat--miss3, .pf-cat--ftx, .pf-cat--tov { color: var(--negative); }
+.pf-pos { color: var(--positive); font-weight: 600; }
+.pf-neg { color: var(--negative); font-weight: 600; }
+.pf-replay { color: var(--brand-text); font-weight: 600; white-space: nowrap; }
+.pf-replay:hover, .pf-replay:focus-visible { text-decoration: underline; }
+.pf-foot { margin-top: var(--space-3); font-size: 0.82rem; line-height: 1.6; }
+@media (max-width: 640px) {
+  .pf-reset { margin-left: 0; }
+  .pf-desc { min-width: 200px; }
+}
+.pf-controls .gf-player { grid-column: span 2; }

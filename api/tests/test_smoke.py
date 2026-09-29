@@ -2378,3 +2378,58 @@ def test_assist_network_matches_game_log_and_known_duos():
     assert client.get("/assists/team", params={"team": "DEN", "season": 2010}).status_code == 404
     assert client.get("/assists/pairs", params={"sort": "drop table"}).status_code == 400
     assert client.get("/assists/player/1").status_code == 404
+
+
+def test_play_finder_matches_game_log_and_bam_83():
+    """Play Finder (scripts/build_play_finder.py, api/routers/play_finder.py): every play from the shared
+    play-by-play parser, so each player-game's counts equal his Game Log line (3PA aside: misses take the NBA
+    shot chart's 2/3 call); Bam Adebayo's 83 on 2026-03-10 comes back whole; filters are whitelisted."""
+    from impact_api import app
+    from impact_core import get_db
+    client = TestClient(app)
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT to_regclass('play_finder_events')")
+        if cur.fetchone()[0] is None:
+            pytest.skip("play_finder_events not built (run scripts/build_play_finder.py)")
+        cur.execute("SELECT SUM(lines_checked), SUM(lines_differ), SUM(games), SUM(rows) FROM play_finder_seasons")
+        checked, differ, games, rows = cur.fetchone()
+        assert checked > 150_000 and differ == 0 and games == 7229
+        cur.execute("SELECT COUNT(*) FROM play_finder_events")
+        assert cur.fetchone()[0] == rows
+        cur.execute("SELECT SUM(plays) FROM play_finder_games")
+        assert cur.fetchone()[0] == rows
+    opts = client.get("/plays/finder/options").json()
+    _assert_has_source(opts)
+    assert opts["seasons"] == {"from": 2021, "to": 2026} and len(opts["teams"]) == 30
+    # Bam Adebayo, 83 points on 2026-03-10: 20 field goals (7 threes), 36 free throws.
+    d = client.get("/plays/finder", params={"player_id": 1628389, "date_from": "2026-03-10",
+                                            "date_to": "2026-03-10", "limit": 200}).json()
+    _assert_has_source(d)
+    n = {c["key"]: c["n"] for c in d["by_cat"]}
+    assert n["made2"] + n["made3"] == 20 and n["made3"] == 7 and n["ftm"] == 36 and d["points"] == 83
+    assert d["total"] == len(d["results"]) and {r["team"] for r in d["results"]} == {"MIA"}
+    # Every offered category and sort is accepted; clutch/margin/distance filters hold on every row.
+    for c in opts["categories"]:
+        assert client.get("/plays/finder", params={"cat": c["key"], "game": d["results"][0]["game_id"],
+                                                   "limit": 1}).status_code == 200
+    d = client.get("/plays/finder", params={"cat": "made3", "clutch": 1, "season_from": 2026, "season_to": 2026,
+                                            "limit": 200}).json()
+    assert d["total"] > 500 and all(r["clutch"] and r["period"] >= 4 and abs(r["margin_before"]) <= 5
+                                    and r["cat"] == "made3" for r in d["results"])
+    d = client.get("/plays/finder", params={"cat": "made", "dist_min": 40, "sort": "dist", "limit": 50}).json()
+    dists = [r["dist"] for r in d["results"]]
+    assert dists and min(dists) >= 40 and dists == sorted(dists, reverse=True)
+    d = client.get("/plays/finder", params={"cat": "made", "margin_min": -3, "margin_max": 0, "period": "4,ot",
+                                            "clock_max": 3, "limit": 200}).json()
+    assert all(-3 <= r["margin_before"] <= 0 and r["period"] >= 4 and r["seconds_left"] <= 3 for r in d["results"])
+    # Well-known leaders: Jokić sets up the most Nuggets baskets; the blocks leaders are rim protectors.
+    d = client.get("/plays/finder", params={"cat": "ast", "team": "DEN", "season_from": 2024, "season_to": 2024,
+                                            "limit": 1}).json()
+    assert d["most"][0]["player_id"] == 203999
+    top_blocks = {p["player_id"] for p in client.get("/plays/finder", params={"cat": "blk", "limit": 1}).json()["most"][:5]}
+    assert 203497 in top_blocks  # Rudy Gobert
+    for bad in ({"cat": "x"}, {"team": "ZZZ"}, {"sort": "id; drop table"}, {"period": "9"}):
+        assert client.get("/plays/finder", params=bad).status_code == 400
+    assert client.get("/plays/finder", params={"game": "nope"}).status_code == 404
+    assert client.get("/plays/finder", params={"offset": 10_001}).status_code == 422

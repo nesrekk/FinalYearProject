@@ -29,6 +29,7 @@ export const NAV_GROUPS = [
             { id: 'projections', label: 'Projections', icon: 'update' },
             { id: 'statline', label: 'Stat Line Finder', icon: 'manage_search' },
             { id: 'gamefinder', label: 'Game Finder', icon: 'event_note' },
+            { id: 'plays', label: 'Play Finder', icon: 'play_circle' },
             { id: 'hotstreaks', label: 'Hot Streak Checker', icon: 'local_fire_department' },
             { id: 'splits', label: 'Situational Splits', icon: 'call_split' },
             { id: 'shotcharts', label: 'Shot Charts', icon: 'adjust' },

@@ -53,6 +53,7 @@ from routers import (
     on_off,
     pair_chemistry,
     pair_synergy,
+    play_finder,
     player_comparison,
     player_impact,
     player_profile,
@@ -126,6 +127,7 @@ for _router_module in (
     rotations,
     rim_deterrence,
     assist_network,
+    play_finder,
 ):
     app.include_router(_router_module.router)
 

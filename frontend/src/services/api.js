@@ -1177,3 +1177,19 @@ export async function fetchPlayerAssists(playerId, season) {
     const response = await axios.get(`${IMPACT_BASE}/assists/player/${playerId}`, { params: season ? { season } : {} });
     return response.data;
 }
+
+// ─── Play Finder (play_finder_events, 2020-21 on) ────────────────
+export async function fetchPlayFinderOptions() {
+    return getWithCache('play_finder_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/plays/finder/options`);
+        return response.data;
+    });
+}
+
+// params: { player_id, cat: 'made3,ast', season_from, season_to, date_from, date_to, game, team, opp, home,
+//           period: '4,ot', clock_min, clock_max, margin_min, margin_max, clutch, dist_min, dist_max,
+//           sort, limit, offset }
+export async function fetchPlayFinder(params) {
+    const response = await axios.get(`${IMPACT_BASE}/plays/finder`, { params });
+    return response.data;
+}

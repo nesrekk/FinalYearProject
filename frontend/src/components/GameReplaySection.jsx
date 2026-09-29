@@ -51,16 +51,25 @@ export default function GameReplaySection() {
     const [gamesError, setGamesError] = useState('');
     const [selectedGameId, setSelectedGameId] = useState('');
     // A link to one game (?page=analytics&game=<id>#replay, e.g. from the
-    // Rotations page) opens it; without the parameter nothing changes.
+    // Rotations page) opens it; `t` (seconds since tip-off) and `ev` (the
+    // play's event id), e.g. from the Play Finder, also mark that moment on
+    // the chart. Without the parameters nothing changes.
     const params = useInitialParams();
     const [linkedGame] = useState(() => parseParam.str(params, 'game'));
-    useUrlSync(linkedGame ? { game: selectedGameId || linkedGame } : null);
+    const [linkedT] = useState(() => parseParam.num(params, 't', { min: 0, max: 6000 }));
+    const [linkedEv] = useState(() => parseParam.int(params, 'ev', { min: 1 }));
+    const onLinkedGame = !selectedGameId || selectedGameId === linkedGame;
+    useUrlSync(linkedGame ? {
+        game: selectedGameId || linkedGame,
+        t: onLinkedGame ? linkedT : null,
+        ev: onLinkedGame ? linkedEv : null,
+    } : null);
     const [page] = useState(currentPageParam);
     useEffect(() => () => {
         if (!linkedGame) return;
         const url = new URL(window.location.href);
         if (url.searchParams.get('page') !== page) return;
-        url.searchParams.delete('game');
+        ['game', 't', 'ev'].forEach((k) => url.searchParams.delete(k));
         window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     }, [linkedGame, page]);
 
@@ -135,6 +144,16 @@ export default function GameReplaySection() {
     }, [whatif, maxElapsed]);
 
     const missedShots = useMemo(() => (replay?.points || []).filter((p) => p.is_missed_shot), [replay]);
+
+    // The linked moment: the play with that event id, else the last play at or before `t`.
+    const moment = useMemo(() => {
+        if (!replay?.points?.length || replay.game_id !== linkedGame || (linkedT == null && linkedEv == null)) return null;
+        const exact = linkedEv != null && replay.points.find((p) => p.event_id === linkedEv);
+        if (exact) return exact;
+        if (linkedT == null) return null;
+        const before = replay.points.filter((p) => p.seconds_elapsed <= linkedT + 0.05);
+        return before.length ? before[before.length - 1] : replay.points[0];
+    }, [replay, linkedGame, linkedT, linkedEv]);
 
     function toggleWhatIf(eventId) {
         if (whatifEventId === eventId) {
@@ -263,6 +282,16 @@ export default function GameReplaySection() {
                             />
                         )}
 
+                        {/* The moment a link pointed at (Play Finder): a marked line and ring. */}
+                        {moment && (
+                            <g style={{ pointerEvents: 'none' }}>
+                                <line x1={chartX(moment.seconds_elapsed)} y1={PAD_T} x2={chartX(moment.seconds_elapsed)} y2={CHART_H - PAD_B}
+                                    stroke="var(--brand)" strokeWidth="1.5" strokeDasharray="3 3" />
+                                <circle cx={chartX(moment.seconds_elapsed)} cy={chartY(moment.home_wp)} r={8}
+                                    fill="none" stroke="var(--brand)" strokeWidth="2.5" />
+                            </g>
+                        )}
+
                         {/* Top-play markers (always visible, on top of the hover layer) */}
                         {replay.top_plays.map((p) => (
                             <circle
@@ -290,13 +319,21 @@ export default function GameReplaySection() {
                                 {' ('}{hovered.wpa >= 0 ? '+' : ''}{(hovered.wpa * 100).toFixed(1)}pp{')'}
                             </p>
                         )}
+                        {!hovered && !whatif && moment && (
+                            <p className="page-subtitle" style={{ margin: 0 }}>
+                                <strong style={{ color: 'var(--brand-text)' }}>Linked play, {formatClock(moment.seconds_elapsed)}</strong>
+                                {' — '}{moment.description}
+                                {' · '}Home WP {Math.round(moment.home_wp * 100)}%
+                                {' ('}{moment.wpa >= 0 ? '+' : ''}{(moment.wpa * 100).toFixed(1)}pp{')'}
+                            </p>
+                        )}
                         {!hovered && whatif && (
                             <p className="page-subtitle" style={{ margin: 0, color: 'var(--streak)' }}>
                                 <Icon name="undo" size="0.9em" style={{ verticalAlign: 'middle', marginRight: 4 }} />
                                 {whatif.counterfactual_label} — {whatif.disclaimer}
                             </p>
                         )}
-                        {!hovered && !whatif && !whatifLoading && (
+                        {!hovered && !whatif && !whatifLoading && !moment && (
                             <p className="page-subtitle" style={{ margin: 0 }}>
                                 Hover a marked play above for details. Click a missed shot below to see a "what if it had gone in" line.
                             </p>
