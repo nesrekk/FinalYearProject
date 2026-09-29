@@ -1392,6 +1392,28 @@ def test_game_log_and_finder_match_known_games():
         assert client.get("/games/finder", params=bad).status_code in (400, 422), bad
 
 
+def test_espn_ids_not_fuzzy_matched_to_another_player():
+    """scripts/repair_espn_player_ids.py: ESPN names with no player_season_stats row that season were once
+    fuzzy-matched to someone else (Keon Johnson -> Keldon Johnson, Jalen -> Jaden McDaniels)."""
+    from impact_api import app
+    client = TestClient(app)
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    # Nobody has lines for two teams on one date.
+    cur.execute("""SELECT count(*) FROM (SELECT player_id, game_date FROM player_game_lines GROUP BY 1, 2
+                   HAVING count(DISTINCT team_abbreviation) > 1) x""")
+    assert cur.fetchone()[0] == 0
+    # Keon Johnson's five Nets games in 2023-24 are his, shot for shot as on the NBA chart (8-21, 4-10 from three).
+    cur.execute("""SELECT count(*), sum(fgm), sum(fga), sum(fg3m), sum(fg3a) FROM player_game_lines
+                   WHERE player_id = 1630553 AND season = 2024""")
+    assert cur.fetchone() == (5, 8, 21, 4, 10)
+    cur.execute("SELECT count(*) FROM player_game_lines WHERE player_id IN (1629640, 1630183) AND team_abbreviation IN ('BKN', 'WAS')")
+    assert cur.fetchone()[0] == 0
+    conn.close()
+    log = client.get("/games/player-log/1629640", params={"season": 2024}).json()
+    assert log["games"] == log["nba_gp"] == 69  # Keldon Johnson, Spurs only
+
+
 def test_hot_streak_checker_persistence_and_noise():
     """hot_streak_persistence (scripts/build_hot_streak_persistence.py) + /games/hot-streak(s)."""
     from impact_api import app

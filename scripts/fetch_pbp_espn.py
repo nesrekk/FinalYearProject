@@ -38,9 +38,12 @@ Real facts verified live against the endpoint before writing this script:
 
 Player attribution (person_id) is matched to this project's existing
 nba_api-keyed player_id by real name, per season, against
-player_season_stats — accent-normalized exact match first, falling back
+player_season_stats — accent-normalized exact match first, then an exact
+match in any season (a name only one player has had), falling back
 to rapidfuzz fuzzy matching (already a transitive dependency of
-sportsdataverse) above a disclosed similarity floor. Unmatched real
+sportsdataverse) above a disclosed similarity floor. (Before 2026-09-29
+there was no any-season step, and two players with no row that season were
+fuzzy-matched to someone else: see repair_espn_player_ids.py.) Unmatched real
 plays keep their real ESPN player name but get NULL person_id rather
 than a guessed one — compute_wpa.py already skips WPA attribution for
 any event with a null person_id, so an unmatched player (retired,
@@ -107,6 +110,7 @@ class PlayerMatcher:
     def __init__(self, cursor):
         self._cursor = cursor
         self._cache = {}  # season -> {normalized_name: (player_id, player_name)}
+        self._unique = None  # normalized_name -> (player_id, player_name), any season
         self._miss_count = 0
         self._hit_count = 0
 
@@ -119,6 +123,17 @@ class PlayerMatcher:
             self._cache[season] = {_normalize_name(name): (pid, name) for pid, name in self._cursor.fetchall()}
         return self._cache[season]
 
+    def _any_season(self):
+        """Names only one player has had in any season -> (player_id, player_name)."""
+        if self._unique is None:
+            self._cursor.execute("SELECT DISTINCT player_id, player_name FROM player_season_stats;")
+            ids, shown = {}, {}
+            for pid, name in self._cursor.fetchall():
+                ids.setdefault(_normalize_name(name), set()).add(pid)
+                shown[_normalize_name(name)] = (pid, name)
+            self._unique = {n: shown[n] for n, p in ids.items() if len(p) == 1}
+        return self._unique
+
     def match(self, espn_name: str, season: int):
         if not espn_name:
             return None, espn_name
@@ -128,6 +143,12 @@ class PlayerMatcher:
             self._hit_count += 1
             pid, real_name = name_map[norm]
             return pid, real_name
+        # A player with no row this season but the exact name in another one is
+        # that player, not a fuzzy look-alike (Keon Johnson, Nets 2023-24, used to
+        # become Keldon Johnson; repair_espn_player_ids.py fixed the stored rows).
+        if norm in self._any_season():
+            self._hit_count += 1
+            return self._any_season()[norm]
         if name_map:
             best = process.extractOne(norm, name_map.keys(), scorer=fuzz.WRatio)
             if best and best[1] >= NAME_MATCH_FLOOR:
