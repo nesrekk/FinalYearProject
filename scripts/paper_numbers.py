@@ -32,6 +32,13 @@ other sections read (a stale audit stops the run). The audit also writes
 paper/tables/data_audit.tex, whose numbers are all macros from this file;
 --check covers every table the paper inputs.
 
+Popular beliefs: the permutation + false-discovery framework of round 5 step 6
+(scripts/paper_beliefs.py -> paper_beliefs, paper_beliefs_summary,
+paper_beliefs_meta, paper/tables/beliefs.tex) is printed by the section
+beliefs() below (\\pnBl... macros): the table's counts per family, the hot
+streak null centres (the Miller-Sanjurjo check), the luck persistence test
+and the referee counts, with claims on the sentences that depend on them.
+
 Read-only: one read-only autocommit session, no table is created or changed.
 
 Usage (Python: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3):
@@ -963,7 +970,171 @@ def data_audit(cur, N):
           "paper_data_audit made_disagree / made_matched: matched made shots whose score-step value differs from the chart's call (%)")
 
 
-SECTIONS = (data_and_pipeline, rapm, shot_quality, pregame_and_sim, luck, awards, protocol, tests, xrapm, data_audit)
+# Franchise code -> name, for the prose (team_luck_schedule.franchise; NJN/NOH are joined into BKN/NOP there).
+FRANCHISE_NAMES = {"ATL": "Atlanta", "BOS": "Boston", "BKN": "Brooklyn", "CHA": "Charlotte", "CHI": "Chicago", "CLE": "Cleveland",
+                   "DAL": "Dallas", "DEN": "Denver", "DET": "Detroit", "GSW": "Golden State", "HOU": "Houston", "IND": "Indiana",
+                   "LAC": "the Los Angeles Clippers", "LAL": "the Los Angeles Lakers", "MEM": "Memphis", "MIA": "Miami",
+                   "MIL": "Milwaukee", "MIN": "Minnesota", "NOP": "New Orleans", "NYK": "New York", "OKC": "Oklahoma City",
+                   "ORL": "Orlando", "PHI": "Philadelphia", "PHX": "Phoenix", "POR": "Portland", "SAC": "Sacramento",
+                   "SAS": "San Antonio", "TOR": "Toronto", "UTA": "Utah", "WAS": "Washington"}
+STREAK_PROSE = {"pts": "StreakPts", "fg3_pct": "StreakThree", "ts_pct": "StreakTs", "min": "StreakMin", "usg_pct": "StreakUsg"}
+STREAK_SHOOTING = ("fg_pct", "fg3_pct", "ft_pct", "ts_pct")
+STREAK_ROLE = ("pts", "reb", "ast", "stl", "blk", "tov", "fg3m", "fta", "min", "usg_pct")
+
+
+def beliefs(cur, N):
+    """Popular beliefs under one permutation + FDR framework (paper_beliefs_summary, paper_beliefs, paper_beliefs_meta;
+    scripts/paper_beliefs.py): the Beliefs subsection and Table beliefs (paper/tables/beliefs.tex)."""
+    N.start("Popular beliefs (Section: Popular beliefs tested, Table: beliefs; scripts/paper_beliefs.py)")
+    meta = dict(rows(cur, "SELECT key, value FROM paper_beliefs_meta"))
+    S = {key: r for key, *r in rows(cur, """SELECT key, n_units, k05, expected05, k_fdr, agg_obs, agg_null_mean, agg_null_lo,
+                                                   agg_null_hi, agg_p, agg_adjusted, agg_n, macro, in_table, floor
+                                            FROM paper_beliefs_summary""")}
+    N.add("BlPermsOne", integer(meta["perms1"]), "paper_beliefs_meta perms1: first-stage draws per unit")
+    N.add("BlPermsTwo", integer(meta["perms2"]), "paper_beliefs_meta perms2: draws for units screened at stage2_p")
+    N.add("BlStageTwoP", dec(meta["stage2_p"], 2), "paper_beliefs_meta stage2_p")
+    N.add("BlFdrPct", dec(meta["fdr_q"] * 100, 0), "paper_beliefs_meta fdr_q (%)")
+    N.claim(meta["streak_perms"] == meta["perms1"], "Methods: every family gets the same number of first-stage draws")
+    N.claim(meta["clutch_max_dev_vs_stored"] <= 5.1e-5 and meta["streak_max_dev_vs_stored"] < 1e-6
+            and meta["split_max_dev_vs_stored"] < 1e-9 and meta["referee_max_dev_vs_stored"] <= 5.1e-4,
+            "Methods: every unit's platform number equals the stored value (within the stored rounding: 4 decimals for clutch lifts, 3 for referees)")
+
+    # Table beliefs: one row per in_table family.
+    total_n = total_fdr = 0
+    for key, (n, k05, exp, kfdr, *_rest, macro, in_table, _floor) in S.items():
+        if not in_table:
+            continue
+        N.add(f"Bl{macro}N", integer(n), f"paper_beliefs_summary n_units, {key}")
+        N.add(f"Bl{macro}Kfive", integer(k05), f"paper_beliefs_summary k05, {key}")
+        N.add(f"Bl{macro}Exp", dec(exp, 1), f"paper_beliefs_summary expected05, {key}")
+        N.add(f"Bl{macro}Kfdr", integer(kfdr), f"paper_beliefs_summary k_fdr, {key}")
+        total_n += n
+        total_fdr += kfdr
+    N.add("BlTableTests", integer(total_n), "paper_beliefs_summary: sum of n_units over the table's rows")
+    N.add("BlTableKfdr", integer(total_fdr), "paper_beliefs_summary: sum of k_fdr over the table's rows")
+
+    # Clutch.
+    N.add("BlClutchShift", dec(meta["clutch_league_shift"], 3), "paper_beliefs_meta clutch_league_shift: league clutch minus non-clutch points per chance")
+    N.add("BlClutchGames", integer(meta["clutch_games"]), "paper_beliefs_meta clutch_games")
+    N.add("BlClutchChancesMillion", millions(meta["clutch_scoring_chances"], 2), "paper_beliefs_meta clutch_scoring_chances")
+    n50, k50, e50, f50 = S["clutch:50"][:4]
+    N.add("BlClutchFiftyN", integer(n50), "paper_beliefs_summary n_units, clutch:50")
+    N.add("BlClutchFiftyKfive", integer(k50), "paper_beliefs_summary k05, clutch:50")
+    N.add("BlClutchFiftyExp", dec(e50, 1), "paper_beliefs_summary expected05, clutch:50")
+    N.add("BlClutchFiftyKfdr", integer(f50), "paper_beliefs_summary k_fdr, clutch:50")
+    N.claim(S["clutch:100"][3] == 0 and f50 == 0, "Beliefs: no player's clutch lift survives FDR at either floor")
+
+    # Hot streaks: the league slope, its null centre and the null-centred share, per stat and window (windows of 10 in the prose).
+    combos = [(k.split(":")[1], int(k.split(":")[2])) for k in S if k.startswith("streak:")]
+    N.add("BlStreakCombos", integer(len(combos)), "paper_beliefs_summary: streak families (stat x window)")
+    null_c = {c: S[f"streak:{c[0]}:{c[1]}"][5] for c in combos}
+    adj = {c: S[f"streak:{c[0]}:{c[1]}"][9] for c in combos}
+    obs_sl = {c: S[f"streak:{c[0]}:{c[1]}"][4] for c in combos}
+    N.claim(all(v > 0 for v in null_c.values()), "Beliefs: the persistence slope's null centre is positive for every stat and window")
+    N.add("BlStreakNullMinPct", pct(min(null_c.values()), 0), "paper_beliefs_summary agg_null_mean, min over streak families (%)")
+    N.add("BlStreakNullMaxPct", pct(max(null_c.values()), 0), "paper_beliefs_summary agg_null_mean, max over streak families (%)")
+    for stat, macro in STREAK_PROSE.items():
+        r = S[f"streak:{stat}:10"]
+        if stat in ("pts", "min", "usg_pct"):
+            N.add(f"Bl{macro}TenAdjPct", pct(r[9], 0), f"paper_beliefs_summary agg_adjusted, streak:{stat}:10 (%; observed minus null centre)")
+        if stat in ("min", "usg_pct"):
+            continue
+        N.add(f"Bl{macro}TenObsPct", pct(r[4], 0), f"paper_beliefs_summary agg_obs, streak:{stat}:10 (%; = hot_streak_persistence.slope)")
+        N.add(f"Bl{macro}TenNullPct", pct(r[5], 0), f"paper_beliefs_summary agg_null_mean, streak:{stat}:10 (%)")
+        N.add(f"Bl{macro}TenP", pval(r[8]), f"paper_beliefs_summary agg_p, streak:{stat}:10")
+        if stat == "pts":
+            N.add(f"Bl{macro}TenNullLoPct", pct(r[6], 0), f"paper_beliefs_summary agg_null_lo, streak:{stat}:10 (%)")
+            N.add(f"Bl{macro}TenNullHiPct", pct(r[7], 0), f"paper_beliefs_summary agg_null_hi, streak:{stat}:10 (%)")
+    shoot = [adj[c] for c in combos if c[0] in STREAK_SHOOTING]
+    role = [adj[c] for c in combos if c[0] in STREAK_ROLE]
+    N.add("BlStreakShootingAdjMinPct", pct(min(shoot), 0), "paper_beliefs_summary agg_adjusted, min over the shooting-% streak families (%)")
+    N.add("BlStreakShootingAdjMaxPct", pct(max(shoot), 0), "paper_beliefs_summary agg_adjusted, max over the shooting-% streak families (%)")
+    N.add("BlStreakShootingFamilies", integer(len(shoot)), "paper_beliefs_summary: shooting-% streak families")
+    N.add("BlStreakShootingInsideNull", integer(sum(1 for c in combos if c[0] in STREAK_SHOOTING and S[f"streak:{c[0]}:{c[1]}"][8] >= 0.05)),
+          "paper_beliefs_summary: shooting-% streak families whose league slope has permutation p >= 0.05")
+    N.add("BlStreakRoleAdjMinPct", pct(min(role), 0), "paper_beliefs_summary agg_adjusted, min over the counting/role streak families (%)")
+    N.add("BlStreakRoleAdjMaxPct", pct(max(role), 0), "paper_beliefs_summary agg_adjusted, max over the counting/role streak families (%)")
+    N.add("BlStreakMinTwentyObsPct", pct(obs_sl[("min", 20)], 0), "paper_beliefs_summary agg_obs, streak:min:20 (%)")
+    N.add("BlStreakMinTwentyNullPct", pct(null_c[("min", 20)], 0), "paper_beliefs_summary agg_null_mean, streak:min:20 (%)")
+    N.add("BlStreakMinTwentyP", pval(S["streak:min:20"][8]), "paper_beliefs_summary agg_p, streak:min:20")
+    N.claim(S["streak0:min:20"][4] > S["streak0:min:20"][5],
+            "Beliefs: with the season-only baseline the minutes slope is above its null centre (the prior-season blend is what puts it below)")
+    N.claim(obs_sl[("min", 20)] < null_c[("min", 20)] and S["streak:min:20"][8] < 0.05,
+            "Beliefs: minutes over 20 games sit below their null centre, by more than the draws allow")
+    for stat, N_, macro in (("min", 5, "StreakMinFive"), ("pts", 5, "StreakPtsFive"), ("ft_pct", 10, "StreakFtTen")):
+        r = S[f"streak:{stat}:{N_}"]
+        N.add(f"Bl{macro}N", integer(r[0]), f"paper_beliefs_summary n_units, streak:{stat}:{N_}")
+        N.add(f"Bl{macro}Kfdr", integer(r[3]), f"paper_beliefs_summary k_fdr, streak:{stat}:{N_}")
+        if stat == "ft_pct":
+            N.add(f"Bl{macro}Exp", dec(r[2], 1), f"paper_beliefs_summary expected05, streak:{stat}:{N_}")
+            N.add(f"Bl{macro}Kfive", integer(r[1]), f"paper_beliefs_summary k05, streak:{stat}:{N_}")
+            N.claim(r[1] > 1.5 * r[2] and r[3] == 0, "Beliefs: FT% over ten games has more players at p<0.05 than expected and none survives FDR")
+        else:
+            N.add(f"Bl{macro}AdjPct", pct(r[9], 0), f"paper_beliefs_summary agg_adjusted, streak:{stat}:{N_} (%)")
+    N.claim(S["streak:min:5"][3] > S["streak:min:5"][2] * 3 and S["streak:pts:5"][3] > S["streak:pts:5"][2] * 2,
+            "Beliefs: for minutes and points over 5 games, far more players survive FDR than chance gives")
+    N.claim(max(adj[c] for c in combos if c[0] in STREAK_ROLE) == adj[("min", 5)],
+            "Beliefs: the largest null-centred share among the role stats is minutes over 5 games")
+    N.claim(all(adj[(s, 20)] < adj[(s, 5)] for s in STREAK_ROLE), "Beliefs: every role stat's null-centred share is smaller at 20 games than at 5")
+    N.add("BlStreakMinWindows", integer(S["streak:pts:10"][13]), "paper_beliefs_summary floor, streak families (windows per player)")
+    shoot_fdr = sum(S[f"streak:{c[0]}:{c[1]}"][3] for c in combos if c[0] in STREAK_SHOOTING)
+    N.add("BlStreakShootingKfdr", integer(shoot_fdr), "paper_beliefs_summary: sum of k_fdr over the shooting-% streak families")
+    N.add("BlStreakShootingTests", integer(sum(S[f"streak:{c[0]}:{c[1]}"][0] for c in combos if c[0] in STREAK_SHOOTING)),
+          "paper_beliefs_summary: sum of n_units over the shooting-% streak families")
+    N.claim(shoot_fdr <= 0.01 * sum(S[f"streak:{c[0]}:{c[1]}"][0] for c in combos if c[0] in STREAK_SHOOTING),
+            "Beliefs: almost no shooting-% streak survives FDR (under 1% of those tests)")
+    N.add("BlStreakUntestable", integer(meta["streak_players_untestable"]), "paper_beliefs_meta streak_players_untestable")
+    kfdr_streak = sum(S[f"streak:{c[0]}:{c[1]}"][3] for c in combos)
+    n_streak = sum(S[f"streak:{c[0]}:{c[1]}"][0] for c in combos)
+    N.add("BlStreakTests", integer(n_streak), "paper_beliefs_summary: sum of n_units over streak families")
+    N.add("BlStreakKfdr", integer(kfdr_streak), "paper_beliefs_summary: sum of k_fdr over streak families")
+
+    # Situational splits, all families.
+    sp = [k for k in S if k.startswith("split:")]
+    N.add("BlSplitFamilies", integer(len(sp)), "paper_beliefs_summary: split families (split x stat)")
+    N.add("BlSplitTests", integer(sum(S[k][0] for k in sp)), "paper_beliefs_summary: sum of n_units over split families")
+    N.add("BlSplitKfive", integer(sum(S[k][1] for k in sp)), "paper_beliefs_summary: sum of k05 over split families")
+    N.add("BlSplitExp", dec(sum(S[k][2] for k in sp), 0), "paper_beliefs_summary: sum of expected05 over split families")
+    N.add("BlSplitKfdr", integer(sum(S[k][3] for k in sp)), "paper_beliefs_summary: sum of k_fdr over split families")
+
+    # Team luck.
+    r = S["luck:luck_per82"]
+    N.add("BlLuckR", dec(r[4], 2), "paper_beliefs_summary agg_obs, luck (= luck_schedule_validation.luck_next_luck_r)")
+    N.add("BlLuckNullLo", dec(r[6], 2), "paper_beliefs_summary agg_null_lo, luck")
+    N.add("BlLuckNullHi", dec(r[7], 2), "paper_beliefs_summary agg_null_hi, luck")
+    N.add("BlLuckP", pval(r[8]), "paper_beliefs_summary agg_p, luck")
+    N.add("BlLuckPairs", integer(r[10]), "paper_beliefs_summary agg_n, luck (franchise-season pairs)")
+    N.add("BlLuckBetweenP", pval(meta["luck_between_var_p"]), "paper_beliefs_meta luck_between_var_p")
+    surv = rows(cur, """SELECT unit_name, stat, p_value FROM paper_beliefs WHERE key = 'luck:luck_per82' AND bh_reject
+                        ORDER BY p_value""")
+    N.add("BlLuckSurvivors", integer(len(surv)), "paper_beliefs: franchises with bh_reject, luck")
+    if surv:
+        N.add("BlLuckTopFranchise", FRANCHISE_NAMES.get(surv[0][0], surv[0][0]),
+              f"paper_beliefs unit_name: the surviving franchise with the smallest p ({surv[0][0]})")
+        N.add("BlLuckTopMean", dec(surv[0][1], 1), "paper_beliefs stat: its mean luck per 82 games")
+
+    # Referees.
+    for c, macro in (("fouls", "Fouls"), ("fta", "Fta"), ("pace", "Pace")):
+        o, cw = S[f"referee:official:{c}"], S[f"referee:crew:{c}"]
+        for name, value, src in ((f"BlRef{macro}Kfdr", o[3], "k_fdr"), (f"BlCrew{macro}Kfdr", cw[3], "k_fdr")):
+            if c == "fta" and "Crew" in name:
+                continue
+            if "pn" + name not in N.names:            # the table's rows define the fouls / FTA ones above
+                N.add(name, integer(value), f"paper_beliefs_summary {src}, referee:{'crew' if 'Crew' in name else 'official'}:{c}")
+    N.add("BlRefN", integer(S["referee:official:fouls"][0]), "paper_beliefs_summary n_units, referee:official:fouls")
+    N.add("BlRefExp", dec(S["referee:official:fouls"][2], 1), "paper_beliefs_summary expected05, referee:official:fouls")
+    N.add("BlCrewN", integer(S["referee:crew:fouls"][0]), "paper_beliefs_summary n_units, referee:crew:fouls")
+    N.add("BlRefGames", integer(meta["referee_games"]), "paper_beliefs_meta referee_games")
+    N.add("BlRefFloor", integer(S["referee:official:fouls"][13]), "paper_beliefs_summary floor, referee:official:*")
+    top = rows(cur, """SELECT unit_name, stat, n_obs FROM paper_beliefs WHERE key = 'referee:official:fouls' AND bh_reject
+                       ORDER BY abs(stat) DESC LIMIT 1""")
+    if top:
+        N.add("BlRefTopName", top[0][0], "paper_beliefs unit_name: the surviving official with the largest fouls difference")
+        N.add("BlRefTopDiff", dec(top[0][1], 1), "paper_beliefs stat: that difference (fouls per game vs the season mean)")
+        N.add("BlRefTopGames", integer(top[0][2]), "paper_beliefs n_obs: games worked")
+
+
+SECTIONS = (data_and_pipeline, rapm, shot_quality, pregame_and_sim, luck, awards, protocol, tests, xrapm, data_audit, beliefs)
 
 
 def build(conn):
