@@ -19,7 +19,8 @@ Distance, in this order:
            matched by order within (game, shooter, period) when both sources
            list the same number of attempts with the same make/miss sequence
            there (about 99% of attempts). The clocks can't be used to match:
-           the two feeds' clocks for the same shot differ by 0-26 seconds.
+           the two feeds' clocks for the same shot differ by a median 4 s and
+           26 s at the 99th percentile (paper_data_audit.py).
            Distance is sqrt(x^2 + y^2), never player_shots.shot_distance
            (it is 0 on 11-17% of threes a season);
   text     ESPN's "N-foot" when the shot wasn't matched;

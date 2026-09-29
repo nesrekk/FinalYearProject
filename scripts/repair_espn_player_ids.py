@@ -17,7 +17,8 @@ contain the stored name, and exactly one other player name from
 player_season_stats (any season, a name only one player has had) appears in
 every one of them and is a fuzzy match for the stored name (WRatio >= 90,
 the fetch's own floor), the events belong to that player. Single events
-where ESPN's player tag and text disagree (about 65, usually two teammates)
+where ESPN's player tag and text disagree (64, nearly all two teammates;
+paper_data_audit.py measures them)
 are left alone: one of the two is wrong and nothing says which.
 
 The fetch now tries an exact name in any season before fuzzy matching, so a

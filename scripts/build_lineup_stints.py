@@ -21,7 +21,8 @@ inclusive `action_number` range so any event can be mapped to its stint.
 Points: ESPN's score fields are stale in a few hundred games of 2020-21 to
 2022-23 (the score drops, or jumps by two baskets at once), so crediting
 points by positive score changes double-counts there (that is why the
-player lines' on-court plus-minus doesn't add up in 29% of team-games).
+player lines' on-court plus-minus doesn't add up in 25% of team-games,
+re-measured by paper_data_audit.py on 2026-09-29).
 Here points come from the made shots and free throws themselves; in games
 where those don't add up to the real final score (game_scores, ~2% of
 games: a shot with no type in the text judged a two instead of a three,
