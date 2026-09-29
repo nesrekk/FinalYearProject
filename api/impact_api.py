@@ -71,6 +71,7 @@ from routers import (
     root,
     schedule_fatigue,
     scouting_report,
+    season_sim,
     shot_charts,
     shot_making,
     situational_splits,
@@ -128,6 +129,7 @@ for _router_module in (
     rim_deterrence,
     assist_network,
     play_finder,
+    season_sim,
 ):
     app.include_router(_router_module.router)
 

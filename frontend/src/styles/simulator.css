@@ -1,0 +1,94 @@
+/* Season Simulator page (pages/SeasonSimulator.jsx). Paper/Ink tokens only;
+   builds on theme.css (.lb-*, .rx-*, .tab-btn) and rapm.css (.rp-*). */
+.ss-controls { align-items: end; }
+.ss-date-btns { display: flex; gap: 6px; flex-wrap: wrap; grid-column: 1 / -1; }
+.ss-note { margin: var(--space-2) 0 0; color: var(--text-3); font-size: 0.78rem; }
+.ss-conf-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: var(--space-6) 0 var(--space-2);
+  font-size: var(--text-title-size, 1.1rem);
+  font-weight: 800;
+  color: var(--text);
+}
+.ss-conf-title small { font-size: 0.8rem; font-weight: 400; color: var(--text-2); }
+.ss-table td, .ss-table th { white-space: nowrap; }
+.ss-table tbody tr { cursor: pointer; }
+.ss-table tbody tr:hover td { background: var(--surface-2); }
+.ss-table tr.ss-row--on td { background: var(--surface-2); font-weight: 700; }
+.ss-table tr.ss-row--cut td { border-top: 2px solid var(--line); }
+.ss-team { display: inline-flex; align-items: center; gap: 6px; }
+.ss-sd { color: var(--text-3); font-size: 0.78rem; font-family: var(--font-mono); margin-left: 4px; }
+.ss-range { color: var(--text-2); font-size: 0.78rem; font-family: var(--font-mono); margin-left: 4px; }
+.ss-pct--sure { color: var(--positive); font-weight: 700; }
+.ss-pct--out { color: var(--text-3); }
+.ss-seeds { display: inline-flex; gap: 1px; vertical-align: middle; }
+.ss-seed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 16px;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-2);
+  border: 1px solid var(--hairline);
+  cursor: default;
+}
+.ss-seed--hot { color: var(--on-brand); font-weight: 700; }
+.ss-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-left: 6px;
+}
+.ss-badge--in { background: var(--positive); color: var(--surface); border-color: var(--positive); }
+.ss-badge--playin { background: var(--surface-2); color: var(--text); }
+.ss-badge--out { color: var(--text-3); }
+.ss-chart { position: relative; min-width: 0; margin: var(--space-3) 0; }
+.ss-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.ss-bar { fill: var(--brand); }
+.ss-bar--out { fill: var(--text-3); opacity: 0.45; }
+.ss-bar--hot { stroke: var(--text); stroke-width: 1.5; }
+.ss-final-line { stroke: var(--text); stroke-width: 2; stroke-dasharray: 5 3; }
+.ss-mean-line { stroke: var(--brand-text); stroke-width: 1.5; }
+.ss-label { fill: var(--text-2); font-size: 11px; font-family: var(--font-mono); }
+.ss-label--strong { fill: var(--text); font-weight: 700; }
+.ss-diag { stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.ss-dot { stroke: var(--surface); stroke-width: 1; opacity: 0.9; }
+.ss-dot--model { fill: var(--brand); }
+.ss-dot--record { fill: var(--text-3); }
+.ss-dot--standings { fill: var(--text); }
+.ss-dot--hot { stroke: var(--text); stroke-width: 2; opacity: 1; }
+.ss-cal-line { fill: none; stroke: var(--brand); stroke-width: 1.5; }
+.ss-cal-line--record { stroke: var(--text-3); stroke-dasharray: 4 3; }
+.ss-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: var(--space-2) 0 0; font-size: 0.78rem; color: var(--text-2); }
+.ss-legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; background: var(--brand); }
+.ss-legend span.ss-legend--record::before { background: var(--text-3); }
+.ss-legend span.ss-legend--standings::before { background: var(--text); }
+.ss-games { margin-top: var(--space-4); }
+.ss-games td.ss-num { text-align: right; font-family: var(--font-mono); }
+.ss-model-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  margin: var(--space-4) 0;
+}
+@media (max-width: 900px) {
+  .ss-model-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.ss-model-table td, .ss-model-table th { font-size: 0.85rem; }
+.ss-model-table tr.ss-chosen td { font-weight: 700; }
+.ss-model-table tr.ss-chosen td:first-child { color: var(--brand-text); }
+.ss-win { color: var(--positive); }
+.ss-loss { color: var(--negative); }
+.ss-section { margin-top: var(--space-8); padding-top: var(--space-4); border-top: 1px solid var(--hairline); }
+.ss-inline-select { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; font-size: 0.85rem; font-weight: 400; color: var(--text-2); }
+@media (max-width: 640px) {
+  .ss-sd, .ss-range { display: block; margin-left: 0; }
+}

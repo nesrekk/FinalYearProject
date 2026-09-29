@@ -344,6 +344,27 @@ COVERAGE_MAP = [
         "used_by": [],
     },
     {
+        "table": "game_pregame_odds", "label": "Pre-game win probability of every game", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM game_pregame_odds", "range_fmt": "season_int",
+        "source": "scripts/build_season_sim.py: for every game 2010-11 on, P(home wins) as of that morning from ratings (this season's SRS blended with last season's), home court and back-to-backs; held out (coefficients fitted without that season); every form's probability stored.",
+        "gap": "Ratings use only games before the game, but the three logistic coefficients and the prior constants are fitted across seasons. No injuries, trades or line-ups: a team is one rating.",
+        "used_by": ["simulator"],
+    },
+    {
+        "table": "season_sim_backtest", "label": "Season simulator backtest", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM season_sim_backtest", "range_fmt": "season_int",
+        "source": "scripts/build_season_sim.py: every season 2010-11 on simulated 10,000 times at opening day, the halfway date and 60 games in, next to what happened (season_postseason), with the standings and the record carried forward as baselines.",
+        "gap": "Honest result: by midseason the record carried forward predicts the playoff field about as well as the model; the model's edge is win totals, ranges and opening day. Tiebreaks stop at head-to-head and conference record.",
+        "used_by": ["simulator"],
+    },
+    {
+        "table": "postseason_games", "label": "Play-in and playoff games", "group": "Teams",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM postseason_games", "range_fmt": "season_int",
+        "source": "ESPN's scoreboard (scripts/fetch_postseason_games.py): every play-in and playoff game 2009-10 on with scores, round and conference; playoff fields cross-checked with player_shots' postseason games and Basketball-Reference.",
+        "gap": "Postseason only (regular-season scores are in game_scores); no box scores or play-by-play, just results.",
+        "used_by": ["simulator"],
+    },
+    {
         "table": "game_team_box", "label": "Team box scores", "group": "Teams",
         "range_sql": "SELECT MIN(season), MAX(season) FROM game_team_box", "range_fmt": "season_int",
         "source": "nba_api team box score, bulk-loaded per season.",

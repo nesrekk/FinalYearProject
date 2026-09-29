@@ -1178,6 +1178,27 @@ export async function fetchPlayerAssists(playerId, season) {
     return response.data;
 }
 
+// ─── Season Simulator (game_pregame_odds, season_sim_*; 2010-11 on) ────
+export async function fetchSeasonSimOptions() {
+    return getWithCache('season_sim_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/season-sim/options`);
+        return response.data;
+    });
+}
+
+// params: { season, as_of: 'YYYY-MM-DD' } — 10,000 simulated seasons from that morning.
+export async function fetchSeasonSim(params) {
+    const response = await axios.get(`${IMPACT_BASE}/season-sim`, { params });
+    return response.data;
+}
+
+export async function fetchSeasonSimModel() {
+    return getWithCache('season_sim_model', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/season-sim/model`);
+        return response.data;
+    });
+}
+
 // ─── Play Finder (play_finder_events, 2020-21 on) ────────────────
 export async function fetchPlayFinderOptions() {
     return getWithCache('play_finder_options', 10 * 60 * 1000, async () => {

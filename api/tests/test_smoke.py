@@ -2465,3 +2465,98 @@ def test_play_finder_matches_game_log_and_bam_83():
         assert client.get("/plays/finder", params=bad).status_code == 400
     assert client.get("/plays/finder", params={"game": "nope"}).status_code == 404
     assert client.get("/plays/finder", params={"offset": 10_001}).status_code == 422
+
+
+def test_season_simulator_pregame_odds_and_backtest():
+    """Season simulator (scripts/build_season_sim.py, api/routers/season_sim.py, api/season_sim_lib.py): pre-game
+    odds for every game 2010-11 on, fitted leave-one-season-out, and 10,000 simulated seasons from any morning with
+    tiebreaks and the play-in. The honest backtest result (the record carried forward predicts the playoff field
+    about as well as the model by midseason) is stored, not hidden."""
+    from impact_api import app
+    from impact_core import TEAM_META
+    import season_sim_lib as L
+    client = TestClient(app)
+    # One conference map for every season on file; matches the app's team metadata for the 30 current codes.
+    assert {t: L.CONFERENCE[t] for t in TEAM_META} == {t: m["conference"].title()[:4] for t, m in TEAM_META.items()}
+    assert L.CONFERENCE["NJN"] == "East" and L.CONFERENCE["NOH"] == "West"
+
+    o = client.get("/season-sim/options").json()
+    _assert_has_source(o)
+    assert [s["season"] for s in o["seasons"]] == list(range(2011, 2027)) and o["play_in_from"] == 2021
+    assert o["form"] == "prior_rest" and 0.1 < o["beta"]["exp_margin"] < 0.2
+    assert o["beta"]["home_b2b"] < -0.15 and o["beta"]["away_b2b"] > 0.15 and o["runs"] == 10000
+
+    # 2015-16 at the halfway date: the 37-4 Warriors are in every run; odds add up exactly (8 playoff spots a
+    # conference; each team's finish odds sum to 1); the real outcome is on every row.
+    d = client.get("/season-sim", params={"season": 2016, "as_of": "2016-01-18"}).json()
+    _assert_has_source(d)
+    assert d["checkpoint"] == "halfway" and d["info"]["played_games"] == 614 and d["info"]["left_games"] == 616
+    assert not d["play_in"]
+    west, east = d["conferences"]["West"], d["conferences"]["East"]
+    gsw = next(t for t in west if t["team"] == "GSW")
+    assert (gsw["wins"], gsw["losses"]) == (37, 4) and gsw["p_playoffs"] == 1.0 and 0.4 < gsw["p_first"] < 0.6
+    assert 65 < gsw["mean_wins"] < 70 and gsw["final"] == {"wins": 73, "losses": 9, "position": 1, "playoffs": True,
+                                                            "play_in": False, "top6": None}
+    cle = next(t for t in east if t["team"] == "CLE")
+    assert cle["p_first"] > 0.75 and cle["final"]["position"] == 1
+    for conf in (west, east):
+        # The endpoint rounds each probability to 3 decimals, so 15 of them can be 0.0075 off in all.
+        assert len(conf) == 15 and abs(sum(t["p_playoffs"] for t in conf) - 8) < 0.01
+        assert sorted(t["position_now"] for t in conf) == list(range(1, 16))
+        assert sum(t["final"]["playoffs"] for t in conf) == 8
+        for t in conf:
+            assert abs(sum(t["p_seed"]) - 1) < 2e-3 and t["wins_p10"] <= t["mean_wins"] <= t["wins_p90"]
+            assert sum(t["wins_hist"]) == 10000 and t["wins"] + t["losses"] + t["games_left"] == t["games_final"] == 82
+    assert len(d["games_on_date"]) == 10 and all(0 < g["p_home"] < 1 for g in d["games_on_date"])
+
+    # Play-in era: top-6 and play-in odds add up to 6 and 4; the 2023-24 Celtics are certain at halfway.
+    d = client.get("/season-sim", params={"season": 2024, "as_of": "2024-01-19"}).json()
+    assert d["play_in"]
+    east = d["conferences"]["East"]
+    bos = next(t for t in east if t["team"] == "BOS")
+    assert bos["p_playoffs"] == 1.0 and bos["p_top6"] > 0.99 and bos["final"]["top6"]
+    assert abs(sum(t["p_top6"] for t in east) - 6) < 0.01 and abs(sum(t["p_playin"] for t in east) - 4) < 0.01
+    assert sum(t["final"]["play_in"] for t in east) == 4 and sum(t["final"]["playoffs"] for t in east) == 8
+    # Opening day: nothing played, the prior alone; a same-link rerun gives the same numbers (fixed seed).
+    d = client.get("/season-sim", params={"season": 2026, "as_of": "2025-10-21"}).json()
+    assert d["info"]["played_games"] == 0 and d["info"]["left_games"] == 1230 and not d["info"]["ratings_from_srs"]
+    okc = next(t for t in d["conferences"]["West"] if t["team"] == "OKC")
+    assert okc["p_playoffs"] > 0.9 and okc["wins_p10"] < okc["final"]["wins"] < okc["wins_p90"] + 5
+    assert client.get("/season-sim", params={"season": 2026, "as_of": "2025-10-21"}).json()["conferences"] == d["conferences"]
+    assert client.get("/season-sim", params={"season": 2016, "as_of": "2015-01-01"}).status_code == 400
+    assert client.get("/season-sim", params={"season": 2009}).status_code == 404
+
+    # The model page: the chosen form has the lowest held-out log loss, calibration holds by decile, the rest
+    # effect is in the raw win rates, and the backtest keeps the baselines.
+    m = client.get("/season-sim/model").json()
+    _assert_has_source(m)
+    ll = {f["form"]: f["loso_log_loss"] for f in m["forms"]}
+    assert m["chosen"] == "prior_rest" and ll["prior_rest"] < ll["prior"] < ll["current"] < ll["baseline"] < 0.64
+    assert all(0.64 < f["favourite_win_rate"] < 0.68 for f in m["forms"])
+    for c in m["calibration"]["prior_rest"]:
+        if c["n"] >= 300:
+            assert abs(c["predicted"] - c["actual"]) < 0.03
+    rest = {(r["home_b2b"], r["away_b2b"]): r["home_win_rate"] for r in m["rest"]}
+    assert rest[(True, False)] < rest[(False, False)] < rest[(False, True)]
+    era = {r["era"]: r for r in m["era"]}
+    assert 0.57 < era["to_2020"]["home_win_rate"] < 0.60 and 0.54 < era["from_2021"]["home_win_rate"] < 0.57
+    s = {(r["checkpoint"], r["method"], r["metric"]): r["value"] for r in m["backtest"]["summary"]}
+    assert s[("halfway", "model", "playoffs_log_loss")] < s[("halfway", "record", "playoffs_log_loss")] < s[("halfway", "standings", "playoffs_log_loss")]
+    assert s[("sixty", "model", "playoffs_brier")] < 0.07 and s[("halfway", "model", "wins_mae")] < s[("halfway", "record", "wins_mae")]
+    assert 0.7 < s[("halfway", "model", "wins_cover80")] < 0.85 and s[("opening", "model", "wins_mae")] < 9
+    assert {r["name"] for r in m["params"].values()} >= {"carry", "tau2", "hca_n0", "runs", "chosen_form"}
+
+    # Stored facts: 16 playoff teams every season; the 2025-26 play-in field from ESPN's own games.
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    cur.execute("SELECT season, COUNT(*) FILTER (WHERE playoffs), COUNT(*) FILTER (WHERE play_in) FROM season_postseason GROUP BY 1 ORDER BY 1")
+    rows = cur.fetchall()
+    assert [r[0] for r in rows] == list(range(2010, 2027)) and all(r[1] == 16 for r in rows)
+    assert all(r[2] == (8 if r[0] >= 2021 else 2 if r[0] == 2020 else 0) for r in rows)
+    cur.execute("SELECT team_abbreviation FROM season_postseason WHERE season = 2026 AND play_in ORDER BY 1")
+    assert [r[0] for r in cur.fetchall()] == ["CHA", "GSW", "LAC", "MIA", "ORL", "PHI", "PHX", "POR"]
+    cur.execute("SELECT COUNT(*), COUNT(DISTINCT season) FROM game_pregame_odds")
+    assert cur.fetchone() == (19118, 16)
+    cur.execute("SELECT COUNT(*) FROM postseason_games WHERE stage = 'play-in' AND season = 2026")
+    assert cur.fetchone()[0] == 6
+    conn.close()

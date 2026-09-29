@@ -49,6 +49,7 @@ export const NAV_GROUPS = [
             { id: 'tradeimpact', label: 'Trade Impact', icon: 'account_balance' },
             { id: 'rotations', label: 'Rotations', icon: 'view_timeline' },
             { id: 'assists', label: 'Assist Network', icon: 'hub' },
+            { id: 'simulator', label: 'Season Simulator', icon: 'casino' },
         ],
     },
     {
