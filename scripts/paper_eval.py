@@ -816,9 +816,9 @@ def sim_stage(conn, out, season_games, phases):
         out.metric("sim_playoffs", phase, method, seasons, "brier", L.brier(p, y), len(g), variant=cp, note=note)
         out.metric("sim_playoffs", phase, method, seasons, "log_loss", L.log_loss(p, y), len(g), variant=cp, note=note)
         t6 = g[g.p_top6.notna()]
-        if len(t6):
-            out.metric("sim_top6", phase, method, seasons, "brier", L.brier(t6.p_top6.to_numpy(float), t6.made_top6.to_numpy(float)),
-                       len(t6), variant=cp, note=note)
+        if len(t6):      # the play-in exists from 2020-21, so a pooled row spans only the seasons it has
+            out.metric("sim_top6", phase, method, sorted(t6.season.unique()), "brier",
+                       L.brier(t6.p_top6.to_numpy(float), t6.made_top6.to_numpy(float)), len(t6), variant=cp, note=note)
         if method != "standings":
             err = (g.mean_wins - g.final_wins).to_numpy(float)
             out.metric("sim_wins", phase, method, seasons, "mae", float(np.abs(err).mean()), len(g), variant=cp, note=note)

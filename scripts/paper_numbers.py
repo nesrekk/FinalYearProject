@@ -41,6 +41,7 @@ Usage (Python: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3):
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -122,6 +123,20 @@ def word(n):
 
 def millions(n, d):
     return dec(Decimal(int(n)) / Decimal(1_000_000), d)
+
+
+def pval(p):
+    """A p-value as a math fragment: p<0.001 below that, else p=0.0xx (three decimals under 0.01, two above)."""
+    p = float(p)
+    if p < 0.001:
+        return "\\ensuremath{p<0.001}"
+    return "\\ensuremath{p=" + dec(p, 3 if p < 0.01 else 2) + "}"
+
+
+def pcell(p):
+    """The same p-value for a table cell: <0.001 or the number alone."""
+    p = float(p)
+    return "\\ensuremath{<0.001}" if p < 0.001 else dec(p, 3 if p < 0.01 else 2)
 
 
 def season(end):
@@ -533,8 +548,6 @@ def protocol(cur, N):
     N.claim(pg[("tune", form[0])] < pg[("tune", "current")] < pg[("tune", "baseline")] and pg[("validate", form[0])] < pg[("validate", "current")],
             "Results: chosen form < current-only < baseline on the tune seasons and the validation season")
     N.claim(pg[("test", "current")] < pg[("test", form[0])], "Results: on the test season this season's ratings alone edge the chosen form")
-    N.add("EvPregameTestGapCurrent", dec(pg[("test", form[0])] - pg[("test", "current")], 4, ROUND_CEILING),
-          "test log loss, chosen form minus current-only, rounded up")
     N.add("EvCarry", dec(ch[("pregame", "constants_test", "carry")][0], 2), "paper_eval_choices pregame.constants_test.carry (fitted before the test season)")
 
     # -- season simulator -------------------------------------------------------------
@@ -561,7 +574,176 @@ def protocol(cur, N):
             "Results: the simulator's 80% range is closer to nominal in every phase")
 
 
-SECTIONS = (data_and_pipeline, rapm, shot_quality, pregame_and_sim, luck, awards, protocol)
+def tests(cur, N):
+    """Round 5 step 3: intervals and paired tests on the protocol's comparisons (scripts/paper_tests.py's table)."""
+    N.start("Significance tests and intervals (Methods: protocol; Results; Table: tests; abstract) -- paper_eval_tests")
+    cols = ("task", "phase", "metric", "model_a", "model_b", "variant", "seasons", "n", "n_clusters", "value_a", "value_b",
+            "diff", "ci_lo", "ci_hi", "p_boot", "p_perm", "dm_stat", "dm_p", "resamples")
+    T = {}
+    for r in rows(cur, f"SELECT {', '.join(cols)} FROM paper_eval_tests"):
+        r = dict(zip(cols, r))
+        T[(r["task"], r["phase"], r["metric"], r["model_a"], r["model_b"], r["variant"])] = r
+    res = {r["resamples"] for r in T.values()}
+    N.claim(len(res) == 1, "Methods: one resample count for every test")
+    N.add("EvResamples", integer(res.pop()), "paper_eval_tests.resamples (bootstrap resamples and sign flips)")
+    src = "paper_eval_tests"
+
+    used = []
+
+    def diff(name, task, phase, metric, a, b, d, variant="", dm=False, scale=1, lo_hi=True, p=True, cell=False):
+        r = T[(task, phase, metric, a, b, variant)]
+        used.append(r)
+        where = f"{src} {task} {phase} {metric} {a} - {b}" + (f", {variant}" if variant else "") + f" ({r['seasons']}, n {r['n']}, {r['n_clusters']} clusters)"
+        N.add(name, dec(r["diff"] * scale, d), where + ": diff")
+        if lo_hi:
+            N.add(name + "Lo", dec(r["ci_lo"] * scale, d), where + ": ci_lo (paired cluster bootstrap, 2.5th percentile)")
+            N.add(name + "Hi", dec(r["ci_hi"] * scale, d), where + ": ci_hi (97.5th percentile)")
+        if p:
+            N.add(name + "P", pval(r["p_boot"]), where + ": p_boot (two-sided bootstrap p)")
+        if dm:
+            N.add(name + "DmP", pval(r["dm_p"]), where + ": dm_p (Diebold-Mariano, Newey-West variance, normal)")
+        if cell:      # Table tests prints the value alone
+            N.add(name + "Pv", pcell(r["p_boot"]), where + ": p_boot as a table cell")
+            if dm:
+                N.add(name + "DmPv", pcell(r["dm_p"]), where + ": dm_p as a table cell")
+        return r
+
+    def interval(name, task, phase, metric, model, d, variant="", scale=1):
+        r = T[(task, phase, metric, model, "", variant)]
+        where = f"{src} {task} {phase} {metric} {model}" + (f", {variant}" if variant else "") + f" ({r['seasons']}, n {r['n']}, {r['n_clusters']} clusters)"
+        N.add(name + "Lo", dec(r["ci_lo"] * scale, d), where + ": ci_lo (cluster bootstrap, 2.5th percentile)")
+        N.add(name + "Hi", dec(r["ci_hi"] * scale, d), where + ": ci_hi (97.5th percentile)")
+        return r
+
+    def excludes_zero(r):
+        return r["ci_lo"] > 0 or r["ci_hi"] < 0
+
+    # -- impact: next-season game RMSE ------------------------------------------------
+    pb = {ph: diff(f"EvDNext{P}PriorBpmRmse", "impact_next", ph, "game_rmse", "rapm_prior", "bpm", 2, dm=True, cell=(ph == "test"))
+          for ph, P in (("tune", "Tune"), ("validate", "Val"), ("test", "Test"))}
+    N.claim(pb["validate"]["diff"] < 0 and excludes_zero(pb["validate"]),
+            "Results/abstract: RAPM + prior is ahead of BPM on the validation season by more than its interval")
+    N.claim(pb["test"]["diff"] > 0 and excludes_zero(pb["test"]) and pb["test"]["dm_p"] < 0.05,
+            "Results/abstract: BPM is ahead of RAPM + prior on the test season by more than its interval (bootstrap and Diebold-Mariano)")
+    N.claim(pb["tune"]["diff"] < 0 and excludes_zero(pb["tune"]),
+            "Results: RAPM + prior is ahead of BPM on the tune pairs by more than its interval")
+    sp = {ph: diff(f"EvDNext{P}SinglePriorRmse", "impact_next", ph, "game_rmse", "rapm_single", "rapm_prior", 2, lo_hi=(ph == "test"), p=(ph == "test"), dm=(ph == "test"), cell=(ph == "test"))
+          for ph, P in (("tune", "Tune"), ("validate", "Val"), ("test", "Test"))}
+    N.claim(all(r["diff"] > 0 and excludes_zero(r) for r in sp.values()),
+            "Results: one-season RAPM is worse than the prior version in every phase by more than its interval")
+    diff("EvDNextTestSingleBpmRmse", "impact_next", "test", "game_rmse", "rapm_single", "bpm", 2, dm=True)
+    mb = diff("EvDNextTestMultiBpmRmse", "impact_next", "test", "game_rmse", "rapm_multi", "bpm", 2, dm=True, cell=True)
+    N.claim(not excludes_zero(mb), "Results: the three-season RAPM is indistinguishable from BPM on the test season")
+    mp = diff("EvDNextTestMultiPriorRmse", "impact_next", "test", "game_rmse", "rapm_multi", "rapm_prior", 2)
+    N.claim(mp["diff"] < 0 and excludes_zero(mp), "Results: the three-season window is ahead of the one-season prior version on the test season")
+    bs = {ph: diff(f"EvDNext{P}BpmScaledBpmRmse", "impact_next", ph, "game_rmse", "bpm_scaled", "bpm", 2)
+          for ph, P in (("validate", "Val"), ("test", "Test"))}
+    N.claim(not excludes_zero(bs["validate"]) and not excludes_zero(bs["test"]),
+            "Results: the tuned BPM multiplier's gain on the validation season and its loss on the test season are both inside their intervals")
+    oz = {ph: diff(f"EvDNext{P}OnoffZeroRmse", "impact_next", ph, "game_rmse", "onoff", "zero", 2, lo_hi=(ph == "test"), p=(ph == "test"), dm=(ph == "test"), cell=(ph == "test"))
+          for ph, P in (("tune", "Tune"), ("validate", "Val"), ("test", "Test"))}
+    N.claim(all(r["diff"] > 0 and excludes_zero(r) for r in oz.values()),
+            "Results: on/off as published is worse than zero in every phase by more than its interval")
+    os_ = diff("EvDNextTestOnoffScaledZeroRmse", "impact_next", "test", "game_rmse", "onoff_scaled", "zero", 2, dm=True, cell=True)
+    N.claim(not excludes_zero(os_), "Results: rescaled on/off is indistinguishable from zero on the test season")
+    pz = diff("EvDNextTestPriorZeroRmse", "impact_next", "test", "game_rmse", "rapm_prior", "zero", 2)
+    N.claim(pz["diff"] < 0 and excludes_zero(pz), "Results: every RAPM version beats zero on the test season (prior version shown)")
+    hb = diff("EvDHeldTestPriorBpmRmse", "impact_heldout", "test", "game_rmse", "rapm_prior", "bpm", 2)
+    N.claim(hb["diff"] > 0 and excludes_zero(hb), "Results: BPM is ahead on the test season's held-out games too")
+    for model, m in (("bpm", "Bpm"), ("rapm_prior", "Prior")):
+        interval(f"EvNextTest{m}Rmse", "impact_next", "test", "game_rmse", model, 2)
+
+    # -- impact: year-to-year reliability ---------------------------------------------
+    for model, m in (("bpm", "Bpm"), ("rapm_prior", "Prior"), ("rapm_single", "Single"), ("onoff", "Onoff")):
+        interval(f"EvYtyTest{m}", "impact_reliability", "test", "corr", model, 2)
+    yd = {k: diff(f"EvDYtyTest{n_}", "impact_reliability", "test", "corr", a, b, 2, cell=(k == "bp"))
+          for k, n_, a, b in (("bp", "BpmPrior", "bpm", "rapm_prior"), ("ps", "PriorSingle", "rapm_prior", "rapm_single"),
+                              ("so", "SingleOnoff", "rapm_single", "onoff"))}
+    N.claim(all(r["diff"] > 0 and excludes_zero(r) for r in yd.values()),
+            "Results: each step of the year-to-year order (BPM > RAPM + prior > one-season RAPM > on/off) is outside its interval on the test pair")
+
+    # -- expected FG% -----------------------------------------------------------------
+    hl = {ph: diff(f"EvDXfg{P}HgbLogregLogLoss", "xfg", ph, "log_loss", "hgb", "logreg", 4, cell=(ph == "test")) for ph, P in (("validate", "Val"), ("test", "Test"))}
+    hz = diff("EvDXfgTestHgbZoneLogLoss", "xfg", "test", "log_loss", "hgb", "zone", 4)
+    N.add("EvXfgTestGames", integer(hz["n_clusters"]), "paper_eval_tests xfg test: games the scored shots belong to (the bootstrap clusters)")
+    N.claim(all(r["diff"] < 0 and excludes_zero(r) for r in (*hl.values(), hz)),
+            "Results: gradient boosting beats the logistic regression and the zone baseline by more than its interval")
+    lz = diff("EvDXfgTestLogregZoneLogLoss", "xfg", "test", "log_loss", "logreg", "zone", 4, cell=True)
+    N.claim(not excludes_zero(lz), "Results: on the test season the logistic regression and the zone baseline are indistinguishable")
+    hb_ = diff("EvDXfgTestHgbLogregBrier", "xfg", "test", "brier", "hgb", "logreg", 4)
+    N.claim(hb_["diff"] < 0 and excludes_zero(hb_), "Results: boosting's Brier gain over the logistic regression is outside its interval")
+    for ph, P in (("validate", "Val"), ("test", "Test")):
+        r = T[("xfg", ph, "ece", "hgb", "", T[("xfg", ph, "log_loss", "hgb", "", next(v for (t, p_, me, mo, mb, v) in T if (t, p_, me, mo, mb) == ("xfg", ph, "log_loss", "hgb", "")))]["variant"])]
+        N.add(f"EvXfg{P}Ece", dec(r["value_a"], 3), f"paper_eval_tests xfg {ph} ece hgb ({r['seasons']}, n {r['n']}, {r['n_clusters']} games): value_a")
+        N.add(f"EvXfg{P}EceLo", dec(r["ci_lo"], 3), "same: ci_lo")
+        N.add(f"EvXfg{P}EceHi", dec(r["ci_hi"], 3), "same: ci_hi")
+        g = T[("xfg", ph, "calib_max_gap", "hgb", "", r["variant"])]
+        N.add(f"EvXfg{P}MaxGap", dec(g["value_a"], 3), f"paper_eval_tests xfg {ph} calib_max_gap hgb: largest gap over bins holding >= 1% of the shots")
+        N.add(f"EvXfg{P}MaxGapHi", dec(g["ci_hi"], 3), "same: ci_hi")
+    for ph, P in (("validate", "Val"), ("test", "Test")):
+        for model, m in (("quality", "Quality"), ("shot_making", "Making")):
+            interval(f"EvXfgYty{P}{m}", "xfg_reliability", ph, "corr", model, 2, variant="fga>=200")
+        r = diff(f"EvDXfgYty{P}QualityMaking", "xfg_reliability", ph, "corr", "quality", "shot_making", 2, variant="fga>=200")
+        N.claim(r["diff"] > 0 and excludes_zero(r), f"Results: shot quality is more persistent than shot-making by more than its interval ({ph})")
+
+    # -- pre-game odds ----------------------------------------------------------------
+    pc = {ph: diff(f"EvDPregame{P}ChosenCurrentLogLoss", "pregame", ph, "log_loss", "prior_rest", "current", 4, dm=True, cell=(ph == "test"))
+          for ph, P in (("tune", "Tune"), ("validate", "Val"), ("test", "Test"))}
+    N.claim(pc["tune"]["diff"] < 0 and excludes_zero(pc["tune"]) and pc["tune"]["dm_p"] < 0.05,
+            "Results: on the tune seasons the chosen form beats this season's ratings alone by more than its interval")
+    N.claim(not excludes_zero(pc["validate"]), "Results: on the validation season the chosen form's gain over current-only is inside its interval")
+    N.claim(not excludes_zero(pc["test"]) and pc["test"]["dm_p"] > 0.05, "Results: on the test season the chosen form and current-only are indistinguishable")
+    pbase = {ph: diff(f"EvDPregame{P}ChosenBaselineLogLoss", "pregame", ph, "log_loss", "prior_rest", "baseline", 4, dm=(ph == "test"), cell=(ph == "test"))
+             for ph, P in (("validate", "Val"), ("test", "Test"))}
+    N.claim(not excludes_zero(pbase["test"]), "Results: on the test season the chosen form and the baseline are indistinguishable")
+    cb = diff("EvDPregameTestCurrentBaselineLogLoss", "pregame", "test", "log_loss", "current", "baseline", 4, dm=True)
+    N.claim(cb["diff"] < 0 and excludes_zero(cb), "Results: this season's ratings alone beat the baseline on the test season by more than its interval")
+    pr = {ph: diff(f"EvDPregame{P}ChosenPriorLogLoss", "pregame", ph, "log_loss", "prior_rest", "prior", 4, lo_hi=(ph != "tune"), p=True)
+          for ph, P in (("tune", "Tune"), ("validate", "Val"), ("test", "Test"))}
+    N.claim(pr["tune"]["diff"] < 0 and excludes_zero(pr["tune"]) and pr["validate"]["diff"] < 0 and excludes_zero(pr["validate"]),
+            "Results: the back-to-back flags help on the tune seasons and the validation season by more than their intervals")
+    N.claim(not excludes_zero(pr["test"]), "Results: the back-to-back flags' contribution on the test season is inside its interval")
+    interval("EvPregameTestFavWinPct", "pregame", "test", "favourite_win_rate", "prior_rest", 1, scale=100)
+
+    # -- season simulator (halfway) -------------------------------------------------------
+    sm = {"brier": ("Brier", 4, 1), "log_loss": ("LogLoss", 3, 1), "mae": ("Mae", 2, 1), "rmse": ("Rmse", 2, 1), "cover80": ("Cover", 1, 100)}
+    sd = {}
+    for metric, (mm, d, scale) in sm.items():
+        task = "sim_playoffs" if metric in ("brier", "log_loss") else "sim_wins"
+        for ph, P in (("tune", "Tune"), ("validate", "Val"), ("test", "Test")):
+            sd[(ph, metric)] = diff(f"EvDSim{P}{mm}", task, ph, metric, "model", "record", d, variant="halfway", scale=scale,
+                                    cell=(ph == "test" and metric != "rmse"))
+    N.claim(all(sd[("tune", k)]["diff"] < 0 and excludes_zero(sd[("tune", k)]) for k in ("mae", "rmse")),
+            "Results: on the tune seasons the simulator's win-total gain is outside its interval")
+    N.claim(sd[("tune", "cover80")]["diff"] > 0 and excludes_zero(sd[("tune", "cover80")]), "Results: the simulator's coverage gain on the tune seasons is outside its interval")
+    N.claim(not excludes_zero(sd[("tune", "brier")]) and not excludes_zero(sd[("tune", "log_loss")]),
+            "Results: on the tune seasons the playoff Brier and log-loss differences are inside their intervals")
+    N.claim(all(not excludes_zero(sd[(ph, k)]) for ph in ("validate", "test") for k in ("brier", "mae", "rmse")),
+            "Results: on the validation and test seasons the baseline's Brier, MAE and RMSE gains are inside their intervals")
+    N.claim(sd[("test", "log_loss")]["diff"] > 0 and excludes_zero(sd[("test", "log_loss")]),
+            "Results: on the test season the baseline's playoff log-loss gain is outside its interval")
+    N.claim(not excludes_zero(sd[("test", "cover80")]), "Results: the simulator's coverage gain on the test season is inside its interval")
+    for method, me in (("model", "Model"), ("record", "Record")):
+        interval(f"EvSimTest{me}CoverPct", "sim_wins", "test", "cover80", method, 1, variant="halfway", scale=100)
+    # Results: "the gap comes mostly from teams the simulator favoured at the midpoint that then missed the playoffs"
+    units = rows(cur, """SELECT m.pred, r.pred, m.actual FROM paper_eval_predictions m JOIN paper_eval_predictions r
+                         ON r.task = m.task AND r.phase = m.phase AND r.variant = m.variant AND r.unit_id = m.unit_id AND r.model = 'record'
+                         WHERE m.task = 'sim_playoffs' AND m.phase = 'test' AND m.model = 'model' AND m.variant = 'halfway'""")
+
+    def ll(p, y):
+        p = min(max(p, 1e-6), 1 - 1e-6)
+        return -(y * math.log(p) + (1 - y) * math.log(1 - p))
+
+    gap = [(ll(pm, y) - ll(pr, y), pm, pr, y) for pm, pr, y in units]
+    favoured_missed = sum(g for g, pm, pr, y in gap if y == 0 and pm > pr)
+    N.claim(favoured_missed > 0.5 * sum(g for g, *_ in gap) > 0,
+            "Results: the test-season playoff log-loss gap comes mostly from teams the simulator favoured at the midpoint that missed the playoffs")
+    # Methods: the sign-flip test agrees with the bootstrap interval at the 5% level on every comparison the paper reports
+    N.claim(all((r["p_perm"] < 0.05) == excludes_zero(r) for r in used if r["p_perm"] is not None),
+            "Methods: the sign-flip permutation test agrees with the bootstrap interval, at the 5% level, on every comparison reported")
+
+
+SECTIONS = (data_and_pipeline, rapm, shot_quality, pregame_and_sim, luck, awards, protocol, tests)
 
 
 def build(conn):
