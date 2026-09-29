@@ -181,6 +181,20 @@ export const SECTIONS = [
                 ],
             },
             {
+                id: 'assists',
+                name: 'Assist Network',
+                open: { page: 'assists', label: 'Assist Network' },
+                answers: 'Who sets up whom on a team, on what kind of shot, and how much of each player\'s scoring is set up by someone else?',
+                method: 'Every made field goal of every regular-season game 2020-21 to 2025-26 from ESPN\'s play-by-play, read by the same parser as the Game Log (scripts/pbp_lineups.py). ESPN names the passer in the made shot\'s text ("... (Jamal Murray assists)"); the parser matches that name to an NBA id the way it does for the player lines (the game\'s own players, then that season\'s team rosters, then names only one player has had). A basket is two or three as the parser calls it; its kind comes from ESPN\'s shot type: layups and dunks (with alley-oops, finger rolls, tips), floaters and hooks, other two-point jumpers, threes. Assisted share = assisted makes / all makes of that kind. The three NBA Cup finals are left out (they don\'t count in regular-season stats). The network draws the top players by minutes around a circle, one arrow per passer → scorer pair, width = assists.',
+                checked: 'Every player-season\'s assists equal his Game Log assists (0 of 3,172 player-seasons differ), and the parser\'s season assists are within 0.3% of NBA.com\'s (0.997 to 1.001 of the season totals, players with 20+ games). 601,617 made field goals, 373,076 of them assisted: 60.2 to 63.7% a season, 50 to 54% of made twos and 82 to 85% of made threes. 1,149 assisted baskets (0.31%) name a passer ESPN gives no id to and aren\'t in any pair; 4 plays are left out as data errors (3 players credited with assisting themselves). Sniff tests: the league\'s top pair each season is Draymond Green → Stephen Curry (194, 2020-21), Trae Young → Clint Capela (164), James Harden → Joel Embiid (244), Tyrese Haliburton → Myles Turner (215), James Harden → Ivica Zubac (209) and Jamal Murray → Nikola Jokić (171, 2025-26); Green → Curry is Golden State\'s top pair every season; Nikola Jokić → Aaron Gordon led Denver in 2022-23 (155, 131 of them layups and dunks). Creators: 12 to 19% of Harden\'s made twos were assisted each season, 7 to 22% of Shai Gilgeous-Alexander\'s, 10 to 26% of Luka Dončić\'s. Shooters: 89 to 94% of Klay Thompson\'s made threes, 88 to 100% of Duncan Robinson\'s. Checked on 2026-09-29.',
+                limits: [
+                    'An assist is the scorekeeper\'s call, and home scorekeepers are known to differ in how freely they give them; nothing here adjusts for that.',
+                    'Counts, not rates per chance: a pair on the floor together more has more assists. The network shows who connects, not how efficiently.',
+                    'Assisted threes are the norm (82 to 85% league-wide), so a shooter at 94% is only mid-pack among 50+ make shooters; the 2s share separates creators from finishers more clearly.',
+                    'Shot kind comes from ESPN\'s shot type, not distance; a "jump shot" two can be from 8 feet or 22.',
+                ],
+            },
+            {
                 id: 'gravity',
                 name: 'Gravity Index and Spacing Lab',
                 open: { page: 'analytics', hash: 'spacing', label: 'Spacing Lab' },

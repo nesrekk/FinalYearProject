@@ -1154,3 +1154,26 @@ export async function fetchTeamRotation(team, season) {
     const response = await axios.get(`${IMPACT_BASE}/rotations/team`, { params: { team, season } });
     return response.data;
 }
+
+// ─── Assist network (assist_pairs, player_assisted_share, assist_seasons) ─────
+export async function fetchAssistOptions() {
+    return getWithCache('assist_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/assists/options`);
+        return response.data;
+    });
+}
+
+export async function fetchTeamAssists(team, season) {
+    const response = await axios.get(`${IMPACT_BASE}/assists/team`, { params: { team, season } });
+    return response.data;
+}
+
+export async function fetchAssistPairs(season, sort = 'ast', limit = 50) {
+    const response = await axios.get(`${IMPACT_BASE}/assists/pairs`, { params: { season, sort, limit } });
+    return response.data;
+}
+
+export async function fetchPlayerAssists(playerId, season) {
+    const response = await axios.get(`${IMPACT_BASE}/assists/player/${playerId}`, { params: season ? { season } : {} });
+    return response.data;
+}

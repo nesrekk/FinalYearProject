@@ -53,7 +53,8 @@ SMALL_GP = 10
 
 TABLES = ["team_seasons", "team_game_fatigue", "game_scores", "team_luck_schedule", "player_season_stats",
           "player_team_stints", "player_game_lines", "player_roles", "contract_value", "lineup_stats",
-          "lineup_seasons", "lineup_stint_games", "player_on_off", "team_zone_mix", "league_zone_mix"]
+          "lineup_seasons", "lineup_stint_games", "player_on_off", "team_zone_mix", "league_zone_mix",
+          "assist_pairs"]
 UPSTREAM = "Stored tables only (Basketball-Reference team summaries, ESPN scores and play-by-play, nba_api)"
 
 SUMMARY_COLS = ["season", "abbreviation", "bref_abbreviation", "franchise", "team_name", "playoffs", "g", "w", "l",
@@ -113,6 +114,7 @@ def _coverage():
         "roles": "SELECT min(season), max(season) FROM player_roles",
         "lineups": "SELECT min(season), max(season) FROM lineup_stats",
         "stints": "SELECT min(season), max(season) FROM lineup_stint_seasons",
+        "assists": "SELECT min(season), max(season) FROM assist_seasons",
         "on_off": "SELECT min(season), max(season) FROM player_on_off",
         "shot_mix": "SELECT min(LEFT(season, 4)::int + 1), max(LEFT(season, 4)::int + 1) FROM team_zone_mix",
     }
@@ -458,6 +460,19 @@ def _rotations(cur, season, abbr):
     return {"available": True, "coverage": cov["label"], "reason": None}
 
 
+def _assists(cur, season, abbr):
+    """Only says whether the Assist network block has data; the block fetches
+    GET /assists/team itself (routers/assist_network.py)."""
+    cov = _coverage()["assists"]
+    if not _in(cov, season):
+        return _missing(f"Assists by passer and scorer come from play-by-play, on file from {label(cov['from'])}.",
+                        cov["label"])
+    cur.execute("SELECT 1 FROM assist_pairs WHERE season = %s AND team_abbreviation = %s LIMIT 1", (season, abbr))
+    if cur.fetchone() is None:
+        return _missing("No assisted basket of this team-season is in the play-by-play.", cov["label"])
+    return {"available": True, "coverage": cov["label"], "reason": None}
+
+
 def _on_off(cur, season, abbr):
     cov = _coverage()["on_off"]
     if not _in(cov, season):
@@ -550,6 +565,7 @@ def team_profile(abbr: str, season: Optional[int] = None):
                       "reason": None if has_pairs else "Pair Chemistry is built from the stored lineups, which "
                                                        f"start in {label(_coverage()['lineups']['from'])}."},
             "rotations": _rotations(cur, season, code),
+            "assists": _assists(cur, season, code),
             "on_off": _on_off(cur, season, code),
             "shot_mix": _shot_mix(cur, season, code),
         }

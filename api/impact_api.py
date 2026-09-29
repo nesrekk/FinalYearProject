@@ -28,6 +28,7 @@ from routers import (
     draft_value,
     era,
     explore,
+    assist_network,
     game_log,
     games_misc,
     greats,
@@ -124,6 +125,7 @@ for _router_module in (
     rapm,
     rotations,
     rim_deterrence,
+    assist_network,
 ):
     app.include_router(_router_module.router)
 

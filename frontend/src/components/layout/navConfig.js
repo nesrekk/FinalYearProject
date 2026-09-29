@@ -47,6 +47,7 @@ export const NAV_GROUPS = [
             { id: 'trade', label: 'Trade Analyzer', icon: 'swap_horiz' },
             { id: 'tradeimpact', label: 'Trade Impact', icon: 'account_balance' },
             { id: 'rotations', label: 'Rotations', icon: 'view_timeline' },
+            { id: 'assists', label: 'Assist Network', icon: 'hub' },
         ],
     },
     {

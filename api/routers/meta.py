@@ -386,6 +386,13 @@ COVERAGE_MAP = [
         "used_by": ["analytics#rim", "player"],
     },
     {
+        "table": "assist_pairs", "label": "Assist network (passer to scorer, every assisted basket)", "group": "Players",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM assist_pairs", "range_fmt": "season_int",
+        "source": "ESPN play-by-play: the passer named in each made shot's text ('(X assists)'), matched to an NBA id by the same parser as player_game_lines (scripts/build_assist_network.py); per player assisted shares in player_assisted_share, league totals and checks in assist_seasons.",
+        "gap": "Every player's assists equal his player_game_lines assists (0 player-seasons differ) and are within 0.3% of NBA.com's season totals. About 0.3% of assists name a passer ESPN gives no id to and aren't in any pair (the basket still counts as assisted); the three NBA Cup finals aren't counted. Assists are the scorekeeper's call, which varies by arena.",
+        "used_by": ["assists", "player", "team"],
+    },
+    {
         "table": "player_wpa_totals", "label": "Win-probability-added totals", "group": "Models",
         "range_sql": None, "range_fmt": None,
         "source": "compute_wpa.py over deduplicated play-by-play (scripts/wpa_lib.PBP_DEDUP_WHERE).",

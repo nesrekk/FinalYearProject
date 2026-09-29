@@ -10,6 +10,7 @@ import PlayerName from '../common/PlayerName';
 import ScoutingReportCard from '../common/ScoutingReportCard';
 import ShotMixHistory from '../common/ShotMixHistory';
 import SituationalSplitsBlock from '../common/SituationalSplitsBlock';
+import AssistBlock from '../common/AssistBlock';
 import { ShotMakingInfo, ShotMakingTable } from '../common/ShotMaking';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
@@ -951,6 +952,11 @@ function missingReasons(d) {
             ? `Five-man stints from play-by-play cover ${span(cov.rapm)}; ${career}.`
             : `No tracked stint with him on the floor (${span(cov.rapm)}): his minutes fall in games or stints the play-by-play couldn't place.`]);
     }
+    if (d.assists && !d.assists.seasons.length && cov.assists?.from) {
+        out.push(['Assists', endedBefore(cov.assists.from)
+            ? `Assists by passer and scorer come from play-by-play, ${span(cov.assists)}; ${career}.`
+            : `No made shot or assist of his in the play-by-play (${span(cov.assists)}).`]);
+    }
     if (d.situational_splits && !d.situational_splits.seasons.length) {
         out.push(['Situational splits', endedBefore(cov.game_lines.from)
             ? `Game-by-game lines start in ${label(cov.game_lines.from)} (rebuilt from ESPN play-by-play); ${career}.`
@@ -1023,6 +1029,7 @@ export default function PlayerProfile({ onNavigate }) {
         ['onoff', 'On/off', (d.on_off?.rows.length ?? 0) > 0],
         ['rapm', 'RAPM', (d.rapm?.rows.length ?? 0) > 0],
         ['rim', 'Rim', (d.rim_deterrence?.rows.length ?? 0) > 0],
+        ['assists', 'Assists', (d.assists?.seasons.length ?? 0) > 0],
         ['splits', 'Splits', (d.situational_splits?.seasons.length ?? 0) > 0],
         ['similar', 'Similar', d.similarity.seasons.length > 0],
         ['breakouts', 'Breakouts', d.breakouts.flags.length > 0],
@@ -1069,6 +1076,9 @@ export default function PlayerProfile({ onNavigate }) {
             {(d.rapm?.rows.length ?? 0) > 0 && <RapmBlock block={d.rapm} coverage={d.coverage.rapm} onNavigate={onNavigate} />}
             {(d.rim_deterrence?.rows.length ?? 0) > 0 && (
                 <RimBlock key={d.player.player_id} block={d.rim_deterrence} coverage={d.coverage.rim_deterrence} onNavigate={onNavigate} />
+            )}
+            {(d.assists?.seasons.length ?? 0) > 0 && (
+                <AssistBlock key={d.player.player_id} playerId={d.player.player_id} seasons={d.assists.seasons} onNavigate={onNavigate} />
             )}
             {(d.situational_splits?.seasons.length ?? 0) > 0 && (
                 <SituationalSplitsBlock key={d.player.player_id} playerId={d.player.player_id} seasons={d.situational_splits.seasons} />

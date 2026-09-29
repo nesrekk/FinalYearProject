@@ -2310,3 +2310,71 @@ def test_rim_deterrence_known_cases():
     assert client.get("/defense/rim-deterrence", params={"season": 2010}).status_code == 404
     assert client.get("/defense/rim-deterrence", params={"team": "XXX"}).status_code == 404
     assert client.get("/defense/rim-deterrence", params={"position": "guards"}).status_code == 400
+
+
+def test_assist_network_matches_game_log_and_known_duos():
+    """Assist network (scripts/build_assist_network.py, api/routers/assist_network.py): every assisted basket
+    from the play-by-play, passer named in the text, matched by the same parser as player_game_lines, so the
+    assists must equal the Game Log's; well-known duos and shot creators land where they should."""
+    from impact_api import app
+    from impact_core import get_db
+    client = TestClient(app)
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT to_regclass('assist_pairs')")
+        if cur.fetchone()[0] is None:
+            pytest.skip("assist_pairs not built (run scripts/build_assist_network.py)")
+        # Same parser: each player-season's assists (pairs + the 4 dropped data errors aside) equal his
+        # player_game_lines assists over the same games (the NBA Cup finals are left out of both).
+        cur.execute("""
+            WITH mine AS (SELECT season, player_id, SUM(ast) ast FROM player_assisted_share GROUP BY 1, 2),
+                 lines AS (SELECT season, player_id, SUM(ast) ast FROM player_game_lines
+                           WHERE game_id IN (SELECT 'espn_' || espn_id FROM game_scores WHERE espn_id IS NOT NULL)
+                           GROUP BY 1, 2)
+            SELECT COUNT(*), COUNT(*) FILTER (WHERE COALESCE(m.ast, 0) <> COALESCE(l.ast, 0))
+            FROM mine m FULL JOIN lines l USING (season, player_id)""")
+        n, differ = cur.fetchone()
+        cur.execute("SELECT SUM(data_errors) FROM assist_seasons")
+        assert n > 3000 and differ <= cur.fetchone()[0]
+    opts = client.get("/assists/options").json()
+    _assert_has_source(opts)
+    assert opts["seasons"] == [2021, 2022, 2023, 2024, 2025, 2026]
+    for lg in opts["league"].values():
+        assert lg["lines_mismatch"] == 0 and 0.995 < lg["ast_vs_nba"] < 1.005
+        assert 0.58 < lg["assisted_share"] < 0.66 and lg["share3"] > 0.8 > lg["share2"] > 0.45
+        assert lg["unknown_passer"] < 0.01 * lg["assisted"]
+    # League's top duo of 2023-24: Haliburton -> Turner.
+    duos = client.get("/assists/pairs", params={"season": 2024}).json()
+    top = duos["pairs"][0]
+    assert (top["passer_id"], top["scorer_id"]) == (1630169, 1626167) and top["ast"] > 200
+    assert [p["ast"] for p in duos["pairs"]] == sorted((p["ast"] for p in duos["pairs"]), reverse=True)
+    threes = client.get("/assists/pairs", params={"season": 2024, "sort": "three"}).json()["pairs"]
+    assert [p["ast3"] for p in threes] == sorted((p["ast3"] for p in threes), reverse=True)
+    # Team view adds up; Jokic -> Gordon led Denver in 2022-23, mostly at the rim; Green -> Curry leads
+    # Golden State every season.
+    den = client.get("/assists/team", params={"team": "DEN", "season": 2023}).json()
+    _assert_has_source(den)
+    e = den["edges"][0]
+    assert (e["passer_id"], e["scorer_id"]) == (203999, 203932) and e["kinds"]["rim"] > 0.7 * e["ast"]
+    assert sum(x["ast"] for x in den["edges"]) == sum(p["ast"] for p in den["players"])
+    assert sum(p["ast_fgm2"] + p["ast_fgm3"] for p in den["players"]) == den["totals"]["assisted"]
+    assert all(sum(x["kinds"].values()) == x["ast"] and x["ast2"] + x["ast3"] == x["ast"] for x in den["edges"])
+    assert den["totals"]["games"] <= 82
+    for season in opts["seasons"]:
+        g = client.get("/assists/team", params={"team": "GSW", "season": season}).json()["edges"][0]
+        assert (g["passer_id"], g["scorer_id"]) == (203110, 201939)
+    # Creators make their own shots; spot-up shooters' threes are set up.
+    for pid, season in ((201935, 2024), (1628983, 2024), (1629029, 2024)):       # Harden, SGA, Doncic
+        assert client.get(f"/assists/player/{pid}", params={"season": season}).json()["summary"]["share2"] < 0.25
+    for pid, season in ((202691, 2024), (1629130, 2021)):                        # Klay, Duncan Robinson
+        r = client.get(f"/assists/player/{pid}", params={"season": season}).json()
+        assert r["summary"]["share3"] > 0.9 > r["league"]["share3"]
+    # Profile and team page blocks.
+    assert client.get("/player-profile/1630169").json()["assists"]["seasons"] == [2021, 2022, 2023, 2024, 2025]
+    assert client.get("/team-profile/DEN", params={"season": 2023}).json()["assists"]["available"] is True
+    assert client.get("/team-profile/DEN", params={"season": 2019}).json()["assists"]["available"] is False
+    # Guards.
+    assert client.get("/assists/team", params={"team": "XXX", "season": 2024}).status_code == 404
+    assert client.get("/assists/team", params={"team": "DEN", "season": 2010}).status_code == 404
+    assert client.get("/assists/pairs", params={"sort": "drop table"}).status_code == 400
+    assert client.get("/assists/player/1").status_code == 404

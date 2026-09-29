@@ -11,6 +11,7 @@ import ChartExport from '../common/ChartExport';
 import TeamLink from '../common/TeamLink';
 import TeamLogo from '../common/TeamLogo';
 import TeamRotationBlock from '../common/TeamRotationBlock';
+import TeamAssistBlock from '../common/TeamAssistBlock';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/profile.css';
 import '../../styles/teamprofile.css';
@@ -506,6 +507,18 @@ function Rotations({ r, season, abbr, onNavigate }) {
     );
 }
 
+function Assists({ a, season, abbr, onNavigate }) {
+    return (
+        <Section id="assists" title="Assist network" meta={`${a.coverage} · every assisted basket in the play-by-play`}
+            info={<InfoTooltip label="How the assist network is built" title="Assist network">
+                ESPN names the passer on every made shot; the name is matched to a player by the same parser as the Game Log. Each
+                arrow runs from passer to scorer, its width the number of assists; circle size is the player&apos;s assists.
+            </InfoTooltip>}>
+            <TeamAssistBlock abbr={abbr} season={season} onNavigate={onNavigate} />
+        </Section>
+    );
+}
+
 function OnOff({ o, season, abbr, onNavigate }) {
     const row = (x) => (
         <tr key={x.player_id}>
@@ -599,7 +612,7 @@ function ShotMix({ m, season, abbr }) {
 
 const BLOCKS = [
     ['games', 'Game by game'], ['luck', 'Luck & schedule'], ['roster', 'Roster'], ['payroll', 'Payroll'],
-    ['lineups', 'Lineups'], ['rotations', 'Rotation'], ['on_off', 'On/off'], ['shot_mix', 'Shot mix'],
+    ['lineups', 'Lineups'], ['rotations', 'Rotation'], ['assists', 'Assist network'], ['on_off', 'On/off'], ['shot_mix', 'Shot mix'],
 ];
 
 export default function TeamProfile({ onNavigate }) {
@@ -669,6 +682,7 @@ export default function TeamProfile({ onNavigate }) {
             {d.payroll.available && <Payroll p={d.payroll} season={d.season} abbr={d.abbreviation} onNavigate={onNavigate} />}
             {d.lineups.available && <Lineups l={d.lineups} pairs={d.pairs} season={d.season} abbr={d.abbreviation} onNavigate={onNavigate} />}
             {d.rotations?.available && <Rotations r={d.rotations} season={d.season} abbr={d.abbreviation} onNavigate={onNavigate} />}
+            {d.assists?.available && <Assists a={d.assists} season={d.season} abbr={d.abbreviation} onNavigate={onNavigate} />}
             {d.on_off.available && <OnOff o={d.on_off} season={d.season} abbr={d.abbreviation} onNavigate={onNavigate} />}
             {d.shot_mix.available && <ShotMix m={d.shot_mix} season={d.season} abbr={d.abbreviation} />}
 

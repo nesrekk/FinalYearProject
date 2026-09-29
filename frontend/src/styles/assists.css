@@ -1,0 +1,70 @@
+/* Assist Network page (pages/AssistNetwork.jsx), common/AssistNetwork.jsx,
+   the profile block (common/AssistBlock.jsx) and the team page's block.
+   Paper/Ink tokens only; builds on theme.css (.lb-*, .rx-*) and rapm.css. */
+.an-wrap { min-width: 0; margin: var(--space-3) 0; }
+.an-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); }
+.an-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.an-bg { fill: transparent; }
+.an-edge { fill: none; stroke: var(--brand); opacity: 0.55; stroke-linecap: round; pointer-events: none; }
+.an-edge--out { stroke: var(--brand); opacity: 0.95; }
+.an-edge--in { stroke: var(--text-2); opacity: 0.85; }
+.an-edge--dim { stroke: var(--text-3); opacity: 0.1; }
+.an-arrow { stroke: none; }
+.an-arrow--out { fill: var(--brand); }
+.an-arrow--in { fill: var(--text-2); }
+.an-arrow--dim { fill: var(--text-3); }
+.an-hit { fill: none; stroke: transparent; cursor: pointer; }
+.an-node { cursor: pointer; outline: none; }
+.an-node-hit { fill: transparent; }
+.an-node-dot { fill: var(--surface); stroke: var(--brand); stroke-width: 2.5; }
+.an-node--lit .an-node-dot { fill: var(--brand); stroke: var(--text); }
+.an-node:focus-visible .an-node-dot { stroke: var(--text); stroke-width: 3.5; }
+.an-node--dim { opacity: 0.35; }
+.an-label { fill: var(--text); font-size: 12px; font-weight: 600; }
+.an-label--sub { fill: var(--text-3); font-family: var(--font-mono); font-size: 10px; font-weight: 400; }
+@media (max-width: 559px) { .an-label { font-size: 10.5px; } }
+
+.an-legend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); font-size: 0.78rem; color: var(--text-2); }
+.an-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  margin-right: 6px;
+  vertical-align: 3px;
+  background: var(--brand);
+}
+.an-legend .an-legend--in::before { background: var(--text-2); }
+.an-legend .an-legend--size::before { width: 9px; height: 9px; vertical-align: 0; border-radius: 50%; background: transparent; border: 2px solid var(--brand); }
+
+.an-controls { align-items: flex-end; }
+.an-player {
+  margin: var(--space-4) 0 var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+}
+.an-player-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-3); font-size: var(--text-headline-size); }
+.an-lists { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+@media (min-width: 720px) { .an-lists { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.an-list { list-style: none; margin: 0; padding: 0; }
+.an-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 0.88rem;
+}
+.an-list-bar { grid-column: 1 / -1; height: 4px; background: var(--surface-2); }
+.an-list-bar > span { display: block; height: 100%; background: var(--brand); }
+.an-list-n { font-family: var(--font-mono); font-size: 0.82rem; color: var(--text-2); white-space: nowrap; }
+.an-shares { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3); margin: 0 0 var(--space-4); }
+.an-share { border: 1px solid var(--hairline); padding: var(--space-3); }
+.an-share-k { font-size: 0.75rem; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.06em; }
+.an-share-v { font-family: var(--font-mono); font-size: 1.4rem; font-weight: 700; margin: 2px 0; }
+.an-share-sub { font-size: 0.78rem; color: var(--text-3); }
+.an-more { margin-top: var(--space-2); }
+.an-table td.an-arrowcell { color: var(--text-3); padding-left: 0; padding-right: 0; }
+.an-pair { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }

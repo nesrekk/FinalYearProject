@@ -33,6 +33,7 @@ from routers.on_off import DEFAULT_MIN_MINUTES as ON_OFF_MIN_MINUTES, FEW_OFF_MI
 from routers.projections import LOW_WEIGHT as PROJECTION_LOW_WEIGHT, PROFILE_STATS as PROJECTION_STATS
 from routers.rapm import _fits as rapm_fits
 from routers.rim_deterrence import profile_block as rim_deterrence_block
+from routers.assist_network import player_seasons as assist_seasons
 from source_badge import make_source
 
 router = APIRouter()
@@ -82,6 +83,7 @@ def _coverage():
             "on_off": _span(cur, "SELECT min(season), max(season) FROM player_on_off"),
             "rapm": _span(cur, "SELECT min(season), max(season) FROM player_rapm"),
             "rim_deterrence": _span(cur, "SELECT min(season), max(season) FROM rim_deterrence_seasons"),
+            "assists": _span(cur, "SELECT min(season), max(season) FROM assist_seasons"),
             "projections": _span(cur, "SELECT min(season), max(season) FROM player_projections"),
             "game_lines": _span(cur, "SELECT min(season), max(season) FROM player_game_lines"),
             "awards": _span(cur, "SELECT min(season), max(season) FROM player_awards WHERE award <> 'All-Star'"),
@@ -377,6 +379,7 @@ def get_player_profile(player_id: int):
         "rapm": {"rows": rapm,
                  "qualified_poss": next(iter(rapm_fits().values()))["qualified_poss"] if rapm_fits() else None},
         "rim_deterrence": rim_deterrence_block(player_id),
+        "assists": {"seasons": assist_seasons(player_id)},
         "similarity": {"seasons": sim_seasons},
         "game_log": {"seasons": game_log_seasons},
         "situational_splits": {"seasons": split_seasons},
@@ -390,7 +393,7 @@ def get_player_profile(player_id: int):
         "_source": make_source(
             ["player_season_stats", "player_team_stints", "player_bio", "player_awards", "draft_history",
              "player_roles", "greats", "player_shots", "scouting_splits", "defender_dad", "player_gravity",
-             "contract_value", "player_wpa_totals", "player_shot_making", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue", "player_situational_splits", "player_projections", "player_rapm", "rim_deterrence"],
+             "contract_value", "player_wpa_totals", "player_shot_making", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue", "player_situational_splits", "player_projections", "player_rapm", "rim_deterrence", "player_assisted_share", "assist_pairs"],
             "nba_api (stats.nba.com), Basketball-Reference via Kaggle, ESPN play-by-play, Kaggle salary datasets",
         ),
     }
