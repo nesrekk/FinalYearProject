@@ -86,6 +86,12 @@ export const TOOL_META = {
         tagline: 'How hard each defender’s real assignments actually were.',
         about: 'DAD Index (OBPM-weighted): for every defender, the share of their real tracked partial possessions spent on each offensive player, times that player’s OBPM (Basketball-Reference’s published Offensive Box Plus/Minus; players under 500 minutes count as replacement level, −2.0). Z-scored per season, and optionally within position. Plotted against the NBA’s own defended-FG% differential (defended FG% minus the shooters’ normal FG%). Descriptive only — no help defense, rebounding or scheme.',
     },
+    rim: {
+        group: 'Player Analysis',
+        visual: 'scatter',
+        tagline: 'Do opponents stop going to the rim, and miss more, with him on the floor?',
+        about: 'Every field-goal attempt of every regular-season game since 2020-21, placed in the five-man stint it happened in (the same play-by-play lineups as On/Off and RAPM), its distance taken from the NBA’s own shot chart. For each defender: opponents’ rim attempts per 100 possessions, rim FG% and rim points with him on the floor vs. off it in the games he played, each with a 95% interval from resampling his games, plus every other distance band. On/off, not adjusted: teammates, his backup and the opponents he faced all move it. Gobert is top 3 in rim points allowed in five of six seasons; Wembanyama and Lopez have top-5 seasons, not every season. Year to year the attempts gap repeats (r ≈ 0.34) more than the FG% gap (≈ 0.17).',
+    },
     spacing: {
         group: 'Teams & Markets',
         visual: 'scatter',

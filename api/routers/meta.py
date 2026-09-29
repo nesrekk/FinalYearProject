@@ -284,8 +284,8 @@ _RANGE_FORMATTERS = {
 # hand-typed, so they can't drift); `source` and `gap` are hand-written and
 # reuse the same wording as README "Known real gaps" and the Methodology
 # page rather than inventing new phrasing. `used_by` are page ids from
-# navConfig.js / App.jsx PAGES so the frontend can link each row to the
-# feature(s) that read it.
+# navConfig.js / App.jsx PAGES (an Analytics tab as 'analytics#<tab>') so
+# the frontend can link each row to the feature(s) that read it.
 COVERAGE_MAP = [
     {
         "table": "player_season_stats", "label": "Player season stats", "group": "Core",
@@ -377,6 +377,13 @@ COVERAGE_MAP = [
         "source": "Ridge regression on the tracked five-man stints (lineup_stints) by scripts/build_rapm.py: one season, a three-season window, and a BPM-prior version; shrinkage by game-grouped cross-validation, errors from a game bootstrap.",
         "gap": "Only stints that reconciled with five identified players a side (93.7-99.8% of minutes a season). Single-season RAPM is noisy by nature (about 0.4 year-to-year correlation against 0.75 for BPM), and the held-out tests show it predicts next season's games about as well as BPM, not better; rapm_validation stores every test.",
         "used_by": ["rapm", "player"],
+    },
+    {
+        "table": "rim_deterrence", "label": "Rim deterrence (opponents' shots by distance, defender on vs. off)", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM rim_deterrence", "range_fmt": "season_int",
+        "source": "scripts/build_rim_deterrence.py: every field-goal attempt from the play-by-play parser, placed in its lineup_stints stint by event number, distance from the NBA shot chart's coordinates (player_shots); per-season totals and checks in rim_deterrence_seasons.",
+        "gap": "99.0% of attempts matched to the NBA shot chart (97.4% in 2025-26, four of whose games player_shots lacks); the rest use ESPN's text distance, or count a layup/dunk/tip with no distance as 0-3 ft (right 85.8% of the time where it can be checked). Only tracked stints (93.7-99.8% of attempts a season). On/off, not adjusted for teammates or opponents.",
+        "used_by": ["analytics#rim", "player"],
     },
     {
         "table": "player_wpa_totals", "label": "Win-probability-added totals", "group": "Models",

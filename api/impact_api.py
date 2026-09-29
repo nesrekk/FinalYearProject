@@ -63,6 +63,7 @@ from routers import (
     radar,
     rapm,
     referee_tendencies,
+    rim_deterrence,
     rotations,
     role_finder,
     root,
@@ -122,6 +123,7 @@ for _router_module in (
     team_profile,
     rapm,
     rotations,
+    rim_deterrence,
 ):
     app.include_router(_router_module.router)
 

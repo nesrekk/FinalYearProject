@@ -28,6 +28,7 @@ import MatchupFinderSection from '../MatchupFinderSection';
 import RefereeTendenciesSection from '../RefereeTendenciesSection';
 import GarbageTimeSection from '../GarbageTimeSection';
 import DadIndexSection from '../DadIndexSection';
+import RimDeterrenceSection from '../RimDeterrenceSection';
 import SpacingLabSection from '../SpacingLabSection';
 import ContractValueSection from '../ContractValueSection';
 import CollegePipelineSection from '../CollegePipelineSection';
@@ -56,6 +57,7 @@ const TAB_GROUPS = [
             { id: 'matchups', label: 'Matchup Finder', icon: 'swords' },
             { id: 'garbage', label: 'Garbage-Time Deflator', icon: 'delete_sweep' },
             { id: 'dad', label: 'DAD Index', icon: 'shield' },
+            { id: 'rim', label: 'Rim Deterrence', icon: 'block' },
         ],
     },
     {
@@ -229,6 +231,7 @@ export default function AnalyticsSection() {
                 {activeTab === 'referees' && <RefereeTendenciesSection />}
                 {activeTab === 'garbage' && <GarbageTimeSection />}
                 {activeTab === 'dad' && <DadIndexSection />}
+                {activeTab === 'rim' && <RimDeterrenceSection />}
                 {activeTab === 'spacing' && <SpacingLabSection />}
                 {activeTab === 'contracts' && <ContractValueSection />}
                 {activeTab === 'pipeline' && <CollegePipelineSection />}

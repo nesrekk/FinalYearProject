@@ -2254,3 +2254,59 @@ def test_rotations_minutes_closing_and_team_block():
     assert lst["season"] == 2024 and any(x["game_id"] == "espn_401584689" for x in lst["games"])
     cov = client.get("/meta/coverage").json()
     assert any(x["table"] == "rotation_closing_games" and x["n_rows"] > 7000 for x in cov["tables"])
+
+
+def test_rim_deterrence_known_cases():
+    """Rim deterrence (scripts/build_rim_deterrence.py, api/routers/rim_deterrence.py): every attempt placed in
+    its lineup_stints stint, distance from the NBA shot chart's coordinates, opponents' rim attempts/FG%/points
+    with each defender on vs. off. Gobert is the textbook case; on/off noise is disclosed, not hidden."""
+    from impact_api import app
+    from impact_core import get_db
+    client = TestClient(app)
+    d = client.get("/defense/rim-deterrence", params={"season": 2025}).json()
+    _assert_has_source(d)
+    lg = d["league"]
+    # Event -> stint mapping is exact; nearly every two gets its distance from coordinates; the
+    # no-distance rule is right ~86% of the time where the shot chart can check it.
+    assert lg["stints_fga_mismatch"] == 0 and lg["three_agree"] > 0.98
+    src = lg["sources"]
+    assert src["coords"] / (src["coords"] + src["text"] + src["rule"] + src["unknown"]) > 0.97
+    assert 0.8 < lg["rule"]["share_right"] < 0.92
+    assert 22 < lg["bands"]["rim"]["per100"] < 28 and 0.6 < lg["bands"]["rim"]["fg"] < 0.72
+    # The league's rim share matches player_shots' own coordinates (under 4 ft, regular season).
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("""SELECT AVG((shot_type NOT LIKE '3%%' AND SQRT(loc_x^2 + loc_y^2) < 40)::int)
+                       FROM player_shots WHERE season = '2024-25' AND game_id LIKE '002%%'""")
+        assert abs(float(cur.fetchone()[0]) - lg["bands"]["rim"]["share"]) < 0.005
+    # League view: 1,000+ minutes by default, biggest rim-points drop first; Gobert near the top and
+    # clearly below zero on rim attempts.
+    assert d["min_minutes"] == 1000 and all(p["qualified"] and p["minutes_on"] >= 1000 for p in d["players"])
+    diffs = [p["rim_pts100_diff"] for p in d["players"]]
+    assert diffs == sorted(diffs)
+    gobert = next(p for p in d["players"] if p["player_id"] == 203497)
+    assert gobert["rim_pts100_rank"] <= 3 and gobert["rim_fga100_hi"] < 0 and gobert["big"]
+    for p in d["players"]:
+        for k in ("rim_fga100", "rim_fg", "rim_pts100"):
+            if p[f"{k}_lo"] is not None:
+                assert p[f"{k}_lo"] - 1e-3 <= p[f"{k}_diff"] <= p[f"{k}_hi"] + 1e-3
+        assert sum(p["bands"][b]["on"]["fga"] for b in p["bands"]) == p["fga_on"]
+        assert p["bands"]["rim"]["on"]["fga"] == p["rim_fga_on"]
+        assert abs(p["rim_fga100_on"] - 100 * p["rim_fga_on"] / p["poss_on"]) < 0.01
+    # More intervals clear zero than chance; the attempts gap repeats year to year more than the FG% gap.
+    assert d["noise"]["rim_fga100"]["ci_excludes_zero"] > 2 * d["noise"]["rim_fga100"]["expected_by_chance"]
+    st = d["stability"]
+    assert st["pairs"] > 500 and 0.2 < st["rim_fga100"] < 0.5 and st["rim_fg"] < st["rim_fga100"]
+    # Team view keeps league ranks; the centers filter only keeps listed centers.
+    mn = client.get("/defense/rim-deterrence", params={"season": 2025, "team": "MIN"}).json()
+    assert mn["players"] and all(p["team_abbreviation"] == "MIN" for p in mn["players"])
+    assert next(p for p in mn["players"] if p["player_id"] == 203497)["rim_pts100_rank"] == gobert["rim_pts100_rank"]
+    bigs = client.get("/defense/rim-deterrence", params={"season": 2025, "position": "bigs"}).json()
+    assert bigs["players"] and all(p["big"] for p in bigs["players"])
+    # Profile block: every season 2020-21 on.
+    prof = client.get("/player-profile/203497").json()["rim_deterrence"]
+    assert {r["season"] for r in prof["rows"]} == {2021, 2022, 2023, 2024, 2025, 2026}
+    # Guards.
+    assert client.get("/defense/rim-deterrence", params={"season": 2010}).status_code == 404
+    assert client.get("/defense/rim-deterrence", params={"team": "XXX"}).status_code == 404
+    assert client.get("/defense/rim-deterrence", params={"position": "guards"}).status_code == 400

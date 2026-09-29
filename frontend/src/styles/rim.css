@@ -1,0 +1,114 @@
+/* Rim Deterrence (RimDeterrenceSection.jsx) and its band chart
+   (common/RimBandChart.jsx, also on the player profile). Chart basics
+   (.rx-chart, .rx-grid, .rx-tick, .rx-axis) and the .oo-* table helpers
+   come from theme.css. */
+.rim-scatter { margin: var(--space-4) 0; }
+.rim-zero { stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 4 4; }
+.rim-quad { fill: color-mix(in srgb, var(--positive) 7%, transparent); }
+.rim-quad-label {
+  fill: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+.rim-dot { stroke: var(--surface); stroke-width: 1; opacity: 0.78; }
+.rim-dot--good { fill: var(--positive); }
+.rim-dot--bad { fill: var(--negative); }
+.rim-dot--big { stroke: var(--text); stroke-width: 1.4; }
+.rim-dot--hot { stroke: var(--text); stroke-width: 2.5; opacity: 1; }
+
+.rim-legend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); font-size: 0.78rem; color: var(--text-2); }
+.rim-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.rim-legend--dots { margin-top: var(--space-2); }
+.rim-legend span:last-child:not([class])::before { display: none; }
+.rim-legend .rim-legend--good::before { background: var(--positive); }
+.rim-legend .rim-legend--bad::before { background: var(--negative); }
+.rim-legend .rim-legend--big::before { background: transparent; border: 1.5px solid var(--text); }
+.rim-legend .rim-legend--on::before { border-radius: 2px; background: var(--brand); }
+.rim-legend .rim-legend--off::before { border-radius: 2px; background: var(--text-3); }
+
+.rim-detail {
+  margin: var(--space-4) 0 var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+}
+.rim-detail-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-headline-size);
+}
+.rim-detail-team { font-size: 0.85rem; color: var(--text-2); font-weight: 500; }
+.rim-detail-team > * { vertical-align: middle; }
+.rim-detail-n { margin: 0 0 var(--space-3); }
+.rim-detail-rank { margin: var(--space-2) 0 0; font-size: 0.82rem; }
+.rim-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+}
+.rim-detail-grid .table-wrapper { max-width: 680px; }
+.rim-facts td, .rim-facts th { font-size: 0.85rem; }
+.rim-facts td.rim-facts-ci { white-space: nowrap; font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-2); }
+.rim-panel-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-eyebrow-size);
+  letter-spacing: var(--text-eyebrow-tracking);
+  text-transform: uppercase;
+  color: var(--text-2);
+  font-weight: 700;
+}
+
+.rim-bands { min-width: 0; }
+.rim-bands-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+.rim-band-bg { fill: transparent; }
+.rim-band--hot .rim-band-bg { fill: var(--surface-2); }
+.rim-band-label { fill: var(--text); font-size: 12px; font-weight: 600; }
+.rim-band-val {
+  fill: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.rim-band-val--sub { fill: var(--text-3); font-size: 10.5px; }
+.rim-bar--on { fill: var(--brand); }
+.rim-bar--off { fill: var(--text-3); opacity: 0.75; }
+
+.rim-table .rim-ci-text { display: block; font-size: 10.5px; }
+.rim-table td.oo-ci-cell > .oo-ci { display: inline-block; }
+.rim-row--sel td { background: color-mix(in srgb, var(--brand) 9%, transparent); }
+.rim-open {
+  margin-left: var(--space-2);
+  padding: 1px 6px;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.rim-open:hover,
+.rim-open:focus-visible { color: var(--brand-text); border-color: currentColor; }
+.rim-open[aria-pressed='true'] { color: var(--brand-text); }
+
+/* Profile block (pages/PlayerProfile.jsx RimBlock) */
+.pp-rim-bands { margin-top: var(--space-4); }
+.pp-rim-pick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); font-size: 0.85rem; color: var(--text-2); }
+.pp-rim-pick .input-field { width: auto; }

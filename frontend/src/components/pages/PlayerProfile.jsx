@@ -16,8 +16,10 @@ import TableExport from '../common/TableExport';
 import TeamLogo from '../common/TeamLogo';
 import TeamLink from '../common/TeamLink';
 import ZoneCourtMap from '../common/ZoneCourtMap';
+import RimBandChart from '../common/RimBandChart';
 import { openPage, parseParam, useInitialParams } from '../../utils/useUrlState';
 import '../../styles/profile.css';
+import '../../styles/rim.css';
 
 // One page per player (?page=player&id=<NBA person id>). Everything comes
 // from GET /player-profile/{id} except the similar seasons (similarity
@@ -800,6 +802,84 @@ function RapmBlock({ block, coverage, onNavigate }) {
     );
 }
 
+// Opponents at the rim with him on the floor vs. off (rim_deterrence). A drop is good for the defence.
+const rimTone = (v) => (v == null || v === 0 ? '' : v < 0 ? 'pp-pos' : 'pp-neg');
+
+function RimBlock({ block, coverage, onNavigate }) {
+    const rows = block.rows;
+    const keyOf = (r) => `${r.season}-${r.team_abbreviation}`;
+    const fallback = [...rows].reverse().find((r) => r.qualified) ?? rows[rows.length - 1];
+    const [chosen, setChosen] = useState(keyOf(fallback));
+    const shown = rows.find((r) => keyOf(r) === chosen) ?? fallback;
+    const ci = (r, k, f) => (r[`${k}_lo`] == null ? '' : ` (${f(r[`${k}_lo`])} to ${f(r[`${k}_hi`])})`);
+    const pts = (v) => (v == null ? '—' : `${signed(v * 100)}`);
+    return (
+        <Section id="rim" title="Rim deterrence"
+            info={(
+                <InfoTooltip label="How rim deterrence is computed" title="Opponents at the rim, him on vs. off">
+                    Every opponent shot from play-by-play, placed in the five-man stint it happened in, its distance from the
+                    NBA&apos;s shot chart. With him on the floor vs. off it in the games he played: opponents&apos; attempts
+                    under 4 feet per 100 possessions, their FG% there, and rim points (2 × makes) per 100. Intervals come from
+                    resampling his games. On/off, not adjusted: who plays beside him and who his backup is move it too.
+                </InfoTooltip>
+            )}
+            meta={<>Play-by-play stints cover {span(coverage)}; ranks among players with {block.qualified_minutes.toLocaleString()}+ minutes
+                (1 = biggest drop). Seasons under the floor are greyed.{' '}
+                <button type="button" className="pp-link" onClick={() => onNavigate('analytics', 'rim', { season: shown.season, sel: `${shown.player_id}-${shown.team_abbreviation}` })}>Open Rim Deterrence</button></>}>
+            <TableExport />
+            <div className="table-wrapper">
+                <table className="data-table lb-table pp-table">
+                    <thead>
+                        <tr><th>Season</th><th>Team</th><th className="lb-num">Min on</th>
+                            <th className="lb-num" title="Opponents' rim attempts per 100 possessions, on / off">Rim att/100</th>
+                            <th className="lb-num">Δ</th>
+                            <th className="lb-num" title="Opponents' FG% under 4 feet, on / off">Rim FG%</th>
+                            <th className="lb-num">Δ (pts)</th>
+                            <th className="lb-num" title="Opponents' rim points per 100 possessions, on minus off">Rim pts/100 Δ</th>
+                            <th className="lb-num">Blk/36</th></tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((r) => (
+                            <tr key={keyOf(r)} className={r.qualified ? undefined : 'sl-short'}
+                                title={r.qualified ? undefined : `Under ${block.qualified_minutes.toLocaleString()} minutes on the floor: treat as noise`}>
+                                <td>{label(r.season)}</td>
+                                <td>{r.team_abbreviation}</td>
+                                <td className="lb-num">{Math.round(r.minutes_on).toLocaleString()}</td>
+                                <td className="lb-num">{num(r.rim_fga100_on)} / {num(r.rim_fga100_off)}</td>
+                                <td className={`lb-num ${rimTone(r.rim_fga100_diff)}`} title={`95% interval${ci(r, 'rim_fga100', signed) || ': none'}`}>
+                                    {signed(r.rim_fga100_diff)}{r.rim_fga100_rank ? ` (#${r.rim_fga100_rank})` : ''}
+                                </td>
+                                <td className="lb-num">{pct(r.rim_fg_on)} / {pct(r.rim_fg_off)}</td>
+                                <td className={`lb-num ${rimTone(r.rim_fg_diff)}`} title={`95% interval${ci(r, 'rim_fg', pts) || ': none'}`}>
+                                    {pts(r.rim_fg_diff)}{r.rim_fg_rank ? ` (#${r.rim_fg_rank})` : ''}
+                                </td>
+                                <td className={`lb-num lb-stat ${rimTone(r.rim_pts100_diff)}`}>
+                                    {signed(r.rim_pts100_diff)}{ci(r, 'rim_pts100', signed)}{r.rim_pts100_rank ? ` #${r.rim_pts100_rank} of ${r.n_ranked}` : ''}
+                                </td>
+                                <td className="lb-num">{num(r.blk36, 2)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <div className="pp-rim-bands">
+                <label className="pp-rim-pick">
+                    <span>Every distance, on vs. off:</span>
+                    <select className="input-field" value={keyOf(shown)} onChange={(e) => setChosen(e.target.value)}>
+                        {rows.map((r) => <option key={keyOf(r)} value={keyOf(r)}>{label(r.season)} {r.team_abbreviation}</option>)}
+                    </select>
+                </label>
+                <RimBandChart row={shown} bands={block.bands} name={`rim deterrence ${shown.player_name} ${label(shown.season)}`} />
+            </div>
+            <p className="page-subtitle pp-foot">
+                Rim = under 4 feet. Green = opponents did less with him on. Opponents&apos; attempts faced
+                in {label(shown.season)} ({shown.team_abbreviation}): {shown.rim_fga_on.toLocaleString()} at the rim with him on,{' '}
+                {shown.rim_fga_off.toLocaleString()} with him off. Year to year the attempts gap repeats more than the FG% gap.
+            </p>
+        </Section>
+    );
+}
+
 // Why each block is missing for this player, in plain words.
 function missingReasons(d) {
     const p = d.player;
@@ -860,6 +940,11 @@ function missingReasons(d) {
         out.push(['On/off', endedBefore(cov.on_off.from)
             ? `Play-by-play lines cover ${span(cov.on_off)}; ${career}.`
             : `No game with on-court minutes in the play-by-play lines (${span(cov.on_off)}).`]);
+    }
+    if (d.rim_deterrence && !d.rim_deterrence.rows.length && cov.rim_deterrence?.from) {
+        out.push(['Rim deterrence', endedBefore(cov.rim_deterrence.from)
+            ? `Five-man stints from play-by-play cover ${span(cov.rim_deterrence)}; ${career}.`
+            : `No tracked stint with him on the floor (${span(cov.rim_deterrence)}): his minutes fall in games or stints the play-by-play couldn't place.`]);
     }
     if (d.rapm && !d.rapm.rows.length && cov.rapm?.from) {
         out.push(['RAPM', endedBefore(cov.rapm.from)
@@ -937,6 +1022,7 @@ export default function PlayerProfile({ onNavigate }) {
         ['projection', 'Next season', (d.projections?.rows.length ?? 0) > 0],
         ['onoff', 'On/off', (d.on_off?.rows.length ?? 0) > 0],
         ['rapm', 'RAPM', (d.rapm?.rows.length ?? 0) > 0],
+        ['rim', 'Rim', (d.rim_deterrence?.rows.length ?? 0) > 0],
         ['splits', 'Splits', (d.situational_splits?.seasons.length ?? 0) > 0],
         ['similar', 'Similar', d.similarity.seasons.length > 0],
         ['breakouts', 'Breakouts', d.breakouts.flags.length > 0],
@@ -981,6 +1067,9 @@ export default function PlayerProfile({ onNavigate }) {
             {(d.projections?.rows.length ?? 0) > 0 && <NextSeason block={d.projections} player={d.player} onNavigate={onNavigate} />}
             {(d.on_off?.rows.length ?? 0) > 0 && <OnOff block={d.on_off} coverage={d.coverage.on_off} onNavigate={onNavigate} />}
             {(d.rapm?.rows.length ?? 0) > 0 && <RapmBlock block={d.rapm} coverage={d.coverage.rapm} onNavigate={onNavigate} />}
+            {(d.rim_deterrence?.rows.length ?? 0) > 0 && (
+                <RimBlock key={d.player.player_id} block={d.rim_deterrence} coverage={d.coverage.rim_deterrence} onNavigate={onNavigate} />
+            )}
             {(d.situational_splits?.seasons.length ?? 0) > 0 && (
                 <SituationalSplitsBlock key={d.player.player_id} playerId={d.player.player_id} seasons={d.situational_splits.seasons} />
             )}

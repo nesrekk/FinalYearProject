@@ -17,6 +17,8 @@ const PAGE_LABELS = {
     shotcharts: 'Shot Charts', tradeimpact: 'Trade Impact', rolefinder: 'Role Player Finder',
     draft: 'Draft Value Guide', greats: 'Greats of the Game', player: 'Player Profile',
     rotations: 'Rotations',
+    // Analytics tabs as 'analytics#<tab>'.
+    'analytics#rim': 'Rim Deterrence',
 };
 
 function CoverageRow({ row, onNavigate }) {
@@ -40,7 +42,7 @@ function CoverageRow({ row, onNavigate }) {
                             key={pageId}
                             type="button"
                             className="cov-page-link"
-                            onClick={() => onNavigate(pageId)}
+                            onClick={() => onNavigate(...pageId.split('#'))}
                         >
                             {PAGE_LABELS[pageId] || pageId}
                         </button>

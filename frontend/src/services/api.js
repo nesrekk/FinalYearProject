@@ -448,6 +448,13 @@ export async function fetchOnOffStars(params) {
     return response.data;
 }
 
+// Rim deterrence: opponents' shots at the rim (and every other distance band)
+// with each defender on the floor vs. off. params: { season, team, min_minutes, position }
+export async function fetchRimDeterrence(params) {
+    const response = await axios.get(`${IMPACT_BASE}/defense/rim-deterrence`, { params });
+    return response.data;
+}
+
 // ─── Team page ──────────────────────────────────────────────────
 // Every block of one team-season (?page=team). abbr: any code the team has
 // used, or its franchise's; season: end year (omit for its latest).
