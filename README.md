@@ -318,8 +318,9 @@ Every number traces back to one of these (each feature's `_source` badge names t
 
 ### Python interpreter — read this first
 ```bash
-/Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pip install fastapi uvicorn psycopg2-binary pandas numpy scikit-learn scipy nba_api requests python-dotenv pytest httpx certifi sportsdataverse rapidfuzz
+/Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pip install -r requirements.txt
 ```
+- `requirements.txt` pins the 17 packages the code imports at the versions the paper's numbers were made with; `requirements-lock.txt` pins every package of that interpreter (`pip freeze`). `api/tests/test_reproducibility.py` fails if an import is missing from it or an installed version drifts from its pin.
 - **macOS only, one-time:** `sportsdataverse` transitively imports `xgboost`, which needs the OpenMP runtime: `brew install libomp`. Without it, `import sportsdataverse` (or anything under `sportsdataverse.nba`) fails with `XGBoostError: Library not loaded: @rpath/libomp.dylib` even though nothing in this project actually calls xgboost.
 - **macOS python.org/Python.framework builds only, one-time:** if any live HTTPS fetch (`sportsdataverse`, `nba_api`, the odds/CBBD APIs) fails with `SSL: CERTIFICATE_VERIFY_FAILED`, run `/Applications/Python\ 3.14/Install\ Certificates.command` — the framework build doesn't wire itself up to the system/certifi trust store by default.
 
@@ -400,6 +401,31 @@ Where a small understood gap exists the test pins its size and says why (Adebayo
 
 ### Paper figures (conference paper, round 5 step 8)
 `scripts/paper_figures.py` (~10 s, read-only; `--only pipeline,forest,calibration,rapm_sens,streaks`; `--png DIR` for 300 dpi previews) draws the paper's five figures into `paper/figures/*.pdf` (untracked, like the rest of `paper/`) from the same rows as its tables: the pipeline and the protocol's seasons (numbers are the `\pn…` macros' own text); a forest plot of every paired difference the Results state, all three phases, with its 95% paired cluster-bootstrap interval (`paper_eval_tests`; the simulator's panel is scaled to the record baseline's own value, coverage shown as misses, so every row reads "negative favours the simulator"); the expected-FG and pre-game models' test-season calibration (`paper_eval_predictions`, same ten fixed-width bins as `paper_tests.py`; Wilson intervals on the pre-game bins); RAPM + prior's next-season RMSE over its prior scale and λ grids per phase against BPM (`paper_ablation_tests`); and every hot-streak family's observed persistence share against its shuffled null (`paper_beliefs_summary`, the Miller–Sanjurjo check). It builds the macros in-process with `paper_numbers.build()` and stops if any plotted number the paper also prints doesn't round to its macro (204 checked) or a sentence a caption states no longer holds, then checks that the paper includes every figure and references every figure label. Vector PDF at 3.5 in / 7.16 in, 8 pt STIX (Times-like) embedded as TrueType, grayscale-safe (phases differ by marker shape and fill), no creation date: two runs are byte-identical. `api/tests/test_paper_figures.py` (4 tests). Rerun after `paper_numbers.py` (any rebuild of the `paper_*` tables).
+### Reproducibility package (conference paper, round 5 step 9)
+Five pieces:
+- **`requirements.txt` / `requirements-lock.txt`**: the pinned environment (see Python interpreter above).
+- **`scripts/rebuild_all.sh`**: every pipeline in dependency order, one `step` line per script, in five stages: `fetch` (network: ESPN, stats.nba.com, CollegeBasketballData.com, each tagged), `load` (local raw files, each gitignored input named), `derived`, `paper`, `paper-inputs`.
+  - With no argument it prints the plan and runs nothing. `--dry-run`, `--from <script>` and `--offline` do what they say.
+  - `scripts/rebuild_all.sh paper-inputs` is the one command that regenerates the paper's inputs: manifest, `numbers.tex`, figures, `SHA256SUMS`. It takes ~1 min and is read-only on the database.
+- **`scripts/paper_manifest.py`**: the row count, schema md5 and an order-independent content md5 of every table (~40 s for all 167, read-only), each table's kind (source / derived / paper / cache / legacy) and producing script (`PRODUCERS`; an unlisted table stops the run), and a database digest. Output goes to `paper/manifest.json` and `.tsv`. `--files` writes `paper/SHA256SUMS` for the generated inputs. `paper_numbers.py` prints the table count, row count and digest (`\pnMan…` macros) and stops if the manifest no longer matches the database's tables, schemas and row counts.
+- **`docs/DATASHEET.md`**: sources, terms, coverage, known errors, and what is and isn't redistributed.
+- **`docs/REPRODUCIBILITY.md`**: environment, stages and runtimes, what differs after a rebuild, every seed, and the plan for an anonymous review artifact.
+
+`api/tests/test_reproducibility.py` (9 tests) checks that:
+- the runner parses and prints its plan;
+- every step exists and every producer runs;
+- no step reads a derived or paper table whose producer runs later (reads in the script and in every local module it imports; a swapped pair is caught);
+- every table has a producer;
+- the table hash ignores row order;
+- the manifest is current and a tampered copy is caught;
+- `SHA256SUMS` matches;
+- `player_season_stats`' 2009-10 to 2024-25 rows are exactly the committed season CSVs' players with 200+ minutes (the rows loaded by a script that isn't in the repository);
+- the requirements cover the imports and pin the installed versions.
+
+**Found on the way:** 2 tables have no loader in the repository (`mvp_seasons`, `mvp_winners`). Neither does the 2009-10 to 2024-25 base of `player_season_stats`, whose loading rule is now recovered and tested. The provenance of the bulk shot files (`shots_data/pbp_shots_1997_2026/`) isn't recorded anywhere; the owner should add it to the datasheet.
+
+Rerun `paper-inputs` after any rebuild.
+
 ## Project structure
 
 ```
@@ -521,7 +547,9 @@ Everything else in the original roadmap, including A6, is shipped — B5 stays p
 
 **Decided:** Bklit UI was installed (commit 5b0960e) and then removed at the owner's request (2026-09-27): no page used it, its area chart labels dates only (most of this app is season data), and it added Tailwind, an alpha visx and a second copy of framer-motion. Charts remain hand-built SVG. The install commit documents how to add one Bklit component safely if a hard-to-build chart type (sankey, choropleth) is ever needed.
 
-**Just shipped:** Figures for the paper (2026-09-30, round 5 step 8; see Running it locally → Paper figures). `scripts/paper_figures.py` → five vector figures in `paper/figures/` (pipeline + protocol; forest plot of every paired difference in all three phases; test-season calibration of the shot and pre-game models; RAPM + prior's sensitivity to prior scale and λ against BPM; hot-streak persistence against its shuffled null), each plotted number the paper prints checked against its macro (204), captions' claims checked, byte-identical reruns; the paper gained the five figures with captions (every number a macro) and a pointer to each in the text. `api/tests/test_paper_figures.py` (4 tests). No table created or changed, nothing to sync. Tests 177 → 181.
+**Just shipped:** Reproducibility package for the paper (2026-09-30, round 5 step 9; see Running it locally → Reproducibility package). Pinned `requirements.txt` + `requirements-lock.txt`, `scripts/rebuild_all.sh` (every pipeline in dependency order, five stages, plan by default; `paper-inputs` regenerates the paper's inputs in one command, ~1 min), `scripts/paper_manifest.py` (row count + order-independent content hash of all 167 tables, 19.9M rows, database digest `b9f5cf00c72f80ff`; `--files` → `paper/SHA256SUMS`), `docs/DATASHEET.md`, `docs/REPRODUCIBILITY.md` (seeds, what differs after a rebuild, the double-blind artifact plan). `paper_numbers.py` gained a manifest section (`\pnMan…`, 923 macros in all) that stops on a stale manifest; the paper's Data and Code Availability section now describes the runner, the pinned environment, the manifest and its digest, the datasheet, and what can't be rebuilt or redistributed, and the Platform section's "every stored table is rebuilt by a script" became true-as-stated (two legacy label tables and three app caches excepted). Every figure and every pre-existing macro regenerated byte-identical. `api/tests/test_reproducibility.py` (9 tests). No table created or changed, nothing to sync. Tests 181 → 190.
+
+**Just shipped (previously):** Figures for the paper (2026-09-30, round 5 step 8; see Running it locally → Paper figures). `scripts/paper_figures.py` → five vector figures in `paper/figures/` (pipeline + protocol; forest plot of every paired difference in all three phases; test-season calibration of the shot and pre-game models; RAPM + prior's sensitivity to prior scale and λ against BPM; hot-streak persistence against its shuffled null), each plotted number the paper prints checked against its macro (204), captions' claims checked, byte-identical reruns; the paper gained the five figures with captions (every number a macro) and a pointer to each in the text. `api/tests/test_paper_figures.py` (4 tests). No table created or changed, nothing to sync. Tests 177 → 181.
 
 **Just shipped (previously):** Ablations for the paper (2026-09-30, round 5 step 7; see Running it locally → Paper ablations). `scripts/paper_ablations.py` takes each model apart under the protocol (RAPM: prior, its scale, λ, possession weights, home term; expected FG: six feature groups; pre-game model and simulator: carry-over, shrinkage, back-to-back flags, per-run rating draw) → `paper_ablation_*` tables and the paper's Table ablations; `paper_numbers.py` gained an ablations section (916 macros in all, 30-odd claims); the paper gained a Methods paragraph, a Results subsection, the table, a clause in contribution 2, one abstract and one conclusion sentence and limitation (xi); `api/tests/test_paper_ablations.py` (7 tests). What it adds to the paper: RAPM rests on its box-score prior, whose best weight and λ move between seasons by more than one season's interval (like the RAPM–BPM reversal); the shot model on location (jointly) and the season; the pre-game model on shrinkage; the simulator's range coverage on its per-run rating draw; and on the test season the simulator's playoff odds would have been better without the carry-over prior or shrinkage. No app table changed. Tests 170 → 177.
 

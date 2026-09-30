@@ -1,0 +1,22 @@
+# NBA Hub: Python packages the repository imports (scripts/, api/, api/tests/), pinned to the versions the
+# paper's numbers were produced with (round 5 step 9, 2026-09-30). Python 3.14.3 (python.org framework build,
+# macOS 26.6 arm64); PostgreSQL 18.1. requirements-lock.txt pins every package installed in that interpreter.
+#   /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pip install -r requirements.txt
+# macOS: sportsdataverse imports xgboost, which needs `brew install libomp` (README, Python interpreter).
+certifi==2026.7.22
+fastapi==0.141.1
+httpx==0.28.1
+matplotlib==3.11.2
+nba_api==1.11.4
+numpy==2.5.3
+pandas==3.0.6
+psycopg2-binary==2.9.13
+pytest==9.1.1
+python-dotenv==1.2.3
+RapidFuzz==3.14.6
+requests==2.34.2
+scikit-learn==1.9.1
+scipy==1.18.1
+shap==0.52.0
+sportsdataverse==0.1.4
+uvicorn==0.53.0

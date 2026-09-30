@@ -46,6 +46,14 @@ the row spec the script stores in paper_ablation_meta ('table:rows'), and the
 numbers the Ablations subsection quotes, with a claim on every sentence that
 depends on a sign or an interval.
 
+Manifest: round 5 step 9's artifact manifest (scripts/paper_manifest.py ->
+paper/manifest.json, row count and content hash of every table) is printed by
+manifest() (\\pnMan... macros: table and row counts, the database digest).
+The section checks the manifest against the live database (table set, schemas,
+row counts) and stops if it is stale; if the file is missing it writes no
+\\pnMan macros and says so (--check then names them). Run it through
+scripts/rebuild_all.sh paper-inputs, which writes the manifest first.
+
 Read-only: one read-only autocommit session, no table is created or changed.
 
 Usage (Python: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3):
@@ -1293,7 +1301,38 @@ def ablations(cur, N):
             "Ablations: the back-to-back flags change nothing in the simulator outside an interval")
 
 
-SECTIONS = (data_and_pipeline, rapm, shot_quality, pregame_and_sim, luck, awards, protocol, tests, xrapm, data_audit, beliefs, ablations)
+def manifest(cur, N):
+    """The artifact manifest (round 5 step 9): paper/manifest.json from scripts/paper_manifest.py, which must
+    describe the database as it is now (table set, schemas and row counts checked live, ~2 s)."""
+    N.start("Manifest (Data and Code Availability, Platform)")
+    import paper_manifest as PM
+    if not os.path.exists(PM.MANIFEST_JSON):
+        print(f"note: {PM.MANIFEST_JSON} is missing, so the \\pnMan... macros are not written; "
+              "run scripts/paper_manifest.py first (rebuild_all.sh paper-inputs does)", file=sys.stderr)
+        return
+    m = PM.load_manifest()
+    stale = PM.stale_reasons(cur, m)
+    N.claim(not stale, "Data and Code Availability: the manifest describes the database the numbers come from "
+                       "(rerun scripts/paper_manifest.py): " + "; ".join(stale[:5]))
+    d = m["database"]
+    kinds = d["by_kind"]
+    N.claim(all(PM.TABLES.get(e["table"]) == (e["kind"], e["producer"]) for e in m["tables"]),
+            "Data and Code Availability: every table's kind and producer in the manifest are paper_manifest.TABLES'")
+    N.add("ManTables", integer(d["tables"]), "paper/manifest.json database.tables (every base table in schema public)")
+    N.add("ManRowsMillion", millions(d["rows"], 1), "paper/manifest.json database.rows, millions")
+    N.add("ManDigest", d["digest_sha256"][:16], "paper/manifest.json database.digest_sha256, first 16 hex digits")
+    N.add("ManLegacyTables", word(kinds["legacy"]), "manifest tables of kind 'legacy' (no loader in the repository)")
+    N.add("ManCacheTables", word(kinds["cache"]), "manifest tables of kind 'cache' (written by the running app)")
+    N.add("ManLegacyFirst", season(PM.LEGACY_SEASONS[0]), "paper_manifest.LEGACY_SEASONS: player_season_stats "
+          "seasons loaded before the first commit (rows = the committed season CSV's players with >= 200 minutes; "
+          "checked by api/tests/test_reproducibility.py)")
+    N.add("ManLegacyLast", season(PM.LEGACY_SEASONS[1]), "paper_manifest.LEGACY_SEASONS, last season")
+    N.claim({e["table"] for e in m["tables"] if e["kind"] == "legacy"} == {"mvp_seasons", "mvp_winners"},
+            "Platform / Availability: the legacy tables are the two MVP award-label tables")
+
+
+SECTIONS = (data_and_pipeline, rapm, shot_quality, pregame_and_sim, luck, awards, protocol, tests, xrapm, data_audit, beliefs, ablations,
+            manifest)
 
 
 def build(conn):
