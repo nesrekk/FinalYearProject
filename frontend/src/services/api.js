@@ -1220,6 +1220,17 @@ export async function fetchLedgerHindcast(season) {
     return response.data;
 }
 
+// Live scoring (ledger_results / ledger_game_log / ...; appended nightly by scripts/ledger_update.py, never cached).
+export async function fetchLedgerLive(season) {
+    const response = await axios.get(`${IMPACT_BASE}/ledger/live`, { params: season ? { season } : {} });
+    return response.data;
+}
+
+export async function fetchLedgerLiveGames(params) {
+    const response = await axios.get(`${IMPACT_BASE}/ledger/live/games`, { params });
+    return response.data;
+}
+
 // The canonical CSV the lock's SHA-256 is taken of (a plain download link).
 export function ledgerCsvUrl(season) {
     return `${IMPACT_BASE}/ledger/lock.csv${season ? `?season=${season}` : ''}`;

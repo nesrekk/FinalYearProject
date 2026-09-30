@@ -56,7 +56,11 @@ Every table carries the script that writes it (TABLES below) and a kind:
   cache    written by the running app (a lazily filled cache or a live ledger)
   ledger   the Forecast Ledger's preseason lock (scripts/ledger_lock.py --lock): written once
            before a season's first tip from ESPN reads made at that moment, never rebuilt; the
-           rebuild step only re-checks its stored SHA-256 (--verify)
+           rebuild step only re-checks its stored SHA-256 (--verify). Also its nightly log
+           (scripts/ledger_update.py), appended during the season from that night's ESPN read;
+           those tables are LIVE: their row counts grow between manifests on purpose, so
+           stale_reasons() checks only that they exist with the same columns (the manifest
+           records their rows and content as of the day it was made)
   legacy   loaded before this repository's first commit by a script that is
            not in it (docs/DATASHEET.md says which)
 A table in the database that isn't in TABLES stops the run (and the test), so
@@ -125,6 +129,8 @@ PRODUCERS = {
     # ---- ledger: locked once before a season's first tip, never rebuilt
     "ledger_lock.py": ("ledger", ["ledger_meta", "ledger_schedule", "ledger_rosters", "ledger_hindcast",
                                   "ledger_forecasts", "ledger_lock"]),
+    # ---- ledger, live: appended each night of the season by the nightly update (LIVE below)
+    "ledger_update.py": ("ledger", ["ledger_results", "ledger_game_log", "ledger_team_log", "ledger_runs", "ledger_tests"]),
     # ---- derived: season tables, awards, clusters
     "build_player_profile_data.py": ("derived", ["player_bio", "player_awards", "player_team_stints"]),
     "build_first_nba_season.py": ("derived", ["player_first_season"]),
@@ -339,9 +345,14 @@ def load_manifest(path=MANIFEST_JSON):
         return json.load(f)
 
 
+# Tables appended on a schedule (the Forecast Ledger's nightly log): a later row count is expected.
+LIVE = {"ledger_results", "ledger_game_log", "ledger_team_log", "ledger_runs", "ledger_tests"}
+
+
 def stale_reasons(cur, m):
     """Why a stored manifest no longer describes the database: table set, schemas and row counts
-    (checked live in ~2 s; a change of content that keeps every count and schema is not caught)."""
+    (checked live in ~2 s; a change of content that keeps every count and schema is not caught; LIVE tables'
+    row counts are not compared)."""
     now = db_tables(cur)
     have = {e["table"]: e for e in m["tables"]}
     reasons = []
@@ -353,7 +364,7 @@ def stale_reasons(cur, m):
     reasons += [f"{t}: schema changed" for t in common if sch[t][0] != have[t]["schema_md5"]]
     counts = row_counts(cur, common)
     reasons += [f"{t}: {have[t]['rows']:,} rows in the manifest, {counts[t]:,} now"
-                for t in common if counts[t] != have[t]["rows"]]
+                for t in common if counts[t] != have[t]["rows"] and t not in LIVE]
     return reasons
 
 

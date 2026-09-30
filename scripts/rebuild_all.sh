@@ -117,6 +117,8 @@ step fetch net      fetch_game_scores.py                 # ESPN scoreboard, one 
 step fetch net      fetch_postseason_games.py            # ESPN scoreboard, play-in and playoffs (~3 min)
 step fetch -        ledger_lock.py --verify              # Forecast Ledger: a lock is made once by hand before a season's
                                                          # first tip (--lock) and never rebuilt; this re-checks its hash
+step fetch net      ledger_update.py                     # Forecast Ledger nightly: ESPN finals, odds from the tagged code,
+                                                         # scores (appends; a rerun of a night adds nothing)
 step fetch nbaapi   fetch_referee_officials.py           # resumable: grows coverage each run
 step fetch nbaapi   fetch_spacing_data.py
 step fetch nbaapi   fetch_matchups.py

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchLedgerGames, fetchLedgerPreseason, fetchLedgerRoster, ledgerCsvUrl } from '../../services/api';
+import { fetchLedgerGames, fetchLedgerLive, fetchLedgerPreseason, fetchLedgerRoster, ledgerCsvUrl } from '../../services/api';
 import Loader from '../Loader';
 import ChartExport from '../common/ChartExport';
 import CopyLinkButton from '../common/CopyLinkButton';
@@ -9,15 +9,17 @@ import SaveViewButton from '../common/SaveViewButton';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import TeamLink from '../common/TeamLink';
+import ForecastLedgerLive from './ForecastLedgerLive';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/rapm.css';
 import '../../styles/simulator.css';
 import '../../styles/ledger.css';
 
-// Forecast Ledger (?page=ledger&v=both|as_is|roster&team=&sort=&dir=): the
+// Forecast Ledger (?page=ledger&tab=preseason|live&v=both|as_is|roster&team=&sort=&dir=): the
 // 2026-27 preseason forecasts locked before the first tip (GET /ledger/*,
 // written once by scripts/ledger_lock.py), with the SHA-256 that proves they
-// haven't changed and the exact CSV it is taken of.
+// haven't changed and the exact CSV it is taken of; and the Live scoring tab
+// (ForecastLedgerLive.jsx, &m=&cal=&tv=), scored nightly by scripts/ledger_update.py.
 
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
 const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
@@ -39,6 +41,8 @@ function pct(v, d = 0) {
 }
 
 const VIEWS = [['both', 'Both side by side'], ['roster', 'Roster-aware in full'], ['as_is', 'As is in full']];
+const TABS = [['live', 'Live scoring'], ['preseason', 'Preseason lock']];
+const CAL_VERSIONS = ['roster', 'as_is', 'record', 'roster_pre', 'as_is_pre'];
 const FULL_COLS = [
     ['team', 'Team', null],
     ['prior_mean', 'Rating', 'Opening-day rating: points per game better than an average team (± its uncertainty)'],
@@ -417,7 +421,12 @@ export default function ForecastLedger() {
     const params = useInitialParams();
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
+    const [live, setLive] = useState(null);
     const [form, setForm] = useState(() => ({
+        tab: parseParam.oneOf(params, 'tab', TABS.map(([k]) => k)) ?? null,
+        metric: parseParam.oneOf(params, 'm', ['log_loss', 'brier']) ?? 'log_loss',
+        cal: parseParam.oneOf(params, 'cal', CAL_VERSIONS) ?? 'roster',
+        tv: parseParam.oneOf(params, 'tv', ['all', 'logged_before_tip']) ?? 'all',
         view: parseParam.oneOf(params, 'v', VIEWS.map(([k]) => k)) ?? 'both',
         team: parseParam.str(params, 'team')?.toUpperCase() ?? null,
         sort: parseParam.oneOf(params, 'sort', SORT_KEYS) ?? null,
@@ -429,9 +438,17 @@ export default function ForecastLedger() {
             .then(setData)
             .catch((e) => setError(e.response?.data?.detail
                 || 'The Forecast Ledger couldn\'t load. Is the impact API (port 8002) running?'));
+        fetchLedgerLive()
+            .then(setLive)
+            .catch(() => setLive({ error: true }));
     }, []);
 
-    useUrlSync({ v: form.view === 'both' ? null : form.view, team: form.team, sort: form.sort, dir: form.dir === 'desc' ? null : form.dir });
+    // Until a game has been scored the page opens on the lock; after that, on the live scoring.
+    const tab = form.tab ?? (live && !live.error && live.status.games_final > 0 ? 'live' : 'preseason');
+    useUrlSync({
+        tab: form.tab, v: form.view === 'both' ? null : form.view, team: form.team, sort: form.sort, dir: form.dir === 'desc' ? null : form.dir,
+        m: form.metric === 'log_loss' ? null : form.metric, cal: form.cal === 'roster' ? null : form.cal, tv: form.tv === 'all' ? null : form.tv,
+    });
 
     const byTeam = useMemo(() => {
         if (!data) return [];
@@ -471,6 +488,16 @@ export default function ForecastLedger() {
                 <CopyLinkButton />
                 <SaveViewButton pageId="ledger" />
             </h2>
+            <div className="ss-date-btns lg-tabs" role="tablist" aria-label="Forecast Ledger section">
+                {TABS.map(([k, label]) => (
+                    <button key={k} type="button" role="tab" aria-selected={tab === k}
+                        className={`tab-btn ${tab === k ? 'tab-btn--active' : ''}`} onClick={() => set({ tab: k })}>{label}</button>
+                ))}
+            </div>
+            {tab === 'live' ? (
+                live?.error ? <p className="error-message">The live scoring couldn&apos;t load.</p>
+                    : <ForecastLedgerLive data={live} form={form} set={set} />
+            ) : (<>
             <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
                 A forecast only counts as a test if it provably existed before the games. These are the {data.season_label} predictions as they were
                 locked on {fmtUtc(data.lock.locked_at)}: win totals with 80% ranges, playoff and title odds, and a win chance for every scheduled game,
@@ -534,6 +561,7 @@ export default function ForecastLedger() {
                         {' '}against {num(meta.hindcast.value.srs_rmse.a, 3)} for the rule used.</li>
                 </ul>
             </div>
+            </>)}
         </section>
     );
 }

@@ -379,6 +379,20 @@ COVERAGE_MAP = [
         "used_by": ["ledger"],
     },
     {
+        "table": "ledger_results", "label": "Forecast Ledger: 2026-27 results, read nightly", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM ledger_results", "range_fmt": "season_int",
+        "source": "scripts/ledger_update.py, each night of the season: ESPN's scoreboard for every date of its 2026-27 calendar (status and final score of every regular-season event). The odds each version gave every game, logged with the time they were computed, are in ledger_game_log (rows start with opening night, 2026-10-20); scored against these results on the Live scoring tab.",
+        "gap": "Only as current as the last run (the laptop must be awake; a missed day's odds are computed on the next run and labelled as recomputed after tip-off). The NBA Cup Championship doesn't count as a regular-season game and is left out; fetch_game_scores.py (game_scores) can't read 2026-27 because it matches ESPN to stats.nba.com's game list.",
+        "used_by": ["ledger"],
+    },
+    {
+        "table": "ledger_team_log", "label": "Forecast Ledger: standings and expected wins by date", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM ledger_team_log", "range_fmt": "season_int",
+        "source": "scripts/ledger_update.py: per night, forecast and team, the record, the in-season rating (locked prior updated by the results before that morning) and the expected final win total from it, next to the locked 80% range.",
+        "gap": "Expected wins carry no rating uncertainty (a sum of win chances), so they sit a little further from 41 than the locked simulation's means.",
+        "used_by": ["ledger"],
+    },
+    {
         "table": "ledger_hindcast", "label": "Forecast Ledger: roster hindcast 2010-11 to 2025-26", "group": "Models",
         "range_sql": "SELECT MIN(target_season), MAX(target_season) FROM ledger_hindcast", "range_fmt": "season_int",
         "source": "scripts/ledger_lock.py: every team-season 2010-11 to 2025-26 rated from the projections made before it and the players who played for it, next to its final SRS and wins; fits the roster-aware weights (leave-one-season-out predictions stored).",

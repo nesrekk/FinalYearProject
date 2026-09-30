@@ -67,3 +67,30 @@
 .lg-games { max-height: 560px; overflow-y: auto; }
 .lg-rules ul { margin: var(--space-2) 0 0; padding-left: 1.1rem; font-size: 0.85rem; color: var(--text); }
 .lg-rules li { margin: 6px 0; }
+
+/* Live scoring tab (pages/ForecastLedgerLive.jsx): one style per version, told apart by dash as well as colour. */
+.lg-tabs { margin: var(--space-3) 0 var(--space-2); }
+.lg-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.lg-line.lg-v--roster { stroke: var(--brand); stroke-width: 2.5; }
+.lg-line.lg-v--as_is { stroke: var(--text); }
+.lg-line.lg-v--record { stroke: var(--text-3); stroke-dasharray: 6 4; }
+.lg-line.lg-v--roster_pre { stroke: var(--brand); stroke-dasharray: 2 3; }
+.lg-line.lg-v--as_is_pre { stroke: var(--text); stroke-dasharray: 2 3; }
+.lg-coin { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 3 3; }
+.lg-ci { stroke: var(--text-2); stroke-width: 1.5; }
+.lg-caldot { stroke: var(--text); stroke-width: 1; fill: var(--surface); }
+.lg-caldot.lg-v--roster, .lg-caldot.lg-v--roster_pre { fill: var(--brand); }
+.lg-caldot.lg-v--as_is, .lg-caldot.lg-v--as_is_pre { fill: var(--text-2); }
+.lg-cal svg { max-width: 420px; }
+.lg-legend span.lg-key::before { border-radius: 0; height: 3px; width: 18px; }
+.lg-legend span.lg-key.lg-v--roster::before { background: var(--brand); }
+.lg-legend span.lg-key.lg-v--as_is::before { background: var(--text); }
+.lg-legend span.lg-key.lg-v--record::before { background: repeating-linear-gradient(90deg, var(--text-3) 0 6px, transparent 6px 10px); }
+.lg-legend span.lg-key.lg-v--roster_pre::before { background: repeating-linear-gradient(90deg, var(--brand) 0 2px, transparent 2px 5px); }
+.lg-legend span.lg-key.lg-v--as_is_pre::before { background: repeating-linear-gradient(90deg, var(--text) 0 2px, transparent 2px 5px); }
+.lg-swatch { display: inline-block; width: 14px; height: 3px; margin-right: 8px; vertical-align: middle; background: var(--text); }
+.lg-swatch.lg-v--roster { background: var(--brand); }
+.lg-swatch.lg-v--record { background: repeating-linear-gradient(90deg, var(--text-3) 0 6px, transparent 6px 10px); }
+.lg-swatch.lg-v--roster_pre { background: repeating-linear-gradient(90deg, var(--brand) 0 2px, transparent 2px 5px); }
+.lg-swatch.lg-v--as_is_pre { background: repeating-linear-gradient(90deg, var(--text) 0 2px, transparent 2px 5px); }
+.lg-muted-cell { color: var(--text-3); }
