@@ -39,6 +39,13 @@ beliefs() below (\\pnBl... macros): the table's counts per family, the hot
 streak null centres (the Miller-Sanjurjo check), the luck persistence test
 and the referee counts, with claims on the sentences that depend on them.
 
+Ablations: round 5 step 7 (scripts/paper_ablations.py -> paper_ablation_tests,
+paper_ablation_metrics, paper_ablation_meta, paper/tables/ablations.tex) is
+printed by ablations() (\\pnAb... macros): every cell of Table ablations, from
+the row spec the script stores in paper_ablation_meta ('table:rows'), and the
+numbers the Ablations subsection quotes, with a claim on every sentence that
+depends on a sign or an interval.
+
 Read-only: one read-only autocommit session, no table is created or changed.
 
 Usage (Python: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3):
@@ -1134,7 +1141,159 @@ def beliefs(cur, N):
         N.add("BlRefTopGames", integer(top[0][2]), "paper_beliefs n_obs: games worked")
 
 
-SECTIONS = (data_and_pipeline, rapm, shot_quality, pregame_and_sim, luck, awards, protocol, tests, xrapm, data_audit, beliefs)
+def ablations(cur, N):
+    """Ablations (scripts/paper_ablations.py -> paper_ablation_tests, paper_ablation_metrics, paper_ablation_meta, and
+    paper/tables/ablations.tex): Table ablations' cells, from the row spec the script stores ('table:rows'), and the
+    numbers the Ablations subsection quotes, with claims on every sentence that depends on a sign or an interval."""
+    N.start("Ablations (Section: Ablations, Table: ablations; scripts/paper_ablations.py)")
+    meta = dict(rows(cur, "SELECT key, value FROM paper_ablation_meta"))   # jsonb: psycopg2 returns it parsed
+    T = {(task, phase, metric, a, v): (diff, lo, hi)
+         for task, phase, metric, a, v, diff, lo, hi in rows(cur, """SELECT task, phase, metric, model_a, variant, diff, ci_lo, ci_hi
+                                                                   FROM paper_ablation_tests WHERE model_b LIKE '%%:full'""")}
+    M = {(task, base, abl, phase, metric): v for task, base, abl, phase, metric, v in rows(cur, """
+            SELECT task, base, ablation, phase, metric, value FROM paper_ablation_metrics
+            WHERE phase <> 'tune' OR seasons LIKE '%%to%%'""")}
+    N.claim(meta["run:resamples"] == 10_000, "Table ablations: intervals from 10,000 resamples, like every other interval in the paper")
+
+    def t(task, base, abl, metric, phase, variant=""):
+        return T[(task, phase, metric, f"{base}:{abl}", variant)]
+
+    def out_of_ci(r):
+        return r[1] > 0 or r[2] < 0
+
+    src = "paper_ablation_tests diff (ablation minus full)"
+    for r in meta["table:rows"]:
+        k, sc, d = r["stem"], r["scale"], r["decimals"]
+        for phase, suffix in (("tune", "Tune"), ("validate", "Val"), ("test", "Test")):
+            if r["task"] == "xfg" and phase == "tune":
+                continue
+            diff = t(r["task"], r["base"], r["ablation"], r["metric"], phase, r["variant"])[0]
+            N.add(f"Ab{k}{suffix}", dec(diff * sc, d), f"{src}, {r['task']} {r['base']}:{r['ablation']} {r['metric']} {phase} (x{sc})")
+        _, lo, hi = t(r["task"], r["base"], r["ablation"], r["metric"], "test", r["variant"])
+        N.add(f"Ab{k}Lo", dec(lo * sc, d), f"paper_ablation_tests ci_lo, {r['task']} {r['base']}:{r['ablation']} {r['metric']} test (x{sc})")
+        N.add(f"Ab{k}Hi", dec(hi * sc, d), f"paper_ablation_tests ci_hi, same row (x{sc})")
+
+    # RAPM: the prior, its scale and the penalty.
+    spec = {k.split(":")[2]: v for k, v in meta.items() if k.startswith("impact:rapm_prior:") and k.endswith(":spec")}
+    N.add("AbPriorFullScale", dec(spec["scale=1"]["prior_scale"], 2), "paper_ablation_meta impact:rapm_prior:scale=1:spec")
+    N.add("AbPriorDoubleScale", dec(spec["scale=2"]["prior_scale"], 2), "paper_ablation_meta impact:rapm_prior:scale=2:spec")
+    N.add("AbLamHighLambda", integer(spec["lambda=12000"]["lambda"]), "paper_ablation_meta impact:rapm_prior:lambda=12000:spec")
+    rp = {abl: {ph: t("impact_next", "rapm_prior", abl, "game_rmse", ph) for ph in ("tune", "validate", "test")}
+          for abl in ("scale=0", "scale=1", "scale=2", "lambda=12000", "no_poss_weight", "no_home", "no_home_rated")}
+    N.claim(all(r[0] > 0 and r[1] > 0 for r in rp["scale=0"].values()),
+            "Ablations: without the prior next-season RMSE rises in every phase, each outside its interval")
+    N.claim(rp["scale=1"]["tune"][1] > 0 and rp["scale=1"]["test"][2] < 0 and not out_of_ci(rp["scale=1"]["validate"]),
+            "Ablations: at scale 1 the prior is behind on the tuning pairs and ahead on the test season, both outside their intervals, level on validation")
+    N.claim(all(r[1] > 0 for r in rp["scale=2"].values()), "Ablations: at scale 2 the prior version is behind in every phase")
+    free = as_json(one(cur, "SELECT value FROM paper_eval_choices WHERE task = 'impact' AND model = 'rapm_prior' AND parameter = 'free_minimum'")[0])
+    N.claim(free["lambda"] == spec["lambda=12000"]["lambda"] and free["prior_scale"] == spec["lambda=12000"]["prior_scale"],
+            "Ablations: lambda = 12,000 at the chosen scale is the tuning grid's free minimum that the rule sets aside")
+    lh = rp["lambda=12000"]
+    N.claim(lh["tune"][0] < 0 and lh["test"][2] < 0 and lh["validate"][0] > 0 and not out_of_ci(lh["validate"]),
+            "Ablations: the free minimum is ahead on the tuning pairs and the test season (outside its interval) and behind, inside its interval, on validation")
+    lh_rmse = one(cur, """SELECT value FROM paper_ablation_metrics WHERE task = 'impact_next' AND base = 'rapm_prior'
+                          AND ablation = 'lambda=12000' AND phase = 'test' AND metric = 'game_rmse'""")[0]
+    bpm_rmse = one(cur, """SELECT value FROM paper_eval_metrics WHERE task = 'impact_next' AND model = 'bpm' AND phase = 'test'
+                           AND metric = 'game_rmse'""")[0]
+    N.claim(lh_rmse > bpm_rmse, "Ablations: with the grid minimum lambda RAPM + prior would still be behind BPM on the test season")
+    lam_r = rows(cur, """SELECT phase, ablation, value FROM paper_ablation_metrics WHERE task = 'impact_reliability' AND base = 'rapm_prior'
+                         AND (ablation LIKE 'lambda=%%' OR ablation = 'full') AND (phase <> 'tune' OR seasons LIKE '%%to%%')""")
+    lam_full = int(one(cur, "SELECT value FROM paper_eval_choices WHERE task = 'impact' AND model = 'rapm_prior' AND parameter = 'lambda'")[0])
+    mono = True
+    for ph in ("tune", "validate", "test"):
+        seq = sorted((lam_full if a == "full" else int(a.split("=")[1]), v) for p_, a, v in lam_r if p_ == ph)
+        mono &= len(seq) > 10 and all(b[1] > a[1] for a, b in zip(seq, seq[1:]))
+    N.claim(mono, "Ablations: RAPM + prior's year-to-year correlation rises with lambda over the whole grid in every phase")
+    # Possession weights.
+    N.add("AbNoWeightLambda", integer(meta["impact:no_poss_weight:lambda"]), "paper_ablation_meta impact:no_poss_weight:lambda (re-chosen on the tune pairs)")
+    N.add("AbNoHomeLambda", integer(meta["impact:no_home:lambda"]), "paper_ablation_meta impact:no_home:lambda (re-chosen on the tune pairs)")
+    N.claim(meta["impact:no_home_rated:lambda"] == meta["impact:no_home:lambda"] and meta["impact:no_poss_weight:prior_scale"] == spec["scale=1"]["prior_scale"] / 2
+            and meta["impact:no_home:prior_scale"] == meta["impact:no_poss_weight:prior_scale"],
+            "Methods, Ablations: re-chosen, the prior scale stays at the full model's in every ablation and the home ablations keep one lambda")
+    sw = {ph: t("impact_next", "rapm_single", "no_poss_weight", "game_rmse", ph) for ph in ("tune", "validate", "test")}
+    N.claim(all(r[1] > 0 for r in sw.values()), "Ablations: without possession weights one-season RAPM is worse in every phase, outside its interval")
+    N.add("AbNoWeightSingleTest", dec(sw["test"][0], 2), f"{src}, impact_next rapm_single:no_poss_weight game_rmse test")
+    N.add("AbNoWeightSingleLo", dec(sw["test"][1], 2), "paper_ablation_tests ci_lo, same row")
+    N.add("AbNoWeightSingleHi", dec(sw["test"][2], 2), "paper_ablation_tests ci_hi, same row")
+    nw = rp["no_poss_weight"]
+    N.claim(nw["tune"][1] > 0 and nw["validate"][1] > 0 and not out_of_ci(nw["test"]),
+            "Ablations: RAPM + prior without weights is worse on the tuning and validation seasons, inside its interval on the test season")
+    rel = {ph: t("impact_reliability", "rapm_prior", "no_poss_weight", "corr", ph) for ph in ("tune", "validate", "test")}
+    N.claim(all(r[1] > 0 for r in rel.values()), "Ablations: without weights RAPM + prior is more reliable year to year in every phase")
+    N.add("AbNoWeightRelTest", dec(rel["test"][0], 2), "paper_ablation_tests diff, impact_reliability rapm_prior:no_poss_weight corr test")
+    N.add("AbNoWeightRelLo", dec(rel["test"][1], 2), "paper_ablation_tests ci_lo, same row")
+    N.add("AbNoWeightRelHi", dec(rel["test"][2], 2), "paper_ablation_tests ci_hi, same row")
+    # The home term: what it does to the ratings and to the prediction.
+    r_home = one(cur, """SELECT min(r) FROM (
+                           SELECT a.base, corr(a.pred, f.pred) AS r FROM paper_ablation_predictions a
+                           JOIN paper_ablation_predictions f ON f.task = a.task AND f.base = a.base AND f.ablation = 'full'
+                                AND f.phase = a.phase AND f.season = a.season AND f.unit_id = a.unit_id
+                           WHERE a.task = 'impact_reliability' AND a.ablation = 'no_home' GROUP BY a.base) x""")[0]
+    N.add("AbNoHomeRatingR", dec(r_home, 3, ROUND_FLOOR), "min over rapm_single/rapm_prior of corr(rating without the home column, full rating), "
+          "qualified player-seasons of paper_ablation_predictions impact_reliability (floored)")
+    N.claim(r_home >= 0.999, "Ablations: without the home column the ratings correlate 0.999 or more with the full model's")
+    mx = max(abs(r[0]) for base in ("rapm_single", "rapm_prior") for r in
+             (t("impact_next", base, "no_home_rated", "game_rmse", ph) for ph in ("tune", "validate", "test")))
+    N.add("AbNoHomeRatedMaxAbs", dec(mx, 2, ROUND_CEILING), "max |diff| over phases and both bases, impact_next no_home_rated game_rmse (rounded up)")
+    nhr = rp["no_home_rated"]
+    N.claim(nhr["test"][0] < 0 and nhr["test"][2] < 0, "Ablations: on the test season the no-home-in-the-fit ratings are slightly better, outside the interval")
+    nh = rp["no_home"]
+    N.claim(nh["tune"][1] > 0 and all(nh[ph][0] > 0 and not out_of_ci(nh[ph]) for ph in ("validate", "test")),
+            "Ablations: leaving the home edge out of the prediction costs on the tuning pairs (outside its interval) and a similar amount inside the interval on the other seasons")
+
+    # Expected FG: the feature groups.
+    xf = {abl: {ph: t("xfg", "hgb", abl, "log_loss", ph) for ph in ("validate", "test")}
+          for abl in ("no_coords", "no_dist_angle", "no_zone_value", "no_location", "no_clock_period", "no_season")}
+    N.claim(all(r[1] > 0 for abl in ("no_location", "no_clock_period", "no_season") for r in xf[abl].values()),
+            "Ablations: all location, the season and the clock/period each add, outside their intervals, in both seasons")
+    N.claim(all(xf["no_season"][ph][0] > xf["no_clock_period"][ph][0] for ph in ("validate", "test")),
+            "Ablations: the season matters more than the clock and period in both seasons")
+    groups = [xf[a][ph] for a in ("no_coords", "no_dist_angle", "no_zone_value") for ph in ("validate", "test")]
+    N.claim(not any(out_of_ci(r) for r in groups), "Ablations: removing any one location group is inside its interval in both seasons")
+    gmax = max(abs(r[0]) for r in groups) * 1000
+    N.add("AbXfgGroupMaxAbs", dec(gmax, 1, ROUND_CEILING), "max |diff| x 10^3 over the three single location groups and both seasons (rounded up)")
+    N.add("AbXfgFullAucTest", dec(M[("xfg", "hgb", "full", "test", "roc_auc")], 2), "paper_ablation_metrics xfg hgb:full roc_auc test")
+    N.add("AbXfgNoLocAucTest", dec(M[("xfg", "hgb", "no_location", "test", "roc_auc")], 2), "paper_ablation_metrics xfg hgb:no_location roc_auc test")
+
+    # Pre-game model.
+    pg = {abl: {ph: t("pregame", "pregame", abl, "log_loss", ph) for ph in ("tune", "validate", "test")} for abl in ("no_carry", "no_shrink", "no_b2b")}
+    N.claim(all(r[1] > 0 for r in pg["no_shrink"].values()), "Ablations: without shrinkage pre-game log loss rises in every phase, outside its interval")
+    N.claim(pg["no_carry"]["tune"][1] > 0 and pg["no_b2b"]["tune"][1] > 0 and pg["no_b2b"]["validate"][1] > 0
+            and not out_of_ci(pg["no_carry"]["validate"]) and not out_of_ci(pg["no_carry"]["test"]) and not out_of_ci(pg["no_b2b"]["test"]),
+            "Ablations: carry-over helps on tune only, the flags on tune and validation, neither outside its interval on the test season")
+    N.claim(all(abs(pg["no_b2b"][ph][0] - v) < 1e-12 for ph, v in (
+            (ph, one(cur, """SELECT diff FROM paper_eval_tests WHERE task = 'pregame' AND metric = 'log_loss' AND model_a = 'prior_rest'
+                             AND model_b = 'prior' AND phase = %s""", (ph,))[0] * -1) for ph in ("tune", "validate", "test"))),
+            "Ablations: the no-flags pre-game model is paper_eval's 'prior' form (the same difference as Table tests' flags comparison)")
+
+    # Simulator.
+    sim = {(abl, m): {ph: t(task, "sim", abl, m, ph, "halfway") for ph in ("tune", "validate", "test")}
+           for abl in ("no_carry", "no_shrink", "no_b2b", "no_draw") for task, m in (("sim_playoffs", "log_loss"), ("sim_playoffs", "brier"),
+                                                                                   ("sim_wins", "mae"), ("sim_wins", "rmse"), ("sim_wins", "cover80"))}
+    N.claim(all(sim[(a, "log_loss")]["test"][2] < 0 and not out_of_ci(sim[(a, "log_loss")]["tune"]) and not out_of_ci(sim[(a, "log_loss")]["validate"])
+                for a in ("no_carry", "no_shrink")),
+            "Ablations: without carry-over or shrinkage the simulator's playoff log loss is better on the test season (interval below zero), inside its interval on tune and validation")
+    N.claim(sim[("no_shrink", "rmse")]["tune"][1] > 0 and not out_of_ci(sim[("no_shrink", "rmse")]["validate"]) and not out_of_ci(sim[("no_shrink", "rmse")]["test"]),
+            "Ablations: without shrinkage win totals are worse on the tuning seasons only")
+    N.add("AbSimShrinkRmseTuneCiLo", dec(sim[("no_shrink", "rmse")]["tune"][1], 2), "paper_ablation_tests ci_lo, sim_wins sim:no_shrink rmse tune")
+    N.add("AbSimShrinkRmseTuneCiHi", dec(sim[("no_shrink", "rmse")]["tune"][2], 2), "paper_ablation_tests ci_hi, same row")
+    dr = sim[("no_draw", "cover80")]
+    N.claim(dr["tune"][2] < 0 and all(r[0] < 0 for r in dr.values()), "Ablations: without the rating draw the ranges cover less in every phase, outside the interval on tune")
+    N.add("AbSimDrawTuneCiLo", dec(dr["tune"][1] * 100, 1), "paper_ablation_tests ci_lo, sim_wins sim:no_draw cover80 tune (points)")
+    N.add("AbSimDrawTuneCiHi", dec(dr["tune"][2] * 100, 1), "paper_ablation_tests ci_hi, same row (points)")
+    N.add("AbSimFullTuneCoverPct", pct(M[("sim_wins", "sim", "full", "tune", "cover80")], 0), "paper_ablation_metrics sim_wins sim:full cover80 tune (pooled)")
+    N.add("AbSimDrawTuneCoverPct", pct(M[("sim_wins", "sim", "no_draw", "tune", "cover80")], 0), "paper_ablation_metrics sim_wins sim:no_draw cover80 tune (pooled)")
+    N.claim(abs(M[("sim_wins", "sim", "full", "tune", "cover80")] - one(cur, """SELECT value FROM paper_eval_metrics WHERE task = 'sim_wins'
+                AND phase = 'tune' AND model = 'model' AND variant = 'halfway' AND metric = 'cover80' AND seasons LIKE '%%to%%'""")[0]) < 1e-12,
+            "Ablations: the full simulator's coverage is Table sim's")
+    mae = [sim[("no_draw", "mae")][ph] for ph in ("tune", "validate", "test")]
+    N.claim(not any(out_of_ci(r) for r in mae), "Ablations: the rating draw changes win-total MAE by nothing outside its interval")
+    N.add("AbSimDrawMaeMaxAbs", dec(max(abs(r[0]) for r in mae), 2, ROUND_CEILING), "max |diff| over phases, sim_wins sim:no_draw mae (wins, rounded up)")
+    N.claim(not any(out_of_ci(sim[("no_b2b", m)][ph]) for m in ("log_loss", "brier", "mae", "rmse", "cover80") for ph in ("tune", "validate", "test")),
+            "Ablations: the back-to-back flags change nothing in the simulator outside an interval")
+
+
+SECTIONS = (data_and_pipeline, rapm, shot_quality, pregame_and_sim, luck, awards, protocol, tests, xrapm, data_audit, beliefs, ablations)
 
 
 def build(conn):
