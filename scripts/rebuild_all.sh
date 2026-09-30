@@ -115,6 +115,8 @@ step fetch nbaapi   fetch_2025_26_season_data.py         # -> nba_data/nba_2025_
 step fetch nbaapi   build_schedule_fatigue.py            # team_game_fatigue (LeagueGameFinder)
 step fetch net      fetch_game_scores.py                 # ESPN scoreboard, one request per date (~7 min)
 step fetch net      fetch_postseason_games.py            # ESPN scoreboard, play-in and playoffs (~3 min)
+step fetch -        ledger_lock.py --verify              # Forecast Ledger: a lock is made once by hand before a season's
+                                                         # first tip (--lock) and never rebuilt; this re-checks its hash
 step fetch nbaapi   fetch_referee_officials.py           # resumable: grows coverage each run
 step fetch nbaapi   fetch_spacing_data.py
 step fetch nbaapi   fetch_matchups.py

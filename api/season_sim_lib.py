@@ -342,15 +342,20 @@ def rank_conference(wp, cwp, h2h, idx, rng):
     return order
 
 
-def simulate(st, remaining, season, p_matrix, ratings_draw, beta, hca, runs, rng):
+def simulate(st, remaining, season, p_matrix, ratings_draw, beta, hca, runs, rng, extra_games=None):
     """Monte Carlo the rest of a season.
 
     st: Standings before the date. remaining: home rows still to play (home, away, venue,
     home_b2b, away_b2b). p_matrix(r): function of the per-run rating draws (N, T) returning
     P(home wins) per remaining game as (N, G) (or a (G,) vector to broadcast). ratings_draw:
     (N, T) draws of every team's true rating (used again for the play-in) or None.
+    extra_games: optional list of (team, venue) for games whose opponent isn't known yet (the
+    Forecast Ledger's NBA Cup placeholders): played against a league-average opponent (rating 0)
+    with the same model, counted in wins and games only (not head-to-head or conference records).
+    Without it the random draws, and so every result, are exactly as before.
     Returns a dict of per-run arrays: wins (N, T), position (N, T; 1-15 within the conference),
-    playoffs, top6, playin (bools), plus the games each team ends with."""
+    playoffs, top6, playin (bools), seed (N, T; playoff seed 1-8 after the play-in, 0 = out),
+    plus the games each team ends with."""
     T = len(st.teams)
     N = runs
     G = len(remaining)
@@ -365,6 +370,19 @@ def simulate(st, remaining, season, p_matrix, ratings_draw, beta, hca, runs, rng
     A[np.arange(G), ai] = 1
     wins = st.wins[None, :] + home_win @ H + (1 - home_win) @ A
     games = st.games + H.sum(0) + A.sum(0)
+    if extra_games:
+        ei = np.array([st.idx[t] for t, _ in extra_games])
+        ev = np.array([v for _, v in extra_games], np.float32)
+        if ratings_draw is None:
+            wp0 = np.where(st.games > 0, st.wins / np.where(st.games > 0, st.games, 1), 0.5)
+            pe = np.broadcast_to(wp0[ei].astype(np.float32), (N, len(ei)))
+        else:
+            pe = win_prob(beta, ratings_draw[:, ei] + ev[None, :] * hca)
+        ew = (rng.random((N, len(ei)), dtype=np.float32) < pe).astype(np.float32)
+        E = np.zeros((len(ei), T), np.float32)
+        E[np.arange(len(ei)), ei] = 1
+        wins = wins + ew @ E
+        games = games + E.sum(0)
     games_safe = np.where(games > 0, games, 1)
     wp = wins / games_safe
     # Head-to-head per run: base plus the simulated games, aggregated by ordered pair.
@@ -387,6 +405,7 @@ def simulate(st, remaining, season, p_matrix, ratings_draw, beta, hca, runs, rng
     playoffs = np.zeros((N, T), bool)
     top6 = np.zeros((N, T), bool)
     playin = np.zeros((N, T), bool)
+    seed = np.zeros((N, T), np.int8)
     n = np.arange(N)
     for conf in CONFERENCES:
         idx = st.conf_idx[conf]
@@ -398,6 +417,7 @@ def simulate(st, remaining, season, p_matrix, ratings_draw, beta, hca, runs, rng
             for k in range(DIRECT_SPOTS):
                 top6[n, teams_in_order[:, k]] = True
                 playoffs[n, teams_in_order[:, k]] = True
+                seed[n, teams_in_order[:, k]] = k + 1
             for k in range(DIRECT_SPOTS, DIRECT_SPOTS + 4):
                 playin[n, teams_in_order[:, k]] = True
             s7, s8, s9, s10 = (teams_in_order[:, k] for k in range(6, 10))
@@ -418,11 +438,81 @@ def simulate(st, remaining, season, p_matrix, ratings_draw, beta, hca, runs, rng
             seed8 = np.where(win_c, loser_a, winner_b)
             playoffs[n, seed7] = True
             playoffs[n, seed8] = True
+            seed[n, seed7] = 7
+            seed[n, seed8] = 8
         else:
             for k in range(PLAYOFF_SPOTS):
                 playoffs[n, teams_in_order[:, k]] = True
+                seed[n, teams_in_order[:, k]] = k + 1
     return {"wins": wins, "games": games, "position": position, "playoffs": playoffs, "top6": top6,
-            "playin": playin, "remaining_games": G}
+            "playin": playin, "seed": seed, "remaining_games": G}
+
+
+# First-round pairs in bracket order: the 1/8 winner meets the 4/5 winner, the 2/7 winner the 3/6 winner
+# (a fixed bracket, no reseeding; Wikipedia "2025 NBA playoffs" and "NBA playoffs", read 2026-09-30).
+BRACKET = ((1, 8), (4, 5), (3, 6), (2, 7))
+SERIES_HOME_GAMES = 4      # 2-2-1-1-1: the team with home court hosts games 1, 2, 5 and 7
+SERIES_AWAY_GAMES = 3
+
+
+def play_series(high, low, r, beta, hca, rng):
+    """Best-of-seven series between two arrays of team indices (one pair per run), `high` holding home
+    court. Every game from the run's ratings with the pre-game model (no rest terms). Playing all seven
+    games and taking whoever wins four gives the same winner as stopping at four. Returns the winners."""
+    n = np.arange(len(high))
+    p_high_home = win_prob(beta, r[n, high] - r[n, low] + hca)
+    p_low_home = win_prob(beta, r[n, low] - r[n, high] + hca)
+    w = ((rng.random((len(high), SERIES_HOME_GAMES)) < p_high_home[:, None]).sum(1)
+         + (rng.random((len(high), SERIES_AWAY_GAMES)) >= p_low_home[:, None]).sum(1))
+    return np.where(w >= 4, high, low)
+
+
+def simulate_playoffs(sim, st, ratings_draw, beta, hca, rng):
+    """The playoffs after a simulated regular season: the seeds from `simulate`, a fixed bracket per
+    conference, home court to the better seed, and in the Finals to the better regular-season record in
+    that run (ties by a coin flip; the NBA's head-to-head and inter-conference tiebreaks are not applied).
+    Needs the per-run rating draws. Returns bool arrays (N, T): won a first-round series (round2),
+    reached the conference finals, reached the Finals, won the title."""
+    N, T = sim["seed"].shape
+    n = np.arange(N)
+    out = {k: np.zeros((N, T), bool) for k in ("round2", "conf_finals", "finals", "title")}
+    champs = {}
+    for conf in CONFERENCES:
+        idx = st.conf_idx[conf]
+        seeds = sim["seed"][:, idx]
+        by_seed = {}
+        for s in range(1, PLAYOFF_SPOTS + 1):
+            hit = seeds == s
+            if not (hit.sum(1) == 1).all():
+                raise ValueError(f"{conf}: seed {s} is not filled exactly once in every run")
+            by_seed[s] = idx[hit.argmax(1)]
+        winners = []
+        for a, b in BRACKET:
+            w = play_series(by_seed[a], by_seed[b], ratings_draw, beta, hca, rng)
+            out["round2"][n, w] = True
+            winners.append((w, np.where(w == by_seed[a], a, b)))
+        semis = []
+        for (w1, s1), (w2, s2) in (winners[0:2], winners[2:4]):
+            high = np.where(s1 < s2, w1, w2)
+            low = np.where(s1 < s2, w2, w1)
+            w = play_series(high, low, ratings_draw, beta, hca, rng)
+            out["conf_finals"][n, w] = True
+            semis.append((w, np.where(w == high, np.minimum(s1, s2), np.maximum(s1, s2))))
+        (w1, s1), (w2, s2) = semis
+        high = np.where(s1 < s2, w1, w2)
+        low = np.where(s1 < s2, w2, w1)
+        champ = play_series(high, low, ratings_draw, beta, hca, rng)
+        out["finals"][n, champ] = True
+        champs[conf] = champ
+    wp = sim["wins"] / np.where(sim["games"] > 0, sim["games"], 1)
+    e, w = champs["East"], champs["West"]
+    coin = rng.random(N) < 0.5
+    east_home = (wp[n, e] > wp[n, w]) | (np.isclose(wp[n, e], wp[n, w]) & coin)
+    high = np.where(east_home, e, w)
+    low = np.where(east_home, w, e)
+    title = play_series(high, low, ratings_draw, beta, hca, rng)
+    out["title"][n, title] = True
+    return out
 
 
 def summarize(sim, st, season):

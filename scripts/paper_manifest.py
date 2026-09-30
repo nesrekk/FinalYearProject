@@ -54,6 +54,9 @@ Every table carries the script that writes it (TABLES below) and a kind:
   derived  built by a script in this repository from other tables
   paper    written by a scripts/paper_*.py script
   cache    written by the running app (a lazily filled cache or a live ledger)
+  ledger   the Forecast Ledger's preseason lock (scripts/ledger_lock.py --lock): written once
+           before a season's first tip from ESPN reads made at that moment, never rebuilt; the
+           rebuild step only re-checks its stored SHA-256 (--verify)
   legacy   loaded before this repository's first commit by a script that is
            not in it (docs/DATASHEET.md says which)
 A table in the database that isn't in TABLES stops the run (and the test), so
@@ -119,6 +122,9 @@ PRODUCERS = {
     # ---- cache: written by the running app
     "api/shots_lib.py": ("cache", ["league_shot_zones", "player_shots_cache_status"]),
     "snapshot_predictions.py": ("cache", ["prediction_ledger"]),     # + resolve_predictions.py
+    # ---- ledger: locked once before a season's first tip, never rebuilt
+    "ledger_lock.py": ("ledger", ["ledger_meta", "ledger_schedule", "ledger_rosters", "ledger_hindcast",
+                                  "ledger_forecasts", "ledger_lock"]),
     # ---- derived: season tables, awards, clusters
     "build_player_profile_data.py": ("derived", ["player_bio", "player_awards", "player_team_stints"]),
     "build_first_nba_season.py": ("derived", ["player_first_season"]),

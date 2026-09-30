@@ -44,6 +44,7 @@ from routers import (
     higher_lower,
     impact_rankings,
     leaders,
+    ledger,
     length_study,
     lineup_chemistry,
     luck_schedule,
@@ -134,6 +135,7 @@ for _router_module in (
     season_sim,
     best_games,
     shot_quality_map,
+    ledger,
 ):
     app.include_router(_router_module.router)
 
