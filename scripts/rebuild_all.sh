@@ -26,7 +26,8 @@
 #   paper         the paper's own tables (paper_* ; never touches an app table).
 #   paper-inputs  paper/manifest.json, paper/numbers.tex, paper/figures/*.pdf, paper/SHA256SUMS (read-only on
 #                 the database). The one command that regenerates every number, table and figure file the
-#                 paper inputs; paper/tables/*.tex are written by the paper stage's scripts.
+#                 paper inputs; paper/tables/*.tex are written by the paper stage's scripts. It also checks, offline,
+#                 that every \cite has a refs.bib entry with a "% verified" line (paper_refs_check.py).
 #
 # What no stage can rebuild (docs/DATASHEET.md, "Not rebuildable from this repository"): player_season_stats'
 # 2009-10 to 2024-25 base rows (loaded before the first commit from the committed nba_data/nba_<season>_*.csv
@@ -209,6 +210,7 @@ step paper -          paper_ablations.py                 # ~11 min; also paper/t
 # ------------------------------------------------------------------ paper-inputs: one command for the paper's inputs
 step paper-inputs -   paper_manifest.py --quiet          # ~40 s: paper/manifest.json, manifest.tsv
 step paper-inputs -   paper_numbers.py --check           # paper/numbers.tex (stops if the manifest is stale)
+step paper-inputs -   paper_refs_check.py                # no DB: every \cite has a verified refs.bib entry
 step paper-inputs -   paper_figures.py                   # paper/figures/*.pdf
 step paper-inputs -   paper_manifest.py --files          # paper/SHA256SUMS (check: cd paper && shasum -a 256 -c SHA256SUMS)
 

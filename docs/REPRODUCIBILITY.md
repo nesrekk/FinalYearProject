@@ -18,7 +18,7 @@ How to rebuild the database and the conference paper's inputs, what is pinned, w
 
 | command | runs | time on the author's machine |
 |---|---|---|
-| `scripts/rebuild_all.sh paper-inputs` | manifest → `paper/numbers.tex` → `paper/figures/*.pdf` → `paper/SHA256SUMS` (read-only on the database) | ~1 min |
+| `scripts/rebuild_all.sh paper-inputs` | manifest → `paper/numbers.tex` → reference check (`paper_refs_check.py`, no database) → `paper/figures/*.pdf` → `paper/SHA256SUMS` (read-only on the database) | ~1 min |
 | `scripts/rebuild_all.sh paper paper-inputs` | the paper's own tables (`paper_*`), then its inputs | ~45 min (beliefs ~22, ablations ~11, eval ~7) |
 | `scripts/rebuild_all.sh derived` | every derived table: the app's and the paper's inputs | a few hours (not timed as one run) |
 | `scripts/rebuild_all.sh load derived paper paper-inputs` | from the local raw files up | the above plus the loads (`player_shots` 6.3M rows) |
