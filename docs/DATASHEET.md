@@ -10,7 +10,7 @@ The core of the paper is the 2020-21 to 2025-26 regular seasons. Season-level ta
 
 ## Composition
 
-The database holds 167 tables and 19.9M rows. `paper_manifest.py` sorts every table into one of five kinds:
+The database held 167 tables and 19.9M rows on that date (173 since round 6 step 1 added the six Forecast Ledger tables on 2026-09-30). `paper_manifest.py` sorts every table into one of six kinds:
 
 | kind | tables | meaning |
 |---|---|---|
@@ -19,6 +19,7 @@ The database holds 167 tables and 19.9M rows. `paper_manifest.py` sorts every ta
 | paper | 19 | written by a `scripts/paper_*.py` script for the paper |
 | cache | 3 | written by the running app (`league_shot_zones`, `player_shots_cache_status`, `prediction_ledger`) |
 | legacy | 2 | loaded before the repository's first commit by a script it doesn't contain (`mvp_seasons`, `mvp_winners`) |
+| ledger | 6 | the Forecast Ledger's preseason lock (`scripts/ledger_lock.py --lock`, 2026-09-30): ESPN's 2026-27 schedule and rosters as read that day, the forecasts made from them and their SHA-256 (`ledger_*`). Written once before the season's first tip and never rebuilt; a rebuild only re-checks the hash (`--verify`). ESPN's data; not redistributed here |
 
 Every table's producing script is listed in `PRODUCERS` in `scripts/paper_manifest.py`. The README's "Database schema" section describes the tables themselves.
 

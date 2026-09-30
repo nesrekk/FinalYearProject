@@ -50,7 +50,7 @@ How to rebuild the database and the conference paper's inputs, what is pinned, w
 ## The manifest: checking that a rebuild holds the same data
 
 `scripts/paper_manifest.py` (~40 s, read-only) writes `paper/manifest.json` and `paper/manifest.tsv`. For each of the 167 tables it records:
-- the kind (source, derived, paper, cache or legacy) and the script that writes it;
+- the kind (source, derived, paper, cache, legacy or ledger) and the script that writes it;
 - the row count and column count;
 - a schema md5;
 - an order-independent content md5: each row's md5 on the server, the two 64-bit halves summed as exact numerics;

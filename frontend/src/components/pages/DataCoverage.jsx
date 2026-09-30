@@ -17,6 +17,7 @@ const PAGE_LABELS = {
     shotcharts: 'Shot Charts', tradeimpact: 'Trade Impact', rolefinder: 'Role Player Finder',
     draft: 'Draft Value Guide', greats: 'Greats of the Game', player: 'Player Profile',
     rotations: 'Rotations',
+    ledger: 'Forecast Ledger',
     // Analytics tabs as 'analytics#<tab>'.
     'analytics#rim': 'Rim Deterrence',
 };

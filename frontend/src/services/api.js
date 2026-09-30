@@ -1199,6 +1199,32 @@ export async function fetchSeasonSimModel() {
     });
 }
 
+// ─── Forecast Ledger (ledger_*; the 2026-27 preseason lock) ────────────
+export async function fetchLedgerPreseason(season) {
+    const response = await axios.get(`${IMPACT_BASE}/ledger/preseason`, { params: season ? { season } : {} });
+    return response.data;
+}
+
+export async function fetchLedgerGames(params) {
+    const response = await axios.get(`${IMPACT_BASE}/ledger/games`, { params });
+    return response.data;
+}
+
+export async function fetchLedgerRoster(team, season) {
+    const response = await axios.get(`${IMPACT_BASE}/ledger/roster/${team}`, { params: season ? { season } : {} });
+    return response.data;
+}
+
+export async function fetchLedgerHindcast(season) {
+    const response = await axios.get(`${IMPACT_BASE}/ledger/hindcast`, { params: season ? { season } : {} });
+    return response.data;
+}
+
+// The canonical CSV the lock's SHA-256 is taken of (a plain download link).
+export function ledgerCsvUrl(season) {
+    return `${IMPACT_BASE}/ledger/lock.csv${season ? `?season=${season}` : ''}`;
+}
+
 // ─── Play Finder (play_finder_events, 2020-21 on) ────────────────
 export async function fetchPlayFinderOptions() {
     return getWithCache('play_finder_options', 10 * 60 * 1000, async () => {

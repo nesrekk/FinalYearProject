@@ -1,0 +1,69 @@
+/* Forecast Ledger page (pages/ForecastLedger.jsx). Paper/Ink tokens only;
+   builds on theme.css (.lb-*, .rx-*, .tab-btn), rapm.css (.rp-*) and simulator.css (.ss-*). */
+.lg-lock {
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  border: 2px solid var(--line);
+  background: var(--surface-2);
+}
+.lg-lock-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+@media (max-width: 900px) {
+  .lg-lock-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.lg-lock-grid > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lg-k {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.lg-v { font-size: 0.95rem; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.lg-v code, .lg-howto code, .lg-hash code { font-family: var(--font-mono); }
+.lg-sub { font-size: 0.78rem; color: var(--text-2); }
+.lg-ok { color: var(--positive); }
+.lg-bad { color: var(--negative); }
+.lg-hash {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 4px 0 var(--space-3);
+}
+.lg-hash code {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.lg-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.lg-actions a { text-decoration: none; }
+.lg-howto { margin-top: var(--space-3); font-size: 0.85rem; color: var(--text); }
+.lg-howto summary { cursor: pointer; font-weight: 700; }
+.lg-howto ol { margin: var(--space-2) 0; padding-left: 1.3rem; }
+.lg-howto li { margin: 4px 0; }
+.lg-howto code { font-size: 0.8rem; overflow-wrap: anywhere; }
+.lg-chart svg { max-width: 780px; }
+.lg-range { stroke-width: 2; stroke-linecap: round; }
+.lg-range--asis { stroke: var(--text-3); }
+.lg-range--roster { stroke: var(--brand); }
+.lg-dot--asis { fill: var(--surface); stroke: var(--text); stroke-width: 1.5; }
+.lg-dot--roster { fill: var(--brand); stroke: var(--text); stroke-width: 1; }
+.lg-legend span.lg-legend--asis::before { background: var(--surface); border: 1.5px solid var(--text); }
+.lg-legend span.lg-legend--roster::before { background: var(--brand); }
+.lg-views { margin-top: var(--space-5); }
+.lg-grid { align-items: start; }
+.lg-muted td { color: var(--text-3); }
+.lg-note { color: var(--text-3); font-size: 0.75rem; }
+.lg-games { max-height: 560px; overflow-y: auto; }
+.lg-rules ul { margin: var(--space-2) 0 0; padding-left: 1.1rem; font-size: 0.85rem; color: var(--text); }
+.lg-rules li { margin: 6px 0; }
