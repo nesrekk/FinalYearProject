@@ -1,0 +1,9 @@
+/* Coaching Decisions (pages/CoachingDecisions.jsx). Layout pieces come from
+   possessions.css (px-*, pc-* charts) and playfinder.css (pf-* pills and
+   controls); table helpers (.oo-*) from theme.css. */
+.cd-tabs { margin: var(--space-4) 0 var(--space-2); flex-wrap: wrap; }
+.cd-page .cd-title { margin-top: var(--space-4); }
+.cd-stat--pos .px-stat-v { color: var(--positive); }
+.cd-table td, .cd-table th { white-space: nowrap; }
+.cd-table td:first-child { white-space: normal; }
+.cd-nof { margin-top: var(--space-4); font-size: 0.84rem; }

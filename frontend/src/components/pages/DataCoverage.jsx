@@ -19,6 +19,7 @@ const PAGE_LABELS = {
     rotations: 'Rotations',
     ledger: 'Forecast Ledger',
     possessions: 'Possession Explorer',
+    coaching: 'Coaching Decisions',
     // Analytics tabs as 'analytics#<tab>'.
     'analytics#rim': 'Rim Deterrence',
 };

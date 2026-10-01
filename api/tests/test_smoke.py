@@ -2952,3 +2952,79 @@ def test_shot_quality_map_cells_reconcile_and_known_shooters():
     assert client.get("/shots/quality-map", params={"player": "Stephen Curry", "season": 2000}).status_code == 404
     assert client.get("/shots/quality-map", params={"player": "zzzzzz"}).status_code == 404
     assert client.get("/shots/quality-map", params={"player": "x"}).status_code == 422
+
+
+def test_coaching_decisions():
+    """Coaching Decisions (scripts/build_coaching_decisions.py, api/routers/coaching.py, round 6 step 5): every
+    stored league effect recomputes from the stored decision points with the shared estimator; decision points sit
+    in their windows; the families' summaries agree with their rows; the endpoints answer for every scope."""
+    import numpy as np
+    import pandas as pd
+    from coaching_lib import DECISIONS, att
+    from impact_api import app
+    conn = psycopg2.connect(**DB_CONFIG)
+    try:
+        rows = pd.read_sql_query("SELECT * FROM coaching_decisions", conn)
+        tests = pd.read_sql_query("SELECT * FROM coaching_decision_tests", conn)
+        summary = pd.read_sql_query("SELECT * FROM coaching_decision_summary", conn)
+    finally:
+        conn.close()
+    assert sorted(rows.decision.unique()) == sorted(DECISIONS) and sorted(rows.season.unique()) == list(range(2021, 2027))
+    n = rows.decision.value_counts()
+    assert n["timeout"] > 9000 and n["challenge"] > 6500 and n["foul_up3"] > 500 and n["twoforone"] > 20000
+    # Windows: runs with 2+ minutes left; 2-for-1 starts 28-40 s from the end of quarters 1-3; up 3 with <= 24 s in the 4th/OT.
+    t, c, f, w = (rows[rows.decision == k] for k in DECISIONS)
+    assert (t.sec_left >= 120).all() and (t["size"] >= 8).all() and (t.margin < 0).mean() > 0.5
+    assert w.period.max() <= 3 and w.sec_left.between(28, 40, inclusive="left").all()
+    assert (f.period >= 4).all() and (f.margin == 3).all() and f.sec_left.between(0, 24, inclusive="right").all()
+    assert f.game_id.is_unique                                      # the first up-3 situation of a game only
+    # Challenges: unknown outcome <=> no treatment flag; most challenges are won (2023-24 on: a second challenge after a win).
+    assert ((c.detail == "unknown") == c.treated.isna()).all()
+    assert 0.5 < c.treated.dropna().astype(float).mean() < 0.7
+    # Every stored league / season / secondary effect is the shared estimator on the stored rows.
+    col_of = {"coaching:league": "outcome"}
+    for r in tests[tests.level.isin(["league", "season"]) & ~tests.family.str.startswith("sensitivity")].itertuples():
+        dec = r.key if r.family in ("coaching:league",) or r.family.startswith("season:") else r.family.split(":")[1]
+        col = col_of.get(r.family, "outcome" if r.family.startswith("season:") else r.key)
+        d = rows[(rows.decision == dec) & rows.treated.notna() & rows[col].notna()]
+        if r.season:
+            d = d[d.season == r.season]
+        got = att(d[col].to_numpy(float), d.treated.astype(bool).to_numpy(), pd.factorize(d.stratum)[0])
+        assert abs(got[0] - r.stat) < 1e-9, (r.family, r.key, r.season)
+        assert r.ci_lo <= r.stat <= r.ci_hi and 0 < r.p <= 1
+    # Families: k of n agrees with the rows; the four league beliefs are one family.
+    for s in summary.itertuples():
+        fam = tests[tests.family == s.family]
+        assert len(fam) == s.units and int(fam.survives.sum()) == s.survivors and int((fam.p < 0.05).sum()) == s.p05
+    assert summary.set_index("family").loc["coaching:league", "units"] == 4
+    assert all(summary.set_index("family").loc[f"{k}:team", "units"] == 30 for k in ("timeout", "twoforone", "challenge"))
+    # The results the page and README state (all six seasons): shooting early pays; a won challenge beats a lost one;
+    # no positive timeout effect; fouling up 3 can't be told from chance.
+    lg = tests[tests.family == "coaching:league"].set_index("key")
+    assert lg.loc["twoforone", "ci_lo"] > 0 and lg.loc["twoforone", "survives"]
+    assert lg.loc["challenge", "ci_lo"] > 0 and lg.loc["challenge", "survives"]
+    assert lg.loc["timeout", "stat"] < 0.1 and not lg.loc["timeout", "survives"]
+    assert lg.loc["foul_up3", "p"] > 0.05
+
+    client = TestClient(app)
+    o = client.get("/coaching/options").json()
+    _assert_has_source(o)
+    assert [x["key"] for x in o["decisions"]] == list(DECISIONS) and len(o["teams"]) == 30 and set(o["league"]) == set(DECISIONS)
+    for k in DECISIONS:
+        for params in ({}, {"team": "BOS"}, {"season": 2025}, {"team": "BOS", "season": 2025}):
+            d = client.get(f"/coaching/decision/{k}", params=params).json()
+            _assert_has_source(d)
+            assert d["n"] > 0 and d["breakdowns"] and len(d["teams"]) == 30 and len(d["trend"]) == 6
+        assert d["scope_test"] is None                              # a team-season has no stored test
+    lg_d = client.get("/coaching/decision/timeout").json()
+    assert abs(lg_d["scope_test"]["stat"] - lg_d["live"]["stat"]) < 1e-6
+    # A team's re-read effect is matched within the team strata, like its stored test.
+    bos = client.get("/coaching/decision/twoforone", params={"team": "BOS"}).json()
+    assert abs(bos["scope_test"]["stat"] - bos["live"]["stat"]) < 1e-6
+    ch = client.get("/coaching/decision/challenge").json()["breakdowns"]
+    assert sum(r["won"] for r in ch["by_season"]) == int((c.treated == True).sum())  # noqa: E712
+    assert len(client.get("/coaching/tests").json()["league"]) == len(tests[tests.level == "league"])
+    assert client.get("/coaching/decision/nope").status_code == 404
+    assert client.get("/coaching/decision/timeout", params={"team": "XXX"}).status_code == 404
+    assert client.get("/coaching/decision/timeout", params={"season": 2019}).status_code == 404
+    assert np.isfinite(o["counts"]["crossings"])

@@ -1302,3 +1302,24 @@ export async function fetchPlayerPossessions(playerId, season) {
     const response = await axios.get(`${IMPACT_BASE}/possessions/player/${playerId}`, { params: season ? { season } : {} });
     return response.data;
 }
+
+// Coaching Decisions (GET /coaching/*): timeouts after runs, challenges, fouling up 3, the 2-for-1.
+export async function fetchCoachingOptions() {
+    return getWithCache('coaching_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/coaching/options`);
+        return response.data;
+    });
+}
+
+export async function fetchCoachingDecision(name, { team, season } = {}) {
+    const params = {};
+    if (team) params.team = team;
+    if (season) params.season = season;
+    const response = await axios.get(`${IMPACT_BASE}/coaching/decision/${encodeURIComponent(name)}`, { params });
+    return response.data;
+}
+
+export async function fetchCoachingTests() {
+    const response = await axios.get(`${IMPACT_BASE}/coaching/tests`);
+    return response.data;
+}

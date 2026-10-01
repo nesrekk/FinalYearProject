@@ -204,6 +204,7 @@ step derived -        compute_wpa.py
 step derived -        build_leverage_splits.py
 step derived -        build_scouting_reports.py          # reads player_leverage_splits
 step derived -        build_season_sim.py
+step derived -        build_coaching_decisions.py        # ~4 min; reads possessions, pbp_event_clock, game_pregame_odds
 
 # ------------------------------------------------------------------ paper: the paper's own tables
 step paper -          paper_xrapm.py                     # ~90 s

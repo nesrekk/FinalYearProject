@@ -439,7 +439,21 @@ COVERAGE_MAP = [
         "range_sql": "SELECT MIN(season), MAX(season) FROM possessions", "range_fmt": "season_int",
         "source": "ESPN play-by-play cut into possessions by scripts/build_possessions.py (rules in scripts/pbp_possessions.py, on the same parser as lineup_stints); times on a clock rebuilt from the NBA shot chart, because ESPN logs made shots a median 14 s late; per-game checks in possession_games, team-season totals by start type in possession_seasons.",
         "gap": "Every regular-season game 2020-21 on; 7,220 of 7,232 games add up to the final score and the team totals, the same games as lineup_stints (possession_games says why the rest don't). Counted possessions run ~2 a team-game under the box-score estimate because team offensive rebounds continue a possession. ESPN stamps a turnover at about the time of the next play, so possessions after turnovers have no time-to-first-shot or transition flag, and about 27% of possessions have an approximate length.",
-        "used_by": ["possessions", "player"],
+        "used_by": ["possessions", "player", "coaching"],
+    },
+    {
+        "table": "coaching_decisions", "label": "Coaching decisions: timeouts after runs, challenges, fouling up 3, the 2-for-1", "group": "Teams",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM coaching_decisions", "range_fmt": "season_int",
+        "source": "scripts/build_coaching_decisions.py over the possessions table, ESPN's timeout and coach's-challenge events and the corrected clock (pbp_event_clock); win probability from Game Replay's model; tests (permutation within matched moments, Benjamini-Hochberg per family) in coaching_decision_tests and coaching_decision_summary.",
+        "gap": "Only games whose possessions reconcile (7,220 of 7,232, 2020-21 on). ESPN's log has one kind of timeout, always charged to a team, so a mandatory television break charged to a team looks like a coach's choice; about one timeout in five is stamped late, so timeouts are placed by the log's order, not its clock. What a coach challenged (foul, out of bounds, goaltending) can't be read: ESPN rewrites the log after an overturn. 527 challenges ('replaycenter' and lone 'Challenge' records) have no outcome.",
+        "used_by": ["coaching"],
+    },
+    {
+        "table": "coaching_decision_tests", "label": "Coaching decisions: the tests", "group": "Teams",
+        "range_sql": None, "range_fmt": None,
+        "source": "scripts/build_coaching_decisions.py: per decision the matched effect on the treated, a game-clustered bootstrap interval, a permutation p (2,000 shuffles of the decision within matched moments, 20,000 when p <= 0.02) and a Benjamini-Hochberg q within its family (league level; per team); paper_beliefs.py's machinery.",
+        "gap": "Matching removes differences in season, quarter, time left, score and run size or start type (per decision), not everything: the fouling teams up 3 were about 1.2 points stronger before the game, and an early shot at the end of a quarter is partly an open look, not only a choice.",
+        "used_by": ["coaching"],
     },
     {
         "table": "rotation_closing_games", "label": "Closing stretch of every game (score at 5:00 left in the fourth)", "group": "Teams",
@@ -487,8 +501,8 @@ COVERAGE_MAP = [
         "table": "pbp_event_clock", "label": "Corrected game clock (every ESPN play-by-play event)", "group": "Games",
         "range_sql": "SELECT MIN(g.season), MAX(g.season) FROM pbp_games g WHERE g.source = 'espn'", "range_fmt": "season_int",
         "source": "scripts/build_event_clock.py: ESPN's clock is late by event type (made shots a median 14 s, rebounds 6 s, turnovers 5-10 s, misses 2 s, against NBA.com's own play-by-play of 418 games), so every field goal matched to the NBA shot chart takes the chart's time, free throws their trip's, a rebound 2 s after its miss, turnovers and unmatched shots ESPN's time less the median lag, everything else ESPN's own; pbp_event_clock_meta stores the checks.",
-        "gap": "About 94% of events land within 2 s of NBA.com's log (ESPN's own times: 32%). The moment a turnover happened can't be recovered from ESPN, which stamps it at about the time of the next play. Read by Game Replay, the Play Finder, Rotations' closing stretch, Best Games and the possessions; player minutes, stints, Clutch WPA, Situational Splits and the Garbage-Time Deflator still use ESPN's times.",
-        "used_by": ["analytics#replay", "plays", "rotations", "bestgames", "possessions"],
+        "gap": "About 94% of events land within 2 s of NBA.com's log (ESPN's own times: 32%). The moment a turnover happened can't be recovered from ESPN, which stamps it at about the time of the next play. Read by Game Replay, the Play Finder, Rotations' closing stretch, Best Games, the possessions and Coaching Decisions; player minutes, stints, Clutch WPA, Situational Splits and the Garbage-Time Deflator still use ESPN's times.",
+        "used_by": ["analytics#replay", "plays", "rotations", "bestgames", "possessions", "coaching"],
     },
     {
         "table": "player_wpa_totals", "label": "Win-probability-added totals", "group": "Models",

@@ -553,16 +553,21 @@ def load_season_names(cur):
     return names, {n: next(iter(p)) for n, p in ids.items() if len(p) == 1}
 
 
-def load_espn(conn, clock=False):
+def load_espn(conn, clock=False, game_ids=None):
     """Every ESPN game (regular season 2020-21 on) and its events, grouped by
     game in the order the parser expects (action_number, then id). With
     `clock`, each event also carries pbp_event_clock's corrected time
     (`period_t`, seconds into the period), `clock_anchored` and
     `clock_source`; game_clock()
-    turns one game's into the `Game(..., clock=)` argument."""
+    turns one game's into the `Game(..., clock=)` argument. `game_ids`
+    (optional list) loads only those games (build_coaching_decisions.py
+    parses a few hundred); omitted = every game, as before."""
+    only, params = "", None
+    if game_ids is not None:
+        only, params = " AND g.game_id = ANY(%(ids)s)", {"ids": list(game_ids)}
     games = pd.read_sql_query(
-        "SELECT game_id, season, game_date, home_team, away_team FROM pbp_games WHERE source = 'espn' "
-        "ORDER BY game_date, game_id;", conn)
+        "SELECT game_id, season, game_date, home_team, away_team FROM pbp_games g WHERE source = 'espn'" + only +
+        " ORDER BY game_date, game_id;", conn, params=params)
     extra, join = "", ""
     if clock:
         extra = ", c.period_t, c.anchored AS clock_anchored, c.source AS clock_source"
@@ -571,7 +576,7 @@ def load_espn(conn, clock=False):
         f"""SELECT e.game_id, e.action_number, e.id, e.period, e.seconds_remaining, e.score_home, e.score_away,
                   e.team_tricode, e.person_id, e.player_name, e.action_type, e.description{extra}
            FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id{join}
-           WHERE g.source = 'espn' ORDER BY e.game_id, e.action_number, e.id;""", conn)
+           WHERE g.source = 'espn'{only} ORDER BY e.game_id, e.action_number, e.id;""", conn, params=params)
     events[["description", "action_type"]] = events[["description", "action_type"]].fillna("")
     events["person_id"] = events["person_id"].astype("Int64").astype(object).where(events["person_id"].notna(), None)
     grouped = dict(tuple(events.groupby("game_id", sort=False)))
