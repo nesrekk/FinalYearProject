@@ -2111,6 +2111,67 @@ def test_lineup_stints_reconcile_and_feed_lineup_tools():
     assert gsw["lineups"]["source"] == "lineup_stats" and gsw["pairs"]["available"]
 
 
+# ─── Round 6, Step 3: possessions ─────────────────────────────────────────────
+
+def test_possessions_reconcile_and_clock():
+    """Possessions from play-by-play (scripts/build_possessions.py, rules in scripts/pbp_possessions.py on the
+    shared parser): every game 2020-21 on, reconciled per game; times on the rebuilt clock, checked against
+    NBA.com's own play-by-play of the twin games."""
+    conn = psycopg2.connect(**DB_CONFIG)
+    try:
+        cur = conn.cursor()
+        cur.execute("""SELECT season, COUNT(*), SUM(game_ok::int), AVG((home_poss + away_poss) / 2.0),
+                              AVG((home_poss + away_poss - home_est - away_est + home_team_oreb + away_team_oreb) / 2.0)
+                       FROM possession_games GROUP BY 1 ORDER BY 1""")
+        rows = cur.fetchall()
+        assert [r[0] for r in rows] == [2021, 2022, 2023, 2024, 2025, 2026]
+        # 7,220 of 7,232 games add up (the stints' own set); about 99-101 possessions a team-game; counted possessions sit within ~1.5 of the
+        # box-score estimate once team offensive rebounds (which continue a possession) are taken out of it.
+        assert sum(r[2] for r in rows) / sum(r[1] for r in rows) > 0.995
+        assert all(98 < float(r[3]) < 102 and 0.5 < float(r[4]) < 2.5 for r in rows)
+        # In every reconciled game: points (with technicals) equal the final score, and FGA, FTA, OREB, TOV equal
+        # team_game_totals (same credit rules as the stints).
+        cur.execute("""WITH s AS (
+                           SELECT game_id, offense AS team, SUM(pts + off_tech_pts) AS pts, SUM(fga) fga,
+                                  SUM(fta) fta, SUM(oreb) oreb, SUM(tov) tov FROM possessions GROUP BY 1, 2),
+                       d AS (SELECT game_id, defense AS team, SUM(def_tech_pts) AS pts FROM possessions GROUP BY 1, 2)
+                       SELECT COUNT(*) FILTER (WHERE s.pts + d.pts <> CASE WHEN s.team = g.home_team THEN g.final_home ELSE g.final_away END),
+                              COUNT(*) FILTER (WHERE (s.fga, s.oreb, s.tov) <> (t.fga, t.oreb, t.tov) OR s.fta > t.fta),
+                              COUNT(*)
+                       FROM s JOIN d USING (game_id, team) JOIN possession_games g USING (game_id)
+                       JOIN team_game_totals t ON t.game_id = s.game_id AND t.team_abbreviation = s.team
+                       WHERE g.game_ok""")
+        bad_pts, bad_comp, n = cur.fetchone()
+        assert n > 14000 and bad_pts == 0 and bad_comp == 0
+        # Possessions alternate: the same side twice in a row within a period is rare (a gap in ESPN's log).
+        cur.execute("""SELECT COUNT(*) FILTER (WHERE offense = prev), COUNT(*) FROM (
+                           SELECT offense, LAG(offense) OVER (PARTITION BY game_id, period ORDER BY poss_no) prev
+                           FROM possessions) x""")
+        same, total = cur.fetchone()
+        assert total > 1_400_000 and same / total < 0.002
+        # Every possession points at a real stint of its game; tracked possessions at a tracked stint.
+        cur.execute("""SELECT COUNT(*) FILTER (WHERE s.stint_no IS NULL), COUNT(*) FILTER (WHERE p.tracked_ok AND NOT s.tracked_ok)
+                       FROM possessions p LEFT JOIN lineup_stints s ON s.game_id = p.game_id AND s.stint_no = p.stint_no
+                       WHERE p.season = 2025""")
+        assert cur.fetchone() == (0, 0)
+        # The rebuilt clock is within 2 s of NBA.com's for >90% of events (ESPN's own: about a third).
+        cur.execute("SELECT value FROM possession_meta WHERE key = 'clock_check'")
+        chk = cur.fetchone()[0]
+        assert chk["twin_games"] >= 400 and chk["all"]["corrected_within_2s"] > 0.9 > 0.5 > chk["all"]["espn_within_2s"]
+        assert chk["classes"]["fg_made"]["espn_lag_median"] >= 10 and chk["classes"]["fg_made"]["corrected_within_2s"] > 0.98
+        # No transition call where ESPN's clock can't place the start (after turnovers).
+        cur.execute("""SELECT COUNT(*) FROM possessions WHERE start_type IN ('steal', 'dead_tov')
+                       AND (transition IS NOT NULL OR first_attempt_sec IS NOT NULL)""")
+        assert cur.fetchone()[0] == 0
+        # League points per possession: after a steal > after a defensive rebound > after a made shot, every season.
+        cur.execute("""SELECT season, MAX(ppp) FILTER (WHERE start_type = 'steal'), MAX(ppp) FILTER (WHERE start_type = 'dreb'),
+                              MAX(ppp) FILTER (WHERE start_type = 'made_fg')
+                       FROM possession_seasons WHERE team = 'ALL' GROUP BY 1""")
+        assert all(st > dr > mk for _, st, dr, mk in cur.fetchall())
+    finally:
+        conn.close()
+
+
 # ─── Round 4, Phase 2: RAPM ───────────────────────────────────────────────────
 
 def test_rapm_versions_validation_and_profile():

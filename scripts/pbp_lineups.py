@@ -575,12 +575,10 @@ def match_coordinates(conn, shots):
     return shots
 
 
-def miss_three_calls(conn, games, grouped, season_names, all_names):
-    """The NBA shot chart's two-or-three call for every missed field goal it
-    can be matched to: ({game_id: {action_number: is_three}}, a DataFrame of
-    those misses with the text's call `text_three` and the chart's `nba_three`).
-    One parse of every game (the shooter ids the lines use) feeds
-    match_coordinates()."""
+def chart_matches(conn, games, grouped, season_names, all_names):
+    """Every ESPN field-goal attempt (game_id, season, action_number, pid, period, made, text_three) with the
+    NBA shot chart row it matches (match_coordinates(): coord_ft, shot_type, nba_shot_id; NaN where
+    unmatched). One parse of every game (the shooter ids the lines use)."""
     rows = []
     for g in games.itertuples(index=False):
         ev = grouped.get(g.game_id)
@@ -593,7 +591,16 @@ def miss_three_calls(conn, games, grouped, season_names, all_names):
                 rows.append((g.game_id, int(g.season), e["action_number"], e["pid"], e["period"], bool(e["made"]),
                              e["val"] == 3))
     shots = pd.DataFrame(rows, columns=["game_id", "season", "action_number", "pid", "period", "made", "text_three"])
-    m = match_coordinates(conn, shots)
+    return match_coordinates(conn, shots)
+
+
+def miss_three_calls(conn, games, grouped, season_names, all_names, matched=None):
+    """The NBA shot chart's two-or-three call for every missed field goal it
+    can be matched to: ({game_id: {action_number: is_three}}, a DataFrame of
+    those misses with the text's call `text_three` and the chart's `nba_three`).
+    `matched` is chart_matches()'s output when the caller already has it
+    (build_possessions.py also reads the chart's clock from it)."""
+    m = chart_matches(conn, games, grouped, season_names, all_names) if matched is None else matched
     misses = m[~m.made & m.shot_type.notna()].copy()
     misses["nba_three"] = misses.shot_type.str.startswith("3")
     calls = {}

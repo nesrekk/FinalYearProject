@@ -187,6 +187,7 @@ step derived -        train_wpa_model.py
 step derived -        build_player_game_lines.py
 step derived -        build_player_on_off.py             # team_game_totals, read by build_lineup_stints
 step derived -        build_lineup_stints.py
+step derived -        build_possessions.py               # ~3.5 min; reads lineup_stints, team_game_totals
 step derived -        build_stat_stability.py
 step derived -        build_hot_streak_persistence.py
 step derived -        build_situational_splits.py
