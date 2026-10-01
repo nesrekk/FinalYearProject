@@ -1,0 +1,40 @@
+/* Availability-aware odds and the lineup what-if (common/AvailabilityOdds.jsx, Season Simulator page).
+   Paper/Ink tokens only; builds on theme.css (.lb-*, .rx-*), rapm.css (.rp-*) and simulator.css (.ss-*). */
+.av-panel { margin-top: var(--space-5); padding: var(--space-4); border: 1px solid var(--line); background: var(--surface); }
+.av-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.av-head .rp-panel-title { margin: 0; }
+.av-result { font-weight: 400; color: var(--text-2); }
+.av-chart { position: relative; min-width: 0; margin: var(--space-3) 0; }
+.av-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.av-mid { stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 4 3; }
+.av-range { stroke-width: 6; stroke-linecap: round; opacity: 0.35; }
+.av-mark { stroke-width: 2; }
+.av-mark--base { fill: var(--surface); stroke: var(--text-2); }
+.av-range.av-mark--actual { stroke: var(--text); }
+.av-mark--actual { fill: var(--text); stroke: var(--surface); }
+.av-range.av-mark--whatif { stroke: var(--brand); }
+.av-mark--whatif { fill: var(--brand); stroke: var(--surface); }
+.av-teams { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); margin: var(--space-4) 0; }
+@media (min-width: 1360px) {
+  .av-teams { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+.av-team { min-width: 0; }
+.av-table td, .av-table th { white-space: nowrap; font-size: 0.85rem; }
+.av-table input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--brand); cursor: pointer; }
+.av-table tr.av-row--out td { color: var(--text-3); }
+.av-tag { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--hairline); font-size: 0.7rem; color: var(--text-2); }
+.av-tag--sat { border-color: var(--line); color: var(--text); font-weight: 700; }
+.av-unrated { color: var(--text-3); margin-left: 2px; }
+.av-good { color: var(--positive); }
+.av-bad { color: var(--negative); }
+.av-ci { color: var(--text-3); font-size: 0.78rem; font-family: var(--font-mono); }
+.data-table.av-wrap thead th, .data-table.av-wrap tbody td { white-space: normal; }
+.data-table.av-wrap tbody td.lb-num { white-space: nowrap; }
+.av-wrap td:first-child { min-width: 7.5rem; }
+.av-ci--block { display: block; }
+.av-checks { margin: 0; padding-left: 1.1rem; font-size: 0.85rem; color: var(--text-2); line-height: 1.5; }
+.av-checks li + li { margin-top: var(--space-2); }
+.data-table tbody td.av-sat { white-space: normal; min-width: 8.5rem; color: var(--text-2); font-size: 0.78rem; }
+@media (max-width: 640px) {
+  .av-panel { padding: var(--space-3); }
+}

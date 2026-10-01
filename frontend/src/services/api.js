@@ -1199,6 +1199,29 @@ export async function fetchSeasonSimModel() {
     });
 }
 
+// ─── Availability-aware pre-game odds (pregame_availability_*; 2020-21 on) ────
+export async function fetchAvailabilityModel() {
+    return getWithCache('availability_model', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/pregame/availability/model`);
+        return response.data;
+    });
+}
+
+// date: 'YYYY-MM-DD' — that day's games: odds before and with who played, who sat.
+export async function fetchAvailabilityGames(date) {
+    const response = await axios.get(`${IMPACT_BASE}/pregame/availability/games`, { params: { date } });
+    return response.data;
+}
+
+// out / add: arrays of player ids (out = who played, add = who sat). Odds with an 80% range.
+export async function fetchAvailabilityGame(gameId, { out = [], add = [] } = {}) {
+    const params = {};
+    if (out.length) params.out = out.join(',');
+    if (add.length) params.add = add.join(',');
+    const response = await axios.get(`${IMPACT_BASE}/pregame/availability/game/${gameId}`, { params });
+    return response.data;
+}
+
 // ─── Forecast Ledger (ledger_*; the 2026-27 preseason lock) ────────────
 export async function fetchLedgerPreseason(season) {
     const response = await axios.get(`${IMPACT_BASE}/ledger/preseason`, { params: season ? { season } : {} });

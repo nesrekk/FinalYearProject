@@ -354,8 +354,22 @@ COVERAGE_MAP = [
         "table": "game_pregame_odds", "label": "Pre-game win probability of every game", "group": "Models",
         "range_sql": "SELECT MIN(season), MAX(season) FROM game_pregame_odds", "range_fmt": "season_int",
         "source": "scripts/build_season_sim.py: for every game 2010-11 on, P(home wins) as of that morning from ratings (this season's SRS blended with last season's), home court and back-to-backs; held out (coefficients fitted without that season); every form's probability stored.",
-        "gap": "Ratings use only games before the game, but the three logistic coefficients and the prior constants are fitted across seasons. No injuries, trades or line-ups: a team is one rating.",
+        "gap": "Ratings use only games before the game, but the three logistic coefficients and the prior constants are fitted across seasons. No injuries, trades or line-ups: a team is one rating (pregame_availability_odds adds who played, 2020-21 on).",
         "used_by": ["simulator", "bestgames"],
+    },
+    {
+        "table": "pregame_availability_odds", "label": "Pre-game odds with who played", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM pregame_availability_odds", "range_fmt": "season_int",
+        "source": "scripts/build_pregame_availability.py (math in api/availability_lib.py): every game 2020-21 on, the pre-game odds plus a lineup term from the rotation players who played (player_game_lines), their expected minutes from earlier games and ratings fixed before the season (BPM projection, last season's RAPM); held out by season, and under the paper's protocol with paired tests in pregame_availability_tests.",
+        "gap": "Who played is known at tip-off, not when a forecast is usually made, so the gain is an upper bound on what injury news is worth. One game (CHI-LAC 2026-01-20) has no lineups and keeps the base odds; RAPM ratings start in 2021-22; before 2025-26 players ESPN gives no id look absent.",
+        "used_by": ["simulator"],
+    },
+    {
+        "table": "pregame_availability_players", "label": "Rotation players of every game: who played, who sat", "group": "Models",
+        "range_sql": None, "range_fmt": None,
+        "source": "scripts/build_pregame_availability.py: per game and side, the rotation players (expected to play 10+ minutes) who played and those who sat while still on the team, with expected minutes and both ratings; read by the Season Simulator's lineup what-if.",
+        "gap": "'Sat' means played for the team earlier that season and not for another team since, so a long injury is listed every game, and a player waived without signing elsewhere stays listed. Rookies before their first game and deep-bench players are not in it.",
+        "used_by": ["simulator"],
     },
     {
         "table": "ledger_forecasts", "label": "Forecast Ledger: locked 2026-27 forecasts", "group": "Models",

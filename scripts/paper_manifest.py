@@ -193,6 +193,9 @@ PRODUCERS = {
                                         "pregame_calibration", "season_postseason", "season_sim_params",
                                         "season_sim_backtest", "season_sim_backtest_summary",
                                         "season_sim_calibration", "season_sim_seasons"]),
+    # app tables, but it reads paper_eval_predictions (the protocol's base odds): runs in the paper stage after paper_eval
+    "build_pregame_availability.py": ("derived", ["pregame_availability_odds", "pregame_availability_players",
+                                                  "pregame_availability_fit", "pregame_availability_tests"]),
     # ---- paper
     "paper_xrapm.py": ("paper", ["paper_xrapm_stints", "paper_xrapm_players", "paper_xrapm_fits",
                                  "paper_xrapm_lambda_cv", "paper_xrapm_meta"]),

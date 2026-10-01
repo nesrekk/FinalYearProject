@@ -210,6 +210,7 @@ step derived -        build_coaching_decisions.py        # ~4 min; reads possess
 step paper -          paper_xrapm.py                     # ~90 s
 step paper -          paper_eval.py                      # ~7 min
 step paper -          paper_tests.py                     # ~75 s
+step paper -          build_pregame_availability.py      # ~20 s; app tables (Season Simulator what-if), reads paper_eval_predictions
 step paper -          paper_data_audit.py                # ~95 s; also paper/tables/data_audit.tex
 step paper -          paper_beliefs.py                   # ~22 min; also paper/tables/beliefs.tex
 step paper -          paper_ablations.py                 # ~11 min; also paper/tables/ablations.tex

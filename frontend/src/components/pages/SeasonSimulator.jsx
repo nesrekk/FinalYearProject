@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchSeasonSim, fetchSeasonSimModel, fetchSeasonSimOptions } from '../../services/api';
+import { fetchAvailabilityGames, fetchAvailabilityModel, fetchSeasonSim, fetchSeasonSimModel, fetchSeasonSimOptions } from '../../services/api';
 import Loader from '../Loader';
+import { AvailabilitySection, AvailabilityWhatIf } from '../common/AvailabilityOdds';
 import ChartExport from '../common/ChartExport';
 import ChartTooltip from '../common/ChartTooltip';
 import CopyLinkButton from '../common/CopyLinkButton';
@@ -14,11 +15,16 @@ import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlStat
 import '../../styles/rapm.css';
 import '../../styles/simulator.css';
 
-// Season Simulator (?page=simulator&season=&asof=&team=&sort=&dir=): 10,000
+// Season Simulator (?page=simulator&season=&asof=&team=&sort=&dir=&game=&out=&add=): 10,000
 // simulated seasons from the morning of any date 2010-11 on, on a pre-game
 // win model fitted leave-one-season-out (GET /season-sim, /season-sim/model).
 // Every season on file is complete, so each team's odds sit next to what
-// actually happened.
+// actually happened. From 2020-21 the day's games also show the odds with who
+// played, and `game` opens the lineup what-if (out / add = player ids;
+// GET /pregame/availability/*).
+
+const AVAIL_FROM = 2021;
+const idList = (params, key) => (parseParam.list(params, key) ?? []).map(Number).filter((n) => Number.isInteger(n) && n > 0).sort((a, b) => a - b);
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
@@ -52,6 +58,12 @@ const COLS = [
     ['seeds', 'Finish', 'Chance of each conference finish, 1 to 15, before the play-in'],
     ['final', 'What happened', 'Final record, finish and result'],
 ];
+
+function satText(a, g) {
+    if (!a) return '—';
+    const one = (team, list) => (list.length ? `${team}: ${list[0].name}${list.length > 1 ? ` +${list.length - 1}` : ''}` : null);
+    return [one(g.away, a.sat_away), one(g.home, a.sat_home)].filter(Boolean).join('; ') || 'nobody';
+}
 
 function sortRows(rows, key, dir) {
     const sign = dir === 'asc' ? 1 : -1;
@@ -450,7 +462,10 @@ export default function SeasonSimulator({ onNavigate }) {
     const [form, setForm] = useState(null);
     const [res, setRes] = useState(null);   // { key, data } | { key, error }
     const [model, setModel] = useState(null);
+    const [availModel, setAvailModel] = useState(null);
+    const [availDay, setAvailDay] = useState(null);   // { key, data }
     const [dateDraft, setDateDraft] = useState('');
+    const whatIfRef = useRef(null);
 
     useEffect(() => {
         fetchSeasonSimOptions()
@@ -467,14 +482,21 @@ export default function SeasonSimulator({ onNavigate }) {
                     team: parseParam.str(params, 'team')?.toUpperCase() ?? null,
                     sort: parseParam.oneOf(params, 'sort', COLS.map(([k]) => k)) ?? 'p_playoffs',
                     dir: parseParam.oneOf(params, 'dir', ['asc', 'desc']) ?? 'desc',
+                    game: (() => { const g = parseParam.str(params, 'game'); return g && /^\d{10}$/.test(g) ? g : null; })(),
+                    out: idList(params, 'out'),
+                    add: idList(params, 'add'),
                 });
                 setDateDraft(ok ? asof : info.halfway_date);
             })
             .catch(() => setOptionsError('The Season Simulator couldn\'t load. Is the impact API (port 8002) running, and has scripts/build_season_sim.py been run?'));
         fetchSeasonSimModel().then(setModel).catch(() => setModel({ error: true }));
+        fetchAvailabilityModel().then(setAvailModel).catch(() => setAvailModel({ error: true }));
     }, [params]);
 
-    useUrlSync(form && { season: form.season, asof: form.asof, team: form.team, sort: form.sort === 'p_playoffs' ? null : form.sort, dir: form.dir === 'desc' ? null : form.dir });
+    useUrlSync(form && {
+        season: form.season, asof: form.asof, team: form.team, sort: form.sort === 'p_playoffs' ? null : form.sort, dir: form.dir === 'desc' ? null : form.dir,
+        game: form.game, out: form.game && form.out.length ? form.out.join(',') : null, add: form.game && form.add.length ? form.add.join(',') : null,
+    });
 
     const key = form ? `${form.season}|${form.asof}` : null;
     useEffect(() => {
@@ -486,6 +508,20 @@ export default function SeasonSimulator({ onNavigate }) {
         return () => { active = false; };
     }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    const dayKey = form && form.season >= AVAIL_FROM ? form.asof : null;
+    useEffect(() => {
+        if (!dayKey) return undefined;
+        let active = true;
+        fetchAvailabilityGames(dayKey)
+            .then((d) => { if (active) setAvailDay({ key: dayKey, data: d }); })
+            .catch(() => { if (active) setAvailDay({ key: dayKey, data: null }); });
+        return () => { active = false; };
+    }, [dayKey]);
+
+    useEffect(() => {
+        if (form?.game && whatIfRef.current) whatIfRef.current.scrollIntoView({ block: 'nearest' });
+    }, [form?.game]);
+
     if (optionsError) return <section className="dashboard-card"><p className="error-message">{optionsError}</p></section>;
     if (!options || !form) return <Loader />;
 
@@ -493,7 +529,15 @@ export default function SeasonSimulator({ onNavigate }) {
     const set = (patch) => setForm((f) => ({ ...f, ...patch }));
     const data = res?.key === key ? res.data : null;
     const error = res?.key === key ? res.error : '';
-    const applyDate = (d) => { if (d && d >= info.first_date && d <= info.last_date) { set({ asof: d }); setDateDraft(d); } };
+    const applyDate = (d) => { if (d && d >= info.first_date && d <= info.last_date) { set({ asof: d, game: null, out: [], add: [] }); setDateDraft(d); } };
+    const avail = availDay?.key === dayKey && availDay.data ? Object.fromEntries(availDay.data.games.map((g) => [g.game_id, g])) : null;
+    const openGame = (gameId) => set({ game: form.game === gameId ? null : gameId, out: [], add: [] });
+    const openUpset = (u) => {
+        const s = options.seasons.find((x) => x.season === u.season);
+        if (!s) return;
+        set({ season: u.season, asof: u.game_date, team: null, game: u.game_id, out: [], add: [] });
+        setDateDraft(u.game_date);
+    };
     const checkpointOf = (s, d) => (['first_date', 'halfway_date', 'sixty_date', 'last_date'].find((k) => s[k] === d) ?? 'halfway_date');
     const onSort = (k) => set(form.sort === k ? { dir: form.dir === 'asc' ? 'desc' : 'asc' } : { sort: k, dir: k === 'team' || k === 'position_now' ? 'asc' : 'desc' });
     const allRows = data ? [...data.conferences.East, ...data.conferences.West] : [];
@@ -523,7 +567,7 @@ export default function SeasonSimulator({ onNavigate }) {
                         const s = Number(e.target.value);
                         const next = options.seasons.find((x) => x.season === s);
                         const d = next[checkpointOf(info, form.asof)];
-                        set({ season: s, asof: d, team: null });
+                        set({ season: s, asof: d, team: null, game: null, out: [], add: [] });
                         setDateDraft(d);
                     }}>
                         {[...options.seasons].reverse().map((s) => <option key={s.season} value={s.season}>{seasonLabel(s.season)}</option>)}
@@ -585,21 +629,30 @@ export default function SeasonSimulator({ onNavigate }) {
                                 <TableExport name={`pre-game odds ${data.as_of}`} />
                                 <div className="table-wrapper">
                                     <table className="data-table lb-table">
-                                        <thead><tr><th>Game</th><th className="lb-num" title="P(home team wins) as of that morning">Home win chance</th><th className="lb-num" title="Expected margin for the home team in points">Exp. margin</th><th>Rest</th><th className="lb-num">Result</th></tr></thead>
+                                        <thead><tr><th>Game</th><th className="lb-num" title="P(home team wins) as of that morning">Home win chance</th>{avail && <th className="lb-num" title="The same with who played (rotation players), known at tip-off: an upper bound">With who played</th>}<th className="lb-num" title="Expected margin for the home team in points">Exp. margin</th><th>Rest</th>{avail && <th title="Rotation players who sat (by expected minutes)">Sat</th>}<th className="lb-num">Result</th>{avail && <th />}</tr></thead>
                                         <tbody>
                                             {data.games_on_date.map((g) => (
                                                 <tr key={g.game_id}>
                                                     <td>{g.away} @ {g.home}{g.venue === 0 ? ' (neutral)' : ''}</td>
                                                     <td className="lb-num">{pct(g.p_home, 1)}</td>
+                                                    {avail && <td className="lb-num">{avail[g.game_id]?.p_avail != null ? pct(avail[g.game_id].p_avail, 1) : '—'}</td>}
                                                     <td className="lb-num">{signed(g.exp_margin)}</td>
-                                                    <td className="lk-sub">{[g.home_b2b ? `${g.home} back-to-back` : null, g.away_b2b ? `${g.away} back-to-back` : null].filter(Boolean).join(', ') || '—'}</td>
+                                                    <td className={avail ? 'lk-sub av-sat' : 'lk-sub'}>{[g.home_b2b ? `${g.home} back-to-back` : null, g.away_b2b ? `${g.away} back-to-back` : null].filter(Boolean).join(', ') || '—'}</td>
+                                                    {avail && <td className="lk-sub av-sat">{satText(avail[g.game_id], g)}</td>}
                                                     <td className={`lb-num ${(g.p_home >= 0.5) === g.home_won ? 'ss-win' : 'ss-loss'}`}>{g.away} {g.pts_away} – {g.pts_home} {g.home}</td>
+                                                    {avail && <td>{avail[g.game_id]?.p_avail != null && <button type="button" className="pp-link rp-link" onClick={() => openGame(g.game_id)}>{form.game === g.game_id ? 'Close' : 'What-if'}</button>}</td>}
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
                                 </div>
-                                <p className="rp-panel-note">Green: the favourite won. <button type="button" className="pp-link rp-link" onClick={() => onNavigate('analytics', 'luck', { season: form.season, asof: form.asof })}>Open the same morning on Luck &amp; Schedule →</button></p>
+                                <p className="rp-panel-note">Green: the favourite won.{avail ? ' "With who played" adds the rotation players who actually played (known at tip-off, so an upper bound on what injury news is worth); "What-if" takes players out or puts them back.' : ''} <button type="button" className="pp-link rp-link" onClick={() => onNavigate('analytics', 'luck', { season: form.season, asof: form.asof })}>Open the same morning on Luck &amp; Schedule →</button></p>
+                            </div>
+                        )}
+                        {form.game && (
+                            <div ref={whatIfRef}>
+                                <AvailabilityWhatIf key={form.game} gameId={form.game} out={form.out} add={form.add}
+                                    onChange={({ out, add }) => set({ out, add })} onClose={() => set({ game: null, out: [], add: [] })} />
                             </div>
                         )}
                     </>
@@ -607,6 +660,7 @@ export default function SeasonSimulator({ onNavigate }) {
             </div>
 
             {model && !model.error && <ModelSection model={model} />}
+            {availModel && !availModel.error && <AvailabilitySection model={availModel} marginBeta={options.beta?.exp_margin} onOpenGame={openUpset} />}
         </section>
     );
 }
