@@ -32,6 +32,7 @@ from routers.shot_making import PLAYER_COLS as SM_COLS, _row as sm_row
 from routers.on_off import DEFAULT_MIN_MINUTES as ON_OFF_MIN_MINUTES, FEW_OFF_MINUTES as ON_OFF_FEW_OFF
 from routers.projections import LOW_WEIGHT as PROJECTION_LOW_WEIGHT, PROFILE_STATS as PROJECTION_STATS
 from routers.rapm import _fits as rapm_fits
+from routers.rapm import _tracker_fit as tracker_fit
 from routers.rim_deterrence import profile_block as rim_deterrence_block
 from routers.assist_network import player_seasons as assist_seasons
 from routers.possessions import player_possession_seasons
@@ -83,6 +84,7 @@ def _coverage():
             "shot_making": _span(cur, "SELECT min(season), max(season) FROM shot_making_league"),
             "on_off": _span(cur, "SELECT min(season), max(season) FROM player_on_off"),
             "rapm": _span(cur, "SELECT min(season), max(season) FROM player_rapm"),
+            "rating_tracker": _span(cur, "SELECT min(season), max(season) FROM player_rating_tracker WHERE kind = 'filtered'"),
             "rim_deterrence": _span(cur, "SELECT min(season), max(season) FROM rim_deterrence_seasons"),
             "assists": _span(cur, "SELECT min(season), max(season) FROM assist_seasons"),
             "possessions": _span(cur, "SELECT min(season), max(season) FROM possession_seasons"),
@@ -337,6 +339,28 @@ def get_player_profile(player_id: int):
             o["ci_excludes_zero"] = None if o["ci_low"] is None else bool(o["ci_low"] > 0 or o["ci_high"] < 0)
             rapm.append(o)
 
+        # ── Rating Tracker: the same ratings carried across seasons (player_rating_tracker), both kinds ──
+        cur.execute("""SELECT kind, season, teams, poss, orapm, drapm, rapm, orapm_sd, drapm_sd, rapm_sd, rapm_ci_low, rapm_ci_high,
+                              carried, prior_o, prior_d, bpm, first_season, seasons_seen, qualified, rk, n_qualified
+                       FROM (SELECT t.*,
+                                    RANK() OVER (PARTITION BY t.kind, t.season, t.qualified ORDER BY t.rapm DESC) AS rk,
+                                    COUNT(*) OVER (PARTITION BY t.kind, t.season, t.qualified) AS n_qualified
+                             FROM player_rating_tracker t) x
+                       WHERE player_id = %s ORDER BY season, kind""", (player_id,))
+        tkeys = ["kind", "season", "teams", "poss", "orapm", "drapm", "rapm", "orapm_sd", "drapm_sd", "rapm_sd", "ci_low", "ci_high",
+                 "carried", "prior_o", "prior_d", "bpm", "first_season", "seasons_seen", "qualified", "rank", "n_qualified"]
+        tracker = []
+        for x in cur.fetchall():
+            o = {k: (_num(v, 2) if isinstance(v, float) else v) for k, v in zip(tkeys, x)}
+            if not o["qualified"]:
+                o["rank"], o["n_qualified"] = None, None
+            o["ci_excludes_zero"] = None if o["ci_low"] is None else bool(o["ci_low"] > 0 or o["ci_high"] < 0)
+            tracker.append(o)
+        tfit = tracker_fit()
+        tracker_block = {"rows": tracker,
+                         "qualified_poss": tfit["qualified_poss"] if tfit else None,
+                         "fit": {k: tfit[k] for k in ("estimated_on", "phi", "drift_sd", "newcomer_sd", "bpm_sd", "prior_scale")} if tfit else None}
+
         # ── Next season: the Marcel-style baseline projection (player_projections) ──
         cur.execute("""SELECT p.stat, s.label, s.format, s.higher_is_better, p.projection, p.lo, p.hi, p.own_weight,
                               p.seasons_used, p.last_season, p.last_value, p.age_adjustment, p.age_known, p.age_next,
@@ -382,6 +406,7 @@ def get_player_profile(player_id: int):
         "on_off": {"rows": on_off, "qualified_minutes": ON_OFF_MIN_MINUTES, "few_off_minutes": ON_OFF_FEW_OFF},
         "rapm": {"rows": rapm,
                  "qualified_poss": next(iter(rapm_fits().values()))["qualified_poss"] if rapm_fits() else None},
+        "rating_tracker": tracker_block,
         "rim_deterrence": rim_deterrence_block(player_id),
         "assists": {"seasons": assist_seasons(player_id)},
         "similarity": {"seasons": sim_seasons},
@@ -398,7 +423,7 @@ def get_player_profile(player_id: int):
         "_source": make_source(
             ["player_season_stats", "player_team_stints", "player_bio", "player_awards", "draft_history",
              "player_roles", "greats", "player_shots", "scouting_splits", "defender_dad", "player_gravity",
-             "contract_value", "player_wpa_totals", "player_shot_making", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue", "player_situational_splits", "player_projections", "player_rapm", "rim_deterrence", "player_assisted_share", "assist_pairs", "possessions", "lineup_stints"],
+             "contract_value", "player_wpa_totals", "player_shot_making", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue", "player_situational_splits", "player_projections", "player_rapm", "player_rating_tracker", "rim_deterrence", "player_assisted_share", "assist_pairs", "possessions", "lineup_stints"],
             "nba_api (stats.nba.com), Basketball-Reference via Kaggle, ESPN play-by-play, Kaggle salary datasets",
         ),
     }

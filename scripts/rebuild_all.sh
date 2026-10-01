@@ -194,6 +194,7 @@ step derived -        build_hot_streak_persistence.py
 step derived -        build_situational_splits.py
 step derived -        build_projections.py
 step derived -        build_rapm.py                      # ~5 min
+step derived -        build_rating_tracker.py            # ~8 min; reads player_rapm (validation); its fit row is read by paper_eval.py
 step derived -        build_rotations.py
 step derived -        build_rim_deterrence.py
 step derived -        build_assist_network.py

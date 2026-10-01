@@ -184,6 +184,8 @@ PRODUCERS = {
     "build_hot_streak_persistence.py": ("derived", ["hot_streak_persistence"]),
     "build_situational_splits.py": ("derived", ["player_situational_splits", "situational_split_league"]),
     "build_rapm.py": ("derived", ["player_rapm", "rapm_fits", "rapm_lambda_cv", "rapm_validation"]),
+    "build_rating_tracker.py": ("derived", ["player_rating_tracker", "rating_tracker_fit", "rating_tracker_curve",
+                                            "rating_tracker_validation"]),
     "build_rotations.py": ("derived", ["rotation_closing_games", "rotation_closing_stints"]),
     "build_rim_deterrence.py": ("derived", ["rim_deterrence", "rim_deterrence_seasons"]),
     "build_assist_network.py": ("derived", ["assist_pairs", "player_assisted_share", "assist_seasons"]),

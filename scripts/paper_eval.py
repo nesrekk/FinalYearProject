@@ -67,6 +67,22 @@ impact (RAPM, BPM, on/off; scripts/build_rapm.py's design matrix and fits)
   are refitted on actual points with the player ratings held fixed (as for
   BPM), so every model is scored on the same actual outcomes. No multi-season
   window version (the paper compares the one-season forms).
+  rapm_tracker (round 6 step 7; scripts/rating_tracker_lib.py, built by
+  scripts/build_rating_tracker.py) is the state-space RAPM whose ratings carry
+  across seasons: each player's offence and defence rating drifts between
+  seasons (phi x last season + drift), newcomers start at average, and each
+  season's BPM is folded into the prior as a noisy measurement before the
+  season's stints. Its five hyperparameters are read from rating_tracker_fit,
+  where build_rating_tracker.py chose them on the tune pairs by the same
+  pooled next-season game RMSE as rapm_single's lambda (the row says so and
+  this script checks: estimated on the tune span, not a --quick run, and the
+  stored tune RMSE reproduces here to 1e-6). The model is then run here from
+  the same rows: impact_next uses the filtered ratings after season S (nothing
+  after S; a player the tracker has seen who missed S keeps his carried
+  rating, which the one-season versions cannot do), impact_heldout refits
+  each fold from the prior the filter brought into the season, and
+  impact_reliability pairs the filtered totals. The platform's stored
+  filtered ratings must equal this run's (checked to the stored rounding).
 
 xfg (the expected-FG model; scripts/build_shot_making.py's features and fits)
   A model that scores season T is trained on every regular-season shot
@@ -126,8 +142,8 @@ Usage (Python: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3):
     cd scripts && python3 paper_eval.py                    # everything
     cd scripts && python3 paper_eval.py --only impact,sim  # some stages
 Then rerun paper_numbers.py. Rerun this after build_lineup_stints.py,
-load_bref_bpm_vorp.py, paper_xrapm.py, a player_shots reload, or a game_scores /
-postseason refresh.
+load_bref_bpm_vorp.py, paper_xrapm.py, build_rating_tracker.py, a player_shots
+reload, or a game_scores / postseason refresh.
 """
 
 import argparse
@@ -150,6 +166,7 @@ from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 import build_rapm as R
 import build_season_sim as BS
 import build_shot_making as S
+import rating_tracker_lib as T
 from db_config import DB_CONFIG
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
@@ -448,6 +465,40 @@ def impact_stage(conn, out):
     bpmf = {s: bpm_fit(s) for s in seasons}
     onof = {s: onoff_fit(s) for s in seasons}
 
+    # ---- the Rating Tracker (round 6 step 7): hyperparameters chosen on the tune pairs by build_rating_tracker.py ----
+    log("impact: rating tracker")
+    assert T.TUNE_SEASONS == TUNE
+    tf = pd.read_sql_query("""SELECT estimated_on, criterion, lambda0, lambda_q, lambda_b, prior_scale, phi, tune_rmse, tune_games,
+                                     sigma2, quick FROM rating_tracker_fit WHERE version = 'tracker'""", conn)
+    assert len(tf) == 1, "rating_tracker_fit is empty: run scripts/build_rating_tracker.py first"
+    tf = tf.iloc[0]
+    assert tf.estimated_on == span(TUNE), f"the tracker's hyperparameters were chosen on {tf.estimated_on}, not {span(TUNE)}"
+    assert not bool(tf.quick), "rating_tracker_fit is from a --quick run: rerun build_rating_tracker.py without it"
+    tpar = {k: float(tf[k]) for k in T.PARAMS}
+    tdata = T.TrackerData(designs, bpm, folds=True)
+    t_rmse, t_games = T.next_rmse(tdata, tpar, T.tune_pairs(TUNE))
+    assert abs(t_rmse - float(tf.tune_rmse)) < 1e-6 and t_games == int(tf.tune_games), (t_rmse, tf.tune_rmse, t_games, tf.tune_games)
+    tfilter = T.Filter(tdata, tpar, keep=True)
+    stored = pd.read_sql_query("SELECT season, player_id, orapm, drapm FROM player_rating_tracker WHERE kind = 'filtered'", conn)
+    worst = 0.0
+    for s in seasons:
+        o, d_ = tfilter.ratings(s)
+        g = stored[stored.season == s]
+        assert len(g) == designs[s].P, (s, len(g), designs[s].P)
+        worst = max(worst, float(np.max(np.abs(g.player_id.map(o).to_numpy() - g.orapm.to_numpy()))),
+                    float(np.max(np.abs(g.player_id.map(d_).to_numpy() - g.drapm.to_numpy()))))
+    assert worst < 1e-3, f"player_rating_tracker's filtered ratings differ from this run's by up to {worst}"
+    tracker = {s: Fit(*tfilter.ratings(s), *tfilter.nuisance(s)) for s in seasons}
+    for k in T.PARAMS:
+        out.choice("impact", "rapm_tracker", k, round(tpar[k], 6), tf.estimated_on,
+                   f"{tf.criterion} (scripts/build_rating_tracker.py, stored in rating_tracker_fit)",
+                   note=f"pooled tune next-season game RMSE at the choice {float(tf.tune_rmse):.4f} over {int(tf.tune_games)} games")
+    out.choice("impact", "rapm_tracker", "sigma2", round(float(tf.sigma2), 3), tf.estimated_on,
+               "profiled stint noise variance at the chosen hyperparameters (behind the stored standard deviations only)")
+    out.metric("impact_next", "tune", "rapm_tracker", [n_ for _, n_ in tune_pairs], "game_rmse", t_rmse, t_games, variant="chosen",
+               note="the criterion's value at the chosen hyperparameters (build_rating_tracker.py); the pooled tune row below is the same number")
+    log(f"impact: tracker {T.fmt(tpar)}; tune RMSE {t_rmse:.4f}; stored filtered ratings reproduced to {worst:.1e}")
+
     # ---- tune: one scale for the published BPM and on/off ----------------------
     scales = {}
     for name, fits in (("bpm", bpmf), ("onoff", onof)):
@@ -466,7 +517,7 @@ def impact_stage(conn, out):
     def models_for(s):
         m = {"rapm_single": single[s], "rapm_prior": prior[s], "zero": zero[s], "bpm": bpmf[s], "onoff": onof[s],
              "bpm_scaled": bpmf[s].scaled(scales["bpm"]), "onoff_scaled": onof[s].scaled(scales["onoff"]),
-             "xrapm_single": xsingle[s], "xrapm_prior": xprior[s]}
+             "xrapm_single": xsingle[s], "xrapm_prior": xprior[s], "rapm_tracker": tracker[s]}
         if s in multi:
             m["rapm_multi"] = multi[s]
         return m
@@ -505,7 +556,7 @@ def impact_stage(conn, out):
         fold_grams = {k: d.gram(mask=d.fold == k) for k in folds}
         G_all, b_all = grams[s][0], grams[s][1]
         preds = {m: np.zeros(d.n) for m in ("rapm_single", "rapm_prior", "zero", "bpm", "bpm_scaled", "onoff", "onoff_scaled",
-                                             "xrapm_single", "xrapm_prior")}
+                                             "xrapm_single", "xrapm_prior", "rapm_tracker")}
         xd = xdesigns[s]
         xfold_grams = {k: xd.gram(mask=xd.fold == k) for k in folds}
         xG_all, xb_all = xgrams[s][0], xgrams[s][1]
@@ -528,6 +579,8 @@ def impact_stage(conn, out):
                 preds["rapm_multi"][test] = md.X[mt] @ beta
             beta, _ = R.fit_nuisance(d, train, np.zeros(d.ncol), False)
             preds["zero"][test] = d.X[test] @ beta
+            # the tracker: the prior the filter brought into the season (earlier seasons + this season's BPM) + the training folds
+            preds["rapm_tracker"][test] = d.X[test] @ tfilter.heldout_beta(s, k)
             # expected-points ratings from the training folds, nuisance refitted on the training folds' actual points
             xG, xb = xG_all - xfold_grams[k][0], xb_all - xfold_grams[k][1]
             for name, xbeta in (("xrapm_single", xd.solve(xG, xb, lam_x)), ("xrapm_prior", xd.solve(xG, xb, lam_x, pv[s] * scale_x))):
@@ -577,6 +630,7 @@ def impact_stage(conn, out):
             "onoff": (onoff_full[s], onoff_full[nxt]),
             "xrapm_single": (xsingle[s].total(), xsingle[nxt].total()),
             "xrapm_prior": (xprior[s].total(), xprior[nxt].total()),
+            "rapm_tracker": (tracker[s].total(), tracker[nxt].total()),
         }
         for model, (a, b) in series.items():
             pairs = [(p, a[p], b[p]) for p in both if p in a and p in b]

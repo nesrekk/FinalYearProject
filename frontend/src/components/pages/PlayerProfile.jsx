@@ -12,6 +12,7 @@ import ShotMixHistory from '../common/ShotMixHistory';
 import SituationalSplitsBlock from '../common/SituationalSplitsBlock';
 import PossessionBlock from '../common/PossessionBlock';
 import AssistBlock from '../common/AssistBlock';
+import RatingTrackerBlock from '../common/RatingTrackerBlock';
 import { ShotMakingInfo, ShotMakingTable } from '../common/ShotMaking';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
@@ -953,6 +954,11 @@ function missingReasons(d) {
             ? `Five-man stints from play-by-play cover ${span(cov.rapm)}; ${career}.`
             : `No tracked stint with him on the floor (${span(cov.rapm)}): his minutes fall in games or stints the play-by-play couldn't place.`]);
     }
+    if (d.rating_tracker && !d.rating_tracker.rows.length && cov.rating_tracker?.from) {
+        out.push(['Rating Tracker', endedBefore(cov.rating_tracker.from)
+            ? `Five-man stints from play-by-play cover ${span(cov.rating_tracker)}; ${career}.`
+            : `No tracked stint with him on the floor (${span(cov.rating_tracker)}): the tracker only rates seasons with stints.`]);
+    }
     if (d.assists && !d.assists.seasons.length && cov.assists?.from) {
         out.push(['Assists', endedBefore(cov.assists.from)
             ? `Assists by passer and scorer come from play-by-play, ${span(cov.assists)}; ${career}.`
@@ -1034,6 +1040,7 @@ export default function PlayerProfile({ onNavigate }) {
         ['projection', 'Next season', (d.projections?.rows.length ?? 0) > 0],
         ['onoff', 'On/off', (d.on_off?.rows.length ?? 0) > 0],
         ['rapm', 'RAPM', (d.rapm?.rows.length ?? 0) > 0],
+        ['tracker', 'Tracker', (d.rating_tracker?.rows.length ?? 0) > 0],
         ['rim', 'Rim', (d.rim_deterrence?.rows.length ?? 0) > 0],
         ['assists', 'Assists', (d.assists?.seasons.length ?? 0) > 0],
         ['splits', 'Splits', (d.situational_splits?.seasons.length ?? 0) > 0],
@@ -1081,6 +1088,9 @@ export default function PlayerProfile({ onNavigate }) {
             {(d.projections?.rows.length ?? 0) > 0 && <NextSeason block={d.projections} player={d.player} onNavigate={onNavigate} />}
             {(d.on_off?.rows.length ?? 0) > 0 && <OnOff block={d.on_off} coverage={d.coverage.on_off} onNavigate={onNavigate} />}
             {(d.rapm?.rows.length ?? 0) > 0 && <RapmBlock block={d.rapm} coverage={d.coverage.rapm} onNavigate={onNavigate} />}
+            {(d.rating_tracker?.rows.length ?? 0) > 0 && (
+                <RatingTrackerBlock key={d.player.player_id} block={d.rating_tracker} coverage={d.coverage.rating_tracker} onNavigate={onNavigate} Section={Section} />
+            )}
             {(d.rim_deterrence?.rows.length ?? 0) > 0 && (
                 <RimBlock key={d.player.player_id} block={d.rim_deterrence} coverage={d.coverage.rim_deterrence} onNavigate={onNavigate} />
             )}

@@ -13,13 +13,17 @@ import TeamLink from '../common/TeamLink';
 import useChartCrosshair from '../../utils/useChartCrosshair';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/rapm.css';
+import '../../styles/tracker.css';
 
 // RAPM (?page=rapm, GET /rapm): regularized adjusted plus-minus for every
 // player from the play-by-play stints, in three versions (one season, a
 // three-season window, one season shrunk toward BPM), with bootstrap error
 // bars, the cross-validation curve that picked the shrinkage, and the
-// held-out tests against BPM, on/off and "everyone average". Link: version,
-// season, team, min (possessions), sort, dir.
+// held-out tests against BPM, on/off and "everyone average". A fourth
+// version, the Rating Tracker (round 6 step 7), carries ratings across
+// seasons: posterior sds instead of bootstrap errors, a drift profile
+// instead of the shrinkage curve, "as of then" or "with hindsight" (kind).
+// Link: version, season, kind, team, min (possessions), sort, dir.
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
@@ -39,12 +43,15 @@ const COLUMNS = {
     drapm: { label: 'DRAPM', title: 'Points per 100 the opponent scores less, the other nine held constant' },
     rapm: { label: 'RAPM', title: 'ORAPM + DRAPM' },
     bpm: { label: 'BPM', title: 'Basketball-Reference BPM for the same season (minutes-weighted over a window)' },
+    carried: { label: 'Carried in', title: 'What the tracker expected before the season started: last season\'s rating times the carry-over (a newcomer starts at average)' },
 };
+const KINDS = [['filtered', 'As of then'], ['smoothed', 'With hindsight']];
 
 function formFromParams(p, versions) {
     return {
         version: parseParam.oneOf(p, 'version', versions) ?? 'single',
         season: parseParam.int(p, 'season', { min: 2000, max: 2100 }),
+        kind: parseParam.oneOf(p, 'kind', KINDS.map((k) => k[0])) ?? 'filtered',
         team: parseParam.str(p, 'team')?.toUpperCase() ?? null,
         minPoss: parseParam.num(p, 'min', { min: 0, max: 20000 }),
         sort: parseParam.oneOf(p, 'sort', Object.keys(COLUMNS)) ?? 'rapm',
@@ -277,6 +284,103 @@ function LambdaChart({ curve, fit, season }) {
     );
 }
 
+// ─── The tracker's drift profile: tune next-season RMSE (the criterion) and
+// the likelihood along the drift grid, the chosen drift marked ────────────────
+function DriftChart({ curve, fit, season }) {
+    const [boxRef, W] = useWidth();
+    const svgRef = useRef(null);
+    const H = W < 480 ? 260 : 300;
+    const pts = [...curve].sort((a, b) => a.lambda_q - b.lambda_q);
+    const lx = (l) => Math.log10(l);
+    const xMin = lx(pts[0].lambda_q);
+    const xMax = lx(pts[pts.length - 1].lambda_q);
+    const rmse = pts.map((c) => c.next_rmse);
+    const rMin = Math.min(...rmse);
+    const rMax = Math.max(...rmse);
+    const rPad = (rMax - rMin) * 0.15 || 0.01;
+    const llMin = Math.min(...pts.map((c) => c.neg2ll));
+    const dll = pts.map((c) => c.neg2ll - llMin);
+    const dMax = Math.max(...dll, 1);
+    const ML = { l: 52, r: 52, t: 16, b: 40 };
+    const sx = (l) => ML.l + 8 + ((lx(l) - xMin) / (xMax - xMin)) * (W - ML.l - ML.r - 16);
+    const sy = (v) => H - ML.b - ((v - (rMin - rPad)) / (rMax + rPad - (rMin - rPad))) * (H - ML.t - ML.b);
+    const sy2 = (v) => H - ML.b - (v / (dMax * 1.15)) * (H - ML.t - ML.b);
+    const chosen = pts.find((c) => c.chosen) ?? pts.reduce((a, b) => (b.next_rmse < a.next_rmse ? b : a));
+    const llBest = pts.reduce((a, b) => (b.neg2ll < a.neg2ll ? b : a));
+    const crosshairPoints = pts.map((c, i) => ({ x: sx(c.lambda_q), y: sy(c.next_rmse), c, dll: dll[i] }));
+    const { point: hovered, overlayProps } = useChartCrosshair(crosshairPoints, W);
+    const yTicks = [rMin, (rMin + rMax) / 2, rMax];
+    const y2Ticks = [0, dMax / 2, dMax];
+    const aria = `Drift profile, hyperparameters chosen on ${fit.estimated_on}: next-season RMSE is lowest at drift λ ${Math.round(chosen.lambda_q).toLocaleString()} (${chosen.next_rmse.toFixed(3)}); the likelihood prefers ${Math.round(llBest.lambda_q).toLocaleString()}.`;
+    return (
+        <div className="rx-chart rp-panel" ref={boxRef}>
+            <ChartExport svgRef={svgRef} name={`rating tracker drift profile ${seasonLabel(season)}`} />
+            <div style={{ position: 'relative' }}>
+                <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={aria}>
+                    {yTicks.map((t) => (
+                        <g key={`y${t}`}>
+                            <line className="rx-grid" x1={ML.l} x2={W - ML.r} y1={sy(t)} y2={sy(t)} />
+                            <text className="rx-tick" x={ML.l - 8} y={sy(t)} textAnchor="end" dominantBaseline="middle">{t.toFixed(2)}</text>
+                        </g>
+                    ))}
+                    {y2Ticks.map((t) => (
+                        <text key={`y2${t}`} className="rx-tick" x={W - ML.r + 8} y={sy2(t)} textAnchor="start" dominantBaseline="middle">{t >= 1000 ? `+${(t / 1000).toFixed(1)}k` : `+${Math.round(t)}`}</text>
+                    ))}
+                    {pts.filter((_, i) => W >= 480 || i % 2 === 0).map((c) => (
+                        <text key={`x${c.lambda_q}`} className="rx-tick" x={sx(c.lambda_q)} y={H - ML.b + 16} textAnchor="middle">{c.lambda_q >= 1000 ? `${Math.round(c.lambda_q / 1000)}k` : Math.round(c.lambda_q)}</text>
+                    ))}
+                    <text className="rx-axis" x={(ML.l + W - ML.r) / 2} y={H - 6} textAnchor="middle">Drift λ (log scale; higher = ratings change less between seasons)</text>
+                    <text className="rx-axis" transform={`translate(12 ${(ML.t + H - ML.b) / 2}) rotate(-90)`} textAnchor="middle">Next-season RMSE (tune)</text>
+                    <text className="rx-axis" transform={`translate(${W - 10} ${(ML.t + H - ML.b) / 2}) rotate(90)`} textAnchor="middle">−2 log likelihood above its minimum</text>
+                    <polyline className="rt-curve-line--alt" points={pts.map((c, i) => `${sx(c.lambda_q).toFixed(1)},${sy2(dll[i]).toFixed(1)}`).join(' ')} />
+                    <polyline className="rt-curve-line" points={pts.map((c) => `${sx(c.lambda_q).toFixed(1)},${sy(c.next_rmse).toFixed(1)}`).join(' ')} />
+                    {hovered && <line x1={hovered.x} y1={ML.t} x2={hovered.x} y2={H - ML.b} className="chart-crosshair-line" />}
+                    <circle className="rp-chosen" cx={sx(chosen.lambda_q)} cy={sy(chosen.next_rmse)} r={5.5} />
+                    <text className="rp-mark" x={sx(chosen.lambda_q)} y={sy(chosen.next_rmse) - 10} textAnchor="middle">chosen: {Math.round(chosen.lambda_q).toLocaleString()}</text>
+                    <rect x={ML.l} y={ML.t} width={W - ML.l - ML.r} height={H - ML.t - ML.b} className="chart-crosshair-overlay"
+                        role="slider" aria-label="Drift profile, use arrow keys to step through"
+                        aria-valuetext={hovered ? `drift λ ${Math.round(hovered.c.lambda_q)}: RMSE ${hovered.c.next_rmse.toFixed(3)}, likelihood +${Math.round(hovered.dll)}` : undefined}
+                        {...overlayProps} />
+                </svg>
+                {hovered && (
+                    <ChartTooltip x={hovered.x} y={hovered.y} chartWidth={W} chartHeight={H}>
+                        <div style={{ fontWeight: 600 }}>drift λ = {Math.round(hovered.c.lambda_q).toLocaleString()}</div>
+                        <div>next-season RMSE {hovered.c.next_rmse.toFixed(3)}</div>
+                        <div style={{ color: 'var(--text-3) ' }}>−2 log likelihood +{Math.round(hovered.dll).toLocaleString()} over its minimum</div>
+                    </ChartTooltip>
+                )}
+            </div>
+            <div className="rp-legend">
+                <span>next-season RMSE on the tune pairs (the criterion)</span>
+                <span className="rp-legend--alt">likelihood of the tune seasons&apos; stints (stored, not used)</span>
+            </div>
+        </div>
+    );
+}
+
+function TrackerParams({ fit }) {
+    const pct = (v) => `${Math.round(v * 100)}%`;
+    const k = (v) => Math.round(v).toLocaleString();
+    const items = [
+        ['Carry-over φ', fit.phi.toFixed(2), `${pct(fit.phi)} of last season's rating carries into the next before any game`],
+        ['Drift between seasons', `± ${num(fit.drift_sd, 2)}`, `points per 100 per side a rating may move between seasons (λ ${k(fit.lambda_q)})`],
+        ['Newcomer spread', `± ${num(fit.newcomer_sd, 2)}`, `a first season starts at average with this spread (λ ${k(fit.lambda0)}: the ordinary ridge)`],
+        ['BPM weight', `${k(fit.lambda_b)} poss.`, `a season's BPM counts like this many possessions of stint evidence (± ${num(fit.bpm_sd, 2)} per side)`],
+        ['BPM scale', fit.prior_scale.toFixed(2), 'the measurement is this times OBPM / DBPM'],
+    ];
+    return (
+        <div className="rt-params">
+            {items.map(([label, value, note]) => (
+                <div className="rt-param" key={label}>
+                    <span className="rt-param-label">{label}</span>
+                    <span className="rt-param-value">{value}</span>
+                    <span className="rt-param-note">{note}</span>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 function ValidationTable({ rows, title, note, name }) {
     if (!rows?.length) return null;
     const rated = rows.filter((r) => r.game_rmse != null);
@@ -333,13 +437,13 @@ export default function Rapm() {
             .catch(() => setOptionsError('RAPM couldn\'t load. Is the impact API (port 8002) running, and has scripts/build_rapm.py been run?'));
     }, [params]);
 
-    const reqKey = form ? JSON.stringify([form.version, form.season, form.team, form.minPoss]) : null;
+    const reqKey = form ? JSON.stringify([form.version, form.season, form.team, form.minPoss, form.version === 'tracker' ? form.kind : null]) : null;
     useEffect(() => {
         if (!form) return undefined;
         let active = true;
         fetchRapm({
             version: form.version, season: form.season ?? undefined, team: form.team ?? undefined,
-            min_poss: form.minPoss ?? undefined,
+            min_poss: form.minPoss ?? undefined, kind: form.version === 'tracker' ? form.kind : undefined,
         })
             .then((d) => { if (active) setResult({ key: reqKey, data: d }); })
             .catch((e) => { if (active) setResult({ key: reqKey, error: e.response?.data?.detail || 'The leaderboard couldn\'t load.' }); });
@@ -352,6 +456,7 @@ export default function Rapm() {
     const shownSeason = form?.season ?? data?.season ?? null;
     useUrlSync(form && {
         version: form.version === 'single' ? null : form.version, season: shownSeason, team: form.team,
+        kind: form.version === 'tracker' && form.kind !== 'filtered' ? form.kind : null,
         min: form.minPoss, sort: form.sort === 'rapm' ? null : form.sort, dir: form.dir === 'desc' ? null : form.dir,
     });
 
@@ -374,6 +479,9 @@ export default function Rapm() {
     const val = data.validation;
     const isPrior = data.version === 'prior';
     const isMulti = data.version === 'multi';
+    const isTracker = data.version === 'tracker';
+    const tr = isTracker ? data.tracker : null;
+    const tfit = tr?.fit;
     const windowLabel = isMulti ? `${seasonLabel(fit.seasons_from)} to ${seasonLabel(fit.seasons_to)}` : seasonLabel(season);
     const nextRows = val.next_season_from_this.length ? val.next_season_from_this : val.next_season;
     const nextTitle = val.next_season_from_this.length
@@ -382,6 +490,15 @@ export default function Rapm() {
     const y2y = val.year_to_year;
     const y2yText = (m) => { const r = y2y.find((x) => x.model === m); return r ? `${num(r.corr, 2)} (${r.players} players)` : null; };
     const cols = ['player_name', 'teams', 'games', 'minutes', 'poss', 'orapm', 'drapm', 'rapm'];
+    const kindLabel = KINDS.find((k) => k[0] === (tr?.kind ?? 'filtered'))[1].toLowerCase();
+    const trackerTests = isTracker ? [...val.next_season_from_this, ...val.next_season] : [];
+    const trBest = (rows) => {
+        const t = rows.find((r) => r.model === 'rapm_tracker');
+        if (!t) return null;
+        const others = rows.filter((r) => r.model !== 'rapm_tracker' && r.game_rmse != null);
+        const best = others.reduce((a, b) => (a == null || b.game_rmse < a.game_rmse ? b : a), null);
+        return best ? { t, best } : null;
+    };
 
     return (
         <section className="dashboard-card lb-card oo-card">
@@ -412,6 +529,17 @@ export default function Rapm() {
             <p className="rp-version-blurb">{version.blurb}</p>
 
             <div className="lb-controls">
+                {isTracker && (
+                    <label>
+                        <span>Estimate</span>
+                        <div className="tab-bar lb-modes rt-kind" role="tablist" aria-label="Kind of estimate">
+                            {KINDS.map(([id, lab]) => (
+                                <button key={id} type="button" role="tab" aria-selected={form.kind === id}
+                                    className={`tab-btn ${form.kind === id ? 'tab-btn--active' : ''}`} onClick={() => set({ kind: id })}>{lab}</button>
+                            ))}
+                        </div>
+                    </label>
+                )}
                 <label>
                     <span>{isMulti ? 'Window ending' : 'Season'}</span>
                     <select className="input-field" value={season} onChange={(e) => set({ season: Number(e.target.value) })}>
@@ -435,6 +563,24 @@ export default function Rapm() {
             {error && <p className="error-message">{error}</p>}
 
             <div className={loading ? 'lb-results lb-results--stale' : 'lb-results'} aria-busy={loading}>
+                {isTracker ? (
+                    <>
+                        <p className="rx-verdict">
+                            <strong>{windowLabel}, {kindLabel}: {fit.players} players in {int(fit.stints)} tracked stints of {int(fit.games)} games; {data.noise.qualified}
+                                {data.team ? ` league-wide` : ''} clear {int(floor)} possessions; {tr.n_carried} carried a rating in from an earlier season and {tr.n_newcomers} started new.</strong>{' '}
+                            {tr.kind === 'filtered'
+                                ? 'As of then: each rating is the posterior after this season\'s games, using nothing later, so it is what a forecast made at the end of the season could have used.'
+                                : 'With hindsight: every later season\'s games weigh in through the smoother, so this is the best guess of what he was, not what could have been known at the time.'}{' '}
+                            The five hyperparameters were chosen on {tfit.estimated_on} by next-season game prediction (pooled RMSE {num(tfit.tune_rmse, 3)} over {int(tfit.tune_games)} games, the same criterion as the other versions&apos; λ under the paper&apos;s protocol) and held fixed, so {seasonLabel(tfit.seasons_to - 1)} and {seasonLabel(tfit.seasons_to)} are out of sample.
+                            The home side scores {signed(fit.home_edge_per_100)} per 100 possessions more than an identical away side.{' '}
+                            {data.noise.ci_excludes_zero} of the {data.noise.qualified} qualified intervals clear zero (about {data.noise.expected_by_chance} would by chance).
+                            {data.noise.corr_with_bpm != null && <> Correlation with BPM among them: r = {num(data.noise.corr_with_bpm, 2)}, higher than one-season RAPM&apos;s because BPM is one of the tracker&apos;s inputs.</>}
+                            {' '}{fit.players_with_prior} of {fit.players} players had a BPM to measure against.
+                            {tfit.ml_estimate && <> The state-space model&apos;s own maximum-likelihood estimate (drift λ {Math.round(tfit.ml_estimate.par.lambda_q).toLocaleString()}, BPM weight {Math.round(tfit.ml_estimate.par.lambda_b).toLocaleString()}, φ {tfit.ml_estimate.par.phi.toFixed(2)}) is stored but not used: it scores a season&apos;s stints against that season&apos;s BPM, which already contains the season&apos;s point differential, and predicts the next season worse (RMSE {num(tfit.ml_estimate.tune_rmse, 3)}).</>}
+                        </p>
+                        <TrackerParams fit={tfit} />
+                    </>
+                ) : (
                 <p className="rx-verdict">
                     <strong>{windowLabel}: {fit.players} players in {int(fit.stints)} tracked stints of {int(fit.games)} games; {data.noise.qualified}
                         {data.team ? ` league-wide` : ''} clear {int(floor)} possessions.</strong>{' '}
@@ -446,27 +592,39 @@ export default function Rapm() {
                     {data.noise.corr_with_bpm != null && <> Correlation with BPM among them: r = {num(data.noise.corr_with_bpm, 2)}, positive and well under 1.</>}
                     {isPrior && fit.players_with_prior != null && <> {fit.players_with_prior} of {fit.players} players had a BPM to shrink toward; the rest shrink toward zero.</>}
                 </p>
+                )}
 
                 <div className="rp-grid">
                     <div>
-                        <h3 className="rp-panel-title">RAPM against BPM, qualified players</h3>
+                        <h3 className="rp-panel-title">{isTracker ? 'Tracker' : 'RAPM'} against BPM, qualified players</h3>
                         <ScatterChart rows={data.players} season={season} versionLabel={version.label} corr={data.noise.corr_with_bpm} />
                     </div>
                     <div>
-                        <h3 className="rp-panel-title">The shrinkage curve</h3>
-                        <LambdaChart curve={data.lambda_curve} fit={fit} season={season} />
+                        <h3 className="rp-panel-title">{isTracker ? 'How much drift the data want' : 'The shrinkage curve'}</h3>
+                        {isTracker ? <DriftChart curve={tr.curve} fit={tfit} season={season} /> : <LambdaChart curve={data.lambda_curve} fit={fit} season={season} />}
                     </div>
                 </div>
 
                 <div className="rp-grid">
                     <ValidationTable rows={val.held_out_games} title={`Held-out games within ${seasonLabel(season)}`}
                         name={`rapm validation held-out ${seasonLabel(season)}`}
-                        note="Each fifth of the season's games predicted by a fit on the other four. BPM here is the full-season published value with one scale fitted on the training games (it saw the held-out games; RAPM didn't); on/off is recomputed from the training games only. The RAPM rows use the λ chosen on these same folds, so they are very slightly flattered." />
+                        note={isTracker
+                            ? 'Each fifth of the season\'s games predicted by a fit on the other four; the tracker\'s row refits each fold from the prior the filter brought into the season (earlier seasons and this season\'s BPM, the same for every fold). The other rows are the RAPM page\'s own, on the same folds. BPM here is the full-season published value, which saw the held-out games.'
+                            : "Each fifth of the season's games predicted by a fit on the other four. BPM here is the full-season published value with one scale fitted on the training games (it saw the held-out games; RAPM didn't); on/off is recomputed from the training games only. The RAPM rows use the λ chosen on these same folds, so they are very slightly flattered."} />
                     {nextTitle && (
                         <ValidationTable rows={nextRows} title={nextTitle} name={`rapm validation next season ${seasonLabel(season)}`}
-                            note={`Ratings used as published (scale 1), only the intercept and home term refitted on the later season. Players without a rating (rookies, newcomers) count as average for every model; "Rated" is the share of players on the floor who had one, and in brackets the share of possessions where all ten did. Year-to-year correlation among players qualified in both seasons${y2y.length ? `: RAPM ${y2yText('rapm_single') ?? '—'}, BPM ${y2yText('bpm') ?? '—'}, on/off ${y2yText('onoff') ?? '—'}` : ' is not on file for this season'}.`} />
+                            note={isTracker
+                                ? `Ratings used as published (scale 1), only the intercept and home term refitted on the later season; every version rescored here on the same rows. The tracker's "as of then" ratings only: the with-hindsight kind has seen the later season and is not scored. A player the tracker has seen who missed the earlier season keeps his carried rating, which the one-season versions cannot do ("Rated" shows the difference). Year-to-year correlation among players qualified in both seasons${y2y.length ? `: tracker ${y2yText('rapm_tracker') ?? '—'}, with hindsight ${y2yText('rapm_tracker_smoothed') ?? '—'}, BPM-prior RAPM ${y2yText('rapm_prior') ?? '—'}, one-season RAPM ${y2yText('rapm_single') ?? '—'}, BPM ${y2yText('bpm') ?? '—'}` : ' is not on file for this season'}; the tracker's is higher by construction (last season is part of this season's estimate), a smoothness, not evidence.`
+                                : `Ratings used as published (scale 1), only the intercept and home term refitted on the later season. Players without a rating (rookies, newcomers) count as average for every model; "Rated" is the share of players on the floor who had one, and in brackets the share of possessions where all ten did. Year-to-year correlation among players qualified in both seasons${y2y.length ? `: RAPM ${y2yText('rapm_single') ?? '—'}, BPM ${y2yText('bpm') ?? '—'}, on/off ${y2yText('onoff') ?? '—'}` : ' is not on file for this season'}.`} />
                     )}
                 </div>
+                {isTracker && trBest(trackerTests) && (
+                    <p className="rp-panel-note">
+                        {(() => { const { t, best } = trBest(trackerTests); const d = t.game_rmse - best.game_rmse; return (
+                            <>On the next-season test above the tracker&apos;s game-margin RMSE is {num(t.game_rmse, 2)} against {num(best.game_rmse, 2)} for the best other model ({best.model_label}): {Math.abs(d) < 0.005 ? 'a tie' : d < 0 ? `${num(-d, 2)} better` : `${num(d, 2)} worse`}. Whether such gaps are outside noise is the paper&apos;s question (paired bootstrap over games under its protocol); the Methodology card quotes the answer.</>
+                        ); })()}
+                    </p>
+                )}
 
                 <TableExport name={`rapm ${data.version} ${data.team ?? 'league'} ${seasonLabel(season)}`} />
                 <div className="table-wrapper">
@@ -478,8 +636,9 @@ export default function Rapm() {
                                     <SortHeader key={k} colKey={k} sort={form.sort} dir={form.dir} onSort={onSort}
                                         className={COLUMNS[k].text ? undefined : `lb-num ${k === 'rapm' ? 'lb-stat' : ''}`} />
                                 ))}
-                                <th className="lb-num" title="Bootstrap 95% interval for RAPM, resampling games">95% interval</th>
+                                <th className="lb-num" title={isTracker ? 'Posterior 95% interval (±1.96 sd) for the rating' : 'Bootstrap 95% interval for RAPM, resampling games'}>95% interval</th>
                                 {isPrior && <th className="lb-num" title="The value he was shrunk toward: scaled OBPM + DBPM">Prior</th>}
+                                {isTracker && <SortHeader colKey="carried" sort={form.sort} dir={form.dir} onSort={onSort} className="lb-num" />}
                                 <SortHeader colKey="bpm" sort={form.sort} dir={form.dir} onSort={onSort} className="lb-num" />
                             </tr>
                         </thead>
@@ -510,6 +669,7 @@ export default function Rapm() {
                                             <span className="rp-ci-text">{signed(r.rapm_ci_low)} to {signed(r.rapm_ci_high)}</span>
                                         </td>
                                         {isPrior && <td className="lb-num">{r.prior_o == null ? '—' : signed(r.prior_o + r.prior_d)}</td>}
+                                        {isTracker && <td className={`lb-num ${r.seasons_seen > 1 ? tone(r.carried) : ''}`} title={r.seasons_seen > 1 ? `Carried in: offence ${signed(r.carried_o)}, defence ${signed(r.carried_d)}; his ${r.seasons_seen}th season on file` : 'First season on file: starts at average'}>{r.seasons_seen > 1 ? signed(r.carried) : 'new'}</td>}
                                         <td className="lb-num">{signed(r.bpm)}</td>
                                     </tr>
                                 );
@@ -519,11 +679,20 @@ export default function Rapm() {
                 </div>
                 {rows.length === 0 && <p className="empty-message">No player here. Lower the possessions floor or pick another team.</p>}
                 <p className="page-subtitle lb-summary rp-foot">
-                    Units are points per 100 possessions, the same as BPM. A player&apos;s number is his effect with the other nine on the
-                    floor held constant, shrunk toward zero by λ, so stars sit lower than their on/off and everyone&apos;s spread is
-                    compressed (that is the point: it is what the data can support). † marks a row under the possessions floor.
-                    Stints from games whose play-by-play didn&apos;t reconcile, and stints with an unidentified player, are left out;
-                    the On/Off and Pair Chemistry pages list them. Descriptive of {windowLabel} only: no ageing, no health, no role.
+                    {isTracker ? (
+                        <>Units are points per 100 possessions, the same as BPM. A player&apos;s number is his effect with the other nine on the
+                        floor held constant, carried from season to season and measured against his BPM; the ± is a posterior standard
+                        deviation (the stint noise, estimated from the stints, over the evidence on him), not a bootstrap, and a 95% interval
+                        that includes zero is within noise. &quot;Carried in&quot; is the rating he brought into the season. † marks a row under
+                        the possessions floor. Stints from games whose play-by-play didn&apos;t reconcile, and stints with an unidentified
+                        player, are left out. {tr.kind === 'smoothed' ? 'With hindsight: not a forecast.' : 'As of then: a season with few minutes leans on what he carried in and on his BPM.'} No ageing, no health, no role.</>
+                    ) : (
+                        <>Units are points per 100 possessions, the same as BPM. A player&apos;s number is his effect with the other nine on the
+                        floor held constant, shrunk toward zero by λ, so stars sit lower than their on/off and everyone&apos;s spread is
+                        compressed (that is the point: it is what the data can support). † marks a row under the possessions floor.
+                        Stints from games whose play-by-play didn&apos;t reconcile, and stints with an unidentified player, are left out;
+                        the On/Off and Pair Chemistry pages list them. Descriptive of {windowLabel} only: no ageing, no health, no role.</>
+                    )}
                 </p>
             </div>
         </section>

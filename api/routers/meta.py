@@ -484,6 +484,13 @@ COVERAGE_MAP = [
         "used_by": ["rapm", "player"],
     },
     {
+        "table": "player_rating_tracker", "label": "Rating Tracker (RAPM that carries across seasons)", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM player_rating_tracker WHERE kind = 'filtered'", "range_fmt": "season_int",
+        "source": "scripts/build_rating_tracker.py (model in scripts/rating_tracker_lib.py): the same stint rows as RAPM, but each player's offence and defence rating is a hidden state that drifts between seasons (Kalman filter and smoother), with that season's Basketball-Reference OBPM/DBPM read as a noisy measurement; the drift, the newcomer spread, the BPM weight and scale are estimated by marginal likelihood on 2020-21 to 2023-24 and held fixed after (rating_tracker_fit). Two kinds per player-season: filtered (nothing after that season) and smoothed (with hindsight).",
+        "gap": "Only stints that reconciled with five identified players a side; a player with a BPM row but no tracked stint that season gets no BPM measurement that season. Posterior standard deviations assume Gaussian stint noise proportional to one over possessions (checked flat across stint lengths), not a bootstrap. The smoothed kind uses later seasons and must not be read as a forecast; rating_tracker_validation scores only the filtered kind.",
+        "used_by": ["rapm", "player"],
+    },
+    {
         "table": "rim_deterrence", "label": "Rim deterrence (opponents' shots by distance, defender on vs. off)", "group": "Models",
         "range_sql": "SELECT MIN(season), MAX(season) FROM rim_deterrence", "range_fmt": "season_int",
         "source": "scripts/build_rim_deterrence.py: every field-goal attempt from the play-by-play parser, placed in its lineup_stints stint by event number, distance from the NBA shot chart's coordinates (player_shots); per-season totals and checks in rim_deterrence_seasons.",
