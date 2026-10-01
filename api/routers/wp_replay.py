@@ -10,12 +10,33 @@ from impact_core import (
     WPA_MODEL,
     WPA_SCALER,
     _fetch_game_events,
+    _has_event_clock,
     _is_missed_field_goal,
     _wpa_model_required,
     get_db,
 )
 
 router = APIRouter()
+
+# ESPN games are replayed on the corrected clock (pbp_event_clock, scripts/build_event_clock.py): ESPN stamps made
+# shots a median 14 s late, rebounds 6 s, turnovers 5-10 s. nba_api games keep NBA.com's own clock (on time).
+CLOCK_NOTE = {
+    "corrected": ("Times are the corrected game clock: ESPN's play-by-play stamps made shots a median 14 seconds "
+                  "late (rebounds 6, turnovers 5-10), so every field goal matched to the NBA's shot chart takes the "
+                  "chart's time and other plays are placed around them (about 94% of plays within 2 seconds of "
+                  "NBA.com's own log, against 32% for ESPN's times)."),
+    "espn": "Times are ESPN's own play-by-play clock, which stamps made shots a median 14 seconds late.",
+    "nba": "Times are NBA.com's own play-by-play clock.",
+}
+
+
+def _replay_events(cursor, game_id):
+    """(events, clock label) for a replay: ESPN games on the corrected clock when it is built."""
+    if game_id.startswith("espn_"):
+        if _has_event_clock(cursor):
+            return _fetch_game_events(cursor, game_id, corrected_clock=True), "corrected"
+        return _fetch_game_events(cursor, game_id), "espn"
+    return _fetch_game_events(cursor, game_id), "nba"
 
 
 @router.get("/games/wp-replay/list")
@@ -84,7 +105,7 @@ def get_wp_replay(game_id: str):
             raise HTTPException(status_code=404, detail=f"No play-by-play found for game {game_id}.")
         game_date, home_team, away_team, home_win = game_row
 
-        events = _fetch_game_events(cursor, game_id)
+        events, clock = _replay_events(cursor, game_id)
 
     if not events:
         raise HTTPException(status_code=404, detail=f"No play-by-play events found for game {game_id}.")
@@ -127,12 +148,14 @@ def get_wp_replay(game_id: str):
             "Every real play-by-play event from this real game, run through the same real trained "
             "win-probability model used by the Clutch WPA leaderboard. home_wp is the model's real "
             "output (probability the home team wins) after that play; wpa is the real swing from the "
-            "previous play, from the home team's perspective."
+            "previous play, from the home team's perspective. " + CLOCK_NOTE[clock]
         ),
+        "clock": clock,
+        "clock_note": CLOCK_NOTE[clock],
         "points": points,
         "top_plays": top_plays,
         "_source": make_source(
-            ["pbp_games", "pbp_events"],
+            ["pbp_games", "pbp_events"] + (["pbp_event_clock"] if clock == "corrected" else []),
             "ESPN via sportsdataverse" if game_id.startswith("espn_") else "nba_api (stats.nba.com)",
         ),
     }
@@ -151,7 +174,7 @@ def get_wp_replay_whatif(game_id: str, event_id: int):
             raise HTTPException(status_code=404, detail=f"No play-by-play found for game {game_id}.")
         home_team, away_team = game_row
 
-        events = _fetch_game_events(cursor, game_id)
+        events, _ = _replay_events(cursor, game_id)
 
     if not events:
         raise HTTPException(status_code=404, detail=f"No play-by-play events found for game {game_id}.")

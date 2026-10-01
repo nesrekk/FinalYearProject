@@ -18,6 +18,14 @@ the running maximum of ESPN's score fields), so the score at 5:00 left
 plus the closing stretch adds up to the real final in every reconciled
 game.
 
+The clock (since round 6 step 3b): the game is replayed on the corrected
+clock of pbp_event_clock (build_event_clock.py), not ESPN's own, which
+stamps made shots a median 14 s late. That decides which baskets fall
+before the 5:00 cut, so the score at the cut (and which games count as
+close) is the real one. Substitutions are at dead balls, where ESPN's
+clock is on time, so the stints' boundaries barely move; the stints'
+times in lineup_stints stay ESPN's.
+
 Definitions (the page states them):
   closing stretch  the last five minutes of the fourth quarter and every
                    overtime (the NBA's clutch window, wpa_lib.CLUTCH_SECONDS);
@@ -38,14 +46,20 @@ Tables written (dropped and rebuilt):
                            credit rules), score at the piece's start.
 
 Check printed at the end: gluing the cut stints back together must give
-`lineup_stints` exactly (same fives, same seconds, same counts), game by
-game; the score at 5:00 plus the closing stretch must equal the final.
+`lineup_stints`' stints (same fives, same counts and points), game by game
+(`matches_stints`; an event-less stint of 2 s or less with no counterpart
+is skipped, `empty_stints_skipped`: two substitutions a moment apart by
+ESPN's clock can land on the same corrected second, and a stint with no
+time and no event isn't kept); `stint_shift` is the largest move of a stint boundary
+against lineup_stints' ESPN times (the corrected clock's doing); the score
+at 5:00 plus the closing stretch must equal the final.
 
 Usage:
     cd scripts && python3 build_rotations.py        (~80 s)
-Rerun after build_lineup_stints.py.
+Rerun after build_lineup_stints.py or build_event_clock.py.
 """
 
+import sys
 import time
 import warnings
 
@@ -54,7 +68,7 @@ import psycopg2
 import psycopg2.extras
 
 from db_config import DB_CONFIG
-from pbp_lineups import Game, STINT_STATS, elapsed, load_espn, load_season_names
+from pbp_lineups import Game, STINT_STATS, elapsed, game_clock, load_espn, load_season_names
 from wpa_lib import CLUTCH_MARGIN, CLUTCH_SECONDS
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
@@ -103,30 +117,62 @@ def glue(pieces):
     return out
 
 
+EMPTY_MAX = 2.0     # an event-less stint this short may vanish on the corrected clock (see same_as_stored)
+
+
 def same_as_stored(glued, stored, pts_key):
-    """True when the glued pieces are exactly the stored stints."""
-    if stored is None or len(glued) != len(stored):
-        return False
-    for g, s in zip(glued, stored):
-        if g["period"] != s["period"] or list(g["home"]) != list(s["home_ids"]) or list(g["away"]) != list(s["away_ids"]):
-            return False
-        if abs(round(elapsed(g["period"], g["t0"]), 1) - s["start_elapsed"]) > 0.051:
-            return False
-        if abs(round(elapsed(g["period"], g["t1"]), 1) - s["end_elapsed"]) > 0.051:
-            return False
-        if g["h_" + pts_key] != s["home_pts"] or g["a_" + pts_key] != s["away_pts"]:
-            return False
-        for side, p in (("home", "h_"), ("away", "a_")):
-            if any(g[p + k] != s[f"{side}_{k}"] for k in STINT_STATS):
-                return False
-    return True
+    """(True when the glued pieces are the stored stints: same fives, counts and points; the largest move of a
+    stint boundary against the stored ESPN times, seconds, or None when they aren't the same stints; how many
+    stints were skipped). The two lists are walked together, and a stint with no counted event of at most
+    EMPTY_MAX seconds that has no counterpart on the other side is skipped: two substitutions a moment apart by
+    ESPN's clock (~0.5 s, mostly at a period's end) can fall at the same corrected second, and stints() keeps no
+    stint with no time and no event."""
+    if stored is None:
+        return False, None, 0
+
+    def g_key(g):
+        return g["period"], list(g["home"]), list(g["away"])
+
+    def s_key(s):
+        return s["period"], list(s["home_ids"]), list(s["away_ids"])
+
+    def g_empty(g):
+        return (not any(g[p + k] for p in ("h_", "a_") for k in STINT_STATS) and not g["h_" + pts_key]
+                and not g["a_" + pts_key] and elapsed(g["period"], g["t1"]) - elapsed(g["period"], g["t0"]) <= EMPTY_MAX)
+
+    def s_empty(s):
+        return (not any(s[f"{side}_{k}"] for side in ("home", "away") for k in STINT_STATS) and not s["home_pts"]
+                and not s["away_pts"] and s["end_elapsed"] - s["start_elapsed"] <= EMPTY_MAX)
+
+    i = j = skipped = 0
+    shift = 0.0
+    while i < len(glued) or j < len(stored):
+        g = glued[i] if i < len(glued) else None
+        s = stored[j] if j < len(stored) else None
+        if g is not None and s is not None and g_key(g) == s_key(s):
+            if g["h_" + pts_key] != s["home_pts"] or g["a_" + pts_key] != s["away_pts"]:
+                return False, None, skipped
+            for side, p in (("home", "h_"), ("away", "a_")):
+                if any(g[p + k] != s[f"{side}_{k}"] for k in STINT_STATS):
+                    return False, None, skipped
+            shift = max(shift, abs(round(elapsed(g["period"], g["t0"]), 1) - s["start_elapsed"]),
+                        abs(round(elapsed(g["period"], g["t1"]), 1) - s["end_elapsed"]))
+            i, j = i + 1, j + 1
+        elif s is not None and s_empty(s):
+            j, skipped = j + 1, skipped + 1
+        elif g is not None and g_empty(g):
+            i, skipped = i + 1, skipped + 1
+        else:
+            return False, None, skipped
+    return True, round(shift, 1), skipped
 
 
 def build_game(g, ev, season_names, all_names, stored):
-    game = Game(g.game_id, int(g.season), g.game_date, ev, season_names[int(g.season)], all_names)
+    game = Game(g.game_id, int(g.season), g.game_date, ev, season_names[int(g.season)], all_names,
+                clock=game_clock(ev)[0])
     pieces, _ = game.stints(g.home_team, split_at=[CUT])
     pts_key = "pts_shots" if g.points_method == "shots" else "pts_score"
-    matches = same_as_stored(glue(pieces), stored, pts_key)
+    matches, shift, dropped = same_as_stored(glue(pieces), stored, pts_key)
     n_periods = max((s["period"] for s in pieces), default=0)
     score = [0, 0]
     at_cut = None
@@ -160,7 +206,8 @@ def build_game(g, ev, season_names, all_names, stored):
         "margin_at_cut": margin, "close_game": margin is not None and abs(margin) <= CLUTCH_MARGIN,
         "home_final": score[0], "away_final": score[1], "final_matches": final_ok,
         "closing_seconds": round(sum(c["seconds"] for c in closing), 1), "closing_pieces": len(closing),
-        "game_ok": bool(g.game_ok), "matches_stints": matches,
+        "game_ok": bool(g.game_ok), "matches_stints": matches, "stint_shift": shift,
+        "empty_stints_skipped": dropped,
     }
     return closing, row
 
@@ -170,7 +217,7 @@ GAMES_DDL = """CREATE TABLE rotation_closing_games (
     away_team TEXT NOT NULL, periods SMALLINT, overtimes SMALLINT, home_at_cut SMALLINT, away_at_cut SMALLINT,
     margin_at_cut SMALLINT, close_game BOOLEAN NOT NULL, home_final SMALLINT, away_final SMALLINT,
     final_matches BOOLEAN NOT NULL, closing_seconds REAL, closing_pieces SMALLINT, game_ok BOOLEAN NOT NULL,
-    matches_stints BOOLEAN NOT NULL)"""
+    matches_stints BOOLEAN NOT NULL, stint_shift REAL, empty_stints_skipped SMALLINT NOT NULL)"""
 
 STINTS_DDL = """CREATE TABLE rotation_closing_stints (
     game_id TEXT NOT NULL, season INTEGER NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL,
@@ -184,10 +231,13 @@ def main():
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
+    cur.execute("SELECT to_regclass('public.pbp_event_clock')")
+    if cur.fetchone()[0] is None:
+        sys.exit("pbp_event_clock is missing: run build_event_clock.py first.")
     season_names, all_names = load_season_names(cur)
     games = load_games(conn)
     stored = load_stints(conn)
-    _, grouped = load_espn(conn)
+    _, grouped = load_espn(conn, clock=True)
     print(f"{len(games)} games ({time.time() - t0:.0f}s)")
 
     closing, rows = [], []
@@ -222,7 +272,13 @@ def main():
 
     # Checks.
     df = pd.DataFrame(rows)
-    print(f"\nGlued back together, the cut stints equal lineup_stints in {df.matches_stints.sum()} of {len(df)} games")
+    print(f"\nGlued back together, the cut stints equal lineup_stints in {df.matches_stints.sum()} of {len(df)} games "
+          f"(fives, counts, points)")
+    sh = df.stint_shift.dropna()
+    print(f"Stint boundaries moved by the corrected clock: {(sh > 0.05).sum()} games; over 2 s in {(sh > 2).sum()}; "
+          f"largest {sh.max():.1f} s")
+    print(f"Event-less stints of <= {EMPTY_MAX:.0f} s with no counterpart: {df.empty_stints_skipped.sum()} in "
+          f"{(df.empty_stints_skipped > 0).sum()} games")
     bad = df[~df.matches_stints]
     if len(bad):
         print(bad[["game_id", "season", "game_ok"]].head(10).to_string(index=False))

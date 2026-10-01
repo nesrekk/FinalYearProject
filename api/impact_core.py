@@ -903,12 +903,25 @@ def _is_missed_field_goal(action_type, description) -> bool:
     if description and "misses" in description.lower() and "free throw" not in description.lower():
         return True
     return False
-def _fetch_game_events(cursor, game_id: str):
+def _fetch_game_events(cursor, game_id: str, corrected_clock: bool = False):
     # action_number alone isn't a safe unique key: nba_api's real feed
     # sometimes assigns the same action_number to two simultaneous events
     # (e.g. a blocked shot's "Missed Shot" and the "Block" row it paired
     # with) — id (the table's own primary key) is what's actually unique,
     # so callers use that to reference one specific event unambiguously.
+    # corrected_clock: seconds_remaining from pbp_event_clock where it has the
+    # event (ESPN games; scripts/build_event_clock.py), else pbp_events' own.
+    # The caller checks the table exists (_has_event_clock).
+    if corrected_clock:
+        cursor.execute(
+            """SELECT e.id, e.action_number, e.period, COALESCE(c.seconds_remaining, e.seconds_remaining),
+                      e.score_home, e.score_away, e.team_tricode, e.person_id, e.player_name, e.action_type,
+                      e.sub_type, e.description
+               FROM pbp_events e LEFT JOIN pbp_event_clock c ON c.event_id = e.id
+               WHERE e.game_id = %s ORDER BY e.action_number, e.id;""",
+            (game_id,),
+        )
+        return cursor.fetchall()
     cursor.execute(
         """SELECT id, action_number, period, seconds_remaining, score_home, score_away,
                   team_tricode, person_id, player_name, action_type, sub_type, description
@@ -916,6 +929,11 @@ def _fetch_game_events(cursor, game_id: str):
         (game_id,),
     )
     return cursor.fetchall()
+
+
+def _has_event_clock(cursor) -> bool:
+    cursor.execute("SELECT to_regclass('public.pbp_event_clock');")
+    return cursor.fetchone()[0] is not None
 GUESS_THE_GAME_MAX_GUESSES = 3
 def _guess_the_game_pool(cursor):
     cursor.execute(

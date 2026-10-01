@@ -43,6 +43,12 @@ from the running maximum of ESPN's score fields when that does, else from
 the shots and the game is flagged (score_ok false): the same rule as
 lineup_stints (their per-game choice is checked to agree).
 
+Clock (since round 6 step 3b): the corrected clock of pbp_event_clock
+(build_event_clock.py; Game(..., clock=)), not ESPN's own, which stamps
+made shots a median 14 s and rebounds 6 s late, so end-of-period and
+clutch searches find the plays that really happened then. The score
+before each play doesn't depend on the clock (it follows the event order).
+
 Distance: the NBA shot chart's coordinates for the same shot where the two
 feeds match (build_rim_deterrence.match_coordinates: order within game,
 shooter and period with identical make/miss sequences, ~99% of attempts;
@@ -76,7 +82,8 @@ Bam Adebayo's 83 on 2026-03-10 (20 field goals, 7 threes, 36 free throws).
 Usage:
     cd scripts && python3 build_play_finder.py     (~2 min)
 Rerun after new play-by-play is loaded, after build_player_game_lines.py
-(they must agree) or after player_shots is reloaded. Restart impact_api
+(they must agree), after build_event_clock.py or after player_shots is
+reloaded (then build_event_clock.py first). Restart impact_api
 afterwards (the router caches the games and seasons tables).
 """
 
@@ -93,8 +100,8 @@ import pandas as pd
 import psycopg2
 
 from db_config import DB_CONFIG
-from pbp_lineups import (ASSIST_RE, BLOCK_RE, DIST_RE, PERIOD_SECONDS, STEAL_RE, Game, load_espn, load_season_names,
-                         match_coordinates, miss_three_calls)
+from pbp_lineups import (ASSIST_RE, BLOCK_RE, DIST_RE, PERIOD_SECONDS, STEAL_RE, Game, game_clock, load_espn,
+                         load_season_names, match_coordinates, miss_three_calls)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 from play_finder import CATS, CODE, SHOT_CODES, is_foul  # noqa: E402
@@ -150,7 +157,7 @@ def game_rows(game, g, game_no, ev, final):
                 diag["no_team"] += 1
             continue
         own_home = team == home
-        clock = period_clock(e["period"], e["secs"])
+        clock = period_clock(e["period"], game.secs(e))
         eid = event_id[n]
         text = desc.get(n, "")
 
@@ -184,8 +191,11 @@ def game_rows(game, g, game_no, ev, final):
 
 
 def collect(conn, cur):
+    cur.execute("SELECT to_regclass('public.pbp_event_clock')")
+    if cur.fetchone()[0] is None:
+        sys.exit("pbp_event_clock is missing: run build_event_clock.py first.")
     season_names, all_names = load_season_names(cur)
-    games, grouped = load_espn(conn)
+    games, grouped = load_espn(conn, clock=True)
     ref = pd.read_sql_query(
         """SELECT 'espn_' || espn_id AS game_id, game_id AS nba_game_id, team_abbreviation AS team, pts_for, periods
            FROM game_scores WHERE espn_id IS NOT NULL""", conn)
@@ -208,7 +218,7 @@ def collect(conn, cur):
             continue
         game_no += 1
         game = Game(g.game_id, int(g.season), g.game_date, ev, season_names[int(g.season)], all_names,
-                    miss_threes=calls.get(g.game_id))
+                    miss_threes=calls.get(g.game_id), clock=game_clock(ev)[0])
         fh, fa = final[(g.game_id, g.home_team)], final[(g.game_id, g.away_team)]
         r, f, method, ok, d = game_rows(game, g, game_no, ev, (fh, fa))
         rows.extend(r)

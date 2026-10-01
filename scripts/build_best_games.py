@@ -11,7 +11,10 @@ from play_finder_events (built by build_play_finder.py from the shared
 play-by-play parser: shots and free throws, or ESPN's running-maximum score
 fields when those reconcile, checked against the real final in game_scores),
 plus the start of the game (tied, 48:00 left) and the real final score at
-the buzzer. From that series, per game:
+the buzzer. Times are Play Finder's, i.e. the corrected clock of
+pbp_event_clock (build_event_clock.py; since round 6 step 3b), so a late
+basket is read at the moment it was scored, not up to ~15 s later as
+ESPN stamps it. From that series, per game:
 
   swing           sum of |change in win probability| from play to play
   lead_changes    times the lead passed from one team to the other

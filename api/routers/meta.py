@@ -444,7 +444,7 @@ COVERAGE_MAP = [
     {
         "table": "rotation_closing_games", "label": "Closing stretch of every game (score at 5:00 left in the fourth)", "group": "Teams",
         "range_sql": "SELECT MIN(season), MAX(season) FROM rotation_closing_games", "range_fmt": "season_int",
-        "source": "scripts/build_rotations.py: the lineup_stints parser rerun with the stint in progress at 5:00 left in the fourth cut in two; closing pieces in rotation_closing_stints.",
+        "source": "scripts/build_rotations.py: the lineup_stints parser rerun on the corrected clock (pbp_event_clock) with the stint in progress at 5:00 left in the fourth cut in two; closing pieces in rotation_closing_stints.",
         "gap": "Close game = within 5 points at 5:00 left in the fourth, checked once (the NBA's own clutch stats re-check the margin at every moment). Games whose play-by-play didn't reconcile (12 of 7,232) are left out of the closing lineups; one game has only three periods in the play-by-play and no 5:00 mark.",
         "used_by": ["rotations"],
     },
@@ -472,7 +472,7 @@ COVERAGE_MAP = [
     {
         "table": "play_finder_events", "label": "Play Finder (every play, one row per player per play)", "group": "Games",
         "range_sql": "SELECT MIN(season), MAX(season) FROM play_finder_games", "range_fmt": "season_int",
-        "source": "scripts/build_play_finder.py: every regular-season game's ESPN play-by-play through the same parser as player_game_lines (shooter, passer, blocker, stealer, two or three), the score before each play reconciled to the real final (game_scores), shot distance from the NBA shot chart's coordinates (player_shots) where matched; per-game sources in play_finder_games, per-season checks in play_finder_seasons.",
+        "source": "scripts/build_play_finder.py: every regular-season game's ESPN play-by-play through the same parser as player_game_lines (shooter, passer, blocker, stealer, two or three), the score before each play reconciled to the real final (game_scores), the time from the corrected clock (pbp_event_clock), shot distance from the NBA shot chart's coordinates (player_shots) where matched; per-game sources in play_finder_games, per-season checks in play_finder_seasons.",
         "gap": "Every player-game's shots (twos and threes), free throws, rebounds, assists, steals, blocks and turnovers equal his player_game_lines line (0 of 152,428 differ). 0.35% of shots have no distance; 0.32% of rows name a player with no id. Team rebounds aren't included; the three NBA Cup finals aren't either.",
         "used_by": ["plays"],
     },
@@ -484,10 +484,17 @@ COVERAGE_MAP = [
         "used_by": ["bestgames"],
     },
     {
+        "table": "pbp_event_clock", "label": "Corrected game clock (every ESPN play-by-play event)", "group": "Games",
+        "range_sql": "SELECT MIN(g.season), MAX(g.season) FROM pbp_games g WHERE g.source = 'espn'", "range_fmt": "season_int",
+        "source": "scripts/build_event_clock.py: ESPN's clock is late by event type (made shots a median 14 s, rebounds 6 s, turnovers 5-10 s, misses 2 s, against NBA.com's own play-by-play of 418 games), so every field goal matched to the NBA shot chart takes the chart's time, free throws their trip's, a rebound 2 s after its miss, turnovers and unmatched shots ESPN's time less the median lag, everything else ESPN's own; pbp_event_clock_meta stores the checks.",
+        "gap": "About 94% of events land within 2 s of NBA.com's log (ESPN's own times: 32%). The moment a turnover happened can't be recovered from ESPN, which stamps it at about the time of the next play. Read by Game Replay, the Play Finder, Rotations' closing stretch, Best Games and the possessions; player minutes, stints, Clutch WPA, Situational Splits and the Garbage-Time Deflator still use ESPN's times.",
+        "used_by": ["analytics#replay", "plays", "rotations", "bestgames", "possessions"],
+    },
+    {
         "table": "player_wpa_totals", "label": "Win-probability-added totals", "group": "Models",
         "range_sql": None, "range_fmt": None,
         "source": "compute_wpa.py over deduplicated play-by-play (scripts/wpa_lib.PBP_DEDUP_WHERE).",
-        "gap": "Clutch plays carry 3.7x the leverage of non-clutch plays — never compare raw clutch and non-clutch WPA per play. Most players are statistically indistinguishable from zero on the clutch split.",
+        "gap": "Clutch plays carry 3.7x the leverage of non-clutch plays — never compare raw clutch and non-clutch WPA per play. Most players are statistically indistinguishable from zero on the clutch split. Still on ESPN's clock, which places a made shot up to ~15 s late (it moves to the corrected clock together with the paper).",
         "used_by": [],
     },
     {

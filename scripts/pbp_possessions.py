@@ -101,7 +101,10 @@ def espn_t(e):
     return min(max(start - e["secs"], 0.0), float(length))
 
 
-def corrected_clock(events, chart_t):
+CLOCK_SOURCES = ("chart", "ft_trip", "rebound", "lag", "espn")
+
+
+def corrected_clock(events, chart_t, how=None):
     """({action_number: seconds into the period}, {action_numbers whose time is anchored}) for every event of a
     parsed game (Game.parse(), home set).
 
@@ -114,7 +117,13 @@ def corrected_clock(events, chart_t):
     Derived times are kept between the anchors around them, and the clock never runs backwards.
     Anchored: the anchors themselves and rebounds of an anchored miss. Turnovers never are: ESPN stamps a
     turnover at about the time of the next thing that happens (NBA.com: steal to next attempt a median 6 s;
-    ESPN's lag on steals: a median 5 s), so the time a turnover happened can't be recovered from ESPN."""
+    ESPN's lag on steals: a median 5 s), so the time a turnover happened can't be recovered from ESPN.
+
+    `how` (optional dict) is filled with {action_number: (source, bounded)}: source is one of CLOCK_SOURCES
+    (chart = the shot chart's clock; ft_trip = the free-throw trip's time; rebound = REB_GAP after its miss;
+    lag = ESPN's time less a median lag; espn = ESPN's as is), bounded is True when the rule keeping derived
+    times between anchors and the clock from running backwards moved it. The times returned don't depend on
+    it (build_event_clock.py stores both in pbp_event_clock)."""
     out = {}
     anchored = set()
     by_period = {}
@@ -124,6 +133,7 @@ def corrected_clock(events, chart_t):
         raw = [espn_t(e) for e in evs]
         t = [None] * len(evs)
         hard = [False] * len(evs)
+        src = ["espn"] * len(evs)
         last_miss = None          # (corrected time, anchored) of the latest miss
         last_foul = None          # time of the latest foul by ESPN's clock
         last_made_fg = None       # (team, corrected time) while the and-one window is open
@@ -135,8 +145,10 @@ def corrected_clock(events, chart_t):
             if kind == "fg":
                 if n in chart_t:
                     t[i], hard[i] = chart_t[n], True
+                    src[i] = "chart"
                 else:
                     t[i] = raw[i] - (LAG_FG_MADE if e["made"] else LAG_FG_MISS)
+                    src[i] = "lag"
                 last_made_fg = (e["team"], t[i]) if e["made"] else None
                 last_miss = None if e["made"] else (t[i], hard[i])
             elif kind == "ft":
@@ -155,17 +167,21 @@ def corrected_clock(events, chart_t):
                         trip_t, trip_hard = raw[i], False
                 t[i] = trip_t if trip_t is not None else raw[i]
                 hard[i] = trip_t is not None and trip_hard
+                src[i] = "ft_trip" if trip_t is not None else "espn"
                 last_miss = None if e["made"] else (t[i], hard[i])
             elif kind in ("oreb", "dreb"):
                 if last_miss is not None:
                     t[i] = min(last_miss[0] + REB_GAP, raw[i])
+                    src[i] = "rebound"
                     if last_miss[1]:
                         anchored.add(n)
                 else:
                     t[i] = raw[i] - LAG_REB
+                    src[i] = "lag"
                 last_miss = last_made_fg = None
             elif kind == "tov":
                 t[i] = raw[i] - (LAG_TOV_STEAL if e.get("steal") else LAG_TOV_DEAD)
+                src[i] = "lag"
                 last_miss = last_made_fg = None
             else:
                 t[i] = raw[i]
@@ -187,6 +203,8 @@ def corrected_clock(events, chart_t):
                 x = min(x, nxt_hard[i])
             clock = max(clock, x, 0.0)
             out[e["action_number"]] = clock
+            if how is not None:
+                how[e["action_number"]] = (src[i], clock != t[i])
             if hard[i]:
                 anchored.add(e["action_number"])
     return out, anchored

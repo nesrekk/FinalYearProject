@@ -13,17 +13,20 @@ NBA.com's own play-by-play of the same games (the 418 games of 2024-25
 kept in pbp_events as nba_api twins): made shots and made last free throws
 a median 14 s late, rebounds and turnovers 6 s, misses 2 s; fouls and the
 first free throw of a trip are on time (turnovers: 5 s for steals, 10 s
-for dead-ball ones). Possession times use
-pbp_possessions.corrected_clock(): every field goal the NBA shot chart can
+for dead-ball ones). Possession times use the corrected clock stored in
+pbp_event_clock (build_event_clock.py, from
+pbp_possessions.corrected_clock(); since round 6 step 3b read from the
+table, output checked identical): every field goal the NBA shot chart can
 be matched to (match_coordinates(), ~99%) takes the chart's clock, free
 throws their trip's first free throw (or the foul / made shot before a
 single one), a rebound 2 s after its miss, a turnover its offensive foul
 or ESPN's time less 6 s. The lags were measured on all 418 twin games;
 `possession_meta` stores them measured separately on the odd and even
-games, and the corrected clock's error against NBA.com on each half. The
-stints, player minutes and every other table keep ESPN's clock (substitutions
-happen at dead balls, where ESPN's clock is on time); possessions map to
-stints by event number, never by time.
+games, and the corrected clock's error against NBA.com on each half
+(build_event_clock.py measures it; copied from pbp_event_clock_meta). The
+stints and player minutes keep ESPN's clock (substitutions happen at dead
+balls, where ESPN's clock is on time); possessions map to stints by event
+number, never by time.
 
 Judgment calls (also on possession_meta and in README):
   - possession rules: pbp_possessions.py docstring (and-ones, kept-ball
@@ -78,13 +81,13 @@ Usage:
     cd scripts && python3 build_possessions.py              # full build (~3.5 min)
     cd scripts && python3 build_possessions.py --dry-run    # 2024-25 only, into schema zz_poss_dry
 Rerun after build_lineup_stints.py (it reads lineup_stints and
-team_game_totals) or a player_shots reload.
+team_game_totals) or build_event_clock.py (after a player_shots reload).
 """
 
 import json
 import sys
 import time
-from collections import Counter, defaultdict
+from collections import Counter
 
 import numpy as np
 import pandas as pd
@@ -92,7 +95,7 @@ import psycopg2
 import psycopg2.extras
 
 from db_config import DB_CONFIG
-from pbp_lineups import Game, chart_matches, elapsed, load_espn, load_season_names, miss_three_calls, period_bounds
+from pbp_lineups import Game, chart_matches, elapsed, game_clock, load_espn, load_season_names, miss_three_calls
 import pbp_possessions as PP
 
 TRANSITION_SECONDS = 7.0
@@ -121,32 +124,17 @@ def load_reference(conn):
     return final_pts, nba_ids, team_tot, stints
 
 
-def chart_clock(conn, matched):
-    """{game_id: {action_number: seconds into the period}} by the NBA shot chart's clock."""
-    clocks = pd.read_sql_query(
-        """SELECT id AS nba_shot_id, period AS chart_period, minutes_remaining * 60 + seconds_remaining AS clock
-           FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2020-21'""", conn)
-    m = matched[matched.nba_shot_id.notna()][["game_id", "action_number", "period", "nba_shot_id"]].copy()
-    m["nba_shot_id"] = m.nba_shot_id.astype("int64")
-    m = m.merge(clocks, on="nba_shot_id")
-    m = m[m.period == m.chart_period]
-    m["t"] = [period_bounds(int(p))[1] - c for p, c in zip(m.period, m.clock)]
-    out = defaultdict(dict)
-    for gid, n, t in m[["game_id", "action_number", "t"]].itertuples(index=False):
-        out[gid][int(n)] = float(t)
-    return out
-
-
-def build_game(g, ev, season_names, all_names, calls, chart_t, final_pts, nba_ids, team_tot, stored_stints):
-    """Possession rows and the reconciliation row for one game."""
+def build_game(g, ev, season_names, all_names, calls, final_pts, nba_ids, team_tot, stored_stints):
+    """Possession rows and the reconciliation row for one game (`ev` from load_espn(conn, clock=True))."""
     home, away = g.home_team, g.away_team
     game = Game(g.game_id, int(g.season), g.game_date, ev, season_names[int(g.season)], all_names,
                 miss_threes=calls.get(g.game_id))
     game.home = home
     events = game.parse()
-    clock, anchored = PP.corrected_clock(events, chart_t.get(g.game_id, {}))
+    clock, anchored = game_clock(ev)
+    on_chart = set(ev.action_number[ev.clock_source == "chart"].astype(int).tolist())
     n_counted = sum(1 for e in events if e["kind"] in PP.COUNT_KINDS)
-    n_chart = sum(1 for e in events if e["kind"] == "fg" and e["action_number"] in chart_t.get(g.game_id, {}))
+    n_chart = sum(1 for e in events if e["kind"] == "fg" and e["action_number"] in on_chart)
     n_fg = sum(1 for e in events if e["kind"] == "fg")
     rows, diag = PP.possessions(game, home, clock)
     stints, _ = game.stints(home)
@@ -287,82 +275,6 @@ def build_game(g, ev, season_names, all_names, calls, chart_t, final_pts, nba_id
         "reason": "; ".join(reasons) if reasons else None,
     }
     return out, game_row, diag
-
-
-# --------------------------------------------------------------------------------------------- clock check
-def clock_check(conn, season_names, all_names, chart_t, grouped):
-    """ESPN's lag and the corrected clock's error against NBA.com's play-by-play of the same games (the nba_api
-    twins), by event class, on all twin games and on the odd / even halves separately."""
-    link = pd.read_sql_query(
-        """SELECT DISTINCT n.game_id AS nba, 'espn_' || s.espn_id AS espn, g.home_team
-           FROM pbp_games n JOIN game_scores s ON s.game_id = n.game_id JOIN pbp_games g ON g.game_id = 'espn_' || s.espn_id
-           WHERE n.source = 'nba_api' AND s.espn_id IS NOT NULL ORDER BY 1""", conn)
-    nba = pd.read_sql_query(
-        """SELECT e.game_id, e.period, e.seconds_remaining, e.person_id, e.action_type
-           FROM pbp_events e JOIN pbp_games g USING (game_id) WHERE g.source = 'nba_api' AND e.person_id IS NOT NULL
-           AND e.action_type IN ('Made Shot', 'Missed Shot', 'Free Throw', 'Rebound', 'Turnover')
-           ORDER BY e.game_id, e.action_number, e.id""", conn)
-    keymap = {"Made Shot": "fg", "Missed Shot": "fg", "Free Throw": "ft", "Rebound": "reb", "Turnover": "tov"}
-    nba["key"] = nba.action_type.map(keymap)
-    nba["t"] = [period_bounds(int(p))[0] - s for p, s in zip(nba.period, nba.seconds_remaining)]
-    nba["pid"] = nba.person_id.astype("int64")
-    nba["half"] = nba.game_id.map({r.nba: i % 2 for i, r in enumerate(link.itertuples())})
-    rows = []
-    for i, l in enumerate(link.itertuples()):
-        ev = grouped.get(l.espn)
-        if ev is None:
-            continue
-        game = Game(l.espn, TWIN_SEASON, None, ev, season_names[TWIN_SEASON], all_names)
-        game.home = l.home_team
-        events = game.parse()
-        corr, _ = PP.corrected_clock(events, chart_t.get(l.espn, {}))
-        for e in events:
-            k = e["kind"]
-            if k not in PP.COUNT_KINDS or not e["pid"]:
-                continue
-            if k == "ft":
-                kk, n, tech, _ = PP.ft_trip(e["action"])
-                if tech:
-                    continue
-                cls = ("ft_first" if kk == 1 and n > 1 else "ft_later" if kk > 1 else "ft_single") + \
-                      ("_made" if e["made"] else "_miss")
-            elif k == "fg":
-                cls = "fg_made" if e["made"] else "fg_miss"
-            elif k == "tov":
-                cls = "tov_steal" if e.get("steal") else "tov_dead"
-            else:
-                cls = "reb"
-            key = {"fg": "fg", "ft": "ft", "oreb": "reb", "dreb": "reb", "tov": "tov"}[k]
-            rows.append((l.nba, i % 2, e["period"], int(e["pid"]), key, cls, PP.espn_t(e), corr[e["action_number"]]))
-    d = pd.DataFrame(rows, columns=["game_id", "half", "period", "pid", "key", "cls", "t_espn", "t_corr"])
-    d["k"] = d.groupby(["game_id", "period", "pid", "key"]).cumcount()
-    nba["k"] = nba.groupby(["game_id", "period", "pid", "key"]).cumcount()
-    m = d.merge(nba[["game_id", "period", "pid", "key", "k", "t"]], on=["game_id", "period", "pid", "key", "k"])
-    m["lag"] = m.t_espn - m.t
-    m["err"] = (m.t_corr - m.t).abs()
-    m["err_espn"] = m.lag.abs()
-    out = {"twin_games": int(link.shape[0]), "matched_events": int(len(m)), "classes": {}}
-    for cls, grp in m.groupby("cls"):
-        out["classes"][cls] = {
-            "n": int(len(grp)),
-            "espn_lag_median": float(grp.lag.median()),
-            "espn_lag_median_odd": float(grp[grp.half == 1].lag.median()),
-            "espn_lag_median_even": float(grp[grp.half == 0].lag.median()),
-            "espn_abs_err_median": float(grp.err_espn.median()),
-            "corrected_abs_err_median": float(grp.err.median()),
-            "corrected_abs_err_median_even": float(grp[grp.half == 0].err.median()),
-            "espn_within_2s": round(float((grp.err_espn <= 2).mean()), 4),
-            "corrected_within_2s": round(float((grp.err <= 2).mean()), 4),
-            "corrected_within_2s_even": round(float((grp[grp.half == 0].err <= 2).mean()), 4),
-            "espn_within_5s": round(float((grp.err_espn <= 5).mean()), 4),
-            "corrected_within_5s": round(float((grp.err <= 5).mean()), 4),
-        }
-    out["all"] = {"espn_within_2s": round(float((m.err_espn <= 2).mean()), 4),
-                  "corrected_within_2s": round(float((m.err <= 2).mean()), 4),
-                  "espn_within_5s": round(float((m.err_espn <= 5).mean()), 4),
-                  "corrected_within_5s": round(float((m.err <= 5).mean()), 4),
-                  "espn_abs_err_median": float(m.err_espn.median()), "corrected_abs_err_median": float(m.err.median())}
-    return out
 
 
 # --------------------------------------------------------------------------------------------- tables
@@ -528,15 +440,18 @@ def main():
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
     season_names, all_names = load_season_names(cur)
+    cur.execute("SELECT to_regclass('public.pbp_event_clock')")
+    if cur.fetchone()[0] is None:
+        sys.exit("pbp_event_clock is missing: run build_event_clock.py first.")
     final_pts, nba_ids, team_tot, stored_stints = load_reference(conn)
-    games, grouped = load_espn(conn)
+    games, grouped = load_espn(conn, clock=True)
     if dry:
         games = games[games.season == TWIN_SEASON]
     matched = chart_matches(conn, games, grouped, season_names, all_names)
     calls, _ = miss_three_calls(conn, games, grouped, season_names, all_names, matched=matched)
-    chart_t = chart_clock(conn, matched)
     print(f"{len(games)} games; {matched.nba_shot_id.notna().mean():.2%} of field goals matched to the shot chart "
           f"({time.time() - t0:.0f}s)")
+    del matched
 
     schema = f"{DRY_SCHEMA}." if dry else ""
     if dry:
@@ -547,7 +462,7 @@ def main():
         ev = grouped.get(g.game_id)
         if ev is None:
             continue
-        rows, game_row, d = build_game(g, ev, season_names, all_names, calls, chart_t, final_pts, nba_ids, team_tot,
+        rows, game_row, d = build_game(g, ev, season_names, all_names, calls, final_pts, nba_ids, team_tot,
                                        stored_stints)
         for r in rows:
             n_poss += 1
@@ -563,7 +478,8 @@ def main():
     insert_possessions(cur, schema, batch)
     print(f"{len(game_rows)} games, {n_poss:,} possessions; parser diag {dict(diag)} ({time.time() - t0:.0f}s)")
 
-    clock = clock_check(conn, season_names, all_names, chart_t, grouped)
+    cur.execute("SELECT value FROM pbp_event_clock_meta WHERE key = 'clock_check'")
+    clock = cur.fetchone()[0]           # measured by build_event_clock.py on the same clock
     print("\nClock check against NBA.com's play-by-play (twin games):")
     print(pd.DataFrame(clock["classes"]).T[["n", "espn_lag_median", "espn_lag_median_odd", "espn_lag_median_even",
                                             "espn_within_2s", "corrected_within_2s", "corrected_within_2s_even",

@@ -2173,6 +2173,88 @@ def test_possessions_reconcile_and_clock():
 
 
 
+def test_event_clock_table_and_readers():
+    """The corrected clock (scripts/build_event_clock.py -> pbp_event_clock, rules in
+    pbp_possessions.corrected_clock()): one row per ESPN event, consistent columns, never running backwards, and
+    read the same way by possessions, the Play Finder, the parser's optional clock argument and Game Replay."""
+    import pandas as pd
+    sys.path.insert(0, os.path.join(os.path.dirname(_API_DIR), "scripts"))
+    from pbp_lineups import Game, game_clock, load_season_names
+    from pbp_possessions import CLOCK_SOURCES
+    from impact_api import app
+    conn = psycopg2.connect(**DB_CONFIG)
+    try:
+        cur = conn.cursor()
+        cur.execute("""SELECT COUNT(*), COUNT(c.event_id), COUNT(*) FILTER (WHERE c.source <> ALL(%s)),
+                              COUNT(*) FILTER (WHERE abs(c.seconds_remaining - (CASE WHEN e.period <= 4
+                                  THEN (5 - e.period) * 720 ELSE 300 END - c.period_t)) > 1e-9),
+                              COUNT(*) FILTER (WHERE c.period_t < 0 OR c.period_t > CASE WHEN e.period <= 4 THEN 720 ELSE 300 END)
+                       FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id
+                       LEFT JOIN pbp_event_clock c ON c.event_id = e.id WHERE g.source = 'espn'""", (list(CLOCK_SOURCES),))
+        n, covered, bad_source, bad_secs, outside = cur.fetchone()
+        assert n > 3_400_000 and covered == n and bad_source == bad_secs == outside == 0
+        cur.execute("SELECT COUNT(*) FROM pbp_event_clock c LEFT JOIN pbp_events e ON e.id = c.event_id WHERE e.id IS NULL")
+        assert cur.fetchone()[0] == 0
+        # Never backwards within a period (in the parser's event order).
+        cur.execute("""SELECT COUNT(*) FROM (
+                           SELECT c.period_t, LAG(c.period_t) OVER (PARTITION BY e.game_id, e.period ORDER BY e.action_number, e.id) prev
+                           FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id JOIN pbp_event_clock c ON c.event_id = e.id
+                           WHERE g.source = 'espn' AND g.season = 2025) x WHERE period_t < prev""")
+        assert cur.fetchone()[0] == 0
+        # Possessions took their clock check from the clock's own meta; the corrected clock is within 2 s of NBA.com's
+        # for > 90% of events, ESPN's for about a third; Game Replay's model scores no worse on it (so no refit).
+        cur.execute("""SELECT p.value = c.value, c.value FROM possession_meta p, pbp_event_clock_meta c
+                       WHERE p.key = 'clock_check' AND c.key = 'clock_check'""")
+        same, chk = cur.fetchone()
+        assert same and chk["all"]["corrected_within_2s"] > 0.9 > 0.5 > chk["all"]["espn_within_2s"]
+        cur.execute("SELECT value FROM pbp_event_clock_meta WHERE key = 'wp_check'")
+        wp = cur.fetchone()[0]
+        for phase in ("all", "last_5_min", "last_minute"):
+            assert wp[phase]["log_loss_corrected"] <= wp[phase]["log_loss_espn"] + 1e-4
+        # The Play Finder's clock is the stored one (tenths left in the period).
+        cur.execute("""SELECT COUNT(*), COUNT(*) FILTER (WHERE p.clock <> round(((CASE WHEN p.period <= 4 THEN 720 ELSE 300 END)
+                                                                                    - c.period_t) * 10))
+                       FROM play_finder_events p JOIN play_finder_games g USING (game_no)
+                       JOIN pbp_event_clock c ON c.event_id = p.event_id WHERE g.season = 2026""")
+        rows, differ = cur.fetchone()
+        assert rows > 500_000 and differ == 0
+        # The parser: without a clock ESPN's times, with one the stored times; stints keep their events either way.
+        gid = "espn_401584689"
+        ev = pd.read_sql_query(
+            """SELECT e.game_id, e.action_number, e.id, e.period, e.seconds_remaining, e.score_home, e.score_away,
+                      e.team_tricode, e.person_id, e.player_name, e.action_type, e.description, c.period_t,
+                      c.anchored AS clock_anchored, c.source AS clock_source
+               FROM pbp_events e LEFT JOIN pbp_event_clock c ON c.event_id = e.id
+               WHERE e.game_id = %s ORDER BY e.action_number, e.id""", conn, params=(gid,))
+        ev[["description", "action_type"]] = ev[["description", "action_type"]].fillna("")
+        ev["person_id"] = ev["person_id"].astype("Int64").astype(object).where(ev["person_id"].notna(), None)
+        cur.execute("SELECT season, home_team FROM pbp_games WHERE game_id = %s", (gid,))
+        season, home = cur.fetchone()
+        names, all_names = load_season_names(cur)
+        clock, anchored = game_clock(ev)
+        assert len(clock) == len(ev) and anchored
+        plain = Game(gid, season, None, ev, names[season], all_names)
+        timed = Game(gid, season, None, ev, names[season], all_names, clock=clock)
+        plain.home = timed.home = home
+        stored = dict(zip(ev.action_number, (5 - ev.period).clip(lower=0) * 720 - ev.period_t))
+        for e in plain.parse():
+            assert plain.secs(e) == e["secs"]
+            if e["period"] <= 4:
+                assert abs(timed.secs(e) - stored[e["action_number"]]) < 1e-9
+        a, _ = plain.stints(home)
+        b, _ = timed.stints(home)
+        key = lambda s: (s["home"], s["away"], s["action_from"], s["action_to"], s["h_fga"], s["a_fga"])  # noqa: E731
+        assert [key(s) for s in a if s["action_from"] is not None] == [key(s) for s in b if s["action_from"] is not None]
+    finally:
+        conn.close()
+    # Game Replay: ESPN games on the corrected clock, times never backwards.
+    r = TestClient(app).get(f"/games/wp-replay/{gid}").json()
+    _assert_has_source(r)
+    assert r["clock"] == "corrected" and "pbp_event_clock" in str(r["_source"])
+    t = [p["seconds_elapsed"] for p in r["points"]]
+    assert all(y >= x - 1e-9 for x, y in zip(t, t[1:]))
+
+
 def test_possession_explorer():
     """Possession Explorer (api/routers/possessions.py, round 6 step 4): the league and every team by how the
     possession began, from possession_seasons; the player block's on/off split live from possessions and
@@ -2334,12 +2416,17 @@ def test_rotations_minutes_closing_and_team_block():
     conn = psycopg2.connect(**DB_CONFIG)
     try:
         cur = conn.cursor()
-        # The cut stints equal lineup_stints in every game, and score at 5:00 + closing stretch = real final.
+        # The cut stints (on the corrected clock since round 6 step 3b) glue back into lineup_stints' stints (same
+        # fives, counts, points) in every game but one: espn_401468511, where ESPN logs a "free throw 2 of 2" with no
+        # 1 of 2, the clock gives it the previous trip's time and an 11 s event-less stint collapses (README Known
+        # real gaps). Stint boundaries move by 2 s or less except in a handful of games. Score at 5:00 + closing
+        # stretch = real final.
         cur.execute("""SELECT COUNT(*), COUNT(*) FILTER (WHERE matches_stints),
-                              COUNT(*) FILTER (WHERE game_ok), COUNT(*) FILTER (WHERE game_ok AND final_matches)
+                              COUNT(*) FILTER (WHERE game_ok), COUNT(*) FILTER (WHERE game_ok AND final_matches),
+                              COUNT(*) FILTER (WHERE stint_shift > 2)
                        FROM rotation_closing_games""")
-        n, glued, ok, final_ok = cur.fetchone()
-        assert n == glued and n > 7000 and ok == final_ok
+        n, glued, ok, final_ok, moved = cur.fetchone()
+        assert n - glued <= 1 and n > 7000 and ok == final_ok and moved <= 20
         cur.execute("""SELECT COUNT(*) FROM rotation_closing_games g JOIN (
                            SELECT game_id, SUM(home_pts) hp, SUM(away_pts) ap FROM rotation_closing_stints GROUP BY 1) c
                        USING (game_id)

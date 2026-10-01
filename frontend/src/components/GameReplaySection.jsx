@@ -192,6 +192,7 @@ export default function GameReplaySection() {
                         missed-shot marker below the chart to see how the game's win probability would have
                         looked had that one shot gone in, assuming everything afterward happened exactly as it
                         really did.
+                        {replay?.clock_note && <> {replay.clock_note}</>}
                     </InfoTooltip>
                     <SourceBadge source={replay?._source} />
                 </h3>

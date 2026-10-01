@@ -169,6 +169,7 @@ PRODUCERS = {
     "build_team_zone_mix.py": ("derived", ["team_zone_mix", "game_pair"]),
     # ---- derived: play-by-play
     "train_wpa_model.py": ("derived", ["wpa_model_validation"]),
+    "build_event_clock.py": ("derived", ["pbp_event_clock", "pbp_event_clock_meta"]),
     "compute_wpa.py": ("derived", ["player_wpa_totals", "wpa_clutch_league"]),
     "build_leverage_splits.py": ("derived", ["player_leverage_splits", "player_leverage_summary",
                                              "leverage_index_grid", "leverage_validation"]),

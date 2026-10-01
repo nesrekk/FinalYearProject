@@ -184,6 +184,7 @@ step derived -        build_player_roles.py
 step derived -        build_shot_making.py               # ~3 min; also shot_xfg
 # ------------------------------------------------------------------ derived: play-by-play (order from CLAUDE.md)
 step derived -        train_wpa_model.py
+step derived -        build_event_clock.py               # ~1.5 min; read by possessions, rotations, play finder
 step derived -        build_player_game_lines.py
 step derived -        build_player_on_off.py             # team_game_totals, read by build_lineup_stints
 step derived -        build_lineup_stints.py

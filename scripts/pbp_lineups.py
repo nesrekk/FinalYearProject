@@ -38,6 +38,16 @@ misses ~8,700 of the chart's missed threes over 2020-21 to 2025-26 (median
 Play Finder pass it; makes always take the score step (the chart agrees on
 99.97% of matched makes). Without it the output is what it always was.
 
+The clock: by default every time is ESPN's `seconds_remaining`, which is
+late by event type (made shots a median 14 s; pbp_possessions.py). A
+caller can pass `clock` ({action_number: seconds into the period}:
+`game_clock()` of `load_espn(conn, clock=True)`, i.e. the stored
+pbp_event_clock, built by build_event_clock.py from
+pbp_possessions.corrected_clock()); `walk()` and `secs()` then use
+it for every event it covers. Without it the output is what it always was
+(player_game_lines and lineup_stints don't pass it: minutes come from
+substitutions, at dead balls, where ESPN is on time).
+
 `Game.walk(home, on_time, on_event, ...)` replays a game once, calling
 back for every stretch of clock with an unchanged lineup and for every
 event with the lineup on the floor when it happened. `Game.run(home)`
@@ -125,10 +135,12 @@ def shot_value(desc, made, delta):
 
 
 class Game:
-    def __init__(self, gid, season, game_date, events, season_names, all_names, miss_threes=None):
+    def __init__(self, gid, season, game_date, events, season_names, all_names, miss_threes=None, clock=None):
         self.gid, self.season, self.game_date = gid, season, game_date
         # {action_number: True if the NBA shot chart calls this missed shot a three}; None = the text's call.
         self.miss_threes = miss_threes
+        # {action_number: seconds into the period} replacing ESPN's times (game_clock()); None = ESPN's.
+        self.clock = clock
         self.ev = events
         self.teams = [t for t in pd.unique(events["team_tricode"].dropna())]
         self.team_of = {}
@@ -168,6 +180,24 @@ class Game:
 
     def other(self, team):
         return next((t for t in self.teams if t != team), None)
+
+    def secs(self, e):
+        """seconds_remaining of a parsed event (pbp_events' convention): the clock's if one was given and covers
+        it, else ESPN's."""
+        if self.clock is not None:
+            t = self.clock.get(e["action_number"])
+            if t is not None:
+                return period_bounds(e["period"])[0] - t
+        return e["secs"]
+
+    def event_t(self, e, start, length):
+        """Seconds into the period, as walk() places the event: the clock's time if given, else ESPN's, kept
+        inside the period."""
+        if self.clock is not None:
+            t = self.clock.get(e["action_number"])
+            if t is not None:
+                return min(max(t, 0.0), float(length))
+        return min(max(start - e["secs"], 0.0), float(length))
 
     def parse(self):
         """Event list with actors resolved: (period, secs, kind, fields)."""
@@ -279,7 +309,7 @@ class Game:
                 on_period_start(period, lineups)
             last = 0.0
             for e in evs:
-                t = min(max(start - e["secs"], 0.0), float(length))
+                t = self.event_t(e, start, length)
                 if t > last:
                     on_time(period, last, t, lineups)
                     last = t
@@ -523,16 +553,24 @@ def load_season_names(cur):
     return names, {n: next(iter(p)) for n, p in ids.items() if len(p) == 1}
 
 
-def load_espn(conn):
+def load_espn(conn, clock=False):
     """Every ESPN game (regular season 2020-21 on) and its events, grouped by
-    game in the order the parser expects (action_number, then id)."""
+    game in the order the parser expects (action_number, then id). With
+    `clock`, each event also carries pbp_event_clock's corrected time
+    (`period_t`, seconds into the period), `clock_anchored` and
+    `clock_source`; game_clock()
+    turns one game's into the `Game(..., clock=)` argument."""
     games = pd.read_sql_query(
         "SELECT game_id, season, game_date, home_team, away_team FROM pbp_games WHERE source = 'espn' "
         "ORDER BY game_date, game_id;", conn)
+    extra, join = "", ""
+    if clock:
+        extra = ", c.period_t, c.anchored AS clock_anchored, c.source AS clock_source"
+        join = " LEFT JOIN pbp_event_clock c ON c.event_id = e.id"
     events = pd.read_sql_query(
-        """SELECT e.game_id, e.action_number, e.id, e.period, e.seconds_remaining, e.score_home, e.score_away,
-                  e.team_tricode, e.person_id, e.player_name, e.action_type, e.description
-           FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id
+        f"""SELECT e.game_id, e.action_number, e.id, e.period, e.seconds_remaining, e.score_home, e.score_away,
+                  e.team_tricode, e.person_id, e.player_name, e.action_type, e.description{extra}
+           FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id{join}
            WHERE g.source = 'espn' ORDER BY e.game_id, e.action_number, e.id;""", conn)
     events[["description", "action_type"]] = events[["description", "action_type"]].fillna("")
     events["person_id"] = events["person_id"].astype("Int64").astype(object).where(events["person_id"].notna(), None)
@@ -607,3 +645,14 @@ def miss_three_calls(conn, games, grouped, season_names, all_names, matched=None
     for gid, n, three in misses[["game_id", "action_number", "nba_three"]].itertuples(index=False):
         calls.setdefault(gid, {})[int(n)] = bool(three)
     return calls, misses[["game_id", "season", "action_number", "text_three", "nba_three"]]
+
+
+def game_clock(ev):
+    """({action_number: seconds into the period}, {action_numbers whose time is anchored}) for one game's events
+    as load_espn(conn, clock=True) returns them; ({}, set()) where pbp_event_clock has no rows."""
+    if "period_t" not in ev.columns:
+        return {}, set()
+    has = ev[ev.period_t.notna()]
+    clock = dict(zip(has.action_number.astype(int).tolist(), has.period_t.astype(float).tolist()))
+    anchored = set(has.action_number[has.clock_anchored.astype(bool)].astype(int).tolist())
+    return clock, anchored
