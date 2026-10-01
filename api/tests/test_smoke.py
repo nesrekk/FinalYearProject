@@ -2172,6 +2172,81 @@ def test_possessions_reconcile_and_clock():
         conn.close()
 
 
+
+def test_possession_explorer():
+    """Possession Explorer (api/routers/possessions.py, round 6 step 4): the league and every team by how the
+    possession began, from possession_seasons; the player block's on/off split live from possessions and
+    lineup_stints. Totals agree across the three reads, the transition split covers the same timed possessions as
+    the stored share, and a player's on-court possessions agree with On/Off's estimate."""
+    from impact_api import app
+    from impact_core import get_db
+    client = TestClient(app)
+    o = client.get("/possessions/options").json()
+    _assert_has_source(o)
+    assert [s["season"] for s in o["seasons"]] == [2021, 2022, 2023, 2024, 2025, 2026] and len(o["teams"]) == 30
+    # Six seasons pooled: a steal is worth about 0.2 points more than the inbound after a make.
+    p = o["pooled"]
+    assert 0.15 < p["steal"]["ppp"] - p["made_fg"]["ppp"] < 0.25 and p["steal"]["ppp"] > p["dead_tov"]["ppp"]
+    assert sum(v["poss"] for k, v in p.items() if k != "all") == p["all"]["poss"]
+    assert o["transition"]["window_seconds"] == 7 and len(o["transition"]["dreb_ppp_by_second"]) == 24
+
+    d = client.get("/possessions/league", params={"season": 2025}).json()
+    _assert_has_source(d)
+    lg = {r["start_type"]: r for r in d["league"]}
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("""SELECT COUNT(*), SUM(p.pts) FROM possessions p JOIN possession_games g USING (game_id)
+                       WHERE g.game_ok AND p.season = 2025""")
+        n, pts = cur.fetchone()
+    assert (lg["all"]["poss"], lg["all"]["pts"]) == (n, pts) and abs(lg["all"]["ppp"] - pts / n) < 1e-4
+    assert lg["all"]["lo"] < lg["all"]["ppp"] < lg["all"]["hi"]
+    # 30 teams; their offence and defence possessions each add up to the league's; ranks run 1-30.
+    teams = d["teams"]
+    assert len(teams) == 30
+    assert sum(t["by_start"]["all"]["off"]["poss"] for t in teams) == n == sum(t["by_start"]["all"]["def"]["poss"] for t in teams)
+    assert sorted(t["by_start"]["all"]["off"]["rank"] for t in teams) == list(range(1, 31))
+    best_def = min(teams, key=lambda t: t["by_start"]["all"]["def"]["ppp"])
+    assert best_def["by_start"]["all"]["def"]["rank"] == 1
+    # Transition vs settled covers exactly the timed possessions behind the stored share.
+    tr = {x["start_type"]: x for x in d["transition"]}
+    assert tr["all"]["trans"]["poss"] + tr["all"]["settled"]["poss"] == lg["all"]["timed_poss"]
+    assert tr["all"]["trans"]["poss"] == lg["all"]["trans_poss"] and tr["dreb"]["trans"]["ppp"] > tr["dreb"]["settled"]["ppp"] + 0.3
+    # Second-chance points allowed add up to the league's second-chance points.
+    assert sum(t["totals"]["d_second_chance_pg"] * t["totals"]["games"] for t in teams) == pytest.approx(lg["all"]["second_chance_pts"], abs=30)
+    # Signal check: whole-possession efficiency is mostly a team trait, efficiency after a steal mostly isn't.
+    sig = {(s["start_type"], s["side"]): s for s in d["signal"]}
+    assert sig[("all", "off")]["real_share"] > 0.6 > 0.4 > sig[("steal", "off")]["real_share"]
+    assert len(sig[("all", "off")]["yty"]) == 5
+    assert client.get("/possessions/league", params={"season": 2019}).status_code == 400
+
+    t = client.get("/possessions/team/okc").json()
+    assert t["team"] == "OKC" and [s["season"] for s in t["seasons"]] == [2021, 2022, 2023, 2024, 2025, 2026]
+    okc25 = next(x for x in teams if x["team"] == "OKC")
+    for key in ("all", "steal"):
+        for side in ("off", "def"):
+            a, b = t["seasons"][4]["by_start"][key][side], okc25["by_start"][key][side]
+            assert (a["poss"], a["pts"], a["ppp"]) == (b["poss"], b["pts"], b["ppp"])
+    assert client.get("/possessions/team/XXX").status_code == 400
+
+    # Player block: on + off = every tracked possession of his team in his games, per start type; on-court
+    # possessions within 5% of On/Off's estimated possessions (counted vs FGA + 0.44 FTA - OREB + TOV).
+    j = client.get("/possessions/player/203999", params={"season": 2026}).json()
+    _assert_has_source(j)
+    den = j["teams"][0]
+    rows = {r["start_type"]: r for r in den["rows"]}
+    for side in ("off", "def"):
+        for where in ("on", "off_court"):
+            assert sum(r[f"{side}_{where}"]["poss"] for k, r in rows.items() if k != "all" and r[f"{side}_{where}"]) == rows["all"][f"{side}_{where}"]["poss"]
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT poss_on FROM player_on_off WHERE player_id = 203999 AND season = 2026 AND team_abbreviation = 'DEN'")
+        est = cur.fetchone()[0]
+    assert abs(rows["all"]["off_on"]["poss"] / est - 1) < 0.05
+    assert rows["all"]["off_diff"]["lo"] < rows["all"]["off_diff"]["diff"] < rows["all"]["off_diff"]["hi"]
+    assert client.get("/possessions/player/1").status_code == 404
+    prof = client.get("/player-profile/203999").json()
+    assert prof["possessions"]["seasons"] == [2021, 2022, 2023, 2024, 2025, 2026]
+
 # ─── Round 4, Phase 2: RAPM ───────────────────────────────────────────────────
 
 def test_rapm_versions_validation_and_profile():

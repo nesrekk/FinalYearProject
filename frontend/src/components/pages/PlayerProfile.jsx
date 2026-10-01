@@ -10,6 +10,7 @@ import PlayerName from '../common/PlayerName';
 import ScoutingReportCard from '../common/ScoutingReportCard';
 import ShotMixHistory from '../common/ShotMixHistory';
 import SituationalSplitsBlock from '../common/SituationalSplitsBlock';
+import PossessionBlock from '../common/PossessionBlock';
 import AssistBlock from '../common/AssistBlock';
 import { ShotMakingInfo, ShotMakingTable } from '../common/ShotMaking';
 import SourceBadge from '../common/SourceBadge';
@@ -962,6 +963,11 @@ function missingReasons(d) {
             ? `Game-by-game lines start in ${label(cov.game_lines.from)} (rebuilt from ESPN play-by-play); ${career}.`
             : `Needs a season with 3+ games on both sides of a split (home and away, say) in the play-by-play lines (${span(cov.game_lines)}).`]);
     }
+    if (d.possessions && !d.possessions.seasons.length && cov.possessions?.from) {
+        out.push(['Possessions', endedBefore(cov.possessions.from)
+            ? `Possessions from play-by-play cover ${span(cov.possessions)}; ${career}.`
+            : `No tracked stint with this player on the floor (${span(cov.possessions)}): the minutes fall in games or stints the play-by-play couldn't place.`]);
+    }
     if (!d.similarity.seasons.length) {
         out.push(['Similar seasons', endedBefore(2010)
             ? `Needs usage, net rating, assist % and rebound %, recorded from 2009-10 on; ${career}.`
@@ -1031,6 +1037,7 @@ export default function PlayerProfile({ onNavigate }) {
         ['rim', 'Rim', (d.rim_deterrence?.rows.length ?? 0) > 0],
         ['assists', 'Assists', (d.assists?.seasons.length ?? 0) > 0],
         ['splits', 'Splits', (d.situational_splits?.seasons.length ?? 0) > 0],
+        ['possessions', 'Possessions', (d.possessions?.seasons.length ?? 0) > 0],
         ['similar', 'Similar', d.similarity.seasons.length > 0],
         ['breakouts', 'Breakouts', d.breakouts.flags.length > 0],
     ].filter(([, , ok]) => ok);
@@ -1082,6 +1089,9 @@ export default function PlayerProfile({ onNavigate }) {
             )}
             {(d.situational_splits?.seasons.length ?? 0) > 0 && (
                 <SituationalSplitsBlock key={d.player.player_id} playerId={d.player.player_id} seasons={d.situational_splits.seasons} />
+            )}
+            {(d.possessions?.seasons.length ?? 0) > 0 && (
+                <PossessionBlock key={d.player.player_id} playerId={d.player.player_id} seasons={d.possessions.seasons} onNavigate={onNavigate} />
             )}
             {d.similarity.seasons.length > 0 && <Similar player={d.player} seasons={d.similarity.seasons} />}
             {d.breakouts.flags.length > 0 && <Breakouts block={d.breakouts} />}

@@ -18,6 +18,7 @@ const PAGE_LABELS = {
     draft: 'Draft Value Guide', greats: 'Greats of the Game', player: 'Player Profile',
     rotations: 'Rotations',
     ledger: 'Forecast Ledger',
+    possessions: 'Possession Explorer',
     // Analytics tabs as 'analytics#<tab>'.
     'analytics#rim': 'Rim Deterrence',
 };

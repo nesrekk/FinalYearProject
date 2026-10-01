@@ -439,7 +439,7 @@ COVERAGE_MAP = [
         "range_sql": "SELECT MIN(season), MAX(season) FROM possessions", "range_fmt": "season_int",
         "source": "ESPN play-by-play cut into possessions by scripts/build_possessions.py (rules in scripts/pbp_possessions.py, on the same parser as lineup_stints); times on a clock rebuilt from the NBA shot chart, because ESPN logs made shots a median 14 s late; per-game checks in possession_games, team-season totals by start type in possession_seasons.",
         "gap": "Every regular-season game 2020-21 on; 7,220 of 7,232 games add up to the final score and the team totals, the same games as lineup_stints (possession_games says why the rest don't). Counted possessions run ~2 a team-game under the box-score estimate because team offensive rebounds continue a possession. ESPN stamps a turnover at about the time of the next play, so possessions after turnovers have no time-to-first-shot or transition flag, and about 27% of possessions have an approximate length.",
-        "used_by": [],
+        "used_by": ["possessions", "player"],
     },
     {
         "table": "rotation_closing_games", "label": "Closing stretch of every game (score at 5:00 left in the fourth)", "group": "Teams",

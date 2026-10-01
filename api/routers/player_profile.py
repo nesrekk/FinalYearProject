@@ -34,6 +34,7 @@ from routers.projections import LOW_WEIGHT as PROJECTION_LOW_WEIGHT, PROFILE_STA
 from routers.rapm import _fits as rapm_fits
 from routers.rim_deterrence import profile_block as rim_deterrence_block
 from routers.assist_network import player_seasons as assist_seasons
+from routers.possessions import player_possession_seasons
 from source_badge import make_source
 
 router = APIRouter()
@@ -84,6 +85,7 @@ def _coverage():
             "rapm": _span(cur, "SELECT min(season), max(season) FROM player_rapm"),
             "rim_deterrence": _span(cur, "SELECT min(season), max(season) FROM rim_deterrence_seasons"),
             "assists": _span(cur, "SELECT min(season), max(season) FROM assist_seasons"),
+            "possessions": _span(cur, "SELECT min(season), max(season) FROM possession_seasons"),
             "projections": _span(cur, "SELECT min(season), max(season) FROM player_projections"),
             "game_lines": _span(cur, "SELECT min(season), max(season) FROM player_game_lines"),
             "awards": _span(cur, "SELECT min(season), max(season) FROM player_awards WHERE award <> 'All-Star'"),
@@ -297,6 +299,8 @@ def get_player_profile(player_id: int):
         cur.execute("""SELECT season, count(*) FILTER (WHERE qualified) FROM player_situational_splits
                        WHERE player_id = %s GROUP BY 1 ORDER BY 1""", (player_id,))
         split_seasons = [{"season": s, "qualified_rows": n} for s, n in cur.fetchall()]
+        # ── Possessions: seasons with a tracked stint of his (rows load from /possessions/player) ──
+        poss_seasons = player_possession_seasons(cur, player_id)
         # ── On/off: the team with him on vs. off the floor, from the play-by-play lines ──
         cur.execute("""SELECT season, team_abbreviation, games, team_games, minutes_on, minutes_off, poss_on, poss_off,
                               ortg_on, drtg_on, net_on, ortg_off, drtg_off, net_off, on_off_net, on_off_ci_low,
@@ -383,6 +387,7 @@ def get_player_profile(player_id: int):
         "similarity": {"seasons": sim_seasons},
         "game_log": {"seasons": game_log_seasons},
         "situational_splits": {"seasons": split_seasons},
+        "possessions": {"seasons": poss_seasons},
         "projections": {"rows": projections, "season": projections[0]["season"] if projections else None,
                         "low_weight": PROJECTION_LOW_WEIGHT},
         "breakouts": {
@@ -393,7 +398,7 @@ def get_player_profile(player_id: int):
         "_source": make_source(
             ["player_season_stats", "player_team_stints", "player_bio", "player_awards", "draft_history",
              "player_roles", "greats", "player_shots", "scouting_splits", "defender_dad", "player_gravity",
-             "contract_value", "player_wpa_totals", "player_shot_making", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue", "player_situational_splits", "player_projections", "player_rapm", "rim_deterrence", "player_assisted_share", "assist_pairs"],
+             "contract_value", "player_wpa_totals", "player_shot_making", "league_zone_mix", "player_on_off", "player_game_lines", "team_game_fatigue", "player_situational_splits", "player_projections", "player_rapm", "rim_deterrence", "player_assisted_share", "assist_pairs", "possessions", "lineup_stints"],
             "nba_api (stats.nba.com), Basketball-Reference via Kaggle, ESPN play-by-play, Kaggle salary datasets",
         ),
     }

@@ -1279,3 +1279,26 @@ export async function fetchQualityMap(player, season) {
     const response = await axios.get(`${IMPACT_BASE}/shots/quality-map`, { params: { player, ...(season ? { season } : {}) } });
     return response.data;
 }
+
+// Possession Explorer (GET /possessions/*): points per possession by how the possession began.
+export async function fetchPossessionOptions() {
+    return getWithCache('possession_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/possessions/options`);
+        return response.data;
+    });
+}
+
+export async function fetchPossessionLeague(season) {
+    const response = await axios.get(`${IMPACT_BASE}/possessions/league`, { params: season ? { season } : {} });
+    return response.data;
+}
+
+export async function fetchPossessionTeam(abbr) {
+    const response = await axios.get(`${IMPACT_BASE}/possessions/team/${encodeURIComponent(abbr)}`);
+    return response.data;
+}
+
+export async function fetchPlayerPossessions(playerId, season) {
+    const response = await axios.get(`${IMPACT_BASE}/possessions/player/${playerId}`, { params: season ? { season } : {} });
+    return response.data;
+}

@@ -61,6 +61,7 @@ const AssistNetwork = lazy(() => import('./components/pages/AssistNetwork'));
 const SeasonSimulator = lazy(() => import('./components/pages/SeasonSimulator'));
 const ForecastLedger = lazy(() => import('./components/pages/ForecastLedger'));
 const BestGames = lazy(() => import('./components/pages/BestGames'));
+const PossessionExplorer = lazy(() => import('./components/pages/PossessionExplorer'));
 const SituationalSplits = lazy(() => import('./components/pages/SituationalSplits'));
 const Watchlist = lazy(() => import('./components/pages/Watchlist'));
 const SavedAnalyses = lazy(() => import('./components/pages/SavedAnalyses'));
@@ -108,6 +109,7 @@ const PAGES = {
   simulator: SeasonSimulator,
   ledger: ForecastLedger,
   bestgames: BestGames,
+  possessions: PossessionExplorer,
   splits: SituationalSplits,
   watchlist: Watchlist,
   saved: SavedAnalyses,

@@ -46,6 +46,7 @@ from routers import (
     leaders,
     ledger,
     length_study,
+    possessions,
     lineup_chemistry,
     luck_schedule,
     matchup_finder,
@@ -136,6 +137,7 @@ for _router_module in (
     best_games,
     shot_quality_map,
     ledger,
+    possessions,
 ):
     app.include_router(_router_module.router)
 
