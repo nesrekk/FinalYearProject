@@ -51,6 +51,7 @@ from routers import (
     pregame_availability,
     lineup_predictor,
     report_card,
+    data_quality,
     lineup_chemistry,
     luck_schedule,
     matchup_finder,
@@ -148,6 +149,7 @@ for _router_module in (
     shot_value,
     lineup_predictor,
     report_card,
+    data_quality,
 ):
     app.include_router(_router_module.router)
 

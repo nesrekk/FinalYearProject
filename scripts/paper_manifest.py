@@ -188,6 +188,9 @@ PRODUCERS = {
     # app tables (Model Report Card); reads paper_eval_predictions for its checks and imports paper_eval / paper_tests
     "build_report_card.py": ("derived", ["report_card_units", "report_card_game_sums", "report_card_tests", "report_card_pooled",
                                          "report_card_choices", "report_card_meta"]),
+    # app tables (Data Quality); re-runs paper_data_audit's checks (must equal paper_data_audit) and reads paper_eval /
+    # paper_tests / pregame_availability rows for its re-scores, so its step is in the paper stage after paper_data_audit
+    "build_data_quality.py": ("derived", ["data_quality_game_flags", "data_quality_sensitivity", "data_quality_meta"]),
     "build_stat_stability.py": ("derived", ["stat_stability", "stat_stability_curve", "stat_year_to_year"]),
     "build_hot_streak_persistence.py": ("derived", ["hot_streak_persistence"]),
     "build_situational_splits.py": ("derived", ["player_situational_splits", "situational_split_league"]),

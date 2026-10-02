@@ -491,6 +491,20 @@ COVERAGE_MAP = [
         "used_by": ["reportcard"],
     },
     {
+        "table": "data_quality_game_flags", "label": "Data Quality: the error classes on every game", "group": "Games",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM data_quality_game_flags", "range_fmt": "season_int",
+        "source": "scripts/build_data_quality.py: every ESPN regular-season game 2020-21 on (the three NBA Cup finals included) with the size of each per-game error class of the paper's data-quality audit (events tagged to the wrong player, tag/text disagreements, players with no id, substitutions with no team, stale or backward score fields, last score vs the final, missed threes worded as twos, chart matches, clock offsets, events outside their period, zero-distance threes, the plus-minus field), which classes touch the game by api/data_quality_lib.py's rules, and its level (excluded, flagged, worked around, clean). The build re-runs scripts/paper_data_audit.py's checks first and stops unless every stored audit number reproduces.",
+        "gap": "No flag before 2020-21 (no play-by-play here). The season-table classes (a wrong team on a season row, two age conventions) aren't per game, and a shot at (0, 0) is a real shot at the rim in this era, so the unlocated class flags no game. Zero-distance threes touch nearly every game, so almost none is 'clean'.",
+        "used_by": ["quality"],
+    },
+    {
+        "table": "data_quality_sensitivity", "label": "Data Quality: results re-scored without the flagged games", "group": "Models",
+        "range_sql": None, "range_fmt": None,
+        "source": "scripts/build_data_quality.py: three headline results (RAPM with a BPM prior vs BPM on next-season margins, points per possession after a steal vs a made shot and transition vs settled, the availability-aware odds vs the pre-game model) re-scored with each drop set (the flagged games, then each per-game class), every score and difference with paper_tests' paired bootstrap by game, and 30 random drops of as many games from the same seasons as the control. The every-game rows equal paper_eval_tests and pregame_availability_tests bit for bit.",
+        "gap": "Hyperparameters stay at the protocol's choices (not re-chosen without the games); the availability odds are only re-scored (not refitted), and their expected minutes still come from earlier games, flagged or not. A class touching more than half the games isn't dropped on its own.",
+        "used_by": ["quality"],
+    },
+    {
         "table": "coaching_decision_tests", "label": "Coaching decisions: the tests", "group": "Teams",
         "range_sql": None, "range_fmt": None,
         "source": "scripts/build_coaching_decisions.py: per decision the matched effect on the treated, a game-clustered bootstrap interval, a permutation p (2,000 shuffles of the decision within matched moments, 20,000 when p <= 0.02) and a Benjamini-Hochberg q within its family (league level; per team); paper_beliefs.py's machinery.",

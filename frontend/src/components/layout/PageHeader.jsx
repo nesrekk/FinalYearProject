@@ -49,6 +49,7 @@ const pageTitles = {
     watchlist: 'Watchlist',
     coverage: 'Data Coverage',
     reportcard: 'Model Report Card',
+    quality: 'Data Quality',
     saved: 'Saved Analyses',
     report: 'Report Builder',
 };
@@ -96,6 +97,7 @@ const pageDescriptions = {
     watchlist: 'Your starred players, side by side',
     coverage: 'Every table this app reads: live row counts, season span, source and known gaps',
     reportcard: 'Every model scored season by season, each season predicted from the seasons before it, and the seasons pooled: where a ranking holds and where it flips',
+    quality: 'The feeds\' known error classes checked live, a quality flag on every game, and whether dropping the flagged games changes the results',
     saved: 'Every tool view you\'ve saved, exactly as you left it',
     report: 'Collect charts and tables from any page, add your own notes, and print or save the result as a PDF',
 };

@@ -21,6 +21,7 @@ const PAGE_LABELS = {
     possessions: 'Possession Explorer',
     coaching: 'Coaching Decisions',
     reportcard: 'Model Report Card',
+    quality: 'Data Quality',
     // Analytics tabs as 'analytics#<tab>'.
     'analytics#rim': 'Rim Deterrence',
 };

@@ -415,6 +415,8 @@ def identity_checks(conn, cur, A):
           macro="DqTagTextOther", fmt="integer")
     A.put("tag_text_teammate", same, "of those, a teammate of the tagged player", macro="DqTagTextTeammate", fmt="integer")
     A.put("tag_text_events_checked", len(ev), "ESPN events with a player id")
+    # per-event frames for build_data_quality.py (the per-game flags); the audit itself ignores them
+    return ev[hit][["id", "game_id"]].reset_index(drop=True), single[["id", "game_id"]].reset_index(drop=True)
 
 
 def shot_checks(conn, cur, A):
@@ -493,6 +495,8 @@ def shot_checks(conn, cur, A):
     A.put("clock_p99", float(np.percentile(off, 99)), "99th percentile (s)", macro="DqClockPctlSec", fmt="int_round")
     A.put("clock_big_share", float((off > CLOCK_BIG).mean()), f"share over {CLOCK_BIG:.0f} s", macro="DqClockBigPct", fmt="pct1")
     A.put("clock_max", float(off.max()), "largest (s); the largest are order-matching slips or clock errors (see clock_largest)")
+    # per-attempt frames for build_data_quality.py (the per-game flags); the audit itself ignores them
+    return m, mm.assign(clock_off=off)
 
 
 # ── The error classes: the paper's table ─────────────────────────────────────

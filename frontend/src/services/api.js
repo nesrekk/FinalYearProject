@@ -1406,3 +1406,29 @@ export async function fetchReportCardPair(task, a, b, { metric, variant } = {}) 
     const response = await axios.get(`${IMPACT_BASE}/report-card/pair`, { params });
     return response.data;
 }
+
+// Data Quality (GET /data-quality/*): the audit's error classes checked live, per-game flags, and whether they matter.
+export async function fetchDataQualityOverview() {
+    const response = await axios.get(`${IMPACT_BASE}/data-quality/overview`);
+    return response.data;
+}
+
+export async function fetchDataQualityCheck(key) {
+    const response = await axios.get(`${IMPACT_BASE}/data-quality/check/${encodeURIComponent(key)}`);
+    return response.data;
+}
+
+export async function fetchDataQualityGames({ season, level, cls, team, sort, dir, limit, offset } = {}) {
+    const params = { sort, dir, limit, offset };
+    if (season != null) params.season = season;
+    if (level) params.level = level;
+    if (cls) params.cls = cls;
+    if (team) params.team = team;
+    const response = await axios.get(`${IMPACT_BASE}/data-quality/games`, { params });
+    return response.data;
+}
+
+export async function fetchDataQualitySensitivity(result) {
+    const response = await axios.get(`${IMPACT_BASE}/data-quality/sensitivity`, { params: { result } });
+    return response.data;
+}

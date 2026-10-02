@@ -1,0 +1,84 @@
+/* Data Quality page (pages/DataQuality.jsx). Layout pieces come from
+   possessions.css (px-*, pc-* charts) and playfinder.css (pf-* pills and
+   controls). Matrix cells shade by --p: the share of the season's games the
+   class touches, 1 = the largest share in the table. */
+.dq-tabs, .dq-results { margin: var(--space-4) 0 var(--space-2); flex-wrap: wrap; }
+.dq-page .data-table td:nth-child(2), .dq-page .data-table th:nth-child(2) { position: static; background: transparent; }
+.dq-table td { vertical-align: top; }
+.dq-table td:first-child { min-width: 150px; }
+.dq-text { font-size: 0.82rem; line-height: 1.45; color: var(--text-2); min-width: 180px; max-width: 320px; }
+.dq-table tr.dq-feed td {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2);
+  border-top: 2px solid var(--line); padding-top: var(--space-3); font-weight: 700;
+}
+.dq-kind {
+  display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 1px 6px; margin-right: 4px;
+  border: 1px solid var(--line); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text);
+}
+.dq-kind--repaired { border-color: var(--positive); color: var(--positive); }
+.dq-kind--excluded { border-color: var(--text-2); color: var(--text-2); }
+.dq-kind--disclosed { border-color: var(--brand); color: var(--brand-text); }
+
+.dq-live {
+  display: inline-block; font: inherit; font-size: 0.78rem; white-space: nowrap; padding: 2px 8px;
+  border: 1px solid var(--hairline); background: none; color: var(--text-2);
+}
+button.dq-live { cursor: pointer; }
+.dq-live--ok { border-color: var(--positive); color: var(--positive); font-weight: 600; }
+.dq-live--bad { border-color: var(--negative); color: var(--negative); font-weight: 600; }
+.dq-live--build { font-style: italic; }
+.dq-why, .dq-link {
+  background: none; border: 0; padding: 0 0 0 6px; font: inherit; font-size: 0.78rem; color: var(--brand-text);
+  cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+}
+.dq-link { padding: 0; font-size: inherit; font-variant-numeric: tabular-nums; }
+.dq-why:hover, .dq-link:hover, .dq-why:focus-visible, .dq-link:focus-visible { color: var(--text); }
+.dq-detail td { background: var(--surface-2); }
+.dq-detail-p { margin: 0 0 var(--space-2); font-size: 0.82rem; color: var(--text-2); max-width: 70ch; }
+.dq-live-table { border-collapse: collapse; font-size: 0.8rem; margin-bottom: var(--space-2); }
+.dq-live-table th, .dq-live-table td { padding: 2px 10px 2px 0; text-align: left; border-bottom: 1px solid var(--hairline); }
+.dq-live-table .lb-num { text-align: right; font-variant-numeric: tabular-nums; }
+.dq-ok { color: var(--positive); font-weight: 600; }
+.dq-bad { color: var(--negative); font-weight: 600; }
+.dq-sub { font-size: 0.75rem; color: var(--text-3); }
+.dq-nowrap { white-space: nowrap; }
+
+.dq-matrix td:first-child { white-space: nowrap; }
+.dq-page .dq-matrix tbody td.dq-heat {
+  --heat-max: 40%;
+  background: color-mix(in srgb, var(--brand) calc(var(--p, 0) * var(--heat-max)), transparent);
+}
+:root[data-theme='dark'] .dq-page .dq-matrix tbody td.dq-heat { --heat-max: 32%; }
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='system'] .dq-page .dq-matrix tbody td.dq-heat { --heat-max: 32%; }
+}
+.dq-matrix tr.dq-level-row td { font-weight: 600; }
+.dq-matrix tr.dq-level-row:first-of-type td, .dq-matrix tr.dq-level-row td { border-top: 1px solid var(--line); }
+
+.dq-level {
+  display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 0 5px; margin-left: 6px;
+  text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid currentColor; white-space: nowrap;
+}
+.dq-matrix .dq-level, .dq-games .dq-level { margin-left: 0; }
+.dq-level-row .dq-level { margin-right: 4px; }
+.dq-level--excluded { color: var(--text-2); }
+.dq-level--flagged { color: var(--negative); }
+.dq-level--worked_around { color: var(--brand-text); }
+.dq-level--clean { color: var(--positive); }
+
+.dq-count { margin: var(--space-2) 0; }
+.dq-games td { vertical-align: top; }
+.dq-hits { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; line-height: 1.45; color: var(--text-2); min-width: 260px; }
+.dq-hit strong { color: var(--text); font-weight: 600; }
+.dq-hit--flagged strong, .dq-hit--excluded strong { color: var(--negative); }
+.dq-pager { margin-top: var(--space-3); }
+.dq-pager .pf-pill:disabled { opacity: 0.45; cursor: default; }
+
+.dq-sens td, .dq-sens th { white-space: nowrap; }
+.dq-sens tr.dq-full td { font-weight: 700; border-bottom: 2px solid var(--line); }
+.dq-verdict { font-size: 0.8rem; }
+.dq-verdict--same { color: var(--text-2); }
+.dq-verdict--no-longer-clear, .dq-verdict--becomes-clear { color: var(--brand-text); font-weight: 600; }
+.dq-verdict--flips { color: var(--negative); font-weight: 700; }
+.dq-stat--warn .px-stat-v { color: var(--brand-text); }
+.dq-nof { margin-top: var(--space-5); font-size: 0.84rem; }

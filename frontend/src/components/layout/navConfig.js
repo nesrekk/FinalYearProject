@@ -68,6 +68,7 @@ export const NAV_GROUPS = [
             { id: 'reportcard', label: 'Model Report Card', icon: 'grading' },
             { id: 'methodology', label: 'Methodology', icon: 'fact_check' },
             { id: 'coverage', label: 'Data Coverage', icon: 'table_chart' },
+            { id: 'quality', label: 'Data Quality', icon: 'rule' },
         ],
     },
     {
