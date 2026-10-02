@@ -68,6 +68,7 @@ const Watchlist = lazy(() => import('./components/pages/Watchlist'));
 const SavedAnalyses = lazy(() => import('./components/pages/SavedAnalyses'));
 const Reports = lazy(() => import('./components/pages/Reports'));
 const DataCoverage = lazy(() => import('./components/pages/DataCoverage'));
+const ModelReportCard = lazy(() => import('./components/pages/ModelReportCard'));
 
 // Every page the app can show, by the id used in navConfig and `?page=`.
 const PAGES = {
@@ -117,6 +118,7 @@ const PAGES = {
   saved: SavedAnalyses,
   report: Reports,
   coverage: DataCoverage,
+  reportcard: ModelReportCard,
 };
 
 // Which view the URL asks for. No `page` = the landing page, except that an

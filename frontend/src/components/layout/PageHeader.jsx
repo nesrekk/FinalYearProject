@@ -48,6 +48,7 @@ const pageTitles = {
     splits: 'Situational Splits',
     watchlist: 'Watchlist',
     coverage: 'Data Coverage',
+    reportcard: 'Model Report Card',
     saved: 'Saved Analyses',
     report: 'Report Builder',
 };
@@ -94,6 +95,7 @@ const pageDescriptions = {
     splits: 'Home or away, back-to-back or rested, long trip or short, strong or weak opponent: each player against the average',
     watchlist: 'Your starred players, side by side',
     coverage: 'Every table this app reads: live row counts, season span, source and known gaps',
+    reportcard: 'Every model scored season by season, each season predicted from the seasons before it, and the seasons pooled: where a ranking holds and where it flips',
     saved: 'Every tool view you\'ve saved, exactly as you left it',
     report: 'Collect charts and tables from any page, add your own notes, and print or save the result as a PDF',
 };

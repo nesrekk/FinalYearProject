@@ -214,6 +214,7 @@ step paper -          paper_eval.py                      # ~7 min
 step paper -          paper_tests.py                     # ~75 s
 step paper -          build_pregame_availability.py      # ~20 s; app tables (Season Simulator what-if), reads paper_eval_predictions
 step paper -          build_lineup_predictor.py          # ~40 s; app tables (Rotations' lineup panel); imports paper_eval/paper_tests for the protocol and tests
+step paper -          build_report_card.py               # ~10 min; app tables (Model Report Card): every model season by season, rolling origin; checks against paper_eval_predictions
 step paper -          paper_data_audit.py                # ~95 s; also paper/tables/data_audit.tex
 step paper -          paper_beliefs.py                   # ~22 min; also paper/tables/beliefs.tex
 step paper -          paper_ablations.py                 # ~11 min; also paper/tables/ablations.tex

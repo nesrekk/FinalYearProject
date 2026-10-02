@@ -1382,3 +1382,27 @@ export async function fetchCoachingTests() {
     const response = await axios.get(`${IMPACT_BASE}/coaching/tests`);
     return response.data;
 }
+
+// Model Report Card (GET /report-card/*): every model scored season by season, each season predicted from the seasons before it.
+export async function fetchReportCardOptions() {
+    return getWithCache('report_card_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/report-card/options`);
+        return response.data;
+    });
+}
+
+export async function fetchReportCardTask(task, { metric, variant } = {}) {
+    const params = { task };
+    if (metric) params.metric = metric;
+    if (variant != null) params.variant = variant;
+    const response = await axios.get(`${IMPACT_BASE}/report-card/task`, { params });
+    return response.data;
+}
+
+export async function fetchReportCardPair(task, a, b, { metric, variant } = {}) {
+    const params = { task, a, b };
+    if (metric) params.metric = metric;
+    if (variant != null) params.variant = variant;
+    const response = await axios.get(`${IMPACT_BASE}/report-card/pair`, { params });
+    return response.data;
+}

@@ -65,6 +65,7 @@ export const NAV_GROUPS = [
             { id: 'analytics', label: 'Player Analysis', icon: 'query_stats', hash: 'similarity' },
             { id: 'analytics', label: 'Teams & Markets', icon: 'storefront', hash: 'vegas' },
             { id: 'analytics', label: 'College & Draft', icon: 'school', hash: 'prospects' },
+            { id: 'reportcard', label: 'Model Report Card', icon: 'grading' },
             { id: 'methodology', label: 'Methodology', icon: 'fact_check' },
             { id: 'coverage', label: 'Data Coverage', icon: 'table_chart' },
         ],

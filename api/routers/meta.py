@@ -477,6 +477,20 @@ COVERAGE_MAP = [
         "used_by": ["rotations"],
     },
     {
+        "table": "report_card_tests", "label": "Model Report Card: every model's score, season by season", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM report_card_tests", "range_fmt": "season_int",
+        "source": "scripts/build_report_card.py: every model re-run with a rolling origin (each season predicted by models rebuilt from the seasons before it, by their own selection rules): pre-game odds and the Season Simulator 2012-13 on, player impact (RAPM versions, Rating Tracker, BPM, on/off, expected-points RAPM) 2022-23 on, by game and by possession, and the shot prices 2021-22 on. Per season every model's score and every pair's difference with a 95% cluster-bootstrap interval; pooled across seasons with random effects in report_card_pooled; choices per season in report_card_choices.",
+        "gap": "Few seasons for player impact (4) and top-6 odds (6), so the between-season spread is rough there. The held-out-games task, year-to-year reliabilities, availability-aware odds, Lineup Predictor and the Forecast Ledger aren't on it. Shot-model and Shot Value settings and BPM's formula are fixed, not re-chosen per season.",
+        "used_by": ["reportcard"],
+    },
+    {
+        "table": "report_card_units", "label": "Model Report Card: every prediction it scored", "group": "Models",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM report_card_units", "range_fmt": "season_int",
+        "source": "scripts/build_report_card.py: one row per scored game (pre-game odds, next-season game margins) or team-season (simulator, per checkpoint), with the prediction and the outcome; per-game sums for the per-possession and per-shot scores in report_card_game_sums.",
+        "gap": "Possessions and shots are stored as per-game sums, not one row each.",
+        "used_by": ["reportcard"],
+    },
+    {
         "table": "coaching_decision_tests", "label": "Coaching decisions: the tests", "group": "Teams",
         "range_sql": None, "range_fmt": None,
         "source": "scripts/build_coaching_decisions.py: per decision the matched effect on the treated, a game-clustered bootstrap interval, a permutation p (2,000 shuffles of the decision within matched moments, 20,000 when p <= 0.02) and a Benjamini-Hochberg q within its family (league level; per team); paper_beliefs.py's machinery.",

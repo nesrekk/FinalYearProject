@@ -1,0 +1,31 @@
+/* Model Report Card (pages/ModelReportCard.jsx). Layout pieces come from
+   possessions.css (px-*, pc-* charts) and playfinder.css (pf-* pills and
+   controls). Grid cells shade by rank: --p is 1 for the best model of the
+   season, 0 for the worst. */
+.rc-tabs { margin: var(--space-4) 0 var(--space-2); flex-wrap: wrap; }
+.rc-grid td, .rc-grid th, .rc-table td, .rc-table th { white-space: nowrap; }
+.rc-grid td:first-child, .rc-table td:first-child { white-space: normal; min-width: 150px; }
+/* the shared data-table pins its first two columns (rank, name); here only the model name is pinned */
+.rc-page .data-table td:nth-child(2), .rc-page .data-table th:nth-child(2) { position: static; background: transparent; }
+.rc-page .rc-grid tbody td.rc-cell {
+  --heat-max: 45%;
+  background: color-mix(in srgb, var(--brand) calc(var(--p, 0) * var(--heat-max)), transparent);
+  font-variant-numeric: tabular-nums;
+}
+:root[data-theme='dark'] .rc-page .rc-grid tbody td.rc-cell { --heat-max: 35%; }
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='system'] .rc-page .rc-grid tbody td.rc-cell { --heat-max: 35%; }
+}
+.rc-first { outline: 2px solid var(--line); outline-offset: -2px; font-weight: 700; }
+.rc-ref td:first-child { font-style: italic; }
+.rc-good { color: var(--positive); font-weight: 600; }
+.rc-bad { color: var(--negative); font-weight: 600; }
+.rc-stat--pos .px-stat-v { color: var(--positive); }
+.rc-stat--neg .px-stat-v { color: var(--negative); }
+.rc-page .data-table tr.rc-sel td { background: var(--surface-2); }
+.rc-link {
+  background: none; border: 0; padding: 0; font: inherit; color: var(--brand-text);
+  text-align: left; cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+}
+.rc-link:hover, .rc-link:focus-visible { color: var(--text); }
+.rc-nof { margin-top: var(--space-4); font-size: 0.84rem; }

@@ -185,6 +185,9 @@ PRODUCERS = {
     # app tables; imports paper_eval / paper_tests (the protocol's seasons, the bootstrap), so its step is in the paper stage
     "build_lineup_predictor.py": ("derived", ["lineup_predictor_units", "lineup_predictor_players", "lineup_predictor_teams",
                                               "lineup_predictor_fit", "lineup_predictor_metrics", "lineup_predictor_tests"]),
+    # app tables (Model Report Card); reads paper_eval_predictions for its checks and imports paper_eval / paper_tests
+    "build_report_card.py": ("derived", ["report_card_units", "report_card_game_sums", "report_card_tests", "report_card_pooled",
+                                         "report_card_choices", "report_card_meta"]),
     "build_stat_stability.py": ("derived", ["stat_stability", "stat_stability_curve", "stat_year_to_year"]),
     "build_hot_streak_persistence.py": ("derived", ["hot_streak_persistence"]),
     "build_situational_splits.py": ("derived", ["player_situational_splits", "situational_split_league"]),
