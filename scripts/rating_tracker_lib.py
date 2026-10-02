@@ -141,9 +141,32 @@ class TrackerData:
 
 # ── The filter ───────────────────────────────────────────────────────────────
 
+def _cho(M):
+    """Lower Cholesky factor of a symmetric positive-definite matrix, from LAPACK's dpotrf called directly (the f2py
+    wrapper in scipy.linalg.lapack); the strict upper triangle is left as it was and never read.
+
+    Not scipy.linalg.cho_factor: from scipy 1.18 it goes through the batched C++ module (_batched_linalg._cholesky),
+    and on macOS 27.0.1 (M5, Accelerate; found 2026-10-02) that call corrupted the heap in this filter's ~1,850 x
+    1,850 factorisations: SIGBUS / SIGILL inside dpotrf$NEWLAPACK, or silently overwritten arrays that broke later
+    steps. Under Guard Malloc the tracker step alone faulted there every run; with this direct call it runs clean.
+    The same LAPACK routine, so the factor is the same up to the last bits (docs/REPRODUCIBILITY.md)."""
+    c, info = sla.lapack.dpotrf(M, lower=1, clean=0)
+    if info:
+        raise np.linalg.LinAlgError(f"dpotrf failed ({info})")
+    return c
+
+
+def _cho_solve(c, b):
+    """Solve with a lower factor from _cho (dpotrs, the f2py wrapper; what scipy.linalg.cho_solve calls too)."""
+    x, info = sla.lapack.dpotrs(c, b, lower=1)
+    if info:
+        raise np.linalg.LinAlgError(f"dpotrs failed ({info})")
+    return x
+
+
 def _chol_inv(M):
     """(inverse, log determinant) of a symmetric positive-definite matrix by Cholesky."""
-    c, low = sla.cho_factor(M, lower=True, check_finite=False)
+    c = _cho(M)
     logdet = 2.0 * float(np.sum(np.log(np.diag(c))))
     inv, info = sla.lapack.dpotri(c, lower=1)
     if info:
@@ -203,15 +226,15 @@ class Filter:
         Ap[mi, mi] += lam_b                                    # + the BPM measurement = the prior the stints see
         rp = A @ mm
         rp[mi] += lam_b * z
-        c1, low1 = sla.cho_factor(Ap, lower=True, check_finite=False)
-        mmp = sla.cho_solve((c1, low1), rp, check_finite=False)
+        c1 = _cho(Ap)
+        mmp = _cho_solve(c1, rp)
         logdet_Ap = 2.0 * float(np.sum(np.log(np.diag(c1))))
         Lam = Ap.copy()
         Lam[np.ix_(cols, cols)] += G
         r = rp.copy()
         r[cols] += b
-        c, low = sla.cho_factor(Lam, lower=True, check_finite=False)
-        m = sla.cho_solve((c, low), r, check_finite=False)
+        c = _cho(Lam)
+        m = _cho_solve(c, r)
         logdet_post = 2.0 * float(np.sum(np.log(np.diag(c))))
         Pinv, info = sla.lapack.dpotri(c, lower=1)
         if info:
@@ -307,8 +330,8 @@ class Filter:
             # J = P_t Phi' (P_prior_{t+1})^{-1}; Phi is phi on the entries carried over, 0 elsewhere
             PPhiT = np.zeros_like(self.P[t_prev])
             PPhiT[:, act] = phi * self.P[t_prev][:, act]
-            c, low = sla.cho_factor(self.P_prior[t], lower=True, check_finite=False)
-            J = sla.cho_solve((c, low), PPhiT.T, check_finite=False).T
+            c = _cho(self.P_prior[t])
+            J = _cho_solve(c, PPhiT.T).T
             ms[t_prev] = self.m[t_prev] + J @ (ms[t] - self.m_prior[t])
             Ps[t_prev] = self.P[t_prev] + J @ (Ps[t] - self.P_prior[t]) @ J.T
         return ms, Ps
