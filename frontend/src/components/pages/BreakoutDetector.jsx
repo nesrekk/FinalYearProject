@@ -8,6 +8,7 @@ import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { signed as signedNum } from '../../utils/format';
 import '../../styles/stability.css';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
@@ -15,11 +16,11 @@ const FORMATS = {
     num1: (v) => v.toFixed(1),
     num2: (v) => v.toFixed(2),
     pct: (v) => `${(v * 100).toFixed(1)}%`,
-    signed1: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}`,
+    signed1: (v) => signedNum(v, 1, '-'), // sign of the shown value; hyphen minus as before
     int: (v) => v.toFixed(0),
 };
 const fmt = (format, v) => (v == null ? '—' : FORMATS[format](v));
-const signed = (v, d = 2) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`;
+const signed = (v, d = 2) => signedNum(v, d);
 const DEFAULT_STATS = ['pts', 'ts_pct', 'usg_pct', 'ast_pct', 'reb_pct', 'bpm'];
 const TOP_N = [10, 25, 50, 100];
 

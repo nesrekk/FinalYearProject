@@ -6,6 +6,7 @@ import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
 import TableExport from './common/TableExport';
+import { signed } from '../utils/format';
 
 function fmtPct(v) {
     return v == null ? '—' : `${(v * 100).toFixed(1)}%`;
@@ -149,7 +150,7 @@ export default function VegasScannerSection() {
                                                             style={{ verticalAlign: 'middle', marginRight: 2 }}
                                                         />
                                                     )}
-                                                    {t.value != null ? `${t.value > 0 ? '+' : ''}${(t.value * 100).toFixed(1)}pp` : '—'}
+                                                    {t.value != null ? `${signed(t.value * 100, 1, '-')}pp` : '—'}
                                                 </td>
                                             </tr>
                                             {isOpen && (

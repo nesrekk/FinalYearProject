@@ -8,12 +8,11 @@ import TeamLogo from './common/TeamLogo';
 import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
 import ClutchSplitSection from './ClutchSplitSection';
+import { bySign, signed } from '../utils/format';
 
 function wpaColor(v) {
     if (v == null) return 'var(--text-muted)';
-    if (v > 0) return 'var(--positive)';
-    if (v < 0) return 'var(--negative)';
-    return 'var(--text-secondary)';
+    return bySign(v, 2, 'var(--positive)', 'var(--negative)', 'var(--text-secondary)'); // as shown, so 0.00 isn't tinted
 }
 
 export default function ClutchWpaSection() {
@@ -93,14 +92,14 @@ export default function ClutchWpaSection() {
                                         <td>{r.clutch_plays}</td>
                                         <td style={{ color: wpaColor(r.clutch_wpa), fontWeight: 700 }}>
                                             <Icon
-                                                name={r.clutch_wpa > 0 ? 'arrow_upward' : r.clutch_wpa < 0 ? 'arrow_downward' : 'remove'}
+                                                name={bySign(r.clutch_wpa, 2, 'arrow_upward', 'arrow_downward', 'remove')}
                                                 size="0.9em"
                                                 style={{ verticalAlign: 'middle', marginRight: 2 }}
                                             />
-                                            {r.clutch_wpa > 0 ? '+' : ''}{r.clutch_wpa.toFixed(2)}
+                                            {signed(r.clutch_wpa, 2, '-')}
                                         </td>
                                         <td style={{ color: wpaColor(r.total_wpa) }}>
-                                            {r.total_wpa > 0 ? '+' : ''}{r.total_wpa.toFixed(2)}
+                                            {signed(r.total_wpa, 2, '-')}
                                         </td>
                                     </tr>
                                 ))}

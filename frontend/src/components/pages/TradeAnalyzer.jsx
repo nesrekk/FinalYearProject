@@ -13,6 +13,7 @@ import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { shownSign, signed } from '../../utils/format';
 
 function StatLabel({ statKey, children }) {
     const def = STAT_GLOSSARY[statKey];
@@ -36,13 +37,12 @@ function DeltaValue({ before, after, digits = 1, higherIsBetter = true }) {
     if (before == null || after == null) return <span>—</span>;
     const delta = after - before;
     const improved = higherIsBetter ? delta > 0 : delta < 0;
-    const flat = Math.abs(delta) < 0.005;
+    const flat = shownSign(delta, digits) === 0; // reads 0.0 as shown: no colour, no sign
     const color = flat ? 'var(--text-3)' : (improved ? 'var(--positive)' : 'var(--negative)');
-    const sign = delta >= 0 ? '+' : '';
     return (
         <span className="hb-delta">
             {fmt(after, digits)}{' '}
-            <span style={{ color, fontSize: '0.85em' }}>({sign}{fmt(delta, digits)})</span>
+            <span style={{ color, fontSize: '0.85em' }}>({signed(delta, digits, '-')})</span>
         </span>
     );
 }

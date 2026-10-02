@@ -8,6 +8,7 @@ import SourceBadge from './common/SourceBadge';
 import AboutModelDrawer from './ui/AboutModelDrawer';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
+import { withSign } from '../utils/format';
 
 function seasonLabel(season) {
     return `${season - 1}-${String(season).slice(-2)}`;
@@ -22,9 +23,9 @@ function money(v, digits = 1) {
     return `${sign}$${Math.round(a / 1e3).toLocaleString()}K`;
 }
 
+// Sign follows the amount as shown, so a surplus that rounds to $0K carries none.
 function signedMoney(v) {
-    if (v == null) return '—';
-    return `${v > 0 ? '+' : ''}${money(v)}`;
+    return v == null ? '—' : withSign(v, money(Math.abs(v)));
 }
 
 function Scatter({ points, costPerWin, minSalary, minMinutes, exportName }) {

@@ -8,6 +8,7 @@ import SourceBadge from './common/SourceBadge';
 import AboutModelDrawer from './ui/AboutModelDrawer';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
+import { signed as signedNum } from '../utils/format';
 
 const POS_COLORS = { G: '#38bdf8', F: '#a78bfa', C: '#f59e0b' };
 const POS_LABELS = { G: 'Guards', F: 'Forwards', C: 'Centers' };
@@ -17,14 +18,14 @@ function seasonLabel(season) {
     return `${season - 1}-${String(season).slice(-2)}`;
 }
 
+// Sign follows the value as shown (no "+0.00" or "-0.00"); this page prints a hyphen minus.
 function signed(v, digits = 2) {
-    if (v == null) return '—';
-    return `${v > 0 ? '+' : ''}${v.toFixed(digits)}`;
+    return signedNum(v, digits, '-');
 }
 
 // DFG% differential in percentage points (negative = shooters below their normal FG%).
 function pp(v) {
-    return v == null ? '—' : `${v > 0 ? '+' : ''}${(v * 100).toFixed(1)} pts`;
+    return v == null ? '—' : `${signedNum(v * 100, 1, '-')} pts`;
 }
 
 function Scatter({ defenders, zKey, focusId, onHover, onSelect, exportName }) {

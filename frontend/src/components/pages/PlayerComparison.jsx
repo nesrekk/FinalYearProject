@@ -14,6 +14,7 @@ import ChartExport from '../common/ChartExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { withSign } from '../../utils/format';
 
 const COLOR_A = '#f87171';
 const COLOR_B = '#38bdf8';
@@ -500,8 +501,8 @@ export default function PlayerComparison() {
                                 </div>
                                 <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginBottom: 6 }}>
                                     <span className="page-subtitle" style={{ margin: 0 }}>
-                                        Predicted synergy <strong style={{ color: synergy.predicted_synergy >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
-                                            {synergy.predicted_synergy >= 0 ? '+' : ''}{synergy.predicted_synergy}
+                                        Predicted synergy <strong style={{ color: synergy.predicted_synergy === 0 ? undefined : synergy.predicted_synergy > 0 ? 'var(--positive)' : 'var(--negative)' }}>
+                                            {withSign(synergy.predicted_synergy, String(Math.abs(synergy.predicted_synergy)), '-')}
                                         </strong>
                                     </span>
                                     <span className="page-subtitle" style={{ margin: 0 }}>
@@ -518,7 +519,7 @@ export default function PlayerComparison() {
                                     <p className="page-subtitle" style={{ margin: 0 }}>
                                         Real observed: {synergy.observed.min.toFixed(0)} real shared minutes this season,
                                         real net rating <strong style={{ color: 'var(--text-primary)' }}>
-                                            {synergy.observed.net_rating >= 0 ? '+' : ''}{synergy.observed.net_rating}
+                                            {withSign(synergy.observed.net_rating, String(Math.abs(synergy.observed.net_rating)), '-')}
                                         </strong>
                                     </p>
                                 ) : (

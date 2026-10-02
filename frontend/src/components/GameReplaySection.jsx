@@ -8,6 +8,7 @@ import TeamLogo from './common/TeamLogo';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
 import { currentPageParam, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
+import { bySign, signed } from '../utils/format';
 
 const CHART_W = 760;
 const CHART_H = 300;
@@ -317,7 +318,7 @@ export default function GameReplaySection() {
                                 <strong style={{ color: 'var(--text-primary)' }}>{formatClock(hovered.seconds_elapsed)}</strong>
                                 {' — '}{hovered.description}
                                 {' · '}Home WP {Math.round(hovered.home_wp * 100)}%
-                                {' ('}{hovered.wpa >= 0 ? '+' : ''}{(hovered.wpa * 100).toFixed(1)}pp{')'}
+                                {' ('}{signed(hovered.wpa * 100, 1, '-')}pp{')'}
                             </p>
                         )}
                         {!hovered && !whatif && moment && (
@@ -325,7 +326,7 @@ export default function GameReplaySection() {
                                 <strong style={{ color: 'var(--brand-text)' }}>Linked play, {formatClock(moment.seconds_elapsed)}</strong>
                                 {' — '}{moment.description}
                                 {' · '}Home WP {Math.round(moment.home_wp * 100)}%
-                                {' ('}{moment.wpa >= 0 ? '+' : ''}{(moment.wpa * 100).toFixed(1)}pp{')'}
+                                {' ('}{signed(moment.wpa * 100, 1, '-')}pp{')'}
                             </p>
                         )}
                         {!hovered && whatif && (
@@ -374,8 +375,8 @@ export default function GameReplaySection() {
                                         <td>{formatClock(p.seconds_elapsed)}</td>
                                         <td>{p.description}</td>
                                         <td>{Math.round(p.home_wp * 100)}%</td>
-                                        <td style={{ color: p.wpa >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
-                                            {p.wpa >= 0 ? '+' : ''}{(p.wpa * 100).toFixed(1)}pp
+                                        <td style={{ color: bySign(p.wpa * 100, 1, 'var(--positive)', 'var(--negative)', undefined) }}>
+                                            {signed(p.wpa * 100, 1, '-')}pp
                                         </td>
                                     </tr>
                                 ))}

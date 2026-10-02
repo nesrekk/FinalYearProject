@@ -7,6 +7,7 @@ import TeamLogo from './common/TeamLogo';
 import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
+import { signed as signedNum } from '../utils/format';
 
 const WARM = [249, 115, 22]; // congested
 const COOL = [56, 189, 248]; // open
@@ -15,9 +16,9 @@ function seasonLabel(season) {
     return `${season - 1}-${String(season).slice(-2)}`;
 }
 
+// Sign follows the value as shown (no "+0.00" or "-0.00"); this page prints a hyphen minus.
 function signed(v, digits = 2) {
-    if (v == null) return '—';
-    return `${v > 0 ? '+' : ''}${v.toFixed(digits)}`;
+    return signedNum(v, digits, '-');
 }
 
 function ordinal(n) {

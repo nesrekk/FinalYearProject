@@ -4,6 +4,7 @@ import ChartTooltip from './ChartTooltip';
 import InfoTooltip from './InfoTooltip';
 import TableExport from './TableExport';
 import useChartCrosshair from '../../utils/useChartCrosshair';
+import { bySign, signed } from '../../utils/format';
 import '../../styles/tracker.css';
 
 // Rating Tracker (round 6 step 7): a player's RAPM carried across seasons,
@@ -15,9 +16,9 @@ import '../../styles/tracker.css';
 // leaderboard view.
 
 const label = (s) => `${s - 1}-${String(s).slice(-2)}`;
-const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
-const tone = (v) => (v == null || v === 0 ? '' : v > 0 ? 'pp-pos' : 'pp-neg');
+// Colour follows the value as shown at one decimal, so a cell reading 0.0 isn't tinted.
+const tone = (v) => bySign(v, 1, 'pp-pos', 'pp-neg');
 
 function useWidth(initial = 560) {
     const ref = useRef(null);

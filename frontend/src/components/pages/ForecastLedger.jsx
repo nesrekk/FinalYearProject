@@ -11,6 +11,7 @@ import TableExport from '../common/TableExport';
 import TeamLink from '../common/TeamLink';
 import ForecastLedgerLive from './ForecastLedgerLive';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { signed } from '../../utils/format';
 import '../../styles/rapm.css';
 import '../../styles/simulator.css';
 import '../../styles/ledger.css';
@@ -22,7 +23,6 @@ import '../../styles/ledger.css';
 // (ForecastLedgerLive.jsx, &m=&cal=&tv=), scored nightly by scripts/ledger_update.py.
 
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
-const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
 const fmtUtc = (iso) => {
     const d = new Date(iso);
     return `${d.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })}, `

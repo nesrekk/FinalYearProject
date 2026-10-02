@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import '../styles/college.css';
 import TableExport from './common/TableExport';
+import { signed } from '../utils/format';
 
 // Columns of ncaa_bracket_odds shown in the table; index into REACH (1 = won a Round of 64 game).
 const ROUNDS = [
@@ -154,7 +155,7 @@ export default function MarchMadnessSection() {
                                 <tr key={t.team}>
                                     <td>{t.team}<span className="cb-sub">{t.region || ''}</span></td>
                                     <td className="cb-num">{t.seed}</td>
-                                    <td className="cb-num">{t.adj_margin > 0 ? '+' : ''}{t.adj_margin.toFixed(1)}</td>
+                                    <td className="cb-num">{signed(t.adj_margin, 1, '-')}</td>
                                     <td className="cb-num">{t.elo}</td>
                                     {ROUNDS.map((r) => (
                                         <td key={r.key} className={`cb-prob ${t.actual_reach >= r.reach ? 'cb-hit' : ''}`} style={heat(t[r.key])}>

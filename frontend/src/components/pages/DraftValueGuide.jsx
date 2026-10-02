@@ -7,6 +7,7 @@ import Icon from '../common/Icon';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import ChartExport from '../common/ChartExport';
+import { bySign, signed } from '../../utils/format';
 
 const CHART_W = 640, CHART_H = 260, PAD_L = 56, PAD_R = 16, PAD_T = 16, PAD_B = 40;
 
@@ -175,8 +176,8 @@ export default function DraftValueGuide() {
                                             <td>{r.team_abbreviation}</td>
                                             <td>{fmt(r.ws_first5)}</td>
                                             <td>{fmt(r.expected_ws_first5)}</td>
-                                            <td style={{ color: r.value_over_expectation >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
-                                                {r.value_over_expectation >= 0 ? '+' : ''}{fmt(r.value_over_expectation)}
+                                            <td style={{ color: bySign(r.value_over_expectation, 1, 'var(--positive)', 'var(--negative)', undefined) }}>
+                                                {signed(r.value_over_expectation, 1, '-')}
                                             </td>
                                         </tr>
                                     ))}

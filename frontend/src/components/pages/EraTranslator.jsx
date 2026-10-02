@@ -12,10 +12,11 @@ import SaveViewButton from '../common/SaveViewButton';
 import AutocompleteDropdown from '../common/AutocompleteDropdown';
 import useChartCrosshair from '../../utils/useChartCrosshair';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { signed as signedNum } from '../../utils/format';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const fmtVal = (format, v) => (v == null ? '—' : format === 'pct' ? `${(v * 100).toFixed(1)}%` : v.toFixed(1));
-const signed = (v, d = 2) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`;
+const signed = (v, d = 2) => signedNum(v, d);
 const ordinal = (n) => {
     const s = ['th', 'st', 'nd', 'rd'];
     const v = n % 100;

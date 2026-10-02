@@ -8,6 +8,7 @@ import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import TeamLink from '../common/TeamLink';
 import useChartCrosshair from '../../utils/useChartCrosshair';
+import { signed as signedNum } from '../../utils/format';
 
 // Forecast Ledger, Live scoring tab (?page=ledger&tab=live&m=&cal=&tv=): the season scored so far
 // against the locked forecasts (GET /ledger/live, appended nightly by scripts/ledger_update.py
@@ -19,7 +20,7 @@ const SHORT = { roster: 'Roster-aware', as_is: 'As is', record: 'Record only', r
 const METRIC_LABEL = { log_loss: 'Log loss', brier: 'Brier score' };
 
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
-const signed = (v, d = 4) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
+const signed = (v, d = 4) => signedNum(v, d);
 const pct = (v, d = 0) => (v == null ? '—' : `${(v * 100).toFixed(d)}%`);
 const fmtUtc = (iso) => {
     if (!iso) return '—';

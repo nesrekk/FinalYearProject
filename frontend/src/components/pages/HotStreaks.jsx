@@ -8,6 +8,7 @@ import SaveViewButton from '../common/SaveViewButton';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { bySign, withSign } from '../../utils/format';
 import '../../styles/gamelog.css';
 
 // Hot Streak Checker (?page=hotstreaks, GET /games/hot-streaks): the league's
@@ -74,9 +75,11 @@ export default function HotStreaks() {
     const seasonInfo = options.seasons.find((s) => s.season === form.season);
     const pct = data?.format === 'pct';
     const show = (v) => (v == null ? '—' : pct ? `${(v * 100).toFixed(1)}%` : v.toFixed(1));
-    const signedShow = (v) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${show(Math.abs(v))}`);
+    const signedShow = (v) => (v == null ? '—' : withSign(v, show(Math.abs(v))));
+    // Colour follows the gap as shown (one decimal, in points for a percentage), so 0.0 isn't tinted.
+    const gapTone = (v) => bySign(pct ? v * 100 : v, 1, 'pp-pos', 'pp-neg');
     // In sentences: shooting gaps are percentage points, not percent.
-    const gapWords = (v) => (pct && v != null ? `${v > 0 ? '+' : v < 0 ? '−' : ''}${(Math.abs(v) * 100).toFixed(1)} percentage points` : signedShow(v));
+    const gapWords = (v) => (pct && v != null ? withSign(v, `${(Math.abs(v) * 100).toFixed(1)} percentage points`) : signedShow(v));
     const statWords = data ? (data.stat_label.includes('%') ? data.stat_label : data.stat_label.toLowerCase()) : '';
     const s = data?.summary;
     const nx = data?.next_games;
@@ -197,7 +200,7 @@ export default function HotStreaks() {
                                                 <td>{r.window.from.slice(5)} to {r.window.to.slice(5)}</td>
                                                 <td className="lb-num lb-stat">{show(r.window.value)}</td>
                                                 <td className="lb-num">{show(r.baseline.value)}</td>
-                                                <td className={`lb-num ${r.gap > 0 ? 'pp-pos' : 'pp-neg'}`}>{signedShow(r.gap)}</td>
+                                                <td className={`lb-num ${gapTone(r.gap)}`}>{signedShow(r.gap)}</td>
                                                 <td className="lb-num">{r.unusual.z.toFixed(1)}</td>
                                                 <td className="lb-num">{r.unusual.p < 0.001 ? '<0.001' : r.unusual.p.toFixed(3)}</td>
                                                 <td className="lb-num" title="Average minutes before the run → during it">{r.minutes.before} → {r.minutes.window}</td>

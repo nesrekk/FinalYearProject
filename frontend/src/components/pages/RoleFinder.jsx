@@ -8,9 +8,10 @@ import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { signed as signedNum } from '../../utils/format';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
-const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(d)}`);
+const signed = (v, d = 1) => signedNum(v, d, '-'); // sign of the shown value; hyphen minus as before
 const money = (v) => (v == null ? '—' : `$${(v / 1e6).toFixed(1)}M`);
 const TOP_N = [10, 25, 50, 100];
 const MAX_CUSTOM = 8;

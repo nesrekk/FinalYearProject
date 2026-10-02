@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { fetchPlayerContractValue } from '../../services/api';
 import TableExport from './TableExport';
+import { withSign } from '../../utils/format';
 
 function money(v) {
     if (v == null) return '—';
@@ -51,7 +52,7 @@ export default function TradeContractValue({ season, players }) {
                                                 <td>{r.player.war?.toFixed(1)}</td>
                                                 <td>{money(r.player.fair_value)}</td>
                                                 <td style={{ fontWeight: 700, color: r.player.surplus >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
-                                                    {r.player.surplus > 0 ? '+' : ''}{money(r.player.surplus)}
+                                                    {r.player.surplus == null ? '—' : withSign(r.player.surplus, money(Math.abs(r.player.surplus)))}
                                                 </td>
                                             </>
                                         ) : (

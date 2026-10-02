@@ -5,6 +5,7 @@ import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
 import SegmentedControl from './ui/SegmentedControl';
+import { plain, shownSign, signed } from '../utils/format';
 
 const MODE_OPTIONS = [
     { value: 'official', label: 'By Official' },
@@ -23,13 +24,13 @@ const CREW_MIN_GAMES_OPTIONS = [1, 2, 3, 4];
 
 function DiffCell({ diffPct, ciLow, ciHigh }) {
     if (diffPct == null) return <td>—</td>;
-    const color = Math.abs(diffPct) < 0.01 ? '#94a3b8' : diffPct > 0 ? '#f87171' : '#38bdf8';
+    const color = shownSign(diffPct, 1) === 0 ? '#94a3b8' : diffPct > 0 ? '#f87171' : '#38bdf8';
     return (
         <td style={{ color, fontWeight: 600 }}>
-            {diffPct > 0 ? '+' : ''}{diffPct.toFixed(1)}%
+            {signed(diffPct, 1, '-')}%
             {ciLow != null && ciHigh != null && (
                 <span className="page-subtitle" style={{ display: 'block', fontSize: '0.68rem', fontWeight: 400 }}>
-                    95% CI [{ciLow.toFixed(2)}, {ciHigh.toFixed(2)}]
+                    95% CI [{plain(ciLow, 2)}, {plain(ciHigh, 2)}]
                 </span>
             )}
         </td>
@@ -185,7 +186,7 @@ export default function RefereeTendenciesSection() {
                                                 <DiffCell diffPct={row.fouls_diff_pct} ciLow={row.fouls_ci_low} ciHigh={row.fouls_ci_high} />
                                                 <td>{row.avg_total_fta?.toFixed(1)}</td>
                                                 <DiffCell diffPct={row.fta_diff_pct} ciLow={row.fta_ci_low} ciHigh={row.fta_ci_high} />
-                                                <td>{row.pace_diff_pct > 0 ? '+' : ''}{row.pace_diff_pct?.toFixed(1)}%</td>
+                                                <td>{row.pace_diff_pct != null && signed(row.pace_diff_pct, 1, '-')}%</td>
                                             </tr>
                                         );
                                     })}

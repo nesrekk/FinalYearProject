@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { fetchHotStreak } from '../../services/api';
 import InfoTooltip from './InfoTooltip';
 import { openPage } from '../../utils/useUrlState';
+import { bySign, withSign } from '../../utils/format';
 
 // "Is his last N games real?" inside the profile's Game log
 // (GET /games/hot-streak/{id}). Two separate answers: how unusual the run is
@@ -27,7 +28,9 @@ export default function HotStreakCard({ playerId, season, stat, win, dates }) {
     const error = result?.key === key ? result.error : null;
     const pct = d?.format === 'pct';
     const show = (v) => (v == null ? '—' : pct ? `${(v * 100).toFixed(1)}%` : v.toFixed(1));
-    const signedShow = (v) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${show(Math.abs(v))}`);
+    const signedShow = (v) => (v == null ? '—' : withSign(v, show(Math.abs(v))));
+    // Colour follows the gap as shown (one decimal, in points for a percentage), so 0.0 isn't tinted.
+    const gapTone = (v) => bySign(pct ? v * 100 : v, 1, 'pp-pos', 'pp-neg');
     const choices = [...dates].reverse();
 
     return (
@@ -73,7 +76,7 @@ export default function HotStreakCard({ playerId, season, stat, win, dates }) {
                         </div>
                         <div>
                             <dt>Gap</dt>
-                            <dd className={d.gap > 0 ? 'pp-pos' : d.gap < 0 ? 'pp-neg' : ''}>{signedShow(d.gap)}</dd>
+                            <dd className={gapTone(d.gap)}>{signedShow(d.gap)}</dd>
                             <span>{d.unusual.p < 0.001 ? '<0.1' : (d.unusual.p * 100).toFixed(1)}% of random sets this {d.direction}; {Math.round(d.unusual.percentile_own_windows * 100)}th percentile of his {d.unusual.own_windows} stretches</span>
                         </div>
                         <div>

@@ -8,6 +8,7 @@ import TableExport from './TableExport';
 import TeamLink from './TeamLink';
 import Loader from '../Loader';
 import { SV_MINS } from '../../utils/shotValue';
+import { bySign, signed } from '../../utils/format';
 import '../../styles/shotvalue.css';
 
 // Shot Value Added (GET /shots/shot-value*, routers/shot_value.py, scripts/build_shot_value.py; round 6
@@ -21,14 +22,10 @@ import '../../styles/shotvalue.css';
 // Hand-built SVG like the app's other charts.
 
 const label = (s) => `${s - 1}-${String(s).slice(-2)}`;
-const signed = (v, d = 1) => {
-    if (v == null) return '—';
-    const r = Number(v.toFixed(d));          // sign of the shown value, so −0.04 reads 0.0, not −0.0
-    return `${r > 0 ? '+' : r < 0 ? '−' : ''}${Math.abs(r).toFixed(d)}`;
-};
 const int = (v) => (v == null ? '—' : Math.round(v).toLocaleString());
 const pctOf = (v, d = 1) => (v == null ? '—' : `${(v * 100).toFixed(d)}%`);
-const tone = (v) => (v == null || Math.abs(v) < 1e-9 ? '' : v > 0 ? 'sv-pos' : 'sv-neg');
+// Colour follows the value as shown at d decimals, so a cell reading 0 (or 0.0) isn't tinted.
+const tone = (v, d = 1) => bySign(v, d, 'sv-pos', 'sv-neg');
 const CLASS_SHORT = { rim: 'Rim', mid: 'Other 2s', three: '3s', ft: 'FT' };
 
 export function ShotValueInfo() {
@@ -189,12 +186,12 @@ export function ShotValuePlayer({ playerId, playerName }) {
                                 <td className="lb-num">{int(r.fga)}</td>
                                 <td className="lb-num">{int(r.pts)}</td>
                                 <td className="lb-num">{int(r.x_blind)}</td>
-                                <td className={`lb-num ${tone(r.skill_pts)}`}>{signed(r.skill_pts, 0)}</td>
-                                <td className={`lb-num ${tone(r.above_pts)}`}>{signed(r.above_pts, 0)}</td>
-                                <td className={`lb-num ${tone(r.total_pts)}`}>{signed(r.total_pts, 0)}</td>
-                                <td className={`lb-num ${tone(r.ft_skill_pts)}`}>{signed(r.ft_skill_pts, 0)}</td>
-                                <td className={`lb-num sv-strong ${tone(r.sva)}`}>{signed(r.sva, 0)}</td>
-                                <td className={`lb-num ${tone(r.sva_per100)}`}>{signed(r.sva_per100, 1)}</td>
+                                <td className={`lb-num ${tone(r.skill_pts, 0)}`}>{signed(r.skill_pts, 0)}</td>
+                                <td className={`lb-num ${tone(r.above_pts, 0)}`}>{signed(r.above_pts, 0)}</td>
+                                <td className={`lb-num ${tone(r.total_pts, 0)}`}>{signed(r.total_pts, 0)}</td>
+                                <td className={`lb-num ${tone(r.ft_skill_pts, 0)}`}>{signed(r.ft_skill_pts, 0)}</td>
+                                <td className={`lb-num sv-strong ${tone(r.sva, 0)}`}>{signed(r.sva, 0)}</td>
+                                <td className={`lb-num ${tone(r.sva_per100, 1)}`}>{signed(r.sva_per100, 1)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -206,19 +203,20 @@ export function ShotValuePlayer({ playerId, playerName }) {
 }
 
 // ── One season's players ──────────────────────────────────────────────────
+// [key, header, title, format, decimals shown (signed columns: coloured by the shown value)]
 const LB_COLS = [
     ['fga', 'FGA', 'Field-goal attempts on the shot chart', (r) => int(r.fga)],
     ['pts', 'FG pts', 'Points from field goals', (r) => int(r.pts)],
-    ['skill_pts', 'Skill', 'FG points his record said his shooting adds over an average shooter on the same shots', (r) => signed(r.skill_pts, 0), 'skill_pts'],
-    ['beyond', 'Beyond', 'FG and FT points scored beyond the shooter-aware expectation this season (luck included)', (r) => signed(r.beyond, 0), 'beyond'],
-    ['total_pts', 'FG total', 'FG points above an average shooter on the same shots (skill + beyond)', (r) => signed(r.total_pts, 0), 'total_pts'],
-    ['ft_skill_pts', 'FT skill', 'Free-throw points his record said he adds over a league-average free-throw shooter', (r) => signed(r.ft_skill_pts, 0), 'ft_skill_pts'],
-    ['sva', 'SVA', 'Shot Value Added: FG + FT skill points', (r) => signed(r.sva, 0), 'sva'],
-    ['sva_per100', 'per 100', 'Shot Value Added per 100 shots (FGA + 0.44 FTA)', (r) => signed(r.sva_per100, 1), 'sva_per100'],
-    ['pre_rim', 'Rim', 'Skill at the rim carried into the season, percentage points over an average shooter', (r) => signed(r.pre_rim, 1), 'pre_rim'],
-    ['pre_mid', 'Other 2s', 'Skill on other twos carried into the season, percentage points', (r) => signed(r.pre_mid, 1), 'pre_mid'],
-    ['pre_three', '3s', 'Skill on threes carried into the season, percentage points', (r) => signed(r.pre_three, 1), 'pre_three'],
-    ['pre_ft', 'FT', 'Free-throw skill carried into the season, percentage points over the league rate', (r) => signed(r.pre_ft, 1), 'pre_ft'],
+    ['skill_pts', 'Skill', 'FG points his record said his shooting adds over an average shooter on the same shots', (r) => signed(r.skill_pts, 0), 0],
+    ['beyond', 'Beyond', 'FG and FT points scored beyond the shooter-aware expectation this season (luck included)', (r) => signed(r.beyond, 0), 0],
+    ['total_pts', 'FG total', 'FG points above an average shooter on the same shots (skill + beyond)', (r) => signed(r.total_pts, 0), 0],
+    ['ft_skill_pts', 'FT skill', 'Free-throw points his record said he adds over a league-average free-throw shooter', (r) => signed(r.ft_skill_pts, 0), 0],
+    ['sva', 'SVA', 'Shot Value Added: FG + FT skill points', (r) => signed(r.sva, 0), 0],
+    ['sva_per100', 'per 100', 'Shot Value Added per 100 shots (FGA + 0.44 FTA)', (r) => signed(r.sva_per100, 1), 1],
+    ['pre_rim', 'Rim', 'Skill at the rim carried into the season, percentage points over an average shooter', (r) => signed(r.pre_rim, 1), 1],
+    ['pre_mid', 'Other 2s', 'Skill on other twos carried into the season, percentage points', (r) => signed(r.pre_mid, 1), 1],
+    ['pre_three', '3s', 'Skill on threes carried into the season, percentage points', (r) => signed(r.pre_three, 1), 1],
+    ['pre_ft', 'FT', 'Free-throw skill carried into the season, percentage points over the league rate', (r) => signed(r.pre_ft, 1), 1],
 ];
 
 export function ShotValueLeaderboard({ season, sort, dir, minFga, onChange }) {
@@ -298,8 +296,8 @@ export function ShotValueLeaderboard({ season, sort, dir, minFga, onChange }) {
                                 <td>{i + 1}</td>
                                 <td><PlayerName name={r.player_name} playerId={r.player_id} /></td>
                                 <td>{r.team_abbreviation ? <TeamLink abbr={r.team_abbreviation} season={r.season} /> : '—'}</td>
-                                {LB_COLS.map(([k, , , fmt, toned]) => (
-                                    <td key={k} className={`lb-num ${toned ? tone(r[toned]) : ''} ${k === 'sva' ? 'sv-strong' : ''}`}>{fmt(r)}</td>
+                                {LB_COLS.map(([k, , , fmt, digits]) => (
+                                    <td key={k} className={`lb-num ${digits != null ? tone(r[k], digits) : ''} ${k === 'sva' ? 'sv-strong' : ''}`}>{fmt(r)}</td>
                                 ))}
                             </tr>
                         ))}

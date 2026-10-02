@@ -11,6 +11,7 @@ import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import TeamLink from '../common/TeamLink';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { bySign, signed } from '../../utils/format';
 import '../../styles/rapm.css';
 import '../../styles/rotations.css';
 
@@ -23,8 +24,8 @@ import '../../styles/rotations.css';
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
 const pct = (v, d = 0) => (v == null ? '—' : `${(v * 100).toFixed(d)}%`);
-const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
-const tone = (v) => (v == null || v === 0 ? '' : v > 0 ? 'oo-pos' : 'oo-neg');
+// Colour follows the value as shown at d decimals, so a cell reading 0.0 isn't tinted.
+const tone = (v, d = 1) => bySign(v, d, 'oo-pos', 'oo-neg');
 const gameLabel = (g) => `${g.date} · ${g.home ? 'vs' : '@'} ${g.opponent} · ${g.result ?? ''} ${g.pts_for ?? '?'}-${g.pts_against ?? '?'}${g.overtimes ? ` (${g.overtimes > 1 ? `${g.overtimes}OT` : 'OT'})` : ''}${!g.game_ok ? ' · not reconciled' : !g.side_complete ? ' · unidentified player' : ''}`;
 
 function Five({ players }) {
@@ -95,7 +96,7 @@ function GameView({ game, team, onNavigate, games, onPick }) {
                                 <td><TeamLink abbr={p.team} season={game.season} /></td>
                                 <td>{p.starter ? 'Yes' : ''}</td>
                                 <td className="lb-num">{num(p.minutes)}</td>
-                                <td className={`lb-num ${tone(p.plus_minus)}`}>{p.plus_minus == null ? '—' : signed(p.plus_minus, 0)}</td>
+                                <td className={`lb-num ${tone(p.plus_minus, 0)}`}>{p.plus_minus == null ? '—' : signed(p.plus_minus, 0)}</td>
                                 <td className="lb-num">{p.stretches.length}</td>
                             </tr>
                         ))}
@@ -189,7 +190,7 @@ function SeasonView({ data, measure, setMeasure, onPickGame }) {
                                                 <td className="lb-num">{l.games}</td>
                                                 <td className="lb-num">{num(l.minutes)}</td>
                                                 <td className="lb-num">{l.pts_for}-{l.pts_against}</td>
-                                                <td className={`lb-num ${tone(l.plus_minus)}`}>{signed(l.plus_minus, 0)}</td>
+                                                <td className={`lb-num ${tone(l.plus_minus, 0)}`}>{signed(l.plus_minus, 0)}</td>
                                                 <td className={`lb-num ${tone(l.net_rating)}`}>{signed(l.net_rating)}</td>
                                                 <td className="lb-num">{l.finished} ({l.finished_wins}-{l.finished_losses})</td>
                                             </tr>

@@ -7,21 +7,17 @@ import PlayerName from './common/PlayerName';
 import '../styles/college.css';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
+import { bySign, signed as signedNum } from '../utils/format';
 
 const RUN_LABEL = {
     Champions: 'Won title', '2ND': 'Runner-up', F4: 'Final Four', E8: 'Elite 8', S16: 'Sweet 16',
     R32: 'Round of 32', R64: 'Round of 64', R68: 'First Four',
 };
 
-function signed(v, digits = 1) {
-    if (v == null) return '—';
-    return `${v > 0 ? '+' : ''}${v.toFixed(digits)}`;
-}
+// Sign and colour follow the value as shown (no "+0.0" or "-0.0"); this page prints a hyphen minus.
+const signed = (v, digits = 1) => signedNum(v, digits, '-');
 
-function toneClass(v) {
-    if (v == null) return '';
-    return v > 0 ? 'cb-pos' : v < 0 ? 'cb-neg' : '';
-}
+const toneClass = (v, digits = 1) => bySign(v, digits, 'cb-pos', 'cb-neg');
 
 function crossesZero(groups) {
     return groups.every((g) => g.ci_low <= 0 && g.ci_high >= 0);
@@ -212,7 +208,7 @@ export default function CollegePipelineSection() {
                     <h3 className="section-heading" style={{ marginTop: 0 }}>Where no-college picks fit</h3>
                     <p className="cb-lede">
                         The {nc.n} picks through {data.mature_class} with no US college (international, G League, straight
-                        from high school) come in at <strong className={toneClass(nc.ws4_vs_expected)}>{signed(nc.ws4_vs_expected, 2)}</strong> Win
+                        from high school) come in at <strong className={toneClass(nc.ws4_vs_expected, 2)}>{signed(nc.ws4_vs_expected, 2)}</strong> Win
                         Shares vs. their slot (95% range {signed(nc.ci_low, 2)} to {signed(nc.ci_high, 2)}).
                     </p>
                     <p className="cb-lede" style={{ marginTop: '0.75rem' }}>
@@ -247,7 +243,7 @@ export default function CollegePipelineSection() {
                                     <td className="cb-num">{s.n}</td>
                                     <td className="cb-num">{s.mean_pick}</td>
                                     <td className="cb-num">{s.total_ws4}</td>
-                                    <td className={`cb-num ${toneClass(s.ws4_vs_expected)}`}>{signed(s.ws4_vs_expected, 2)}</td>
+                                    <td className={`cb-num ${toneClass(s.ws4_vs_expected, 2)}`}>{signed(s.ws4_vs_expected, 2)}</td>
                                     <td className="cb-num">{signed(s.ci_low, 1)} to {signed(s.ci_high, 1)}</td>
                                     <td>{s.best}</td>
                                 </tr>

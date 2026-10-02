@@ -12,6 +12,7 @@ import TableExport from '../common/TableExport';
 import TeamLink from '../common/TeamLink';
 import useChartCrosshair from '../../utils/useChartCrosshair';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { signed } from '../../utils/format';
 import '../../styles/rapm.css';
 import '../../styles/simulator.css';
 
@@ -28,7 +29,6 @@ const idList = (params, key) => (parseParam.list(params, key) ?? []).map(Number)
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
-const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
 const fmtDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 const LOGO = { NOH: 'NOP', NJN: 'BKN' };
 

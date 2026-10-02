@@ -11,6 +11,7 @@ import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import useChartCrosshair from '../../utils/useChartCrosshair';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { signed } from '../../utils/format';
 import '../../styles/stability.css';
 import '../../styles/projections.css';
 
@@ -19,7 +20,7 @@ const minus = (t) => t.replace('-', '−');
 const fmtVal = (format, v) => {
     if (v == null || Number.isNaN(v)) return '—';
     if (format === 'pct') return `${(v * 100).toFixed(1)}%`;
-    if (format === 'signed1') return minus(`${v > 0 ? '+' : ''}${v.toFixed(1)}`);
+    if (format === 'signed1') return signed(v, 1);
     return v.toFixed(1);
 };
 const fmtDiff = (format, v) => {

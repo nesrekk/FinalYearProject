@@ -9,13 +9,14 @@ import PlayerName from './common/PlayerName';
 import TeamLogo from './common/TeamLogo';
 import TeamLink from './common/TeamLink';
 import { currentPageParam, openPage, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
+import { bySign, signed } from '../utils/format';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
-const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
 const int = (v) => (v == null ? '—' : Math.round(v).toLocaleString());
 const pct = (v) => (v == null ? '—' : `${(v * 100).toFixed(1)}%`);
-const tone = (v) => (v == null || v === 0 ? '' : v > 0 ? 'oo-pos' : 'oo-neg');
+// Colour follows the value as shown at one decimal, so a cell reading 0.0 isn't tinted.
+const tone = (v) => bySign(v, 1, 'oo-pos', 'oo-neg');
 
 const VIEWS = [
     { id: 'team', label: 'One team' },

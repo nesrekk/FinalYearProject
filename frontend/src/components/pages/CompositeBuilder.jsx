@@ -6,17 +6,18 @@ import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { signed as signedNum } from '../../utils/format';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const FORMATS = {
     num1: (v) => v.toFixed(1),
     num2: (v) => v.toFixed(2),
     pct: (v) => `${(v * 100).toFixed(1)}%`,
-    signed1: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}`,
+    signed1: (v) => signedNum(v, 1, '-'), // sign of the shown value; hyphen minus as before
     int: (v) => v.toFixed(0),
 };
 const fmt = (format, v) => (v == null ? '—' : FORMATS[format](v));
-const signed = (v, d = 2) => `${v > 0 ? '+' : ''}${v.toFixed(d)}`;
+const signed = (v, d = 2) => signedNum(v, d, '-');
 const MAX_STATS = 8;
 const TOP_N = [10, 25, 50, 100];
 

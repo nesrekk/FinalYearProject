@@ -21,6 +21,7 @@ import TeamLink from '../common/TeamLink';
 import ZoneCourtMap from '../common/ZoneCourtMap';
 import RimBandChart from '../common/RimBandChart';
 import { openPage, parseParam, useInitialParams } from '../../utils/useUrlState';
+import { bySign, MINUS, shownSign, signed } from '../../utils/format';
 import '../../styles/profile.css';
 import '../../styles/rim.css';
 
@@ -32,9 +33,9 @@ import '../../styles/rim.css';
 const label = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
 const pct = (v, d = 1) => (v == null ? '—' : `${(v * 100).toFixed(d)}%`);
-const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
-const money = (v) => (v == null ? '—' : `${v < 0 ? '−' : ''}$${(Math.abs(v) / 1e6).toFixed(1)}M`);
-const tone = (v) => (v == null || v === 0 ? '' : v > 0 ? 'pp-pos' : 'pp-neg');
+const money = (v) => (v == null ? '—' : `${shownSign(v / 1e6, 1) < 0 ? MINUS : ''}$${(Math.abs(v) / 1e6).toFixed(1)}M`);
+// Colour follows the value as shown at d decimals, so a cell reading 0.0 isn't tinted.
+const tone = (v, d = 1) => bySign(v, d, 'pp-pos', 'pp-neg');
 const ordinal = (n) => {
     const s = ['th', 'st', 'nd', 'rd'];
     const v = n % 100;
@@ -355,7 +356,7 @@ function ShotZones({ playerId, block }) {
                                                 <td className="lb-num">{pct(z.share, 0)}</td>
                                                 <td className="lb-num lb-stat">{pct(z.fg_pct)}</td>
                                                 <td className="lb-num">{pct(z.league_fg_pct)}</td>
-                                                <td className={`lb-num ${z.small_sample ? '' : tone(diff)}`}>{diff == null ? '—' : signed(diff * 100)}</td>
+                                                <td className={`lb-num ${z.small_sample ? '' : tone(diff == null ? null : diff * 100)}`}>{diff == null ? '—' : signed(diff * 100)}</td>
                                             </tr>
                                         );
                                     })}
@@ -426,7 +427,7 @@ function Defense({ block, onNavigate }) {
                                 <td className="lb-num">{Math.round(r.total_poss).toLocaleString()}</td>
                                 <td className="lb-num lb-stat">{r.qualified ? signed(r.dad_z, 2) : '—'}</td>
                                 <td className="lb-num">{r.qualified ? `${signed(r.dad_pos_z, 2)} (${r.pos_group})` : '—'}</td>
-                                <td className={`lb-num ${r.small_dfg_sample ? '' : tone(r.dfg_diff == null ? null : -r.dfg_diff)}`}>
+                                <td className={`lb-num ${r.small_dfg_sample ? '' : tone(r.dfg_diff == null ? null : -r.dfg_diff * 100)}`}>
                                     {r.dfg_diff == null ? '—' : `${signed(r.dfg_diff * 100)} ± ${num(r.dfg_diff_margin95 * 100)}`}
                                     {r.small_dfg_sample && r.dfg_diff != null && <span className="pp-tag">small</span>}
                                 </td>
@@ -466,7 +467,7 @@ function Gravity({ rows, onNavigate }) {
                         {rows.map((r) => (
                             <tr key={r.season}>
                                 <td>{label(r.season)}</td>
-                                <td className={`lb-num lb-stat ${tone(r.gravity)}`}>{signed(r.gravity, 2)}</td>
+                                <td className={`lb-num lb-stat ${tone(r.gravity, 2)}`}>{signed(r.gravity, 2)}</td>
                                 <td className="lb-num">{r.rank} of {r.pool}</td>
                                 <td className="lb-num">{num(r.three_rate)}</td>
                                 <td className="lb-num">{r.cs_fg3a ? pct(r.cs_pct) : '—'}</td>
@@ -509,7 +510,7 @@ function Contracts({ rows, coverage, onNavigate }) {
                                 <td className="lb-num">{money(r.salary)}</td>
                                 <td className="lb-num">{num(r.war, 1)}</td>
                                 <td className="lb-num">{money(r.fair_value)}</td>
-                                <td className={`lb-num lb-stat ${tone(r.surplus)}`}>{money(r.surplus)}</td>
+                                <td className={`lb-num lb-stat ${tone(r.surplus == null ? null : r.surplus / 1e6)}`}>{money(r.surplus)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -806,7 +807,8 @@ function RapmBlock({ block, coverage, onNavigate }) {
 }
 
 // Opponents at the rim with him on the floor vs. off (rim_deterrence). A drop is good for the defence.
-const rimTone = (v) => (v == null || v === 0 ? '' : v < 0 ? 'pp-pos' : 'pp-neg');
+// Colour follows the value as shown (one decimal, after `scale`: 100 for FG% points), so 0.0 isn't tinted.
+const rimTone = (v, scale = 1) => bySign(v * scale, 1, 'pp-neg', 'pp-pos');
 
 function RimBlock({ block, coverage, onNavigate }) {
     const rows = block.rows;
@@ -853,7 +855,7 @@ function RimBlock({ block, coverage, onNavigate }) {
                                     {signed(r.rim_fga100_diff)}{r.rim_fga100_rank ? ` (#${r.rim_fga100_rank})` : ''}
                                 </td>
                                 <td className="lb-num">{pct(r.rim_fg_on)} / {pct(r.rim_fg_off)}</td>
-                                <td className={`lb-num ${rimTone(r.rim_fg_diff)}`} title={`95% interval${ci(r, 'rim_fg', pts) || ': none'}`}>
+                                <td className={`lb-num ${rimTone(r.rim_fg_diff, 100)}`} title={`95% interval${ci(r, 'rim_fg', pts) || ': none'}`}>
                                     {pts(r.rim_fg_diff)}{r.rim_fg_rank ? ` (#${r.rim_fg_rank})` : ''}
                                 </td>
                                 <td className={`lb-num lb-stat ${rimTone(r.rim_pts100_diff)}`}>

@@ -6,6 +6,7 @@ import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
 import PlayerHeadshot from './common/PlayerHeadshot';
+import { signed } from '../utils/format';
 
 function fmt(v, digits = 1) {
     return v == null ? '—' : Number(v).toFixed(digits);
@@ -21,7 +22,7 @@ function SplitCard({ label, split, color }) {
             <div className="page-subtitle" style={{ marginTop: 4, fontSize: '0.78rem' }}>
                 {split.n === 0
                     ? 'No real games in this split'
-                    : `${split.n} real games · ${(split.win_pct * 100).toFixed(1)}% win rate · ${split.avg_point_diff >= 0 ? '+' : ''}${fmt(split.avg_point_diff)} avg point diff`}
+                    : `${split.n} real games · ${(split.win_pct * 100).toFixed(1)}% win rate · ${signed(split.avg_point_diff, 1, '-')} avg point diff`}
             </div>
         </div>
     );

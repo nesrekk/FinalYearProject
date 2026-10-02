@@ -6,6 +6,7 @@ import Icon from './common/Icon';
 import SourceBadge from './common/SourceBadge';
 import PlayerName from './common/PlayerName';
 import TableExport from './common/TableExport';
+import { signed as signedNum } from '../utils/format';
 
 // Similarity inputs exist from 2009-10 on (usage, net rating, AST%/REB%).
 // The last season updates from the API's pool after the first search.
@@ -14,7 +15,7 @@ const DEFAULT_LAST_SEASON = 2026;
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const pct = (v) => `${(v * 100).toFixed(1)}%`;
-const signed = (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}`;
+const signed = (v) => signedNum(v, 1, '-'); // sign of the shown value; hyphen minus as before
 
 const STAT_COLUMNS = [
     { key: 'pts', label: 'PTS', fmt: (v) => v.toFixed(1) },

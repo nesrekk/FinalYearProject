@@ -10,10 +10,10 @@ import SaveViewButton from './common/SaveViewButton';
 import TeamLogo from './common/TeamLogo';
 import TeamLink from './common/TeamLink';
 import { currentPageParam, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
+import { signed } from '../utils/format';
 import '../styles/luck.css';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
-const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
 const tone = (v, eps = 0.05) => (v == null || Math.abs(v) < eps ? '' : v > 0 ? 'lk-pos' : 'lk-neg');
 const wl = (w, l) => `${w}-${l}`;

@@ -9,22 +9,23 @@ import ChartExport from '../common/ChartExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { signed as signedNum, withSign } from '../../utils/format';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const FORMATS = {
     num1: (v) => v.toFixed(1),
     num2: (v) => v.toFixed(2),
     pct: (v) => `${(v * 100).toFixed(1)}%`,
-    signed1: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}`,
+    signed1: (v) => signedNum(v, 1, '-'), // sign of the shown value; hyphen minus as before
     int: (v) => v.toFixed(0),
 };
 const fmt = (format, v) => (v == null ? '—' : FORMATS[format](v));
 // A change in a stat, in its own units (percentages as percentage points).
+// No sign on a change that rounds to zero.
 const fmtDelta = (format, v) => {
-    const sign = v > 0 ? '+' : v < 0 ? '−' : '';
     const a = Math.abs(v);
-    if (format === 'pct') return `${sign}${(a * 100).toFixed(2)} pts`;
-    return `${sign}${a < 1 ? a.toFixed(3) : a.toFixed(2)}`;
+    if (format === 'pct') return withSign(v, `${(a * 100).toFixed(2)} pts`);
+    return withSign(v, a < 1 ? a.toFixed(3) : a.toFixed(2));
 };
 const strength = (r) => {
     const a = Math.abs(r);

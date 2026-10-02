@@ -9,9 +9,9 @@ import SaveViewButton from './common/SaveViewButton';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import PlayerName from './common/PlayerName';
 import { currentPageParam, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
+import { signed } from '../utils/format';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
-const signed = (v) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}`);
 const int = (v) => Math.round(v).toLocaleString();
 const lastName = (name) => (name ? name.split(' ').slice(1).join(' ') || name : '?');
 

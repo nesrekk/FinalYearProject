@@ -13,6 +13,7 @@ import TeamLogo from '../common/TeamLogo';
 import TeamRotationBlock from '../common/TeamRotationBlock';
 import TeamAssistBlock from '../common/TeamAssistBlock';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { bySign, MINUS, shownSign, signed } from '../../utils/format';
 import '../../styles/profile.css';
 import '../../styles/teamprofile.css';
 
@@ -24,9 +25,9 @@ import '../../styles/teamprofile.css';
 const label = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
 const pct = (v, d = 1) => (v == null ? '—' : `${(v * 100).toFixed(d)}%`);
-const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
-const money = (v) => (v == null ? '—' : `${v < 0 ? '−' : ''}$${(Math.abs(v) / 1e6).toFixed(1)}M`);
-const tone = (v) => (v == null || v === 0 ? '' : v > 0 ? 'pp-pos' : 'pp-neg');
+const money = (v) => (v == null ? '—' : `${shownSign(v / 1e6, 1) < 0 ? MINUS : ''}$${(Math.abs(v) / 1e6).toFixed(1)}M`);
+// Colour follows the value as shown at one decimal, so a cell reading 0.0 isn't tinted.
+const tone = (v) => bySign(v, 1, 'pp-pos', 'pp-neg');
 const ordinal = (n) => {
     const s = ['th', 'st', 'nd', 'rd'];
     const v = n % 100;
@@ -411,7 +412,7 @@ function Payroll({ p, season, abbr, onNavigate }) {
             <td><PlayerName playerId={x.player_id} name={x.player_name} size={22} /></td>
             <td className="lb-num">{money(x.salary)}</td>
             <td className="lb-num">{money(x.fair_value)}</td>
-            <td className={`lb-num lb-stat ${tone(x.surplus)}`}>{money(x.surplus)}</td>
+            <td className={`lb-num lb-stat ${tone(x.surplus == null ? null : x.surplus / 1e6)}`}>{money(x.surplus)}</td>
         </tr>
     );
     return (
@@ -419,7 +420,7 @@ function Payroll({ p, season, abbr, onNavigate }) {
             <p className="rx-verdict">
                 <strong>{money(p.payroll)}</strong> across {p.players} paid players ({ordinal(p.payroll_rank)} of {p.n_teams});
                 their wins above replacement were worth {money(p.fair_value)}, a surplus of{' '}
-                <strong className={tone(p.surplus)}>{money(p.surplus)}</strong>.
+                <strong className={tone(p.surplus == null ? null : p.surplus / 1e6)}>{money(p.surplus)}</strong>.
                 {p.unattributed_players > 0 && ` ${p.unattributed_players} traded players that season aren't attributed to any team.`}
             </p>
             <TableExport name={`${abbr} ${label(season)} contract value`} />
@@ -588,10 +589,10 @@ function ShotMix({ m, season, abbr }) {
                                 <td>{short[z.zone] ?? z.zone}</td>
                                 <td className="lb-num lb-stat">{pct(z.share)}</td>
                                 <td className="lb-num">{pct(z.league_share)}</td>
-                                <td className={`lb-num ${tone(z.fg_pct != null && z.league_fg_pct != null ? z.fg_pct - z.league_fg_pct : null)}`}>{pct(z.fg_pct)}</td>
+                                <td className={`lb-num ${tone(z.fg_pct != null && z.league_fg_pct != null ? (z.fg_pct - z.league_fg_pct) * 100 : null)}`}>{pct(z.fg_pct)}</td>
                                 <td className="lb-num">{pct(z.league_fg_pct)}</td>
                                 <td className="lb-num">{pct(z.opp_share)}</td>
-                                <td className={`lb-num ${tone(z.opp_fg_pct != null && z.league_fg_pct != null ? z.league_fg_pct - z.opp_fg_pct : null)}`}>{pct(z.opp_fg_pct)}</td>
+                                <td className={`lb-num ${tone(z.opp_fg_pct != null && z.league_fg_pct != null ? (z.league_fg_pct - z.opp_fg_pct) * 100 : null)}`}>{pct(z.opp_fg_pct)}</td>
                                 <td className="tp-bars-col" aria-hidden="true" data-export-skip>
                                     <span className="tp-bars">{bar(z.share, 'tp-sbar--team')}{bar(z.league_share, 'tp-sbar--lg')}{bar(z.opp_share, 'tp-sbar--opp')}</span>
                                 </td>

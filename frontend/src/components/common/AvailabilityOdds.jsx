@@ -4,6 +4,7 @@ import Loader from '../Loader';
 import ChartExport from './ChartExport';
 import PlayerName from './PlayerName';
 import TableExport from './TableExport';
+import { signed } from '../../utils/format';
 import '../../styles/availability.css';
 
 // Availability-aware pre-game odds on the Season Simulator page
@@ -15,8 +16,7 @@ import '../../styles/availability.css';
 
 const pct = (v, d = 0) => (v == null ? '—' : `${(v * 100).toFixed(d)}%`);
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
-const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
-const pts = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v * 100).toFixed(d)}`);
+const pts = (v, d = 1) => (v == null ? '—' : signed(v * 100, d));
 const fmtDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const PHASE = { tune: 'Tune (2020-21 to 2023-24)', validate: 'Validate (2024-25)', test: 'Test (2025-26, scored once)' };

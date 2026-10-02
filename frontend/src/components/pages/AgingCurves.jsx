@@ -11,6 +11,7 @@ import AutocompleteDropdown from '../common/AutocompleteDropdown';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/stability.css';
 import '../../styles/aging.css';
+import { signed } from '../../utils/format';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const ERAS = [
@@ -20,7 +21,6 @@ const ERAS = [
 ];
 const ERA_IDS = ERAS.map(([id]) => id);
 const isPct = (kind) => kind === 'pct' || kind === 'rate';
-const minus = (s) => s.replace('-', '−');
 // A level or a value in the stat's own units.
 const fmtVal = (kind, v) => (v == null ? '—' : isPct(kind) ? `${(v * 100).toFixed(1)}%` : v.toFixed(kind === 'per36' ? 2 : 1));
 // A difference: percentage points for percentages.
@@ -28,8 +28,7 @@ const fmtDiff = (kind, v, unit = true) => {
     if (v == null || Number.isNaN(v)) return '—';
     const x = isPct(kind) ? v * 100 : v;
     const d = kind === 'per36' || isPct(kind) ? (Math.abs(x) < 10 ? 2 : 1) : 1;
-    const txt = `${x > 0 ? '+' : ''}${x.toFixed(d)}`;
-    return minus(txt) + (unit && isPct(kind) ? ' pts' : '');
+    return signed(x, d) + (unit && isPct(kind) ? ' pts' : '');
 };
 const pctTxt = (v) => (v == null ? '—' : `${Math.round(v * 100)}%`);
 

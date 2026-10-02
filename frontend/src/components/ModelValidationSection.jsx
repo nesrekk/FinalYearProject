@@ -6,6 +6,7 @@ import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
+import { bySign, signed } from '../utils/format';
 
 const ROC_SIZE = 320;
 const ROC_PAD = 36;
@@ -105,8 +106,8 @@ function ShapBar({ feature, featureValue, shapValue, maxAbs }) {
         <div style={{ marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
                 <span className="page-subtitle" style={{ fontSize: '0.8rem' }}>{feature} ({featureValue})</span>
-                <span style={{ fontSize: '0.8rem', color: positive ? 'var(--positive)' : 'var(--negative)', flexShrink: 0 }}>
-                    {positive ? '+' : ''}{(shapValue * 100).toFixed(1)}pp
+                <span style={{ fontSize: '0.8rem', color: bySign(shapValue * 100, 1, 'var(--positive)', 'var(--negative)', undefined), flexShrink: 0 }}>
+                    {signed(shapValue * 100, 1, '-')}pp
                 </span>
             </div>
             <div style={{ position: 'relative', height: 10, background: 'rgba(100,116,139,0.15)', borderRadius: 4 }}>
@@ -514,8 +515,8 @@ export default function ModelValidationSection() {
                                 {allNbaDetail.summary.feature_importance.map((f) => (
                                     <tr key={f.feature}>
                                         <td>{f.feature}</td>
-                                        <td className={f.value >= 0 ? 'text-accent' : 'error-message'}>
-                                            {f.value >= 0 ? '+' : ''}{f.value.toFixed(3)}
+                                        <td className={bySign(f.value, 3, 'text-accent', 'error-message')}>
+                                            {signed(f.value, 3, '-')}
                                         </td>
                                     </tr>
                                 ))}
@@ -716,8 +717,8 @@ export default function ModelValidationSection() {
                                 {detail.summary.feature_importance.map((f) => (
                                     <tr key={f.feature}>
                                         <td>{f.feature}</td>
-                                        <td className={!f.signed || f.value >= 0 ? 'text-accent' : 'error-message'}>
-                                            {f.signed && f.value >= 0 ? '+' : ''}{f.value.toFixed(3)}
+                                        <td className={!f.signed ? 'text-accent' : bySign(f.value, 3, 'text-accent', 'error-message')}>
+                                            {f.signed ? signed(f.value, 3, '-') : f.value.toFixed(3)}
                                         </td>
                                     </tr>
                                 ))}

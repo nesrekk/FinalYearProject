@@ -8,12 +8,13 @@ import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { signed as signedNum } from '../../utils/format';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const FORMATS = {
     num1: (v) => v.toFixed(1),
     pct: (v) => `${(v * 100).toFixed(1)}%`,
-    signed1: (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}`,
+    signed1: (v) => signedNum(v, 1, '-'), // sign of the shown value; hyphen minus as before
     int: (v) => v.toFixed(0),
 };
 const fmt = (format, v) => (v == null ? '—' : FORMATS[format](v));

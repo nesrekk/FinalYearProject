@@ -10,6 +10,7 @@ import TeamLink from '../common/TeamLink';
 import TeamLogo from '../common/TeamLogo';
 import { PppDotChart, TransitionCurve } from '../common/PossessionCharts';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { signed } from '../../utils/format';
 import '../../styles/playfinder.css';
 import '../../styles/possessions.css';
 
@@ -26,7 +27,7 @@ import '../../styles/possessions.css';
 const f3 = (v) => (v == null ? '—' : v.toFixed(3));
 const f1 = (v) => (v == null ? '—' : v.toFixed(1));
 const pct = (v, d = 1) => (v == null ? '—' : `${(v * 100).toFixed(d)}%`);
-const signed3 = (v) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(3)}`);
+const signed3 = (v) => signed(v, 3);
 const ordinal = (n) => {
     if (n == null) return '';
     const v = n % 100;

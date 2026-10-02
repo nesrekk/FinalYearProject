@@ -11,6 +11,7 @@ import TeamLink from './common/TeamLink';
 import ChartExport from './common/ChartExport';
 import ChartTooltip from './common/ChartTooltip';
 import RimBandChart from './common/RimBandChart';
+import { bySign, signed } from '../utils/format';
 import { currentPageParam, openPage, parseParam, pushPage, useInitialParams, useUrlSync } from '../utils/useUrlState';
 import { useWidth } from '../utils/rotationFormat';
 import '../styles/rim.css';
@@ -20,13 +21,13 @@ import '../styles/rim.css';
 // play-by-play stint (GET /defense/rim-deterrence). On/off, not adjusted.
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
-const signed = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
 const int = (v) => (v == null ? '—' : Math.round(v).toLocaleString());
 const pct = (v, d = 1) => (v == null ? '—' : `${(v * 100).toFixed(d)}%`);
 const pts = (v) => (v == null ? '—' : `${signed(v * 100)} pts`);
 // A drop is good for the defence: green when opponents did less with him on.
-const tone = (v) => (v == null || v === 0 ? '' : v < 0 ? 'oo-pos' : 'oo-neg');
+// Colour follows the value as shown (one decimal, after `scale`: 100 for FG% points), so 0.0 isn't tinted.
+const tone = (v, scale = 1) => bySign(v * scale, 1, 'oo-neg', 'oo-pos');
 
 const VIEWS = [
     { id: 'league', label: 'League' },
@@ -112,7 +113,7 @@ function DiffCell({ r, k, bar }) {
         <td className={`lb-num oo-ci-cell ${k === 'rim_pts100' ? 'lb-stat' : ''}`}
             title={`${h.label}: on ${k === 'rim_fg' ? pct(r[`${k}_on`]) : num(r[`${k}_on`])}, off ${k === 'rim_fg' ? pct(r[`${k}_off`]) : num(r[`${k}_off`])}; ${interval}`}>
             {bar && <CiBar est={est} lo={lo} hi={hi} clear={clear} range={h.range} />}
-            <span className={tone(est)}>{h.fmt(est)}</span>
+            <span className={tone(est, k === 'rim_fg' ? 100 : 1)}>{h.fmt(est)}</span>
             {lo != null && <span className="oo-ci-text rim-ci-text">{h.fmt(lo)} to {h.fmt(hi)}</span>}
         </td>
     );
@@ -252,7 +253,7 @@ function PlayerDetail({ r, data, season }) {
                                         <td>{what}</td>
                                         <td className="lb-num">{on}</td>
                                         <td className="lb-num">{off}</td>
-                                        <td className={`lb-num ${tone(d)}`}>{k === 'rim_fg' || k == null ? pts(d) : signed(d)}</td>
+                                        <td className={`lb-num ${tone(d, k === 'rim_fg' || k == null ? 100 : 1)}`}>{k === 'rim_fg' || k == null ? pts(d) : signed(d)}</td>
                                         <td className="lb-num rim-facts-ci">{k && r[`${k}_lo`] != null ? `${signed(r[`${k}_lo`] * (k === 'rim_fg' ? 100 : 1))} to ${signed(r[`${k}_hi`] * (k === 'rim_fg' ? 100 : 1))}` : '—'}</td>
                                     </tr>
                                 ))}

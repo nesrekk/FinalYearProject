@@ -5,6 +5,7 @@ import ChartExport from './ChartExport';
 import InfoTooltip from './InfoTooltip';
 import SourceBadge from './SourceBadge';
 import TableExport from './TableExport';
+import { bySign, signed } from '../../utils/format';
 import '../../styles/gamelog.css';
 import '../../styles/playfinder.css';
 import '../../styles/qualitymap.css';
@@ -28,7 +29,9 @@ const FULL_TINT = 0.12;  // a gap of 12 FG points (after shrinking) is the stron
 const MIN_LEAGUE_NOTE = 30;
 
 const pct = (v, d = 1) => (v == null ? '—' : `${(v * 100).toFixed(d)}%`);
-const gapText = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v * 100).toFixed(d)}`);
+const gapText = (v, d = 1) => (v == null ? '—' : signed(v * 100, d));
+// Made shots above the reference, coloured as shown at one decimal (0.0 isn't tinted).
+const madeTone = (v) => bySign(v, 1, 'qm-pos', 'qm-neg');
 
 function arc(cx, cy, r, a1, a2, steps = 48) {
     const pts = [];
@@ -190,8 +193,8 @@ function QualityPanel({ name, season, mode, minShots, onSeason }) {
                                         <td className="lb-num">{c.fgm}</td>
                                         <td className="lb-num">{pct(c.fgm / c.fga, 0)}</td>
                                         <td className="lb-num">{pct(c.ref, 0)}</td>
-                                        <td className={`lb-num ${c.fgm > c.ref * c.fga ? 'qm-pos' : 'qm-neg'}`}>
-                                            {(c.fgm - c.ref * c.fga > 0 ? '+' : '−') + Math.abs(c.fgm - c.ref * c.fga).toFixed(1)}
+                                        <td className={`lb-num ${madeTone(c.fgm - c.ref * c.fga)}`}>
+                                            {signed(c.fgm - c.ref * c.fga, 1)}
                                         </td>
                                     </tr>
                                 ))}

@@ -11,6 +11,7 @@ import TableExport from './common/TableExport';
 import CopyLinkButton from './common/CopyLinkButton';
 import SaveViewButton from './common/SaveViewButton';
 import { currentPageParam, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
+import { bySign, signed } from '../utils/format';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const URL_KEYS = ['season', 'order', 'min'];
@@ -180,11 +181,11 @@ export default function LineupChemistrySection() {
                                             <td className="lb-num">{r.def_rating.toFixed(1)}</td>
                                             <td className="lb-num lb-stat" style={{ color: netRatingColor(r.net_rating), fontWeight: 700 }}>
                                                 <Icon
-                                                    name={r.net_rating > 0 ? 'arrow_upward' : r.net_rating < 0 ? 'arrow_downward' : 'remove'}
+                                                    name={bySign(r.net_rating, 1, 'arrow_upward', 'arrow_downward', 'remove')}
                                                     size="0.9em"
                                                     style={{ verticalAlign: 'middle', marginRight: 2 }}
                                                 />
-                                                {r.net_rating > 0 ? '+' : ''}{r.net_rating.toFixed(1)}
+                                                {signed(r.net_rating, 1, '-')}
                                             </td>
                                         </tr>
                                     ))}

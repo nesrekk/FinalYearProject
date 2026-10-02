@@ -9,6 +9,7 @@ import TeamLink from './common/TeamLink';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
 import ChartTooltip from './common/ChartTooltip';
+import { withSign } from '../utils/format';
 
 const CHART_W = 480;
 const CHART_H = 220;
@@ -140,8 +141,8 @@ export default function ScheduleFatigueSection() {
                                             <td>{b.bucket_label}</td>
                                             <td>{b.n.toLocaleString()}</td>
                                             <td>{(b.win_pct * 100).toFixed(1)}%</td>
-                                            <td style={{ color: b.avg_point_diff >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
-                                                {b.avg_point_diff >= 0 ? '+' : ''}{b.avg_point_diff}
+                                            <td style={{ color: b.avg_point_diff === 0 ? undefined : b.avg_point_diff > 0 ? 'var(--positive)' : 'var(--negative)' }}>
+                                                {withSign(b.avg_point_diff, String(Math.abs(b.avg_point_diff)), '-')}
                                             </td>
                                         </tr>
                                     ))}

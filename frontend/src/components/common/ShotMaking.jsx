@@ -5,6 +5,7 @@ import PlayerName from './PlayerName';
 import SourceBadge from './SourceBadge';
 import TableExport from './TableExport';
 import ChartExport from './ChartExport';
+import { bySign, signed as signedNum } from '../../utils/format';
 import '../../styles/shotmaking.css';
 
 // Expected FG% / shot-making (GET /shots/shot-making/*, routers/shot_making.py,
@@ -18,9 +19,11 @@ import '../../styles/shotmaking.css';
 
 const label = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const pct = (v, d = 1) => (v == null ? '—' : `${(v * 100).toFixed(d)}%`);
-const pts = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${(Math.abs(v) * 100).toFixed(d)}`);
-const signed = (v, d = 0) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}`);
-const tone = (v) => (v == null || v === 0 ? '' : v > 0 ? 'smk-pos' : 'smk-neg');
+const pts = (v, d = 1) => (v == null ? '—' : signedNum(v * 100, d));
+const signed = (v, d = 0) => signedNum(v, d);
+// Colour follows the value as shown, so a cell reading 0.0 (or 0) isn't tinted.
+const tone = (v) => bySign(v * 100, 1, 'smk-pos', 'smk-neg'); // eFG points, as pts() shows them
+const tonePts = (v) => bySign(v, 0, 'smk-pos', 'smk-neg');    // points, as signed() shows them
 const M = { l: 44, r: 10, t: 12, b: 30 };
 
 export function ShotMakingInfo() {
@@ -139,7 +142,7 @@ export function ShotMakingTable({ rows, minFga, compact = false }) {
                                 <td className={`lb-num lb-stat ${tone(r.shot_making)}`}>
                                     {pts(r.shot_making)} <span className="smk-margin">± {pts(r.margin95, 1).replace(/^[+−]/, '')}</span>
                                 </td>
-                                <td className={`lb-num ${tone(r.pts_above)}`}>{signed(r.pts_above)}</td>
+                                <td className={`lb-num ${tonePts(r.pts_above)}`}>{signed(r.pts_above)}</td>
                                 <td className="lb-num">{r.rank ? `${r.rank} of ${r.pool}` : '—'}</td>
                                 <td className="lb-num">{r.quality_rank ? `${r.quality_rank} of ${r.pool}` : '—'}</td>
                                 <td className="lb-num">{r.fg3a ? `${pct(r.fg3_pct)} vs ${pct(r.x_fg3_pct)}` : '—'}</td>
@@ -220,7 +223,7 @@ export function ShotMakingPlayer({ playerName }) {
                             </div>
                             <div className="stat-card">
                                 <div className="stat-card-label">Points above expected</div>
-                                <div className={`stat-card-value ${tone(career.ptsAbove)}`}>{signed(career.ptsAbove)}</div>
+                                <div className={`stat-card-value ${tonePts(career.ptsAbove)}`}>{signed(career.ptsAbove)}</div>
                                 <div className="stat-card-sub">over {career.fga.toLocaleString()} shots</div>
                             </div>
                         </div>
@@ -333,7 +336,7 @@ export function ShotMakingLeaderboard({ season, sort, order, onChange }) {
                                         <td className={`lb-num lb-stat ${tone(r.shot_making)}`}>
                                             {pts(r.shot_making)} <span className="smk-margin">± {pts(r.margin95).replace(/^[+−]/, '')}</span>
                                         </td>
-                                        <td className={`lb-num ${tone(r.pts_above)}`}>{signed(r.pts_above)}</td>
+                                        <td className={`lb-num ${tonePts(r.pts_above)}`}>{signed(r.pts_above)}</td>
                                         <td className="lb-num">{r.fg3a >= 50 ? `${pct(r.fg3_pct)} vs ${pct(r.x_fg3_pct)}` : '—'}</td>
                                     </tr>
                                 ))}
