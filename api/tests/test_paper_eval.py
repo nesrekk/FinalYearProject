@@ -38,7 +38,8 @@ from db_config import DB_CONFIG  # noqa: E402
 
 TUNE, VALIDATE, TEST = (2021, 2022, 2023, 2024), 2025, 2026
 TUNE_SPAN, VAL_LABEL, TEST_LABEL = "2020-21 to 2023-24", "2024-25", "2025-26"
-IMPACT_MODELS = {"rapm_single", "rapm_prior", "rapm_multi", "bpm", "bpm_scaled", "onoff", "onoff_scaled", "zero", "rapm_tracker"}
+IMPACT_MODELS = {"rapm_single", "rapm_prior", "rapm_multi", "bpm", "bpm_scaled", "onoff", "onoff_scaled", "zero", "rapm_tracker",
+                 "xrapm_lf_single", "xrapm_lf_prior", "xrapm_sa_single", "xrapm_sa_prior"}
 XFG_MODELS = {"constant", "zone", "logreg", "hgb"}
 FORMS = {"baseline", "current", "prior", "prior_rest"}
 

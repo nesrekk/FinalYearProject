@@ -1040,6 +1040,24 @@ export async function fetchShotMakingModel() {
     return response.data;
 }
 
+// Shot Value Added (routers/shot_value.py, scripts/build_shot_value.py; round 6 step 8).
+export async function fetchShotValueOptions() {
+    return getWithCache('shot_value_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/shots/shot-value/options`);
+        return response.data;
+    });
+}
+
+export async function fetchShotValue(params = {}) {
+    const response = await axios.get(`${IMPACT_BASE}/shots/shot-value`, { params });
+    return response.data;
+}
+
+export async function fetchShotValuePlayer(playerId) {
+    const response = await axios.get(`${IMPACT_BASE}/shots/shot-value/player/${playerId}`);
+    return response.data;
+}
+
 export async function fetchHofCareerLeaders(stat, limit = 50) {
     return getWithCache(`hof_career_${stat}_${limit}`, 10 * 60 * 1000, async () => {
         const response = await axios.get(`${IMPACT_BASE}/hof/career-leaders`, { params: { stat, limit } });

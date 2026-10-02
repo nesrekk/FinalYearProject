@@ -1,0 +1,39 @@
+/* Shot Value Added (common/ShotValue.jsx): Shot Charts > Shot value tab, and the RAPM page's shot-aware
+   version. Paper/Ink tokens only. */
+.sv-card { margin-top: 1rem; }
+.sv-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.sv-pos, .data-table tbody td.sv-pos { color: var(--positive); }   /* beat .data-table tbody td's colour */
+.sv-neg, .data-table tbody td.sv-neg { color: var(--negative); }
+.sv-strong { font-weight: 600; }
+.sv-row--small, .sv-table tbody .sv-row--small td { color: var(--text-3); }
+.sv-row--pooled td { font-weight: 600; }
+.sv-note { margin-top: var(--space-3); }
+.sv-subhead { margin: var(--space-5) 0 var(--space-2); font-size: 1rem; color: var(--text); }
+.sv-table th, .sv-table td { white-space: nowrap; }
+.sv-table .lb-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.sv-controls { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-4); margin: var(--space-3) 0; }
+.sv-select { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+.sv-select > span { font-size: var(--text-eyebrow-size); letter-spacing: var(--text-eyebrow-tracking); text-transform: uppercase; color: var(--text-3); }
+.sv-select .input-field { flex: none; min-width: 140px; max-width: 100%; }
+
+.sv-sort { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-transform: inherit; letter-spacing: inherit; }
+.sv-sort--active { color: var(--brand-text); }
+
+.sv-track { position: relative; margin: var(--space-3) 0; }
+.sv-track svg { display: block; width: 100%; height: auto; }
+.sv-panel-title { fill: var(--text); font-size: 12px; font-weight: 600; }
+.sv-grid { stroke: var(--hairline); stroke-width: 1; }
+.sv-zero { stroke: var(--text-2); stroke-width: 1.25; }
+.sv-tick { fill: var(--text-2); font-family: var(--font-mono); font-size: 10px; }
+.sv-band { fill: var(--brand); opacity: 0.16; stroke: none; }
+.sv-line { fill: none; stroke: var(--brand-text); stroke-width: 2; }
+.sv-dot { fill: var(--surface); stroke: var(--brand-text); stroke-width: 1.75; }
+.sv-dot-post { fill: var(--text-2); stroke: none; }
+.sv-legend { margin: var(--space-2) 0 0; color: var(--text-2); font-size: 0.82rem; }
+.sv-key { display: inline-block; vertical-align: middle; margin: 0 4px 0 10px; }
+.sv-key:first-child { margin-left: 0; }
+.sv-key--line { width: 14px; height: 0; border-top: 2px solid var(--brand-text); }
+.sv-key--post { width: 6px; height: 6px; border-radius: 50%; background: var(--text-2); }
+
+.sv-model .tab-bar { margin: var(--space-3) 0; }

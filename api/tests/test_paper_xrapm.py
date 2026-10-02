@@ -125,7 +125,9 @@ def test_target_has_less_spread_and_fits_are_on_the_grid(cur):
     assert len(seasons) == 6
     for s in seasons:
         assert sd[("sd_xpts100", s)] < 0.7 * sd[("sd_pts100", s)], s
-    fits = q(cur, "SELECT version, season, lambda, prior_scale, lambda_rule, cv_rmse, cv_rmse_zero, r_with_rapm FROM paper_xrapm_fits")
+    # round 5's two versions (round 6 step 8's lf_* / sa_* rows are test_shot_value.py's)
+    fits = q(cur, """SELECT version, season, lambda, prior_scale, lambda_rule, cv_rmse, cv_rmse_zero, r_with_rapm FROM paper_xrapm_fits
+                     WHERE version IN ('single', 'prior')""")
     assert len(fits) == 12
     for version, season, lam, scale, rule, cv, cv0, r in fits:
         assert lam in R.LAMBDAS and cv < cv0
@@ -134,7 +136,7 @@ def test_target_has_less_spread_and_fits_are_on_the_grid(cur):
         else:
             assert scale is None and rule == "cv_min"
         assert 0.3 < r < 0.95, (version, season, r)        # related to actual-points RAPM, not the same number
-    (n_players,), = q(cur, "SELECT count(*) FROM paper_xrapm_players WHERE qualified")
+    (n_players,), = q(cur, "SELECT count(*) FROM paper_xrapm_players WHERE qualified AND version IN ('single', 'prior')")
     assert n_players > 2000
     (M,), = q(cur, "SELECT value FROM paper_xrapm_meta WHERE key = 'ft_shrink_attempts'")
     (stable,), = q(cur, "SELECT stable_n FROM stat_stability WHERE stat = 'ft_pct' AND variant = 'catalogue'")

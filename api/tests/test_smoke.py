@@ -2341,7 +2341,7 @@ def test_rapm_versions_validation_and_profile():
     o = client.get("/rapm/options").json()
     _assert_has_source(o)
     versions = {v["id"]: v for v in o["versions"]}
-    assert set(versions) == {"single", "multi", "prior", "tracker"} and o["qualified_poss"] == 1000 and o["bootstraps"] >= 200
+    assert set(versions) == {"single", "multi", "prior", "tracker", "shotaware"} and o["qualified_poss"] == 1000 and o["bootstraps"] >= 200
     assert versions["single"]["seasons"] == [2021, 2022, 2023, 2024, 2025, 2026]
     assert versions["multi"]["seasons"] == [2023, 2024, 2025, 2026]   # three seasons on file from 2022-23 on
 

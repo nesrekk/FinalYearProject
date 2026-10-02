@@ -80,6 +80,7 @@ from routers import (
     shot_charts,
     shot_making,
     shot_quality_map,
+    shot_value,
     situational_splits,
     spacing_lab,
     team_comparison,
@@ -142,6 +143,7 @@ for _router_module in (
     possessions,
     coaching,
     pregame_availability,
+    shot_value,
 ):
     app.include_router(_router_module.router)
 

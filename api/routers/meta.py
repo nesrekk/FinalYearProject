@@ -330,6 +330,13 @@ COVERAGE_MAP = [
         "used_by": ["shotcharts"],
     },
     {
+        "table": "shot_value_added", "label": "Shot Value Added (attempts priced before the game, with and without the shooter)", "group": "Shooting",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM shot_value_added", "range_fmt": "season_int",
+        "source": "scripts/build_shot_value.py (model in scripts/shot_value_lib.py): every regular-season chart shot from 2020-21 priced by a gradient-boosting location model fitted only on earlier seasons and on none of the shooter's fold of players (30 fits), moved by the league's level so far that season, with and without the shooter's own skill as of the day before (a hidden log-odds number per player for rim, other twos, threes and free throws, carried across seasons and updated game by game; its four settings per kind estimated by empirical Bayes on 2010-11 to 2019-20). Free throws from player_game_lines. shot_value_shots holds the per-shot prices, shot_value_states the skills carried into and out of each season, shot_value_validation the out-of-sample log loss and year-to-year checks.",
+        "gap": "Free-throw history before 2020-21 is rebuilt from per-game averages (player_season_stats: games x FTA, makes = attempts x FT%), off by a few attempts a season; players under the 2009-10 to 2024-25 legacy minutes floor have none. No defender distance or shot type, so skill carries the defence a shooter usually faces and the shots he creates. The league level is a running estimate, so a level that drifts during a season puts the whole league above or below its forecast (stored per season). The three NBA Cup finals are not regular-season games and are left out; the 4 games of 2025-26 the shot chart lacks have no priced field goals (the shooter-aware RAPM prices their attempts by the unmatched-attempt rule).",
+        "used_by": ["shotcharts", "rapm"],
+    },
+    {
         "table": "team_zone_mix", "label": "Team shot mix", "group": "Shooting",
         "range_sql": "SELECT MIN(LEFT(season, 4)::int + 1), MAX(LEFT(season, 4)::int + 1) FROM team_zone_mix", "range_fmt": "season_int",
         "source": "Every located regular-season shot in player_shots, placed on a team game by game (scripts/build_team_zone_mix.py).",

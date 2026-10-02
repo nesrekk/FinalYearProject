@@ -83,6 +83,17 @@ impact (RAPM, BPM, on/off; scripts/build_rapm.py's design matrix and fits)
   each fold from the prior the filter brought into the season, and
   impact_reliability pairs the filtered totals. The platform's stored
   filtered ratings must equal this run's (checked to the stored rounding).
+  xrapm_lf_single/_prior and xrapm_sa_single/_prior (round 6 step 8;
+  scripts/build_shot_value.py prices, scripts/paper_xrapm.py targets) are xrapm's
+  regression on two more targets: lf prices every field goal with a location
+  model that never saw the season or a later one (limitation viii) plus the
+  league's level so far, sa adds the shooter's skill before the game (both price
+  free throws with the shooter's FT skill before the game). Chosen exactly like
+  xrapm's (lambda, then the prior scale at that lambda, on the tune pairs' actual
+  margins; nuisance refitted on actual points). In impact_heldout the shooter's
+  skill and the league level would carry a held-out game's outcome into later
+  training stints' targets, so each fold trains on paper_xrapm_stints.fold_xpts:
+  the targets priced with that fold's games excluded from every update.
 
 xfg (the expected-FG model; scripts/build_shot_making.py's features and fits)
   A model that scores season T is trained on every regular-season shot
@@ -167,6 +178,7 @@ import build_rapm as R
 import build_season_sim as BS
 import build_shot_making as S
 import rating_tracker_lib as T
+import shot_value_lib as SV
 from db_config import DB_CONFIG
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
@@ -189,6 +201,8 @@ XFG_CONFIGS = {
     "large": {**S.HGB_PARAMS, "max_leaf_nodes": 127, "min_samples_leaf": 1000, "learning_rate": 0.05, "max_iter": 800},
 }
 STAGES = ("impact", "xfg", "pregame", "sim")
+# Round 6 step 8's expected-points targets (paper_xrapm.py from build_shot_value.py's prices): model xrapm_<key>_single/_prior
+AWARE = {"lf": "look-ahead-free shooter-blind expected-points", "sa": "shooter-aware expected-points"}
 
 
 def label(season):
@@ -318,6 +332,29 @@ def impact_stage(conn, out):
         xdesigns[s] = d
     xgrams = {s: xdesigns[s].gram() for s in seasons}
     log(f"impact: expected-points target loaded ({len(xp):,} stints)")
+    # Round 6 step 8: look-ahead-free shooter-blind (lf) and shooter-aware (sa) targets; the held-out task trains on
+    # fold_xpts, the same targets priced with the held-out fold's games excluded from every update.
+    ax = pd.read_sql_query("SELECT stint_id, home_xpts_lf, away_xpts_lf, home_xpts_sa, away_xpts_sa, fold_xpts FROM paper_xrapm_stints",
+                           conn).set_index("stint_id")
+    home_rows = rows.home.to_numpy() == 1
+    poss_rows = rows.poss.to_numpy(float)
+    fx = np.array(ax.fold_xpts.reindex(rows.stint_id).tolist(), float)
+    assert fx.shape == (len(rows), len(SV.FOLD_LAYOUT) * R.FOLDS) and not np.isnan(fx).any()
+    adesigns, agrams, afold_y = {}, {}, {}
+    for v in AWARE:
+        xv = np.where(home_rows, ax[f"home_xpts_{v}"].reindex(rows.stint_id).to_numpy(), ax[f"away_xpts_{v}"].reindex(rows.stint_id).to_numpy())
+        assert not np.isnan(xv).any(), f"every tracked stint needs a {v} target"
+        yk = np.column_stack([np.where(home_rows, fx[:, SV.FOLD_LAYOUT.index((v, "home")) * R.FOLDS + k],
+                                       fx[:, SV.FOLD_LAYOUT.index((v, "away")) * R.FOLDS + k]) for k in range(R.FOLDS)])
+        adesigns[v], afold_y[v] = {}, {}
+        for s in seasons:
+            d = copy.copy(designs[s])
+            m = (rows.season == s).to_numpy()
+            d.y = 100.0 * xv[m] / poss_rows[m]
+            adesigns[v][s] = d
+            afold_y[v][s] = 100.0 * yk[m] / poss_rows[m][:, None]
+        agrams[v] = {s: adesigns[v][s].gram() for s in seasons}
+    log("impact: look-ahead-free and shooter-aware targets loaded (main + per-fold)")
 
     def prior_vec(s):
         d = designs[s]
@@ -455,10 +492,47 @@ def impact_stage(conn, out):
                note=f"free grid minimum: lambda {free_x['lambda']}, scale {free_x['prior_scale']}")
     log(f"impact: xrapm prior scale = {scale_x} at lambda {lam_x}; free minimum lambda {free_x['lambda']} scale {free_x['prior_scale']}")
 
+    # ---- tune: the round-6 targets (step 8), exactly as xrapm's ----------------------------
+    lam_a, scale_a = {}, {}
+    for v in AWARE:
+        name = f"xrapm_{v}"
+        what = AWARE[v]
+        grid = []
+        for lam in R.LAMBDAS:
+            fits = {s: xfit(s, adesigns[v][s].solve(agrams[v][s][0], agrams[v][s][1], lam)) for s, _ in tune_pairs}
+            val, n = pooled_next(fits)
+            grid.append({"lambda": lam, "game_rmse": round(val, 4)})
+            out.metric("impact_next", "tune", f"{name}_single", [n_ for _, n_ in tune_pairs], "game_rmse", val, n, variant=f"lambda={lam}",
+                       note=f"tune grid: pooled next-season game RMSE (actual margins) at this lambda, {what} target")
+        lam_a[v] = min(grid, key=lambda g: g["game_rmse"])["lambda"]
+        out.choice("impact", f"{name}_single", "lambda", lam_a[v], span(TUNE),
+                   f"pooled next-season game-margin RMSE (actual margins) over the tune pairs; ratings fitted on the {what} target "
+                   f"(paper_xrapm_stints.home/away_xpts_{v})", grid)
+        grid = []
+        for lam in R.LAMBDAS:
+            for sc in R.PRIOR_SCALES:
+                fits = {s: xfit(s, adesigns[v][s].solve(agrams[v][s][0], agrams[v][s][1], lam, pv[s] * sc)) for s, _ in tune_pairs}
+                val, n = pooled_next(fits)
+                grid.append({"lambda": lam, "prior_scale": sc, "game_rmse": round(val, 4)})
+                out.metric("impact_next", "tune", f"{name}_prior", [n_ for _, n_ in tune_pairs], "game_rmse", val, n,
+                           variant=f"lambda={lam},scale={sc}", note=f"tune grid: pooled next-season game RMSE at this lambda and prior scale, {what} target")
+        at_rule = [g for g in grid if g["lambda"] == lam_a[v]]
+        scale_a[v] = min(at_rule, key=lambda g: g["game_rmse"])["prior_scale"]
+        free_a = min(grid, key=lambda g: g["game_rmse"])
+        out.choice("impact", f"{name}_prior", "prior_scale", scale_a[v], span(TUNE),
+                   f"pooled next-season game-margin RMSE over the tune pairs at lambda = {lam_a[v]} (the {what} single-season lambda, by rule)",
+                   at_rule, note=f"with lambda free the grid minimum is lambda {free_a['lambda']}, scale {free_a['prior_scale']} (RMSE {free_a['game_rmse']})")
+        out.choice("impact", f"{name}_prior", "lambda", lam_a[v], span(TUNE), f"rule: the {what} single-season lambda (build_rapm.py's rule)",
+                   note=f"free grid minimum: lambda {free_a['lambda']}, scale {free_a['prior_scale']}")
+        log(f"impact: {name} lambda {lam_a[v]}, prior scale {scale_a[v]}; free minimum lambda {free_a['lambda']} scale {free_a['prior_scale']}")
+
     # ---- fits at the chosen hyperparameters, every season ----------------------
     single = {s: Fit.from_beta(designs[s], designs[s].solve(grams[s][0], grams[s][1], lam_single)) for s in seasons}
     xsingle = {s: xfit(s, xdesigns[s].solve(xgrams[s][0], xgrams[s][1], lam_x)) for s in seasons}
     xprior = {s: xfit(s, xdesigns[s].solve(xgrams[s][0], xgrams[s][1], lam_x, pv[s] * scale_x)) for s in seasons}
+    asingle = {v: {s: xfit(s, adesigns[v][s].solve(agrams[v][s][0], agrams[v][s][1], lam_a[v])) for s in seasons} for v in AWARE}
+    aprior = {v: {s: xfit(s, adesigns[v][s].solve(agrams[v][s][0], agrams[v][s][1], lam_a[v], pv[s] * scale_a[v])) for s in seasons}
+              for v in AWARE}
     prior = {s: Fit.from_beta(designs[s], designs[s].solve(grams[s][0], grams[s][1], lam_single, pv[s] * scale_prior)) for s in seasons}
     multi = {s: Fit.from_beta(d, d.solve(multi_grams[s][0], multi_grams[s][1], lam_multi)) for s, d in multi_designs.items()}
     zero = {s: zero_fit(s) for s in seasons}
@@ -518,6 +592,9 @@ def impact_stage(conn, out):
         m = {"rapm_single": single[s], "rapm_prior": prior[s], "zero": zero[s], "bpm": bpmf[s], "onoff": onof[s],
              "bpm_scaled": bpmf[s].scaled(scales["bpm"]), "onoff_scaled": onof[s].scaled(scales["onoff"]),
              "xrapm_single": xsingle[s], "xrapm_prior": xprior[s], "rapm_tracker": tracker[s]}
+        for v in AWARE:
+            m[f"xrapm_{v}_single"] = asingle[v][s]
+            m[f"xrapm_{v}_prior"] = aprior[v][s]
         if s in multi:
             m["rapm_multi"] = multi[s]
         return m
@@ -556,7 +633,8 @@ def impact_stage(conn, out):
         fold_grams = {k: d.gram(mask=d.fold == k) for k in folds}
         G_all, b_all = grams[s][0], grams[s][1]
         preds = {m: np.zeros(d.n) for m in ("rapm_single", "rapm_prior", "zero", "bpm", "bpm_scaled", "onoff", "onoff_scaled",
-                                             "xrapm_single", "xrapm_prior", "rapm_tracker")}
+                                             "xrapm_single", "xrapm_prior", "rapm_tracker")
+                 + tuple(f"xrapm_{v}_{k}" for v in AWARE for k in ("single", "prior"))}
         xd = xdesigns[s]
         xfold_grams = {k: xd.gram(mask=xd.fold == k) for k in folds}
         xG_all, xb_all = xgrams[s][0], xgrams[s][1]
@@ -586,6 +664,15 @@ def impact_stage(conn, out):
             for name, xbeta in (("xrapm_single", xd.solve(xG, xb, lam_x)), ("xrapm_prior", xd.solve(xG, xb, lam_x, pv[s] * scale_x))):
                 beta, _ = R.fit_nuisance(d, train, xbeta, False)
                 preds[name][test] = d.X[test] @ beta
+            # round-6 targets: trained on the prices that never saw fold k's games (fold_xpts), nuisance on actual points
+            for v in AWARE:
+                ad = adesigns[v][s]
+                aG = G_all - fold_grams[k][0]
+                ab = ad.X[train].T @ (ad.w[train] * afold_y[v][s][train, k])
+                for name, abeta in ((f"xrapm_{v}_single", ad.solve(aG, ab, lam_a[v])),
+                                    (f"xrapm_{v}_prior", ad.solve(aG, ab, lam_a[v], pv[s] * scale_a[v]))):
+                    beta, _ = R.fit_nuisance(d, train, abeta, False)
+                    preds[name][test] = d.X[test] @ beta
             bvec = d.rating_vector(bpmf[s].o, bpmf[s].d)
             for name, vec in (("bpm", bvec), ("bpm_scaled", bvec * scales["bpm"])):
                 beta, _ = R.fit_nuisance(d, train, vec, False)
@@ -631,6 +718,7 @@ def impact_stage(conn, out):
             "xrapm_single": (xsingle[s].total(), xsingle[nxt].total()),
             "xrapm_prior": (xprior[s].total(), xprior[nxt].total()),
             "rapm_tracker": (tracker[s].total(), tracker[nxt].total()),
+            **{f"xrapm_{v}_{k}": (f_[s].total(), f_[nxt].total()) for v in AWARE for k, f_ in (("single", asingle[v]), ("prior", aprior[v]))},
         }
         for model, (a, b) in series.items():
             pairs = [(p, a[p], b[p]) for p in both if p in a and p in b]

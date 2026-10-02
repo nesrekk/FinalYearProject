@@ -9,6 +9,8 @@ import SaveViewButton from '../common/SaveViewButton';
 import ShotMixHistory from '../common/ShotMixHistory';
 import { ShotMakingLeaderboard, ShotMakingModel, ShotMakingPlayer } from '../common/ShotMaking';
 import ShotQualityMap from '../common/ShotQualityMap';
+import ShotValue from '../common/ShotValue';
+import { SV_MINS, SV_SORTS } from '../../utils/shotValue';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 function clamp(n, lo, hi) {
@@ -184,7 +186,14 @@ export default function ShotCharts() {
   const [seasons, setSeasons] = useState([]);
   const [season, setSeason] = useState('');
   const [source, setSource] = useState('');
-  const [viewMode, setViewMode] = useState(() => parseParam.oneOf(params, 'view', ['heatmap', 'shotmaking', 'quality']) ?? 'dots'); // 'dots' | 'heatmap' | 'shotmaking' | 'quality'
+  const [viewMode, setViewMode] = useState(() => parseParam.oneOf(params, 'view', ['heatmap', 'shotmaking', 'quality', 'value']) ?? 'dots'); // 'dots' | 'heatmap' | 'shotmaking' | 'quality' | 'value'
+  // Shot value tab (round 6 step 8): the leaderboard's season, sort, direction and attempts floor (sv=, svby=, svdir=, svmin=).
+  const [svState, setSvState] = useState(() => ({
+    season: parseParam.int(params, 'sv', { min: 2021, max: 2100 }),
+    sort: parseParam.oneOf(params, 'svby', SV_SORTS) ?? 'sva',
+    dir: parseParam.oneOf(params, 'svdir', ['asc', 'desc']) ?? 'desc',
+    minFga: SV_MINS.includes(parseParam.int(params, 'svmin')) ? parseParam.int(params, 'svmin') : 200,
+  }));
   // Quality map tab: colour reference, the player's season, an optional second player and cell floor (qm=, qs=, vs=, vss=, qmin=).
   const [quality, setQuality] = useState(() => ({
     mode: parseParam.oneOf(params, 'qm', ['expected', 'league']) ?? 'expected',
@@ -263,6 +272,7 @@ export default function ShotCharts() {
   // doesn't wipe the link it came from.
   const onShotMaking = viewMode === 'shotmaking';
   const onQuality = viewMode === 'quality';
+  const onValue = viewMode === 'value';
   useUrlSync(resolvedPlayer ? {
     player: resolvedPlayer, season, view: viewMode === 'dots' ? null : viewMode,
     rank: onShotMaking ? rank.season : null,
@@ -273,6 +283,10 @@ export default function ShotCharts() {
     vs: onQuality ? quality.vs : null,
     vss: onQuality && quality.vs ? quality.vsSeason : null,
     qmin: onQuality && quality.minShots !== 2 ? quality.minShots : null,
+    sv: onValue ? svState.season : null,
+    svby: onValue && svState.sort !== 'sva' ? svState.sort : null,
+    svdir: onValue && svState.dir !== 'desc' ? svState.dir : null,
+    svmin: onValue && svState.minFga !== 200 ? svState.minFga : null,
   } : null);
 
   function handleSeasonChange(newSeason) {
@@ -424,6 +438,13 @@ export default function ShotCharts() {
           >
             Quality map
           </button>
+          <button
+            type="button"
+            className={`tab-btn ${viewMode === 'value' ? 'tab-btn--active' : ''}`}
+            onClick={() => setViewMode('value')}
+          >
+            Shot value
+          </button>
         </div>
         {viewMode === 'heatmap' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: '0.75rem' }}>
@@ -438,7 +459,7 @@ export default function ShotCharts() {
         )}
       </div>
 
-      {!onShotMaking && !onQuality && (<>
+      {!onShotMaking && !onQuality && !onValue && (<>
       <div className="court-container">
         <ChartExport svgRef={svgRef} name={`${resolvedPlayer || 'player'} shot chart ${season || ''}`} />
         <svg ref={svgRef} viewBox="0 0 500 470" className="court-svg" role="img" aria-label={viewMode === 'heatmap'
@@ -563,6 +584,11 @@ export default function ShotCharts() {
             onChange={(patch) => setRank((prev) => ({ ...prev, ...patch }))} />
           <ShotMakingModel />
         </>
+      )}
+
+      {onValue && resolvedPlayer && (
+        <ShotValue playerId={resolvedPlayerId} playerName={resolvedPlayer} state={svState}
+          onChange={(patch) => setSvState((prev) => ({ ...prev, ...patch }))} />
       )}
 
       {resolvedPlayer && <ShotMixHistory key={resolvedPlayer} playerName={resolvedPlayer} />}

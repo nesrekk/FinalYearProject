@@ -194,6 +194,7 @@ step derived -        build_hot_streak_persistence.py
 step derived -        build_situational_splits.py
 step derived -        build_projections.py
 step derived -        build_rapm.py                      # ~5 min
+step derived -        build_shot_value.py                # ~20 min; 30 look-ahead-free shot fits; reads player_game_lines, shot_xfg (folds); imports build_rapm
 step derived -        build_rating_tracker.py            # ~8 min; reads player_rapm (validation); its fit row is read by paper_eval.py
 step derived -        build_rotations.py
 step derived -        build_rim_deterrence.py

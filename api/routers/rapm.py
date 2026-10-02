@@ -7,6 +7,10 @@
     GET /rapm?version=tracker&kind=           the Rating Tracker (round 6 step 7): the same shape, rows from
                                               player_rating_tracker (kind filtered | smoothed), its fit, drift
                                               profile and validation in `tracker`
+    GET /rapm?version=shotaware&kind=         shot-aware expected-points RAPM (round 6 step 8): the same shape, rows
+                                              from paper_xrapm_players (kind prior | single = versions sa_prior /
+                                              sa_single), its cross-validation curve, and the paper protocol's scores
+                                              (paper_eval_metrics / paper_eval_tests) in `shotaware`
 
 Reads `player_rapm`, `rapm_fits`, `rapm_lambda_cv` and `rapm_validation`
 (scripts/build_rapm.py): ridge regression on every tracked five-man stint
@@ -15,8 +19,11 @@ cross-validation, standard errors from a game bootstrap; and, for the
 tracker version, `player_rating_tracker`, `rating_tracker_fit`,
 `rating_tracker_curve`, `rating_tracker_validation`
 (scripts/build_rating_tracker.py): a state-space RAPM whose ratings carry
-across seasons. Everything is cached per process: restart impact_api after
-rerunning either script.
+across seasons; and, for the shot-aware version, `paper_xrapm_players`,
+`paper_xrapm_fits`, `paper_xrapm_lambda_cv` (scripts/paper_xrapm.py on
+scripts/build_shot_value.py's prices) with the protocol's scores from
+`paper_eval_metrics` / `paper_eval_tests`. Everything is cached per process:
+restart impact_api after rerunning any of those scripts.
 """
 
 import json
@@ -37,6 +44,11 @@ UPSTREAM = "ESPN play-by-play (pbp_events) rebuilt into five-man stints by scrip
 TRACKER_UPSTREAM = ("ESPN play-by-play (pbp_events) rebuilt into five-man stints by scripts/build_lineup_stints.py, "
                     "filtered and smoothed across seasons by scripts/build_rating_tracker.py (scripts/rating_tracker_lib.py)")
 TRACKER_KINDS = ("filtered", "smoothed")
+SHOTAWARE_KINDS = ("prior", "single")
+SHOTAWARE_TABLES = ["paper_xrapm_players", "paper_xrapm_fits", "paper_xrapm_lambda_cv", "paper_xrapm_stints", "shot_value_added",
+                    "paper_eval_metrics", "paper_eval_tests", "player_rapm"]
+SHOTAWARE_UPSTREAM = ("ESPN play-by-play stints (lineup_stints) with every attempt priced before its game by scripts/build_shot_value.py; "
+                      "fitted by scripts/paper_xrapm.py, scored by scripts/paper_eval.py / paper_tests.py")
 MAX_MIN_POSS = 20000
 
 VERSIONS = {
@@ -46,6 +58,8 @@ VERSIONS = {
               "blurb": "A three-season window ending in the season: one rating per player over the window, one intercept per season. Steadier, slower to notice change."},
     "prior": {"label": "One season, BPM prior", "short": "BPM prior",
               "blurb": "Each season on its own, shrunk toward a scaled Basketball-Reference BPM (offence toward OBPM, defence toward DBPM) instead of zero; the scale and the shrinkage are both chosen by cross-validation."},
+    "shotaware": {"label": "Shot-aware", "short": "Shot-aware",
+                  "blurb": "The same regression, but each stint's target is what its shots were worth before the game, given who took them: every attempt priced by a location model that never saw the season plus the shooter's own skill as of the day before. Shooting luck leaves the target; shooting skill stays."},
     "tracker": {"label": "Rating Tracker", "short": "Tracker",
                 "blurb": "Ratings that carry across seasons: each player's offence and defence rating is a hidden state that drifts between seasons, updated by each season's stints with that season's BPM read as a noisy measurement. How much of last season to keep, how much BPM is worth and how far a newcomer may start from average are chosen on 2020-21 to 2023-24 by next-season prediction and held fixed. \"As of then\" uses nothing after the season; \"with hindsight\" smooths every season's games back through the career."},
 }
@@ -59,6 +73,12 @@ MODELS = {
     "bpm": "BPM (Basketball-Reference)",
     "onoff": "On/off net (from the same stints)",
     "zero": "Everyone average (intercept and home only)",
+    "xrapm_single": "Expected points, shooter-blind (round 5), one season",
+    "xrapm_prior": "Expected points, shooter-blind (round 5), BPM prior",
+    "xrapm_lf_single": "Expected points, shooter-blind, no look-ahead, one season",
+    "xrapm_lf_prior": "Expected points, shooter-blind, no look-ahead, BPM prior",
+    "xrapm_sa_single": "Shot-aware, one season",
+    "xrapm_sa_prior": "Shot-aware, BPM prior",
     "orapm": "Offensive RAPM",
     "drapm": "Defensive RAPM",
 }
@@ -191,6 +211,7 @@ def _seasons_by_version(fits):
         out[version].append(season)
     tf = _tracker_fit()
     out["tracker"] = tf["season_list"] if tf else []
+    out["shotaware"] = sorted({se for (v, se) in _sa_fits() if v == "sa_prior"})
     return out
 
 
@@ -213,7 +234,7 @@ def _round(d):
     return d
 
 
-def _pick(version, season):
+def _pick(version, season, kind=None):
     fits = _fits()
     if not fits:
         raise HTTPException(status_code=503, detail="No RAPM data: run scripts/build_rapm.py.")
@@ -222,7 +243,8 @@ def _pick(version, season):
     seasons = _seasons_by_version(fits)[version]
     if not seasons:
         raise HTTPException(status_code=404, detail=f"No {VERSIONS[version]['label']} fits on file"
-                            + (" (run scripts/build_rating_tracker.py)." if version == "tracker" else "."))
+                            + (" (run scripts/build_rating_tracker.py)." if version == "tracker" else
+                               " (run scripts/build_shot_value.py, then paper_xrapm.py)." if version == "shotaware" else "."))
     season = season or seasons[-1]
     if season not in seasons:
         raise HTTPException(status_code=404, detail=(
@@ -230,6 +252,8 @@ def _pick(version, season):
             f"on file: {', '.join(f'{s - 1}-{str(s)[-2:]}' for s in seasons)}."))
     if version == "tracker":
         return season, _tracker_fit_summary(season), seasons
+    if version == "shotaware":
+        return season, _sa_fit_summary(season, kind), seasons
     return season, fits[(version, season)], seasons
 
 
@@ -248,6 +272,100 @@ def _tracker_fit_summary(season):
         "tracker": {k: tf[k] for k in ("estimated_on", "criterion", "lambda0", "lambda_q", "lambda_b", "prior_scale", "phi", "tune_rmse",
                                        "tune_games", "sigma2", "newcomer_sd", "drift_sd", "bpm_sd", "evaluations", "converged", "quick",
                                        "ml_estimate", "loo_pairs", "ridge_check", "players", "seasons_from", "seasons_to")},
+    }
+
+
+@lru_cache(maxsize=1)
+def _sa_fits():
+    """paper_xrapm_fits rows of the shot-aware versions, {(version, season): dict}; {} when not built."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT to_regclass('paper_xrapm_fits')")
+        if cur.fetchone()[0] is None:
+            return {}
+        cols = ["version", "season", "games", "rows", "players", "poss", "lambda", "prior_scale", "lambda_rule", "cv_folds", "cv_rmse",
+                "cv_rmse_zero", "cv_best_lambda", "cv_best_scale", "intercept", "home_coef", "home_edge_per_100", "qualified",
+                "players_with_prior", "r_with_rapm", "sd_xrapm", "sd_rapm", "mean_abs_diff"]
+        cur.execute(f"SELECT {', '.join(cols)} FROM paper_xrapm_fits WHERE version IN ('sa_single', 'sa_prior')")
+        out = {}
+        for r in cur.fetchall():
+            d = dict(zip(cols, r))
+            for k in ("lambda", "cv_best_lambda"):
+                if d[k] is not None and d[k] == int(d[k]):
+                    d[k] = int(d[k])
+            out[(d["version"], d["season"])] = d
+        return out
+
+
+@lru_cache(maxsize=1)
+def _sa_curves():
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT to_regclass('paper_xrapm_lambda_cv')")
+        if cur.fetchone()[0] is None:
+            return {}
+        cur.execute("""SELECT version, season, lambda, prior_scale, cv_rmse FROM paper_xrapm_lambda_cv
+                       WHERE version IN ('sa_single', 'sa_prior') ORDER BY version, season, prior_scale, lambda""")
+        out = {}
+        for version, season, lam, scale, rmse in cur.fetchall():
+            out.setdefault((version, season), []).append({"lambda": int(lam), "prior_scale": scale, "cv_rmse": rmse})
+        return out
+
+
+SA_PROTOCOL_MODELS = ("xrapm_sa_prior", "xrapm_sa_single", "xrapm_lf_prior", "xrapm_lf_single", "xrapm_prior", "xrapm_single",
+                      "rapm_prior", "rapm_single", "rapm_multi", "rapm_tracker", "bpm", "zero")
+SA_PROTOCOL_PAIRS = (("xrapm_sa_single", "rapm_single"), ("xrapm_sa_prior", "rapm_prior"), ("xrapm_sa_single", "xrapm_single"),
+                     ("xrapm_sa_prior", "xrapm_prior"), ("xrapm_sa_single", "xrapm_lf_single"), ("xrapm_sa_prior", "xrapm_lf_prior"),
+                     ("xrapm_lf_single", "xrapm_single"), ("xrapm_sa_prior", "bpm"), ("xrapm_sa_prior", "rapm_tracker"))
+
+
+@lru_cache(maxsize=1)
+def _sa_protocol():
+    """The paper protocol's scores for the shot-aware versions and the models they are compared with: next-season
+    game RMSE and year-to-year r per phase (paper_eval_metrics), and paired differences with 95% intervals
+    (paper_eval_tests). {} when the protocol hasn't scored them."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT to_regclass('paper_eval_metrics'), to_regclass('paper_eval_tests')")
+        if not all(cur.fetchone()):
+            return {}
+        cur.execute("""SELECT task, phase, model, seasons, metric, value, n FROM paper_eval_metrics
+                       WHERE task IN ('impact_next', 'impact_reliability', 'impact_heldout') AND variant = '' AND model = ANY(%s)
+                         AND metric IN ('game_rmse', 'corr') AND (phase <> 'tune' OR seasons LIKE '%% to %%')""", (list(SA_PROTOCOL_MODELS),))
+        scores = {}
+        for task, phase, model, seasons, metric, value, n in cur.fetchall():
+            scores.setdefault(model, {}).setdefault(task, {})[phase] = {"value": value, "n": n, "seasons": seasons}
+        if "xrapm_sa_prior" not in scores:
+            return {}
+        cur.execute("""SELECT task, phase, model_a, model_b, seasons, diff, ci_lo, ci_hi, p_boot, n FROM paper_eval_tests
+                       WHERE variant = '' AND task IN ('impact_next', 'impact_reliability', 'impact_heldout')
+                         AND metric IN ('game_rmse', 'corr') AND model_b <> ''""")
+        want = set(SA_PROTOCOL_PAIRS)
+        tests = []
+        for task, phase, a, b, seasons, d, lo, hi, p, n in cur.fetchall():
+            if (a, b) in want:
+                tests.append({"task": task, "phase": phase, "a": a, "b": b, "seasons": seasons, "diff": d, "ci_lo": lo, "ci_hi": hi,
+                              "p": p, "n": n, "a_label": MODELS.get(a, a), "b_label": MODELS.get(b, b)})
+        cur.execute("""SELECT model, parameter, value FROM paper_eval_choices WHERE task = 'impact' AND model LIKE 'xrapm_%%'""")
+        choices = {(m, p): v for m, p, v in cur.fetchall()}
+        return {"scores": [{"model": m, "label": MODELS.get(m, m), **scores[m]} for m in SA_PROTOCOL_MODELS if m in scores],
+                "tests": sorted(tests, key=lambda t: (t["task"], ("tune", "validate", "test").index(t["phase"]), t["a"], t["b"])),
+                "choices": {f"{m}.{p}": v for (m, p), v in choices.items()}}
+
+
+def _sa_fit_summary(season, kind):
+    """A fit dict in rapm_fits' shape for one season of the shot-aware version (kind prior | single), plus its own fields."""
+    sf = _sa_fits()[(f"sa_{kind}", season)]
+    base = _fits().get((kind, season), {})
+    return {
+        "version": "shotaware", "season": season, "seasons_from": season, "seasons_to": season,
+        "games": sf["games"], "stints": base.get("stints"), "rows": sf["rows"], "players": sf["players"], "poss": sf["poss"],
+        "lambda": sf["lambda"], "prior_scale": sf["prior_scale"], "lambda_rule": sf["lambda_rule"], "cv_folds": sf["cv_folds"],
+        "cv_rmse": sf["cv_rmse"], "cv_rmse_zero": sf["cv_rmse_zero"], "cv_best_lambda": sf["cv_best_lambda"],
+        "cv_best_scale": sf["cv_best_scale"], "cv_best_rmse": None, "intercepts": {season: sf["intercept"]},
+        "home_coef": sf["home_coef"], "home_edge_per_100": sf["home_edge_per_100"], "bootstraps": None,
+        "qualified_poss": base.get("qualified_poss", 1000), "qualified": sf["qualified"], "players_with_prior": sf["players_with_prior"],
+        "r_with_rapm": sf["r_with_rapm"], "sd_xrapm": sf["sd_xrapm"], "sd_rapm": sf["sd_rapm"], "mean_abs_diff": sf["mean_abs_diff"],
     }
 
 
@@ -286,6 +404,7 @@ def rapm_options():
         "models": MODELS,
         "method": METHOD,
         "tracker": {"kinds": list(TRACKER_KINDS), "method": TRACKER_METHOD, "built": bool(_tracker_fit())},
+        "shotaware": {"kinds": list(SHOTAWARE_KINDS), "method": SA_METHOD, "built": bool(_sa_fits())},
         "_source": make_source(TABLES, UPSTREAM),
     }
 
@@ -312,20 +431,51 @@ TRACKER_METHOD = (
 )
 
 
+SA_ROW_COLS = ROW_COLS + ["rapm_actual", "sva", "skill_pts", "above_pts", "fga"]
+SA_ROWS_SQL = """SELECT p.player_id, r.teams, p.games, r.stints, p.minutes, r.poss_off, r.poss_def, p.poss, p.xorapm, p.xdrapm, p.xrapm,
+                        NULL::real, NULL::real, NULL::real, NULL::real, NULL::real, NULL::real, NULL::real, r.obpm, r.dbpm, r.bpm,
+                        p.rapm, a.sva, a.skill_pts, a.above_pts, a.fga
+                 FROM paper_xrapm_players p
+                 LEFT JOIN player_rapm r ON r.version = 'single' AND r.season = p.season AND r.player_id = p.player_id
+                 LEFT JOIN shot_value_added a ON a.player_id = p.player_id AND a.season = p.season
+                 WHERE p.version = %s AND p.season = %s ORDER BY p.xrapm DESC, p.poss DESC"""
+
+SA_METHOD = (
+    "The same stint rows, weights and regression as RAPM, with one change: the points a side scored in a stint are replaced "
+    "by what its attempts were worth before the game. Every field goal is priced by a location model fitted only on "
+    "earlier seasons (and on none of the shooter's fold of players), moved by the league's level so far that season, "
+    "plus the shooter's own skill as known the day before (a hidden number per player for shots at the rim, other twos, "
+    "threes and free throws, carried across seasons and updated game by game; scripts/build_shot_value.py); every free "
+    "throw at the shooter's free-throw skill the same way. Points no attempt accounts for are added as they are. So the "
+    "target keeps what a shooter's record says he makes and drops what he made beyond it. Shrinkage (and, for the BPM "
+    "prior kind, the prior scale) by 5-fold game-grouped cross-validation, the platform's way; no bootstrap, so no "
+    "intervals here. Round 5's version priced shots with a shooter-blind model and predicted next season worse; whether "
+    "this one does better is the paper protocol's question, answered below on seasons nothing was chosen on."
+)
+
+
 @router.get("/rapm")
 def rapm(version: str = "single", season: Optional[int] = None, min_poss: float = -1, team: Optional[str] = None,
          kind: str = "filtered"):
+    if version == "shotaware" and kind == "filtered":
+        kind = "prior"           # the tracker's default kind; the shot-aware default is the BPM-prior fit
     if version == "tracker" and kind not in TRACKER_KINDS:
         raise HTTPException(status_code=400, detail=f"kind must be one of {', '.join(TRACKER_KINDS)}.")
-    season, fit, seasons = _pick(version, season)
+    if version == "shotaware" and kind not in SHOTAWARE_KINDS:
+        raise HTTPException(status_code=400, detail=f"kind must be one of {', '.join(SHOTAWARE_KINDS)}.")
+    season, fit, seasons = _pick(version, season, kind)
     floor = fit["qualified_poss"] if min_poss < 0 else max(0.0, min(float(min_poss), MAX_MIN_POSS))
     team = team.upper() if team else None
     tracker = version == "tracker"
+    shotaware = version == "shotaware"
+    cols = TRACKER_ROW_COLS if tracker else SA_ROW_COLS if shotaware else ROW_COLS
     with get_db() as conn:
         cur = conn.cursor()
         if tracker:
             cur.execute(f"""SELECT {', '.join(TRACKER_ROW_COLS)} FROM player_rating_tracker WHERE kind = %s AND season = %s
                             ORDER BY rapm DESC, poss DESC""", (kind, season))
+        elif shotaware:
+            cur.execute(SA_ROWS_SQL, (f"sa_{kind}", season))
         else:
             cur.execute(f"""SELECT {', '.join(ROW_COLS)} FROM player_rapm WHERE version = %s AND season = %s
                             ORDER BY rapm DESC, poss DESC""", (version, season))
@@ -336,7 +486,7 @@ def rapm(version: str = "single", season: Optional[int] = None, min_poss: float 
         raise HTTPException(status_code=404, detail=f"No {team} player in the {season - 1}-{str(season)[-2:]} stints.")
     rows = []
     for r in raw:
-        d = _round(dict(zip(TRACKER_ROW_COLS if tracker else ROW_COLS, r)))
+        d = _round(dict(zip(cols, r)))
         if tracker:
             # the page reads the one-season names for the error columns: sd -> se
             d["orapm_se"], d["drapm_se"], d["rapm_se"] = d["orapm_sd"], d["drapm_sd"], d["rapm_sd"]
@@ -349,7 +499,7 @@ def rapm(version: str = "single", season: Optional[int] = None, min_poss: float 
         rows = [r for r in rows if team in r["team_list"]]
     # Ranks among the qualified, league-wide (a team filter keeps the league rank).
     qualified = [r for r in rows if r["qualified"]] if not team else None
-    league_q = [r for r in _all_qualified(version, season, floor, kind if tracker else "")] if team else qualified
+    league_q = [r for r in _all_qualified(version, season, floor, kind if tracker or shotaware else "")] if team else qualified
     for key in ("rapm", "orapm", "drapm"):
         order = sorted(league_q, key=lambda r: -r[key])
         rank = {r["player_id"]: i + 1 for i, r in enumerate(order)}
@@ -368,16 +518,19 @@ def rapm(version: str = "single", season: Optional[int] = None, min_poss: float 
         "seasons_available": seasons, "versions": {k: v["label"] for k, v in VERSIONS.items()},
         "teams": teams, "team": team, "min_poss": floor, "default_min_poss": fit["qualified_poss"],
         "fit": fit,
-        "noise": {"qualified": n_q, "ci_excludes_zero": excl, "expected_by_chance": round(0.05 * n_q, 1),
+        "noise": {"qualified": n_q, "ci_excludes_zero": None if shotaware else excl, "expected_by_chance": round(0.05 * n_q, 1),
                   "corr_with_bpm": corr_bpm, "bpm_pairs": len(bpm_pairs)},
-        "lambda_curve": [] if tracker else _curves().get((version, season), []),
-        "validation": _validation_for(season, tracker=tracker),
+        "lambda_curve": [] if tracker else _sa_curves().get((f"sa_{kind}", season), []) if shotaware else _curves().get((version, season), []),
+        "validation": ({"held_out_games": [], "next_season": [], "next_season_from_this": [], "year_to_year": []} if shotaware
+                       else _validation_for(season, tracker=tracker)),
         "players": rows,
-        "method": TRACKER_METHOD if tracker else METHOD,
+        "method": TRACKER_METHOD if tracker else SA_METHOD if shotaware else METHOD,
         "tracker": {"kind": kind, "kinds": list(TRACKER_KINDS), "fit": fit["tracker"], "curve": _tracker_curve(),
                     "n_carried": sum(1 for r in rows if r["seasons_seen"] > 1),
                     "n_newcomers": sum(1 for r in rows if r["seasons_seen"] == 1)} if tracker else None,
-        "_source": make_source(TRACKER_TABLES if tracker else TABLES, TRACKER_UPSTREAM if tracker else UPSTREAM),
+        "shotaware": {"kind": kind, "kinds": list(SHOTAWARE_KINDS), "protocol": _sa_protocol()} if shotaware else None,
+        "_source": make_source(TRACKER_TABLES if tracker else SHOTAWARE_TABLES if shotaware else TABLES,
+                               TRACKER_UPSTREAM if tracker else SHOTAWARE_UPSTREAM if shotaware else UPSTREAM),
     }
 
 
@@ -389,6 +542,10 @@ def _all_qualified(version, season, floor, kind=""):
         if version == "tracker":
             cur.execute("""SELECT player_id, rapm, orapm, drapm, bpm, rapm_ci_low, rapm_ci_high FROM player_rating_tracker
                            WHERE kind = %s AND season = %s AND poss >= %s""", (kind, season, floor))
+        elif version == "shotaware":
+            cur.execute("""SELECT p.player_id, p.xrapm, p.xorapm, p.xdrapm, r.bpm, NULL::real, NULL::real FROM paper_xrapm_players p
+                           LEFT JOIN player_rapm r ON r.version = 'single' AND r.season = p.season AND r.player_id = p.player_id
+                           WHERE p.version = %s AND p.season = %s AND p.poss >= %s""", (f"sa_{kind}", season, floor))
         else:
             cur.execute("""SELECT player_id, rapm, orapm, drapm, bpm, rapm_ci_low, rapm_ci_high FROM player_rapm
                            WHERE version = %s AND season = %s AND poss >= %s""", (version, season, floor))

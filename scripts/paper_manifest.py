@@ -166,6 +166,8 @@ PRODUCERS = {
     "build_league_zone_mix.py": ("derived", ["league_zone_mix"]),
     "build_shot_making.py": ("derived", ["player_shot_making", "shot_making_league", "shot_making_validation",
                                          "player_shot_hex", "shot_hex_league", "shot_hex_meta", "shot_xfg"]),
+    "build_shot_value.py": ("derived", ["shot_value_shots", "shot_value_states", "shot_value_added", "shot_value_fit",
+                                        "shot_value_validation"]),
     "build_team_zone_mix.py": ("derived", ["team_zone_mix", "game_pair"]),
     # ---- derived: play-by-play
     "train_wpa_model.py": ("derived", ["wpa_model_validation"]),
