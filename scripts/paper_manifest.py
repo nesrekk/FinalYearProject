@@ -182,6 +182,9 @@ PRODUCERS = {
     "build_possessions.py": ("derived", ["possessions", "possession_games", "possession_seasons", "possession_meta"]),
     "build_coaching_decisions.py": ("derived", ["coaching_decisions", "coaching_decision_tests", "coaching_decision_summary",
                                                 "coaching_decision_meta"]),
+    # app tables; imports paper_eval / paper_tests (the protocol's seasons, the bootstrap), so its step is in the paper stage
+    "build_lineup_predictor.py": ("derived", ["lineup_predictor_units", "lineup_predictor_players", "lineup_predictor_teams",
+                                              "lineup_predictor_fit", "lineup_predictor_metrics", "lineup_predictor_tests"]),
     "build_stat_stability.py": ("derived", ["stat_stability", "stat_stability_curve", "stat_year_to_year"]),
     "build_hot_streak_persistence.py": ("derived", ["hot_streak_persistence"]),
     "build_situational_splits.py": ("derived", ["player_situational_splits", "situational_split_league"]),

@@ -1173,6 +1173,24 @@ export async function fetchTeamRotation(team, season) {
     return response.data;
 }
 
+// ─── Lineup Predictor (lineup_predictor_*: the "try a lineup" panel on Rotations) ─────
+export async function fetchLineupPredictorOptions() {
+    return getWithCache('lineup_predictor_options', 10 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/lineup-predictor/options`);
+        return response.data;
+    });
+}
+
+export async function fetchLineupPredictorTeam(team, season) {
+    const response = await axios.get(`${IMPACT_BASE}/lineup-predictor/team`, { params: { team, season } });
+    return response.data;
+}
+
+export async function fetchLineupPrediction(team, season, ids) {
+    const response = await axios.get(`${IMPACT_BASE}/lineup-predictor/predict`, { params: { team, season, ids: ids.join(',') } });
+    return response.data;
+}
+
 // ─── Assist network (assist_pairs, player_assisted_share, assist_seasons) ─────
 export async function fetchAssistOptions() {
     return getWithCache('assist_options', 10 * 60 * 1000, async () => {

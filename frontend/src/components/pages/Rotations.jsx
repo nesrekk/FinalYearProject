@@ -4,6 +4,7 @@ import Loader from '../Loader';
 import CopyLinkButton from '../common/CopyLinkButton';
 import GameRotationChart from '../common/GameRotationChart';
 import InfoTooltip from '../common/InfoTooltip';
+import LineupPredictorPanel from '../common/LineupPredictorPanel';
 import PlayerName from '../common/PlayerName';
 import RotationHeatmap from '../common/RotationHeatmap';
 import SaveViewButton from '../common/SaveViewButton';
@@ -20,6 +21,8 @@ import '../../styles/rotations.css';
 // and, with a game picked, that game's full rotation chart for both teams
 // with the score margin underneath. Everything from the play-by-play stints
 // (GET /rotations/*); games whose play-by-play didn't reconcile are listed.
+// The season view ends with the Lineup Predictor's "try a lineup" panel
+// (common/LineupPredictorPanel.jsx; its five in lu=<ids>).
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
@@ -274,12 +277,14 @@ export default function Rotations({ onNavigate }) {
                     team: teams.includes(team) ? team : (teams.includes('BOS') ? 'BOS' : teams[0]),
                     game: parseParam.str(params, 'game'),
                     measure: parseParam.oneOf(params, 'm', ['team', 'own']) ?? 'team',
+                    lu: (parseParam.str(params, 'lu') ?? '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0),
                 });
             })
             .catch(() => setOptionsError('Rotations couldn\'t load. Is the impact API (port 8002) running, and have scripts/build_lineup_stints.py and scripts/build_rotations.py been run?'));
     }, [params]);
 
-    useUrlSync(form && { team: form.team, season: form.season, game: form.game, m: form.measure === 'team' ? null : form.measure });
+    useUrlSync(form && { team: form.team, season: form.season, game: form.game, m: form.measure === 'team' ? null : form.measure,
+        lu: !form.game && form.lu?.length === 5 ? form.lu.join(',') : null });
 
     const teamKey = form ? `${form.team}-${form.season}` : null;
     useEffect(() => {
@@ -338,14 +343,14 @@ export default function Rotations({ onNavigate }) {
                     <select className="input-field" value={form.season} onChange={(e) => {
                         const s = Number(e.target.value);
                         const ts = options.teams[String(s)] ?? [];
-                        set({ season: s, team: ts.includes(form.team) ? form.team : ts[0], game: null });
+                        set({ season: s, team: ts.includes(form.team) ? form.team : ts[0], game: null, lu: [] });
                     }}>
                         {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
                     </select>
                 </label>
                 <label>
                     <span>Team</span>
-                    <select className="input-field" value={form.team} onChange={(e) => set({ team: e.target.value, game: null })}>
+                    <select className="input-field" value={form.team} onChange={(e) => set({ team: e.target.value, game: null, lu: [] })}>
                         {teams.map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>
                 </label>
@@ -390,6 +395,8 @@ export default function Rotations({ onNavigate }) {
                             </button>
                         </p>
                     )}
+                    <LineupPredictorPanel key={teamKey} team={form.team} season={form.season} initialIds={form.lu}
+                        onIdsChange={(ids) => set({ lu: ids })} />
                 </div>
             )}
         </section>

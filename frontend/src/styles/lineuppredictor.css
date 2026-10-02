@@ -1,0 +1,20 @@
+/* Lineup Predictor panel (common/LineupPredictorPanel.jsx) on Teams › Rotations.
+   Paper/Ink tokens only; builds on theme.css (.lb-*), rapm.css, rotations.css and possessions.css (.pc-*). */
+.lp-panel { margin-top: var(--space-6); padding-top: var(--space-5); border-top: 1px solid var(--hairline); min-width: 0; }
+.lp-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); }
+.lp-picks { align-items: flex-end; }
+.lp-picks label { flex: 1 1 180px; min-width: 0; }
+.lp-picks select { width: 100%; }
+.lp-result { margin: var(--space-4) 0; }
+.lp-bands { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-4); }
+.lp-band { border: 1px solid var(--hairline); border-radius: 10px; padding: var(--space-3); min-width: 0; }
+.lp-band-title { margin: 0 0 var(--space-1); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
+.lp-band-value { font-family: var(--font-mono); font-size: 1.9rem; font-weight: 700; line-height: 1.2; color: var(--text); }
+.lp-band-value.oo-pos { color: var(--positive); }
+.lp-band-value.oo-neg { color: var(--negative); }
+.lp-band-range { margin-top: var(--space-1); font-size: 0.82rem; line-height: 1.45; color: var(--text-2); }
+.lp-flag { color: var(--brand-text); font-weight: 700; }
+.lp-muted { color: var(--text-3); font-style: italic; }
+.lp-parts table { margin-top: var(--space-2); }
+.lp-scores { margin-top: var(--space-6); }
+.lp-score-controls { align-items: flex-end; }
