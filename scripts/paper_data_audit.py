@@ -53,6 +53,17 @@ Error classes (key: what is measured)
                       sequences): median and 99th percentile of |difference|, the
                       share over 5 s and the largest; and regulation events whose
                       ESPN clock lies outside their own period
+    clock_lag         ESPN's time of each event against NBA.com's own play-by-play
+                      of the same game (the nba_api twin games of 2024-25, the
+                      only season with both; events matched by order within game,
+                      period, player and kind): ESPN's median lag by event class
+                      (made shots, later free throws, rebounds, steals, dead-ball
+                      turnovers, misses) and the share within 2 s, against the
+                      corrected clock's (pbp_event_clock, build_event_clock.py).
+                      Re-measured with build_event_clock.clock_check() on its own
+                      parse and shot match of those games; it must equal the
+                      check build_event_clock stored in pbp_event_clock_meta
+                      (round 6 step 12)
   Shot chart (NBA, player_shots)
     chart_gaps        reconciled games with no chart rows at all, and the share of
                       play-by-play attempts matched to the chart per season
@@ -114,7 +125,7 @@ from rapidfuzz import fuzz, process
 
 from db_config import DB_CONFIG
 from fetch_pbp_espn import NAME_MATCH_FLOOR, _normalize_name
-from pbp_lineups import PERIOD_SECONDS, Game, load_espn, load_season_names, match_coordinates
+from pbp_lineups import PERIOD_SECONDS, Game, chart_matches, load_espn, load_season_names, match_coordinates
 from repair_espn_player_ids import find as find_wrong_ids
 from repair_espn_player_ids import fold
 
@@ -499,6 +510,53 @@ def shot_checks(conn, cur, A):
     return m, mm.assign(clock_off=off)
 
 
+LAG_CLASSES = (("fg_made", "Made"), ("ft_later_made", "FtLater"), ("reb", "Reb"), ("tov_steal", "Steal"), ("tov_dead", "Dead"),
+               ("fg_miss", "Miss"))
+
+
+def clock_lag_checks(conn, cur, A):
+    """ESPN's clock against NBA.com's play-by-play of the same games (the twin games), by event class: build_event_clock's
+    own clock_check() on a fresh parse and shot match of those games. It must equal pbp_event_clock_meta's stored check
+    (the corrected clock it describes is the stored one)."""
+    import build_event_clock as EC      # imported here: only this check needs it
+    twins = [r[0] for r in q(cur, """SELECT DISTINCT 'espn_' || s.espn_id FROM pbp_games n JOIN game_scores s ON s.game_id = n.game_id
+                                     JOIN pbp_games g ON g.game_id = 'espn_' || s.espn_id
+                                     WHERE n.source = 'nba_api' AND s.espn_id IS NOT NULL ORDER BY 1""")]
+    seasons = q(cur, "SELECT DISTINCT season FROM pbp_games WHERE game_id = ANY(%s)", (twins,))
+    if seasons != [(EC.TWIN_SEASON,)]:
+        raise SystemExit(f"clock_lag: the twin games are not all of {EC.TWIN_SEASON} ({seasons})")
+    season_names, all_names = load_season_names(cur)
+    games, grouped = load_espn(conn, game_ids=twins)
+    chart_t = EC.chart_clock(conn, chart_matches(conn, games, grouped, season_names, all_names))
+    chk = EC.clock_check(conn, season_names, all_names, chart_t, grouped)
+    (stored,), = q(cur, "SELECT value FROM pbp_event_clock_meta WHERE key = 'clock_check'")
+    stored = stored if isinstance(stored, dict) else __import__("json").loads(stored)
+    if stored != __import__("json").loads(__import__("json").dumps(chk)):
+        raise SystemExit("clock_lag: the re-measured check differs from pbp_event_clock_meta's: rerun build_event_clock.py")
+    A.put("lag_twin_games", chk["twin_games"], "nba_api twin games (NBA.com play-by-play of an ESPN game)",
+          macro="DqLagTwinGames", fmt="integer")
+    A.put("lag_season", EC.TWIN_SEASON, "their season", macro="DqLagSeason", fmt="season")
+    A.put("lag_events", chk["matched_events"], "events matched to NBA.com's by order within game, period, player and kind",
+          macro="DqLagEvents", fmt="integer")
+    for cls, m in LAG_CLASSES:
+        c = chk["classes"][cls]
+        A.put(f"lag_{cls}_n", c["n"], f"{cls}: events matched")
+        A.put(f"lag_{cls}_median", c["espn_lag_median"], f"{cls}: median of ESPN time - NBA.com time (s; positive = ESPN later)",
+              macro=f"DqLag{m}Sec", fmt="int_round")
+        A.put(f"lag_{cls}_median_odd", c["espn_lag_median_odd"], f"{cls}: the same on the odd half of the games")
+        A.put(f"lag_{cls}_median_even", c["espn_lag_median_even"], f"{cls}: the same on the even half")
+        A.put(f"lag_{cls}_espn_within2", c["espn_within_2s"], f"{cls}: share of ESPN times within 2 s of NBA.com's")
+        A.put(f"lag_{cls}_corr_within2", c["corrected_within_2s"], f"{cls}: share of corrected times within 2 s")
+    A.put("lag_made_espn_within2", chk["classes"]["fg_made"]["espn_within_2s"], "made shots: ESPN within 2 s",
+          macro="DqLagMadeWithinPct", fmt="pct0")
+    A.put("lag_espn_within2", chk["all"]["espn_within_2s"], "every matched event: ESPN's time within 2 s of NBA.com's",
+          macro="DqLagEspnWithinPct", fmt="pct1")
+    A.put("lag_corr_within2", chk["all"]["corrected_within_2s"], "every matched event: the corrected clock within 2 s",
+          macro="DqLagCorrWithinPct", fmt="pct1")
+    A.put("lag_espn_abs_median", chk["all"]["espn_abs_err_median"], "every matched event: median |ESPN - NBA.com| (s)")
+    A.put("lag_corr_abs_median", chk["all"]["corrected_abs_err_median"], "every matched event: median |corrected - NBA.com| (s)")
+
+
 # ── The error classes: the paper's table ─────────────────────────────────────
 # size: LaTeX with \pn macros only (defined in paper/numbers.tex by paper_numbers.py from paper_data_audit).
 
@@ -550,6 +608,11 @@ CLASSES = [
      "median gap \\pnDqClockMedianSec{} s, \\pnDqClockBigPct\\% over 5 s, 99th percentile \\pnDqClockPctlSec{} s; "
      "\\pnDqClockOutside{} events in \\pnDqClockOutsideGames{} games outside their period",
      "worked around", "feeds matched by order, never by clock"),
+    ("Play-by-play", "clock_lag", "Clock late by event type",
+     "event times vs.\\ NBA.com's play-by-play (\\pnDqLagTwinGames{} games)",
+     "made shots a median \\pnDqLagMadeSec{} s late, rebounds \\pnDqLagRebSec, turnovers \\pnDqLagStealSec--\\pnDqLagDeadSec; "
+     "\\pnDqLagEspnWithinPct\\% of events within 2 s",
+     "worked around", "clock rebuilt (\\pnDqLagCorrWithinPct\\% within 2 s)"),
     ("Play-by-play", "unreconciled", "Game does not reconcile",
      "stint points, length and team totals vs.\\ real final and box totals",
      "\\pnDqUnrecGames{} of \\pnGamesParsed{} games (\\pnDqUnrecScore{} score, \\pnDqUnrecTotals{} rebound count, "
@@ -659,6 +722,8 @@ def main():
     log("identity checks")
     shot_checks(conn, cur, A)
     log("shot checks")
+    clock_lag_checks(conn, cur, A)
+    log("clock lag checks")
     class_counts(A)
     conn.rollback()
     write(conn, A)

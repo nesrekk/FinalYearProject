@@ -68,6 +68,7 @@ import math
 import os
 import re
 import sys
+from datetime import timezone
 from decimal import ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 import psycopg2
@@ -1331,8 +1332,596 @@ def manifest(cur, N):
             "Platform / Availability: the legacy tables are the two MVP award-label tables")
 
 
+# ---------------------------------------------------------------- round 6 (step 12): the app features' results
+
+PHASE_NAMES = (("tune", "Tune"), ("validate", "Val"), ("test", "Test"))
+TEST_COLS = ("task", "phase", "metric", "model_a", "model_b", "variant", "seasons", "n", "n_clusters", "value_a", "value_b",
+             "diff", "ci_lo", "ci_hi", "p_boot", "dm_p")
+
+
+class Pairs:
+    """Rows of a table with paper_tests' columns (paper_eval_tests, pregame_availability_tests, lineup_predictor_tests,
+    data_quality_sensitivity), printed as macros the way tests() prints paper_eval_tests'. A pair stored the other way
+    round is read with the sign turned (diff -> -diff, interval mirrored); single-model rows are model_b ''."""
+
+    def __init__(self, cur, N, table, where="TRUE"):
+        self.N, self.table, self.T = N, table, {}
+        for r in rows(cur, f"SELECT {', '.join(TEST_COLS)} FROM {table} WHERE {where}"):
+            r = dict(zip(TEST_COLS, r))
+            self.T[(r["task"], r["phase"], r["metric"], r["model_a"], r["model_b"], r["variant"])] = r
+
+    def get(self, task, phase, metric, a, b="", variant=""):
+        r = self.T.get((task, phase, metric, a, b, variant))
+        if r is not None:
+            return r
+        r = self.T[(task, phase, metric, b, a, variant)]
+        return dict(r, model_a=a, model_b=b, value_a=r["value_b"], value_b=r["value_a"], diff=-r["diff"],
+                    ci_lo=-r["ci_hi"], ci_hi=-r["ci_lo"])
+
+    def where(self, r):
+        return (f"{self.table} {r['task']} {r['phase']} {r['metric']} {r['model_a']}"
+                + (f" - {r['model_b']}" if r["model_b"] else "") + (f", {r['variant']}" if r["variant"] else "")
+                + f" ({r['seasons']}, n {r['n']}, {r['n_clusters']} clusters)")
+
+    def diff(self, name, task, phase, metric, a, b, d, variant="", scale=1, lo_hi=True, p=True, dm=False, cell=False):
+        r = self.get(task, phase, metric, a, b, variant)
+        w = self.where(r)
+        self.N.add(name, dec(r["diff"] * scale, d), w + ": diff" + (f" x {scale}" if scale != 1 else ""))
+        if lo_hi:
+            self.N.add(name + "Lo", dec(r["ci_lo"] * scale, d), w + ": ci_lo (paired cluster bootstrap, 2.5th percentile)")
+            self.N.add(name + "Hi", dec(r["ci_hi"] * scale, d), w + ": ci_hi (97.5th percentile)")
+        if p:
+            self.N.add(name + "P", pval(r["p_boot"]), w + ": p_boot (two-sided bootstrap p)")
+        if dm:
+            self.N.add(name + "DmP", pval(r["dm_p"]), w + ": dm_p (Diebold-Mariano, Newey-West variance)")
+        if cell:
+            self.N.add(name + "Pv", pcell(r["p_boot"]), w + ": p_boot as a table cell")
+            if dm:
+                self.N.add(name + "DmPv", pcell(r["dm_p"]), w + ": dm_p as a table cell")
+        return r
+
+    def value(self, name, task, phase, metric, model, d, variant="", scale=1, lo_hi=False):
+        r = self.get(task, phase, metric, model, "", variant)
+        w = self.where(r)
+        self.N.add(name, dec(r["value_a"] * scale, d), w + ": value" + (f" x {scale}" if scale != 1 else ""))
+        if lo_hi:
+            self.N.add(name + "Lo", dec(r["ci_lo"] * scale, d), w + ": ci_lo (cluster bootstrap)")
+            self.N.add(name + "Hi", dec(r["ci_hi"] * scale, d), w + ": ci_hi")
+        return r
+
+
+def excl(r):
+    """The interval excludes zero."""
+    return r["ci_lo"] > 0 or r["ci_hi"] < 0
+
+
+def eval_metrics(cur):
+    """paper_eval_metrics as {(task, phase, model, variant, seasons, metric): (value, n)} and protocol()'s pick()."""
+    M = {(t, ph, m, va, se, me): (v, n) for t, ph, m, va, se, me, v, n in rows(
+        cur, "SELECT task, phase, model, variant, seasons, metric, value, n FROM paper_eval_metrics")}
+
+    def pick(task, phase, model, metric, variant=""):
+        c = [(se, v, n) for (t, ph, m, va, se, me), (v, n) in M.items() if (t, ph, m, va, me) == (task, phase, model, variant, metric)]
+        if phase == "tune" and len(c) > 1:
+            c = [x for x in c if " to " in x[0]]
+        assert len(c) == 1, (task, phase, model, metric, variant, c)
+        se, v, n = c[0]
+        return v, n, se
+    return pick
+
+
+def possessions_clock(cur, N):
+    """Round 6 steps 3, 3b, 4: the possessions table (scripts/build_possessions.py), the corrected clock
+    (scripts/build_event_clock.py; its accuracy is the audit's clock_lag class) and the Possession Explorer's results."""
+    N.start("Possessions and the corrected clock (Data: possessions; round 6 steps 3, 3b, 4) -- possessions, possession_*, "
+            "pbp_event_clock_meta, data_quality_sensitivity")
+    n_poss, = one(cur, "SELECT count(*) FROM possessions")
+    games, ok = one(cur, "SELECT count(*), count(*) FILTER (WHERE game_ok) FROM possession_games")
+    N.add("PoPossessions", integer(n_poss), "count(*) possessions")
+    N.add("PoGamesOk", integer(ok), "possession_games.game_ok (points, FGA, FTA, OREB and TOV add up to the final and the box)")
+    N.claim((games, ok) == N.raw["games"], "Data: the possessions reconcile in exactly the games the stints do")
+    meta = {k: as_json(v) for k, v in rows(cur, "SELECT key, value FROM possession_meta")}
+    sec = meta["rules"]["transition_seconds"]
+    N.add("PoTransSec", word(int(sec)), "possession_meta rules.transition_seconds (transition = first attempt within it)")
+    tc = meta["transition_check"]
+    N.add("PoTakeFouls", integer(tc["take_fouls"]), "possession_meta transition_check.take_fouls (transition take fouls with a start time)")
+    N.add("PoTakeFoulsWithinPct", pct(tc["take_fouls_within_window"], 1), "transition_check.take_fouls_within_window (share inside the window)")
+    dr = tc["dreb_ppp_by_first_attempt_second"]
+    N.add("PoDrebPeakPpp", dec(max(dr), 2), "transition_check.dreb_ppp_by_first_attempt_second: highest points per possession "
+          "(after a defensive rebound, by second of the first attempt)")
+    N.add("PoDrebPlateauPpp", dec(dr[int(sec) + 2], 2), f"the same at {int(sec) + 2} s (the plateau the early premium fades to)")
+    N.claim(max(dr) == max(dr[:int(sec)]) and dr[int(sec) + 2] < min(dr[1:int(sec)]),
+            "Data: after a defensive rebound the early-shot premium peaks inside the transition window and has faded two seconds after it")
+    timed, trans, tpts = one(cur, """SELECT sum(timed_poss)::float8, sum(trans_poss)::float8, sum(trans_pts)::float8 FROM possession_seasons
+                                     WHERE team = 'ALL' AND start_type = 'all'""")
+    N.add("PoTransSharePct", pct(trans / timed, 1), "possession_seasons ALL/all: sum(trans_poss) / sum(timed_poss), every season")
+    P = Pairs(cur, N, "data_quality_sensitivity", "result = 'possessions' AND drop_set = 'none'")
+    st = P.diff("PoDStealMade", "possessions", "all", "ppp", "steal", "made_fg", 2, p=False)
+    P.value("PoPppSteal", "possessions", "all", "ppp", "steal", 2)
+    P.value("PoPppMade", "possessions", "all", "ppp", "made_fg", 2)
+    pts, poss = one(cur, "SELECT sum(pts)::float8, sum(poss)::float8 FROM possession_seasons WHERE team = 'ALL' AND start_type = 'dreb'")
+    N.add("PoPppDreb", dec(pts / poss, 2), "possession_seasons ALL/dreb: points per possession after a defensive rebound, every season")
+    tr = P.diff("PoDTransSettled", "possessions", "all", "ppp", "transition", "settled", 2, p=False)
+    P.value("PoPppTrans", "possessions", "all", "ppp", "transition", 2)
+    P.value("PoPppSettled", "possessions", "all", "ppp", "settled", 2)
+    N.claim(st["diff"] > 0 and excl(st) and tr["diff"] > 0 and excl(tr),
+            "Data: possessions after a steal and in transition score more, by more than their intervals")
+    chk = as_json(one(cur, "SELECT value FROM data_quality_meta WHERE key = 'possessions_check_vs_possession_seasons'")[0])
+    N.claim(abs(chk["steal_ppp"] - st["value_a"]) < 1e-12 and abs(chk["transition_share"] - trans / timed) < 1e-12,
+            "Data: the bootstrap rows describe the possessions table (data_quality_meta's check)")
+    # How much of the between-team spread is beyond chance, and how well it repeats: the computation of
+    # api/routers/possessions._signal() (not imported: importing the app runs its DDL), with its rounding of ppp and
+    # its standard error to four decimals, so the page and the paper print the same numbers.
+    var = {(s, t): float(v) for s, t, v in rows(cur, """
+        SELECT p.season, COALESCE(p.start_type, 'all'), VAR_SAMP(p.pts) FROM possessions p
+        JOIN possession_games g USING (game_id) WHERE g.game_ok
+        GROUP BY GROUPING SETS ((p.season, p.start_type), (p.season))""") if v is not None}
+    teamrows = {(s, t, k): (poss, pts) for s, t, k, poss, pts in rows(
+        cur, "SELECT season, team, start_type, poss, pts FROM possession_seasons WHERE team <> 'ALL'")}
+    seasons = sorted({s for s, _t, _k in teamrows})
+    teams = sorted({t for _s, t, _k in teamrows})
+    sig = {}
+    for key in ("all", "steal", "made_fg", "dreb"):
+        shares, vals = [], {}
+        for s in seasons:
+            v = var[(s, key)]
+            xs = {t: teamrows[(s, t, key)] for t in teams if (s, t, key) in teamrows and teamrows[(s, t, key)][0]}
+            ppp = {t: round(pts / poss, 4) for t, (poss, pts) in xs.items()}
+            se2 = [round(math.sqrt(v / poss), 4) ** 2 for poss, _ in xs.values()]
+            m = sum(ppp.values()) / len(ppp)
+            obs = sum((x - m) ** 2 for x in ppp.values()) / (len(ppp) - 1)
+            shares.append(max(0.0, 1 - (sum(se2) / len(se2)) / obs))
+            vals[s] = ppp
+        rs = [_corr([vals[s][t] for t in teams], [vals[s + 1][t] for t in teams]) for s in seasons[:-1]]
+        sig[key] = (sum(shares) / len(shares), sum(rs) / len(rs), len(rs))
+    for key, K in (("all", "All"), ("steal", "Steal"), ("made_fg", "Made")):
+        N.add(f"PoSignal{K}Pct", pct(sig[key][0], 0), f"possessions/possession_seasons, offence {key}: 1 - mean sampling variance / "
+              "between-team variance of points per possession, averaged over seasons (api/routers/possessions._signal)")
+        N.add(f"PoYty{K}", dec(sig[key][1], 2), f"the same: year-to-year r of team points per possession, mean over {sig[key][2]} pairs")
+    N.add("PoYtyPairs", word(sig["all"][2]), "consecutive-season pairs")
+    N.claim(sig["steal"][0] < sig["all"][0] / 2 and sig["steal"][1] < sig["all"][1] / 2,
+            "Data: a team's points after steals is mostly noise (under half the signal share and half the year-to-year r of all possessions)")
+    wp = as_json(one(cur, "SELECT value FROM pbp_event_clock_meta WHERE key = 'wp_check'")[0])
+    for k, K in (("last_minute", "LastMin"),):
+        N.add(f"PoWp{K}LlEspn", dec(wp[k]["log_loss_espn"], 4), f"pbp_event_clock_meta wp_check.{k}.log_loss_espn (Game Replay's model, ESPN's clock)")
+        N.add(f"PoWp{K}LlCorr", dec(wp[k]["log_loss_corrected"], 4), f"wp_check.{k}.log_loss_corrected (the same model on the corrected clock)")
+    N.add("PoWpLastMinEceEspn", dec(wp["last_minute"]["ece_espn"], 4), "wp_check.last_minute.ece_espn")
+    N.add("PoWpLastMinEceCorr", dec(wp["last_minute"]["ece_corrected"], 4), "wp_check.last_minute.ece_corrected")
+    N.claim(all(w["log_loss_corrected"] < w["log_loss_espn"] for k, w in wp.items() if isinstance(w, dict) and "log_loss_espn" in w),
+            "Data: the win-probability model, fitted on ESPN's times, scores better on the corrected clock in every phase checked (not refitted)")
+    A = {k: v for k, v in rows(cur, "SELECT key, value FROM paper_data_audit WHERE season = 0 AND key LIKE 'lag%%'")}
+    N.claim(all(A[f"lag_{c}_median_odd"] == A[f"lag_{c}_median_even"] for c in ("fg_made", "ft_later_made", "reb", "tov_steal", "tov_dead", "fg_miss")),
+            "Data: ESPN's lag by event class is the same on the two halves of the twin games")
+
+
+def data_quality_effect(cur, N):
+    """Round 6 step 11: the per-game flags and the "does it matter?" re-scores (scripts/build_data_quality.py), counted the
+    way the Data Quality page counts them (api/routers/data_quality._call/_verdict): a cell is one pair in one phase,
+    metric and scope of one drop set; its call is which side is lower with the interval excluding zero, or none."""
+    N.start("Data quality, downstream (Section: Data quality; round 6 step 11) -- data_quality_game_flags, data_quality_sensitivity")
+    lv = dict(rows(cur, "SELECT level, count(*) FROM data_quality_game_flags GROUP BY 1"))
+    for k, K in (("flagged", "Flagged"), ("excluded", "Excluded"), ("worked_around", "Worked"), ("clean", "Clean")):
+        N.add(f"DqsGames{K}", integer(lv.get(k, 0)), f"data_quality_game_flags level = {k}")
+    cols = ("result", "drop_set", "scope", "games_dropped", "phase", "metric", "model_a", "model_b", "diff", "ci_lo", "ci_hi", "rand_p",
+            "rand_lo", "rand_hi", "rand_draws")
+    S = [dict(zip(cols, r)) for r in rows(cur, f"SELECT {', '.join(cols)} FROM data_quality_sensitivity WHERE model_b <> ''")]
+
+    def call(r):
+        return "a" if r["ci_hi"] < 0 else "b" if r["ci_lo"] > 0 else "none"
+    full = {(r["result"], r["phase"], r["metric"], r["model_a"], r["model_b"]): call(r) for r in S if r["drop_set"] == "none"}
+    cells = [(full[(r["result"], r["phase"], r["metric"], r["model_a"], r["model_b"])], call(r), r) for r in S if r["drop_set"] != "none"]
+    flips = sum(f != "none" and c != "none" and f != c for f, c, _ in cells)
+    clarity = sum((f == "none") != (c == "none") for f, c, _ in cells)
+    controlled = [r for _f, _c, r in cells if r["rand_p"] is not None]
+    beyond = sum(r["rand_p"] <= 0.05 for r in controlled)
+    N.add("DqsCells", integer(len(cells)), "data_quality_sensitivity pair rows with a drop set (each compared with the every-game row)")
+    N.add("DqsClarity", word(clarity), "cells whose interval starts or stops excluding zero")
+    N.claim(flips == 0, "Data quality: no conclusion flips (no cell's interval excludes zero on the other side from every game's)")
+    N.add("DqsControlled", integer(len(controlled)), "cells with the random-drop control (drop sets of 50+ games)")
+    N.add("DqsBeyond", integer(beyond), "of those, the drop set moves the difference beyond the random drops at p <= 0.05")
+    N.add("DqsBeyondExp", integer(round(0.05 * len(controlled))), "0.05 x controlled cells")
+    draws = {r["rand_draws"] for r in controlled}
+    N.claim(len(draws) == 1, "Data quality: one random-drop count")
+    N.add("DqsRandDraws", integer(draws.pop()), "data_quality_sensitivity.rand_draws (random drops of as many games per season)")
+    P = Pairs(cur, N, "data_quality_sensitivity", "drop_set = 'flagged' AND scope = 'everywhere' AND result = 'impact'")
+    R = {(r["phase"]): r for r in S if r["drop_set"] == "flagged" and r["scope"] == "everywhere" and r["result"] == "impact"
+         and (r["model_a"], r["model_b"], r["metric"]) == ("rapm_prior", "bpm", "game_rmse")}
+    N.add("DqsImpactFlagGames", integer(R["test"]["games_dropped"]), "games dropped (flagged or excluded) for the impact result")
+    for ph, Ph in (("tune", "Tune"), ("test", "Test")):
+        r = P.diff(f"DqsImpact{Ph}", "impact_next", ph, "game_rmse", "rapm_prior", "bpm", 2, variant="drop:flagged", p=False)
+        N.add(f"DqsImpact{Ph}RandLo", dec(R[ph]["rand_lo"], 2), "data_quality_sensitivity rand_lo: 2.5th percentile over the random drops")
+        N.add(f"DqsImpact{Ph}RandHi", dec(R[ph]["rand_hi"], 2), "rand_hi: 97.5th percentile")
+        N.add(f"DqsImpact{Ph}RandP", pval(R[ph]["rand_p"]), "rand_p: (1 + random drops moving it as far) / (1 + draws)")
+    t = R["test"]
+    N.claim(not excl(P.get("impact_next", "test", "game_rmse", "rapm_prior", "bpm", "drop:flagged")) and t["rand_p"] > 0.05 and R["tune"]["rand_p"] > 0.05,
+            "Data quality: without the flagged games the test-season gap's interval reaches zero, but no further than random drops of as many games move it")
+    A = Pairs(cur, N, "data_quality_sensitivity", "drop_set = 'flagged' AND result = 'availability'")
+    a = A.diff("DqsAvailTune", "pregame", "tune", "log_loss", "avail_bpm", "prior_rest", 4, variant="drop:flagged", p=False, lo_hi=False)
+    ar = next(r for r in S if r["drop_set"] == "flagged" and r["result"] == "availability" and r["phase"] == "tune"
+              and r["metric"] == "log_loss" and r["model_a"] == "avail_bpm" and r["model_b"] == "prior_rest")
+    N.add("DqsAvailTuneRandP", pval(ar["rand_p"]), "availability, tune, log loss: rand_p of the flagged drop set")
+    full_a = next(r for r in S if r["drop_set"] == "none" and r["result"] == "availability" and r["phase"] == "tune"
+                  and r["metric"] == "log_loss" and r["model_a"] == "avail_bpm")
+    N.claim(a["diff"] > full_a["diff"] and ar["rand_p"] <= 0.05,
+            "Data quality: on the tuning seasons the gain from knowing who played shrinks without the flagged games, beyond random drops")
+
+
+def rating_tracker(cur, N):
+    """Round 6 step 7: the Rating Tracker (scripts/rating_tracker_lib.py, build_rating_tracker.py), scored by paper_eval as
+    rapm_tracker; and step 8's shooter-aware expected-points RAPM rows of Table rapm."""
+    N.start("Rating Tracker and the shooter-aware xRAPM in Tables rapm/tests (round 6 steps 7, 8) -- rating_tracker_fit, "
+            "player_rating_tracker, paper_eval_metrics, paper_eval_tests")
+    f = dict(zip(("lambda0", "lambda_q", "lambda_b", "prior_scale", "phi", "estimated_on", "players", "quick", "criterion"), one(
+        cur, "SELECT lambda0, lambda_q, lambda_b, prior_scale, phi, estimated_on, players, quick, criterion FROM rating_tracker_fit")))
+    N.claim(not f["quick"] and f["estimated_on"] == "2020-21 to 2023-24", "Rating Tracker: hyperparameters chosen on the tuning seasons only")
+    N.add("TrLambdaZero", integer(round(f["lambda0"])), "rating_tracker_fit.lambda0 (a newcomer's prior precision, per possession-weighted row)")
+    N.add("TrLambdaQ", integer(round(f["lambda_q"])), "rating_tracker_fit.lambda_q (between-season drift precision)")
+    N.add("TrLambdaB", integer(round(f["lambda_b"])), "rating_tracker_fit.lambda_b (precision of the season's BPM measurement)")
+    N.add("TrScale", dec(f["prior_scale"], 2), "rating_tracker_fit.prior_scale (BPM's scale in the measurement)")
+    N.add("TrPhi", dec(f["phi"], 2), "rating_tracker_fit.phi (carry-over of last season's rating)")
+    N.add("TrPlayers", integer(f["players"]), "rating_tracker_fit.players (state dimension / 2)")
+    lo, hi = one(cur, """SELECT min(r), max(r) FROM (SELECT season, corr(rapm, bpm) r FROM player_rating_tracker
+                         WHERE kind = 'filtered' AND qualified GROUP BY season) x""")
+    N.add("TrBpmCorrMin", dec(lo, 2), "player_rating_tracker filtered, qualified: corr(rating, BPM) by season, smallest")
+    N.add("TrBpmCorrMax", dec(hi, 2), "the same, largest")
+    pick = eval_metrics(cur)
+    models = {"rapm_tracker": "Tracker", "xrapm_sa_prior": "XsaPrior", "xrapm_sa_single": "XsaSingle"}
+    nx = {}
+    for model, m in models.items():
+        for ph, Ph in PHASE_NAMES:
+            v, n, se = pick("impact_next", ph, model, "game_rmse")
+            nx[(ph, model)] = v
+            N.add(f"EvNext{Ph}{m}Rmse", dec(v, 2), f"paper_eval_metrics impact_next {ph} {model} game_rmse ({se}, n {n})")
+        v, n, se = pick("impact_next", "test", model, "game_corr")
+        N.add(f"EvNextTest{m}R", dec(v, 2), f"paper_eval_metrics impact_next test {model} game_corr ({se})")
+        v, n, se = pick("impact_heldout", "test", model, "game_rmse")
+        N.add(f"EvHeldTest{m}Rmse", dec(v, 2), f"paper_eval_metrics impact_heldout test {model} game_rmse ({se}, n {n})")
+    allm = [m for m in ("bpm", "bpm_scaled", "rapm_prior", "rapm_multi", "rapm_single", "zero", "onoff", "onoff_scaled",
+                        "xrapm_prior", "xrapm_single", "rapm_tracker", "xrapm_sa_prior", "xrapm_sa_single")]
+    test_all = {m: pick("impact_next", "test", m, "game_rmse")[0] for m in allm}
+    N.claim(min(test_all, key=test_all.get) == "rapm_tracker",
+            "Results: the Rating Tracker has the lowest test-season next-season error of any estimator in Table rapm (BPM second)")
+    N.claim(sorted(test_all, key=test_all.get)[1] == "bpm", "Results: BPM is the best of the round-5 estimators on the test season")
+    v, n, se = pick("impact_reliability", "test", "rapm_tracker", "corr")
+    N.add("EvYtyTestTracker", dec(v, 2), f"paper_eval_metrics impact_reliability test rapm_tracker corr ({se}, n {n})")
+    P = Pairs(cur, N, "paper_eval_tests")
+    tb = {ph: P.diff(f"EvDNext{Ph}TrackerBpmRmse", "impact_next", ph, "game_rmse", "rapm_tracker", "bpm", 2,
+                     dm=(ph == "test"), cell=(ph == "test")) for ph, Ph in PHASE_NAMES}
+    N.claim(all(tb[ph]["diff"] < 0 and excl(tb[ph]) for ph in ("tune", "validate")) and not excl(tb["test"]),
+            "Results: the tracker is ahead of BPM on the tuning and validation seasons by more than the interval and level on the test season")
+    tp = {ph: P.diff(f"EvDNext{Ph}TrackerPriorRmse", "impact_next", ph, "game_rmse", "rapm_tracker", "rapm_prior", 2, cell=(ph == "test"),
+                     dm=(ph == "test")) for ph, Ph in PHASE_NAMES}
+    N.claim(tp["tune"]["diff"] < 0 and excl(tp["tune"]) and tp["test"]["diff"] < 0 and excl(tp["test"]) and not excl(tp["validate"]),
+            "Results: the tracker is ahead of RAPM + prior on the tuning and test seasons by more than the interval, level on the validation season")
+    ts = {ph: P.diff(f"EvDNext{Ph}TrackerSingleRmse", "impact_next", ph, "game_rmse", "rapm_tracker", "rapm_single", 2,
+                     lo_hi=(ph == "test"), p=False) for ph, Ph in PHASE_NAMES}
+    tm = {ph: P.diff(f"EvDNext{Ph}TrackerMultiRmse", "impact_next", ph, "game_rmse", "rapm_tracker", "rapm_multi", 2,
+                     lo_hi=(ph == "test"), p=(ph == "test")) for ph, Ph in PHASE_NAMES}
+    N.claim(all(ts[ph]["diff"] < 0 and excl(ts[ph]) for ph in ts) and all(tm[ph]["diff"] < 0 for ph in tm) and not excl(tm["test"]),
+            "Results: the tracker is ahead of every RAPM version in every phase (of one-season RAPM by more than the interval; of the "
+            "three-season window on the test season inside it)")
+    hb = P.diff("EvDHeldTestTrackerBpmRmse", "impact_heldout", "test", "game_rmse", "rapm_tracker", "bpm", 2, p=False)
+    hp = P.diff("EvDHeldTestTrackerPriorRmse", "impact_heldout", "test", "game_rmse", "rapm_tracker", "rapm_prior", 2, p=False)
+    N.claim(hb["diff"] > 0 and excl(hb) and hp["diff"] < 0 and excl(hp),
+            "Results: on held-out games of the same season BPM (which saw them) stays ahead of the tracker; the tracker is ahead of RAPM + prior")
+    yb = {ph: P.get("impact_reliability", ph, "corr", "bpm", "rapm_tracker") for ph, _ in PHASE_NAMES}
+    P.diff("EvDYtyTestBpmTracker", "impact_reliability", "test", "corr", "bpm", "rapm_tracker", 2, p=False)
+    N.claim(all(r["diff"] < 0 and excl(r) for r in yb.values()), "Results: the tracker is more reliable year to year than BPM in every phase")
+    # Table tests rows and Table rapm claims for the shooter-aware version (step 8)
+    sp = {ph: P.diff(f"EvDNext{Ph}XsaPriorPriorRmse", "impact_next", ph, "game_rmse", "xrapm_sa_prior", "rapm_prior", 2,
+                     cell=(ph == "test"), dm=(ph == "test")) for ph, Ph in PHASE_NAMES}
+    N.claim(not excl(sp["tune"]) and sp["validate"]["diff"] > 0 and excl(sp["validate"]) and not excl(sp["test"]),
+            "Results: shooter-aware xRAPM + prior is level with RAPM + prior on the tuning and test seasons and behind on the validation season")
+    sb = {ph: P.diff(f"EvDNext{Ph}XsaPriorBpmRmse", "impact_next", ph, "game_rmse", "xrapm_sa_prior", "bpm", 2,
+                     lo_hi=(ph == "test"), p=(ph == "test")) for ph, Ph in PHASE_NAMES}
+    N.claim(not any(r["diff"] < 0 and excl(r) for r in sb.values()), "Results: the shooter-aware version is never ahead of BPM")
+    ss = {ph: P.diff(f"EvDNext{Ph}XsaSingleSingleRmse", "impact_next", ph, "game_rmse", "xrapm_sa_single", "rapm_single", 2,
+                     cell=(ph == "test"), dm=(ph == "test")) for ph, Ph in PHASE_NAMES}
+    N.claim(ss["tune"]["diff"] > 0 and excl(ss["tune"]) and ss["validate"]["diff"] > 0 and excl(ss["validate"]) and not excl(ss["test"]),
+            "Results: one-season shooter-aware xRAPM is still behind one-season RAPM on the tuning and validation seasons, level on the test season")
+    sx = {ph: P.diff(f"EvDNext{Ph}XsaSingleXsingleRmse", "impact_next", ph, "game_rmse", "xrapm_sa_single", "xrapm_single", 2,
+                     cell=(ph == "test"), dm=(ph == "test")) for ph, Ph in PHASE_NAMES}
+    sl = {ph: P.diff(f"EvDNext{Ph}XsaSingleXlfSingleRmse", "impact_next", ph, "game_rmse", "xrapm_sa_single", "xrapm_lf_single", 2,
+                     lo_hi=False, p=False) for ph, Ph in PHASE_NAMES}
+    N.claim(all(r["diff"] < 0 and excl(r) for r in list(sx.values()) + [P.get("impact_next", ph, "game_rmse", "xrapm_sa_single",
+                                                                               "xrapm_lf_single") for ph, _ in PHASE_NAMES]),
+            "Results: the shooter term improves on round 5's xRAPM, and on its own shooter-blind twin, by more than the interval in every phase")
+    look = [abs(P.get("impact_next", ph, "game_rmse", f"xrapm_lf_{v}", f"xrapm_{v}")["diff"]) for ph, _ in PHASE_NAMES for v in ("single", "prior")]
+    N.add("XlfMaxAbs", dec(max(look), 2, ROUND_CEILING), "paper_eval_tests: largest |look-ahead-free - round-5 xRAPM| next-season RMSE "
+          "difference over phases and versions, rounded up (the look-ahead fix alone)")
+    v, n, se = pick("impact_reliability", "test", "xrapm_sa_prior", "corr")
+    N.add("EvYtyTestXsaPrior", dec(v, 2), f"paper_eval_metrics impact_reliability test xrapm_sa_prior corr ({se}, n {n})")
+
+
+def shot_value(cur, N):
+    """Round 6 step 8: Shot Value Added (scripts/shot_value_lib.py, build_shot_value.py): pricing every attempt before
+    its game, with and without the shooter's skill."""
+    N.start("Shot Value Added (Section: shooter-aware expected points; round 6 step 8) -- shot_value_validation, shot_value_fit, "
+            "shot_value_added, paper_xrapm_players")
+    est = {r[0] for r in rows(cur, "SELECT DISTINCT estimated_on FROM shot_value_fit WHERE cls <> 'models'")}
+    N.claim(len(est) == 1, "Shot value: one estimation span for every class")
+    first, last = est.pop().split(" to ")
+    N.add("SvFitFirst", season(first), "shot_value_fit.estimated_on (first season the carry-over and drift settings are estimated on)")
+    N.add("SvFitLast", season(last), "shot_value_fit.estimated_on (last)")
+    N.claim(int(last[:4]) + 1 < 2021, "Shot value: the settings are estimated on seasons before any scored one")
+    V = {(sc, se, c, p): dict(zip(("n", "ll", "d", "lo", "hi", "games"), r)) for sc, se, c, p, *r in rows(
+        cur, """SELECT scope, seasons, cls, price, n, log_loss, d_log_loss_vs_lf, ci_lo, ci_hi, games FROM shot_value_validation
+                WHERE scope <> 'yty' AND scope NOT LIKE '%%->%%'""")}
+    allk = [k for k in V if k[0] == "all"]
+    span = {k[1] for k in allk}
+    N.claim(len(span) == 1, "Shot value: one all-season span")
+    span = span.pop()
+    N.add("SvAttempts", millions(V[("all", span, "fg", "sa")]["n"], 2), "shot_value_validation all fg: field-goal attempts priced (millions)")
+    for c, C in (("fg", "Fg"), ("ft", "Ft")):
+        for p, Pr in (("lf", "Lf"), ("pre", "Pre"), ("sa", "Sa")):
+            N.add(f"Sv{C}Ll{Pr}", dec(V[("all", span, c, p)]["ll"], 4), f"shot_value_validation all {c} {p}: log loss per attempt ({span})")
+        r = V[("all", span, c, "sa")]
+        N.add(f"SvD{C}", dec(r["d"] * 1000, 1), f"shot_value_validation all {c} sa: log loss minus lf, x 1,000")
+        N.add(f"SvD{C}Lo", dec(r["lo"] * 1000, 1), "the same: 95% interval resampling games, low")
+        N.add(f"SvD{C}Hi", dec(r["hi"] * 1000, 1), "high")
+    per = [V[k]["d"] for k in V if k[0] == k[1] and k[2] == "fg" and k[3] == "sa"]
+    perx = [(V[k]["lo"], V[k]["hi"]) for k in V if k[0] == k[1] and k[2] == "fg" and k[3] == "sa"]
+    N.claim(len(per) == 6 and all(h < 0 for _l, h in perx), "Shot value: the shooter term lowers field-goal log loss in every season, outside the interval")
+    N.add("SvDFgMin", dec(min(per) * 1000, 1), "shot_value_validation per season fg sa - lf x 1,000, most negative")
+    N.add("SvDFgMax", dec(max(per) * 1000, 1), "the same, least negative")
+    for c, C in (("rim", "Rim"), ("three", "Three")):
+        N.add(f"SvD{C}", dec(V[("all", span, c, "sa")]["d"] * 1000, 1), f"shot_value_validation all {c} sa - lf x 1,000")
+    yty = {}
+    for k, v in rows(cur, "SELECT price, corr FROM shot_value_validation WHERE cls = 'yty'"):
+        yty.setdefault(k, []).append(v)
+    for k, K in (("skill_pts", "Skill"), ("above_pts", "Above")):
+        N.add(f"SvYty{K}Min", dec(min(yty[k]), 2), f"shot_value_validation yty {k}: year-to-year r of the player-season value, smallest pair")
+        N.add(f"SvYty{K}Max", dec(max(yty[k]), 2), "the same, largest pair")
+    N.claim(min(yty["skill_pts"]) > 0.9 and max(abs(x) for x in yty["above_pts"]) < 0.1,
+            "Shot value: skill repeats year to year (r > 0.9); what a player makes beyond it does not (|r| < 0.1)")
+    cs = {}
+    for v in ("sa_single", "lf_single"):
+        b = rows(cur, """SELECT s.skill_pts / s.fga, s.above_pts / s.fga, p.xrapm - p.rapm FROM paper_xrapm_players p
+                         JOIN shot_value_added s ON s.player_id = p.player_id AND s.season = p.season
+                         WHERE p.version = %s AND p.qualified AND p.rapm IS NOT NULL AND s.fga >= 200
+                         ORDER BY p.season, p.player_id""", (v,))
+        sk, ab, dl = (list(c) for c in zip(*b))
+        cs[v] = (_corr(sk, dl), _corr(ab, dl), len(b))
+    N.add("SvDeltaPairs", integer(cs["sa_single"][2]), "qualified player-seasons with 200+ attempts in shot_value_added")
+    N.add("SvDeltaSkillSa", dec(cs["sa_single"][0], 2), "corr(skill per attempt, shooter-aware one-season xRAPM - RAPM)")
+    N.add("SvDeltaSkillLf", dec(cs["lf_single"][0], 2), "corr(skill per attempt, look-ahead-free shooter-blind xRAPM - RAPM)")
+    N.add("SvDeltaAboveSa", dec(cs["sa_single"][1], 2), "corr(made beyond skill per attempt, shooter-aware xRAPM - RAPM)")
+    N.claim(abs(cs["sa_single"][0]) < 0.1 and cs["lf_single"][0] < -0.3 and cs["sa_single"][1] < -0.2,
+            "Results: the shooter-aware rating's change no longer tracks shooting skill, but still tracks what a player made beyond it")
+
+
+def lineup_predictor(cur, N):
+    """Round 6 step 9: the Lineup Predictor (scripts/build_lineup_predictor.py): share of the real spread of new lineups'
+    net ratings explained, on lineups first used after game 20."""
+    N.start("Lineup Predictor (Section: lineups; round 6 step 9) -- lineup_predictor_units, _tests, _fit")
+    n, s0, s1 = one(cur, "SELECT count(*), min(season), max(season) FROM lineup_predictor_units")
+    N.add("LpUnits", integer(n), "count(*) lineup_predictor_units (five x team x season)")
+    N.add("LpFirstSeason", season(s0), "min(season) lineup_predictor_units")
+    fit = {k: (v, d) for k, v, d in rows(cur, "SELECT name, value, detail FROM lineup_predictor_fit WHERE fit_on = '' AND model = ''")}
+    N.add("LpLaterGame", integer(float(fit["const:later_after"][0])), "lineup_predictor_fit const:later_after (later = first used after this game)")
+    N.add("LpNoiseModel", dec(float(fit["const:noise_check_model_var"][0]), 1), "lineup_predictor_fit noise check: real variance under the noise model")
+    N.add("LpNoiseSplit", dec(float(fit["const:noise_check_split_cov"][0]), 1), "the same from the split-half covariance (no noise assumption)")
+    P = Pairs(cur, N, "lineup_predictor_tests", "variant = 'later'")
+    r = P.value("LpSumPct", "lineup", "test", "r2_true", "sum", 1, "later", scale=100, lo_hi=True)
+    N.add("LpTestUnits", integer(r["n"]), "lineup_predictor_tests test later: lineups")
+    P.value("LpFullPct", "lineup", "test", "r2_true", "full", 1, "later", scale=100, lo_hi=True)
+    P.value("LpTeamPct", "lineup", "test", "r2_true", "team", 1, "later", scale=100)
+    fs = {ph: P.diff(f"LpDFit{Ph}", "lineup", ph, "r2_true", "fit", "scaled", 1, "later", scale=100, p=False, lo_hi=(ph == "test"))
+          for ph, Ph in PHASE_NAMES}
+    sf = {ph: P.diff(f"LpDSeason{Ph}", "lineup", ph, "r2_true", "full", "fit", 1, "later", scale=100, p=(ph == "test"), lo_hi=(ph == "test"))
+          for ph, Ph in PHASE_NAMES}
+    N.claim(not any(excl(r) for r in fs.values()), "Results: spacing, roles and usage add nothing outside the interval in any phase")
+    N.claim(all(r["diff"] > 0 and excl(r) for r in sf.values()), "Results: the season so far adds to the prediction in every phase, outside the interval")
+    sr = P.diff("LpDScaledSum", "lineup", "test", "r2_true", "scaled", "sum", 1, "later", scale=100, p=False)
+    tb = P.diff("LpDTrackerBpm", "lineup", "test", "r2_true", "scaled_tracker", "scaled_bpm", 1, "later", scale=100, p=False)
+    rb = P.get("lineup", "test", "r2_true", "scaled_rapm", "scaled_bpm", "later")
+    N.claim(not excl(sr) and not excl(tb) and not excl(rb), "Results: rescaling, and the RAPM or tracker sums instead of BPM's, change nothing outside the interval")
+
+
+def availability(cur, N):
+    """Round 6 step 6: availability-aware pre-game odds (scripts/build_pregame_availability.py), paired with the protocol's
+    pre-game model on the same games."""
+    N.start("Availability-aware odds (Section: pre-game; round 6 step 6) -- pregame_availability_tests")
+    P = Pairs(cur, N, "pregame_availability_tests")
+    d = {ph: P.diff(f"AvD{Ph}", "pregame", ph, "log_loss", "avail_bpm", "prior_rest", 4, dm=(ph == "test")) for ph, Ph in PHASE_NAMES}
+    N.claim(all(r["diff"] < 0 and excl(r) for r in d.values()), "Results: knowing who played lowers log loss in every phase, outside the interval")
+    P.value("AvLlTestAvail", "pregame", "test", "log_loss", "avail_bpm", 4)
+    P.value("AvLlTestBase", "pregame", "test", "log_loss", "prior_rest", 4)
+    N.claim(abs(P.get("pregame", "test", "log_loss", "prior_rest")["value_a"] - P.get("pregame", "test", "log_loss", "avail_bpm",
+                                                                                     "prior_rest")["value_b"]) < 1e-12,
+            "the base log loss is the paired row's")
+    b = P.diff("AvDTestBrier", "pregame", "test", "brier", "avail_bpm", "prior_rest", 4, p=False)
+    br = P.diff("AvDTestBpmRapm", "pregame", "test", "log_loss", "avail_bpm", "avail_rapm", 4, p=False)
+    al = P.diff("AvDTestAll", "pregame", "test", "log_loss", "avail_bpm_all", "avail_bpm", 4, p=False, lo_hi=False)
+    N.claim(b["diff"] < 0 and excl(b) and not excl(br) and not excl(P.get("pregame", "test", "log_loss", "avail_bpm_all", "avail_bpm")),
+            "Results: Brier agrees; BPM and RAPM ratings of who played are indistinguishable; counting every appearance adds nothing")
+    v = eval_metrics(cur)("pregame", "test", "prior_rest", "log_loss")[0]
+    N.claim(abs(v - P.get("pregame", "test", "log_loss", "prior_rest")["value_a"]) < 1e-12,
+            "the availability base model is the protocol's chosen pre-game form on the same games")
+
+
+def ledger(cur, N):
+    """Round 6 steps 1-2: the Forecast Ledger (scripts/ledger_lock.py, ledger_update.py). The locked forecast and its
+    hindcast; the forward test is read from ledger_game_log / ledger_results as of the last nightly run."""
+    N.start("Forecast Ledger (Section: pre-game, a forecast locked in advance; round 6 steps 1-2) -- ledger_lock, ledger_meta, "
+            "ledger_game_log, ledger_runs")
+    sea, sha, tag, commit, locked, tip = one(cur, "SELECT season, lock_sha256, code_tag, code_commit, locked_at, first_tip_utc FROM ledger_lock")
+    meta = {k: v for k, v in rows(cur, "SELECT key, value FROM ledger_meta")}
+    N.add("LgSeason", season(sea), "ledger_lock.season")
+    N.add("LgLockDate", locked.astimezone(timezone.utc).strftime("%Y-%m-%d"), "ledger_lock.locked_at (UTC date)")
+    N.add("LgFirstTip", tip.astimezone(timezone.utc).strftime("%Y-%m-%d"), "ledger_lock.first_tip_utc (UTC date)")
+    days = (tip - locked).total_seconds() / 86400
+    N.claim(days > 0, "Ledger: the forecast was locked before the first tip")
+    N.add("LgDaysBefore", dec(days, 1), "first_tip_utc - locked_at, days")
+    N.add("LgHashShort", sha[:16], "ledger_lock.lock_sha256, first 16 of 64 hex digits (SHA-256 of ledger_lib.canonical_csv)")
+    N.add("LgTag", tag, "ledger_lock.code_tag (git tag of the frozen code)")
+    N.add("LgCommit", commit[:7], "ledger_lock.code_commit, short")
+    games, = one(cur, "SELECT count(*) FROM ledger_forecasts WHERE season = %s AND forecast = 'roster' AND kind = 'game'", (sea,))
+    N.claim(games == int(meta["schedule_counted"]), "Ledger: every scheduled game with both teams known is forecast")
+    N.add("LgGames", integer(games), "ledger_forecasts roster game rows (= ledger_meta.schedule_counted)")
+    N.add("LgRuns", integer(int(meta["runs"])), "ledger_meta.runs (simulated seasons per forecast)")
+    N.add("LgRosterA", dec(float(meta["roster_a"]), 2), "ledger_meta.roster_a (weight on centred team BPM of the roster)")
+    N.add("LgRosterC", dec(float(meta["roster_c"]), 2), "ledger_meta.roster_c (weight on last season's SRS)")
+    h = as_json(meta["hindcast"])
+    N.add("LgHcTeamSeasons", integer(h["team_seasons"]), "ledger_meta.hindcast.team_seasons")
+    N.add("LgHcGames", integer(h["games"]), "ledger_meta.hindcast.games")
+    f, l = h["seasons"].split("-")
+    N.add("LgHcFirst", season(int(f)), "ledger_meta.hindcast.seasons (first target season)")
+    N.add("LgHcLast", season(int(l)), "ledger_meta.hindcast.seasons (last)")
+    for k, K, d in (("srs_rmse", "Srs", 2), ("wins82_mae", "Wins", 2), ("game_log_loss", "Ll", 4)):
+        r = h[k]
+        N.add(f"LgHc{K}Roster", dec(r["a"], d), f"ledger_meta.hindcast.{k}.a (roster-aware, leave-one-season-out)")
+        N.add(f"LgHc{K}AsIs", dec(r["b"], d), f"ledger_meta.hindcast.{k}.b (as is: the simulator's prior)")
+        N.add(f"LgHcD{K}", dec(r["diff"], d), f"ledger_meta.hindcast.{k}.diff")
+        N.add(f"LgHcD{K}Lo", dec(r["ci_lo"], d), f"ledger_meta.hindcast.{k}.ci_lo (cluster bootstrap by season)")
+        N.add(f"LgHcD{K}Hi", dec(r["ci_hi"], d), f"ledger_meta.hindcast.{k}.ci_hi")
+        N.claim(r["ci_hi"] < 0, f"Ledger: the roster-aware forecast beats the as-is one on {k} in the hindcast, outside the interval")
+    last_run, = one(cur, "SELECT max(started_at) FROM ledger_runs")
+    N.add("LgAsOf", last_run.astimezone(timezone.utc).strftime("%Y-%m-%d"), "max(ledger_runs.started_at), UTC date")
+    import ledger_live as LL       # the page's own scoring query (api/ledger_live.py: pandas only, no model code)
+    scored = int(LL.common(LL.scored(cur.connection, sea)).espn_id.nunique())
+    N.add("LgScored", integer(scored), "ledger_live.common(scored()): games final and scored under every version, as of LgAsOf")
+    N.claim(scored == 0, "Pre-game: no 2026-27 game has been scored yet -- once games are scored, rewrite the forward-test sentence "
+                         "with ledger_tests' intervals (and drop this claim)")
+
+
+def report_card(cur, N):
+    """Round 6 step 10: the Model Report Card (scripts/build_report_card.py, api/report_card_lib.py): every model season by
+    season with a rolling origin, pooled by random effects (DerSimonian-Laird, Hartung-Knapp interval, prediction interval
+    for a new season)."""
+    N.start("Model Report Card (Section: season by season; round 6 step 10) -- report_card_pooled, report_card_tests")
+    cols = ("task", "metric", "variant", "model_a", "model_b", "k", "seasons", "mu", "ci_lo", "ci_hi", "p", "tau", "i2", "pi_lo", "pi_hi",
+            "a_better", "b_better", "a_clear", "b_clear", "flips")
+    R = {}
+    for r in rows(cur, f"SELECT {', '.join(cols)} FROM report_card_pooled"):
+        r = dict(zip(cols, r))
+        R[(r["task"], r["metric"], r["variant"], r["model_a"], r["model_b"])] = r
+
+    def get(task, metric, a, b, variant=""):
+        r = R.get((task, metric, variant, a, b))
+        if r is not None:
+            return r
+        r = R[(task, metric, variant, b, a)]
+        return dict(r, model_a=a, model_b=b, mu=-r["mu"], ci_lo=-r["ci_hi"], ci_hi=-r["ci_lo"],
+                    pi_lo=None if r["pi_hi"] is None else -r["pi_hi"], pi_hi=None if r["pi_lo"] is None else -r["pi_lo"],
+                    a_better=r["b_better"], b_better=r["a_better"], a_clear=r["b_clear"], b_clear=r["a_clear"])
+
+    def put(name, task, metric, a, b, d, variant="", scale=1, pi=False, wins=True, p=False, tau=False):
+        r = get(task, metric, a, b, variant)
+        w = f"report_card_pooled {task} {metric} {a} - {b}" + (f", {variant}" if variant else "") + f" ({r['seasons']}, k {r['k']})"
+        N.add(name, dec(r["mu"] * scale, d), w + ": mu (random-effects mean of the per-season differences)" + (f" x {scale}" if scale != 1 else ""))
+        N.add(name + "Lo", dec(r["ci_lo"] * scale, d), w + ": ci_lo (Hartung-Knapp, t with k-1 df)")
+        N.add(name + "Hi", dec(r["ci_hi"] * scale, d), w + ": ci_hi")
+        if wins:
+            N.add(name + "Wins", word(r["a_better"]), w + f": seasons where {a} scores better")
+        if p:
+            N.add(name + "P", pval(r["p"]), w + ": p")
+        if pi:
+            N.add(name + "PiLo", dec(r["pi_lo"] * scale, d), w + ": prediction interval for a new season, low (t with k-2 df)")
+            N.add(name + "PiHi", dec(r["pi_hi"] * scale, d), w + ": high")
+        if tau:
+            N.add(name + "Tau", dec(r["tau"] * scale, 2), w + ": tau (between-season SD of the true difference)")
+            N.add(name + "IsqPct", pct(r["i2"], 0), w + ": I^2")
+        return r
+    pre = get("pregame", "log_loss", "prior_rest", "current")
+    span = pre["seasons"].split(" to ")
+    N.add("RcPreSeasons", integer(pre["k"]), "report_card_pooled pregame: seasons scored")
+    N.add("RcPreFirst", season(span[0]), "report_card_pooled pregame: first season")
+    imp = get("impact_next", "game_rmse", "bpm", "rapm_prior")
+    N.add("RcImpactSeasons", word(imp["k"]), "report_card_pooled impact_next: seasons scored")
+    N.add("RcImpactFirst", season(imp["seasons"].split(" to ")[0]), "report_card_pooled impact_next: first season")
+    xs = get("xfg", "log_loss", "sa", "lf")
+    N.add("RcShotSeasons", word(xs["k"]), "report_card_pooled xfg: seasons")
+    N.add("RcShotFirst", season(xs["seasons"].split(" to ")[0]), "report_card_pooled xfg: first season")
+    pc = put("RcPreChosenCurrent", "pregame", "log_loss", "prior_rest", "current", 1, scale=1000, pi=True)
+    pr = put("RcPreRest", "pregame", "log_loss", "prior_rest", "prior", 1, scale=1000, pi=True)
+    N.claim(all(r["pi_hi"] < 0 for r in (pc, pr)) and pc["a_better"] >= pc["k"] - 1 and pr["a_better"] >= pr["k"] - 1,
+            "Season by season: the chosen pre-game form's edges hold in all but at most one season, and a new season's prediction interval excludes zero")
+    sb = put("RcSimBrier", "sim_playoffs", "brier", "model", "record", 4, "halfway", tau=True)
+    N.add("RcSimBrierLoses", word(sb["b_better"]), "report_card_pooled sim_playoffs brier halfway: seasons where the record scores better")
+    N.claim(sb["ci_lo"] < 0 < sb["ci_hi"] and abs(sb["a_better"] - sb["b_better"]) <= 1,
+            "Season by season: the simulator and the record carried forward split the seasons on playoff Brier and the pooled difference is inside its interval")
+    sm = put("RcSimMae", "sim_wins", "mae", "model", "record", 2, "halfway")
+    sc = put("RcSimCover", "sim_wins", "cover80", "model", "record", 1, "halfway", scale=100)
+    N.claim(sm["ci_hi"] < 0 and sc["ci_lo"] > 0, "Season by season: the simulator's win totals and ranges beat the record's in pooled terms, outside the interval")
+    bp = put("RcBpmPrior", "impact_next", "game_rmse", "bpm", "rapm_prior", 2, pi=True, tau=True)
+    N.add("RcBpmPriorLoses", word(bp["b_better"]), "seasons where RAPM + prior scores better")
+    N.claim(bp["ci_lo"] < 0 < bp["ci_hi"] and bp["pi_lo"] < 0 < bp["pi_hi"] and bp["a_better"] == bp["b_better"],
+            "Season by season: BPM and RAPM + prior split the seasons, the pooled difference and a new season's prediction interval include zero")
+    gaps = [abs(r[0]) for r in rows(cur, """SELECT diff FROM paper_eval_tests WHERE task = 'impact_next' AND metric = 'game_rmse'
+                                             AND model_a = 'rapm_prior' AND model_b = 'bpm' AND variant = ''""")]
+    N.claim(len(gaps) == 3 and bp["tau"] >= 0.5 * max(gaps),
+            "Abstract: the true BPM - RAPM + prior difference varies between seasons (tau) by about as much as the protocol's gaps")
+    tb = put("RcTrackerBpm", "impact_next", "game_rmse", "rapm_tracker", "bpm", 2, p=True)
+    N.claim(tb["ci_lo"] < 0 < tb["ci_hi"] and tb["a_better"] == tb["k"] - 1, "Season by season: the tracker is ahead of BPM in all but one season, the pooled difference inside its interval")
+    tp = put("RcTrackerPrior", "impact_next", "game_rmse", "rapm_tracker", "rapm_prior", 2)
+    ps = put("RcPriorSingle", "impact_next", "game_rmse", "rapm_prior", "rapm_single", 2)
+    N.claim(ps["ci_hi"] < 0 and ps["a_better"] == ps["k"], "Season by season: the prior beats one-season RAPM every season, outside the interval")
+    xb = put("RcXsaBpm", "impact_next", "game_rmse", "xrapm_sa_prior", "bpm", 2)
+    N.claim(xb["a_better"] == 0, "Season by season: shooter-aware xRAPM + prior is behind BPM every season")
+    pp = put("RcPossTrackerBpm", "impact_poss", "poss_rmse", "rapm_tracker", "bpm", 2, scale=10000, p=True)
+    pq = put("RcPossTrackerPrior", "impact_poss", "poss_rmse", "rapm_tracker", "rapm_prior", 2, scale=10000, p=True)
+    N.claim(pp["a_better"] == pp["k"] and pp["ci_hi"] < 0 and pq["a_better"] == pq["k"] and pq["ci_hi"] < 0,
+            "Season by season: per possession the tracker is ahead of BPM and of RAPM + prior in every season, outside the interval")
+    sh = put("RcShotSaLf", "xfg", "log_loss", "sa", "lf", 1, scale=1000)
+    N.claim(sh["a_better"] == sh["k"] and sh["ci_hi"] < 0, "Season by season: the shooter-aware price beats the shooter-blind one every season")
+    k = rows(cur, "SELECT count(DISTINCT task || metric || variant || model_a || model_b) FROM report_card_pooled")[0][0]
+    N.add("RcPairs", integer(k), "report_card_pooled rows (pairs pooled across seasons)")
+
+
+def coaching(cur, N):
+    """Round 6 step 5: Coaching Decisions (scripts/build_coaching_decisions.py, api/coaching_lib.py): four coaching beliefs
+    under round 5's permutation + Benjamini-Hochberg test, on the corrected clock."""
+    N.start("Coaching decisions (Section: popular beliefs; round 6 step 5) -- coaching_decision_tests, _summary, _meta")
+    S = {k: dict(zip(("units", "p05", "expected", "survivors"), r)) for k, *r in rows(
+        cur, "SELECT key, units, p05, expected, survivors FROM coaching_decision_summary")}
+    lg = S["coaching:league"]
+    N.add("CoLeagueN", word(lg["units"]), "coaching_decision_summary coaching:league units")
+    N.add("CoLeagueKfive", word(lg["p05"]), "decisions at p < 0.05")
+    N.add("CoLeagueExp", dec(lg["expected"], 1), "0.05 x units")
+    N.add("CoLeagueKfdr", word(lg["survivors"]), "surviving Benjamini-Hochberg at 5%")
+    for key, K in (("timeout:team", "TeamTimeout"), ("challenge:team", "TeamChal"), ("twoforone:team", "TeamTwo")):
+        N.add(f"Co{K}N", integer(S[key]["units"]), f"coaching_decision_summary {key} units (franchises)")
+        N.add(f"Co{K}Kfdr", word(S[key]["survivors"]), f"coaching_decision_summary {key} survivors")
+    cols = ("family", "key", "n_treated", "n_control", "stat", "ci_lo", "ci_hi", "treated_mean", "control_mean", "p", "survives")
+    T = {(r[0], r[1]): dict(zip(cols, r)) for r in rows(cur, f"SELECT {', '.join(cols)} FROM coaching_decision_tests WHERE level = 'league'")}
+
+    def put(name, fam, key, d, scale=1, p=False, n=False):
+        r = T[(fam, key)]
+        w = f"coaching_decision_tests league {fam} {key}"
+        N.add(name, dec(r["stat"] * scale, d), w + ": stat (decision minus matched moments, stratified)" + (f" x {scale}" if scale != 1 else ""))
+        N.add(name + "Lo", dec(r["ci_lo"] * scale, d), w + ": ci_lo")
+        N.add(name + "Hi", dec(r["ci_hi"] * scale, d), w + ": ci_hi")
+        if p:
+            N.add(name + "P", pval(r["p"]), w + ": permutation p")
+            N.add(name + "Pv", pcell(r["p"]), w + ": permutation p as a table cell")
+        if n:
+            N.add(name + "Treated", integer(r["n_treated"]), w + ": decisions")
+            N.add(name + "Control", integer(r["n_control"]), w + ": matched moments without it")
+        return r
+    ch = put("CoChalWp", "coaching:league", "challenge", 1, scale=100, p=True, n=True)
+    put("CoChalPts", "secondary:challenge", "outcome_b", 2)
+    tw = put("CoTwoPts", "coaching:league", "twoforone", 2, p=True, n=True)
+    to = put("CoTimeoutPts", "coaching:league", "timeout", 2, p=True, n=True)
+    td = T[("sensitivity:timeout", "dead_ball")]
+    N.add("CoTimeoutDeadPts", dec(td["stat"], 2), "coaching_decision_tests sensitivity:timeout dead_ball: stat (only timeouts at a dead ball by the corrected clock)")
+    fu = put("CoFoulWp", "coaching:league", "foul_up3", 1, scale=100, p=True, n=True)
+    th = T[("secondary:foul_up3", "outcome_c")]
+    N.add("CoFoulThreeFouledPct", pct(th["treated_mean"], 1), "secondary:foul_up3 outcome_c treated_mean (offence makes a three, fouled)")
+    N.add("CoFoulThreeDefendedPct", pct(th["control_mean"], 1), "the same, defended")
+    surv = {k for (f, k), r in T.items() if f == "coaching:league" and r["survives"]}
+    N.claim(surv == {"challenge", "twoforone"} and ch["stat"] > 0 and tw["stat"] > 0 and to["p"] > 0.05 and fu["p"] > 0.05,
+            "Popular beliefs: of the four coaching decisions, a won challenge and shooting early for a 2-for-1 survive; the timeout and fouling up 3 do not")
+    meta = {k: v for k, v, _n in rows(cur, "SELECT key, value, note FROM coaching_decision_meta")}
+    N.add("CoRunMin", word(int(float(meta["param:run_min"]))), "coaching_decision_meta param:run_min (run size, points unanswered)")
+    N.add("CoTimeoutPoss", word(int(float(meta["param:k_possessions"]))), "coaching_decision_meta param:k_possessions (possessions after)")
+    N.claim(float(meta["balance:foul_up3:exp_margin"]) > 0, "Popular beliefs: teams that foul up three were the stronger side before the game (matched strata)")
+    N.add("CoChalSuccessPct", pct(float(meta["challenge:success_rate"]), 1), "coaching_decision_meta challenge:success_rate (won / with an outcome)")
+
+
 SECTIONS = (data_and_pipeline, rapm, shot_quality, pregame_and_sim, luck, awards, protocol, tests, xrapm, data_audit, beliefs, ablations,
-            manifest)
+            possessions_clock, data_quality_effect, rating_tracker, shot_value, lineup_predictor, availability, ledger, report_card,
+            coaching, manifest)
 
 
 def build(conn):

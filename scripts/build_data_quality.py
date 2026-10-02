@@ -12,7 +12,7 @@ What it does
    (its own functions, so one implementation) and the result must equal the
    stored paper_data_audit row for row; otherwise the run stops ("rerun
    paper_data_audit.py"). Each live check of api/data_quality_lib.py (the
-   page's independent SQL re-measure of 14 of the 17 classes) must agree with
+   page's independent SQL re-measure of 14 of the 18 classes) must agree with
    the same rows at the precision the paper prints them.
 2. Flags every game of the play-by-play era (lineup_stint_games: every ESPN
    regular-season game 2020-21 on, the three NBA Cup finals included) with
@@ -162,6 +162,8 @@ def remeasure(conn):
     log("audit: identity checks")
     attempts, matched = DA.shot_checks(conn, cur, A)
     log("audit: shot checks")
+    DA.clock_lag_checks(conn, cur, A)
+    log("audit: clock lag checks")
     DA.class_counts(A)
     conn.rollback()
     return A, wrong, single, attempts, matched

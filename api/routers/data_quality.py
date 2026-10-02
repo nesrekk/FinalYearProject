@@ -37,7 +37,7 @@ LEVEL_ORDER = [lv for lv, _, _ in Q.LEVELS]
 CLASS_SHORT = {
     "twin_copies": "Duplicate copy", "cup_finals": "Not counted", "wrong_player": "Wrong player (repaired)", "tag_text": "Tag ≠ text",
     "unidentified": "No player id", "teamless_sub": "Sub with no team", "score_fields": "Score fields", "last_score": "Last score ≠ final",
-    "missed_threes": "3 worded as 2", "clock_offset": "Clock", "unreconciled": "Doesn't reconcile", "chart_gaps": "Chart gap",
+    "missed_threes": "3 worded as 2", "clock_offset": "Clock", "clock_lag": "Clock lag", "unreconciled": "Doesn't reconcile", "chart_gaps": "Chart gap",
     "zero_distance": "Zero distance", "unlocated": "No location", "plus_minus": "Plus-minus field",
 }
 

@@ -66,6 +66,8 @@ PER_GAME = {
 NOT_PER_GAME = {
     "wrong_team": "A season-table error (a player-season row with a wrong team), not a game's.",
     "age_convention": "A season-table convention (how ages are counted), not a game's.",
+    "clock_lag": "On every game: ESPN logs live-ball events late by type (made shots a median 14 s), and pbp_event_clock rebuilds "
+                 "the clock of every event. Measured only where NBA.com's own play-by-play exists (the twin games of 2024-25).",
     "unlocated": "Before 2010-11 only. In the play-by-play era a shot at (0, 0) is a real shot at the rim (about five a game, "
                  "dunks and tips), so it singles no game out.",
 }
@@ -76,6 +78,8 @@ BUILD_ONLY = {
                     "which must find nothing left.",
     "tag_text": "Folds every tagged event's text and name (accents, dots, apostrophes) in Python, game by game.",
     "missed_threes": "Parses every game and matches each attempt to the shot chart by order within game, shooter and period.",
+    "clock_lag": "Parses the twin games of 2024-25 and matches every event to NBA.com's play-by-play of the same game by order "
+                 "within game, period, player and kind (build_event_clock.clock_check, which must equal pbp_event_clock_meta).",
 }
 
 # ── "Does it matter?" ────────────────────────────────────────────────────────
@@ -225,6 +229,12 @@ def size_text(key, A, S):
         return (f"median gap {_n(A('clock_median'))} s, {_pct(A('clock_big_share'))} over 5 s, 99th percentile {_n(A('clock_p99'))} s "
                 f"({_n(A('clock_pairs'))} shots); {_n(A('clock_outside_events'))} events in {_n(A('clock_outside_games'))} games "
                 f"outside their period")
+    if key == "clock_lag":
+        return (f"median lag behind NBA.com's play-by-play: made shots {_n(A('lag_fg_made_median'))} s, later free throws "
+                f"{_n(A('lag_ft_later_made_median'))} s, rebounds {_n(A('lag_reb_median'))} s, steals {_n(A('lag_tov_steal_median'))} s, "
+                f"dead-ball turnovers {_n(A('lag_tov_dead_median'))} s, misses {_n(A('lag_fg_miss_median'))} s; "
+                f"{_pct(A('lag_espn_within2'))} of {_n(A('lag_events'))} events within 2 s ({_pct(A('lag_corr_within2'))} on the corrected "
+                f"clock), {_n(A('lag_twin_games'))} games of {season_label(int(A('lag_season')))}")
     if key == "unreconciled":
         return (f"{_n(A('unrec_games'))} games ({_n(A('unrec_score'))} score, {_n(A('unrec_totals'))} team totals, "
                 f"{_n(A('unrec_cup'))} no final)")

@@ -113,7 +113,7 @@ def test_live_checks_agree_and_sizes_write(cur, audit):
         assert not bad, (key, bad[:3])
     cur.execute("SELECT key FROM paper_data_audit_classes ORDER BY ord")
     keys = [k for (k,) in cur.fetchall()]
-    assert len(keys) == 17 and set(keys) == set(Q.LIVE) | set(Q.BUILD_ONLY)
+    assert len(keys) == 18 and set(keys) == set(Q.LIVE) | set(Q.BUILD_ONLY)
 
     def S(k):
         return {s: v for (kk, s), (v, _) in audit.items() if kk == k and s}
@@ -184,7 +184,7 @@ def test_endpoints(cur):
     import impact_api
     c = TestClient(impact_api.app)
     o = c.get("/data-quality/overview").json()
-    assert len(o["classes"]) == 17 and sum(x["live"]["mode"] == "live" for x in o["classes"]) == len(Q.LIVE)
+    assert len(o["classes"]) == 18 and sum(x["live"]["mode"] == "live" for x in o["classes"]) == len(Q.LIVE)
     assert sum(lv["games"] for lv in o["levels"]) == o["games"] == one(cur, "SELECT count(*) FROM data_quality_game_flags")[0]
     assert set(o["results"]) == set(Q.RESULTS)
     ck = c.get("/data-quality/check/unreconciled").json()

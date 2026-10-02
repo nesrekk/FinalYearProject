@@ -564,14 +564,14 @@ COVERAGE_MAP = [
         "table": "pbp_event_clock", "label": "Corrected game clock (every ESPN play-by-play event)", "group": "Games",
         "range_sql": "SELECT MIN(g.season), MAX(g.season) FROM pbp_games g WHERE g.source = 'espn'", "range_fmt": "season_int",
         "source": "scripts/build_event_clock.py: ESPN's clock is late by event type (made shots a median 14 s, rebounds 6 s, turnovers 5-10 s, misses 2 s, against NBA.com's own play-by-play of 418 games), so every field goal matched to the NBA shot chart takes the chart's time, free throws their trip's, a rebound 2 s after its miss, turnovers and unmatched shots ESPN's time less the median lag, everything else ESPN's own; pbp_event_clock_meta stores the checks.",
-        "gap": "About 94% of events land within 2 s of NBA.com's log (ESPN's own times: 32%). The moment a turnover happened can't be recovered from ESPN, which stamps it at about the time of the next play. Read by Game Replay, the Play Finder, Rotations' closing stretch, Best Games, the possessions and Coaching Decisions; player minutes, stints, Clutch WPA, Situational Splits and the Garbage-Time Deflator still use ESPN's times.",
+        "gap": "About 94% of events land within 2 s of NBA.com's log (ESPN's own times: 32%). The moment a turnover happened can't be recovered from ESPN, which stamps it at about the time of the next play. Read by Game Replay, the Play Finder, Rotations' closing stretch, Best Games, the possessions, Coaching Decisions and Clutch WPA (since 2026-10-02); player minutes, stints, Situational Splits and the Garbage-Time Deflator still use ESPN's times.",
         "used_by": ["analytics#replay", "plays", "rotations", "bestgames", "possessions", "coaching"],
     },
     {
         "table": "player_wpa_totals", "label": "Win-probability-added totals", "group": "Models",
         "range_sql": None, "range_fmt": None,
         "source": "compute_wpa.py over deduplicated play-by-play (scripts/wpa_lib.PBP_DEDUP_WHERE).",
-        "gap": "Clutch plays carry 3.7x the leverage of non-clutch plays — never compare raw clutch and non-clutch WPA per play. Most players are statistically indistinguishable from zero on the clutch split. Still on ESPN's clock, which places a made shot up to ~15 s late (it moves to the corrected clock together with the paper).",
+        "gap": "Clutch plays carry 3.7x the leverage of non-clutch plays — never compare raw clutch and non-clutch WPA per play. Most players are statistically indistinguishable from zero on the clutch split. On the corrected clock (pbp_event_clock) since 2026-10-02: ESPN's own clock places a made shot a median 14 s late. The switch moved 186 players with 100+ clutch chances to 184 and no clutch conclusion.",
         "used_by": [],
     },
     {

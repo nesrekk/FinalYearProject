@@ -39,7 +39,7 @@ import paper_numbers as P  # noqa: E402
 from db_config import DB_CONFIG  # noqa: E402
 
 # Definitional constants a size cell may name (thresholds and units, not measurements).
-ALLOWED = ("over 5 s", "99th percentile", "1+ point", "$\\neq 5\\times$", "$(0,0)$", "1 February", "$=0$", "$\\div 5$")
+ALLOWED = ("over 5 s", "within 2 s", "99th percentile", "1+ point", "$\\neq 5\\times$", "$(0,0)$", "1 February", "$=0$", "$\\div 5$")
 
 
 def _db_reachable() -> bool:

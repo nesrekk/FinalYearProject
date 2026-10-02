@@ -9,7 +9,8 @@ that play. Aggregates each real player's total WPA and CLUTCH WPA (final
 5 min of regulation/OT, real score margin within 5 points at that
 moment — the NBA's own "clutch time" definition) across every real game
 in the tables, and stores the totals in Postgres for the API to read
-instantly.
+instantly. Times are the corrected clock (pbp_event_clock, from
+build_event_clock.py; rerun this after it), not ESPN's own.
 
 Vectorized end to end (one bulk SQL query, one batched model.predict_proba
 call across every real event) rather than one DB round-trip per game and
@@ -49,13 +50,20 @@ from wpa_lib import CLUTCH_MARGIN, CLUTCH_SECONDS, PBP_DEDUP_WHERE, load_model, 
 
 def load_events(conn):
     # PBP_DEDUP_WHERE: one copy per real game (the ESPN one), so no play is
-    # counted twice in a player's totals.
+    # counted twice in a player's totals. Times come from pbp_event_clock (the
+    # corrected clock, build_event_clock.py; since round 6 step 12, 2026-10-02):
+    # ESPN logs made shots a median 14 s late, which put some of the last five
+    # minutes' plays outside the clutch window. Every deduplicated event has a
+    # row there; an event without one (an nba_api-only game, none today) keeps
+    # its own time.
     query = """
-        SELECT e.game_id, e.action_number, e.id, e.period, e.seconds_remaining,
+        SELECT e.game_id, e.action_number, e.id, e.period,
+               COALESCE(k.seconds_remaining, e.seconds_remaining) AS seconds_remaining,
                e.score_home, e.score_away, e.team_tricode, e.person_id, e.player_name,
                e.action_type, g.home_team
         FROM pbp_events e
         JOIN pbp_games g ON g.game_id = e.game_id
+        LEFT JOIN pbp_event_clock k ON k.event_id = e.id
         WHERE """ + PBP_DEDUP_WHERE + """
         ORDER BY e.game_id, e.action_number, e.id;
     """

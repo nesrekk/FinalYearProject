@@ -21,6 +21,15 @@ and fill as well as by colour.
   fig_streaks.pdf      the Miller-Sanjurjo check: each hot-streak family's
                        observed persistence share against its within-season
                        shuffled null (paper_beliefs_summary; Popular beliefs)
+  fig_possessions.pdf  points per possession by how it began, and after a
+                       defensive rebound by the second of the first attempt
+                       (possessions, possession_seasons, possession_meta; round 6)
+  fig_quality.pdf      three headline differences with every game, without the
+                       flagged games, and under random drops of as many games
+                       (data_quality_sensitivity; round 6 step 11)
+  fig_reportcard.pdf   four pairs season by season with the random-effects pool
+                       and the prediction interval (report_card_tests/_pooled;
+                       round 6 step 10)
 
 Same data as the text, checked: the script first builds the paper's macros
 in-process with paper_numbers.build() (read-only, ~4 s) and then, for every
@@ -209,13 +218,13 @@ def fig_pipeline(cur, C, out_dir, png_dir):
     box(67.5, 60, 30.5, 12.3, f"NBA shot chart\n{t('ShotsMillion')}M located shots")
     ax.text(50, 56.6, f"Data-quality audit: {t('DqClasses')} error classes, each re-measured", ha="center", va="center")
     # the parser, which reconciles every game to its real final score
-    box(2, 37, 70, 12.3, f"One parser, one replay per game: stints, game lines;\n"
-                            f"{t('GamesReconciled')} of {t('GamesParsed')} games reconcile, {t('Stints')} stints")
+    box(2, 37, 70, 12.3, f"One parser, one replay per game: stints, possessions,\ngame lines, corrected clock; "
+                            f"{t('GamesReconciled')} of {t('GamesParsed')} reconcile")
     arrow(37, 53.5, 37, 49.3)
     # the models
     xs = (2, 26.5, 51, 75.5)
     w = 22.5
-    for x, s in zip(xs, ("RAPM, xRAPM\nBPM, on/off", "Popular\nbeliefs", "Pre-game odds,\nsimulator", "Expected FG\n(per shot)")):
+    for x, s in zip(xs, ("RAPM, tracker,\nxRAPM, BPM", "Popular\nbeliefs", "Pre-game odds,\nsimulator", "Expected FG\n(per shot)")):
         box(x, 17, w, 13, s)
     for x in xs[:3]:
         arrow(x + w / 2, 37, x + w / 2, 30)
@@ -248,6 +257,8 @@ FOREST = {
         ("xRAPM $-$ RAPM, both with prior", ("impact_next", "game_rmse", "xrapm_prior", "rapm_prior", ""), "EvDNext{P}XpriorPriorRmse", 2),
         ("On/off $\\times$ {onoff} $-$ zero", ("impact_next", "game_rmse", "onoff_scaled", "zero", ""), "EvDNext{P}OnoffScaledZeroRmse", 2),
         ("On/off (as published) $-$ zero", ("impact_next", "game_rmse", "onoff", "zero", ""), "EvDNext{P}OnoffZeroRmse", 2),
+        ("Rating Tracker $-$ BPM", ("impact_next", "game_rmse", "rapm_tracker", "bpm", ""), "EvDNext{P}TrackerBpmRmse", 2),
+        ("xRAPM-SA $-$ xRAPM, both one season", ("impact_next", "game_rmse", "xrapm_sa_single", "xrapm_single", ""), "EvDNext{P}XsaSingleXsingleRmse", 2),
     ]),
     "B": dict(xlabel="$\\Delta$ year-to-year correlation $r$", scale=1, xlim=(-0.12, 0.52), rows=[
         ("BPM $-$ RAPM + prior", ("impact_reliability", "corr", "bpm", "rapm_prior", ""), "EvDYty{P}BpmPrior", 2),
@@ -256,6 +267,7 @@ FOREST = {
         ("xRAPM $-$ RAPM, both with prior", ("impact_reliability", "corr", "xrapm_prior", "rapm_prior", ""), "EvDYty{P}XpriorPrior", 2),
         ("xRAPM $-$ RAPM, both one season", ("impact_reliability", "corr", "xrapm_single", "rapm_single", ""), "EvDYty{P}XsingleSingle", 2),
         ("Shot quality $-$ shot-making", ("xfg_reliability", "corr", "quality", "shot_making", "fga>=200"), "EvDXfgYty{P}QualityMaking", 2),
+        ("BPM $-$ Rating Tracker", ("impact_reliability", "corr", "bpm", "rapm_tracker", ""), "EvDYty{P}BpmTracker", 2),
     ]),
     "C": dict(xlabel="$\\Delta$ log loss ($\\times 10^{-3}$)", scale=1000, xlim=(-22.5, 9.5), rows=[
         ("Pre-game: chosen $-$ this season only", ("pregame", "log_loss", "prior_rest", "current", ""), "EvDPregame{P}ChosenCurrentLogLoss", 4),
@@ -581,10 +593,184 @@ def fig_streaks(cur, C, out_dir, png_dir):
     return save(fig, out_dir, "fig_streaks", png_dir)
 
 
+# ---------------------------------------------------------------- round 6 (step 12): possessions, data quality, report card
+
+POSS_STARTS = (("steal", "After a steal"), ("dreb", "After a def. rebound"), ("made_fg", "After a made shot"),
+               ("made_ft", "After a made free throw"), ("dead_tov", "After a dead-ball turnover"))
+
+
+def fig_possessions(cur, C, out_dir, png_dir):
+    """(a) points per possession by start type, every season pooled, intervals treating possessions as independent (the
+    Possession Explorer's); (b) after a defensive rebound, by the second of the first attempt (possession_meta)."""
+    import json
+    var = {k: (float(v), int(n)) for k, v, n in rows(cur, """
+        SELECT p.start_type, VAR_SAMP(p.pts), COUNT(*) FROM possessions p JOIN possession_games g USING (game_id)
+        WHERE g.game_ok GROUP BY 1""")}
+    ps = {k: (float(pts), float(poss)) for k, pts, poss in rows(
+        cur, "SELECT start_type, sum(pts), sum(poss) FROM possession_seasons WHERE team = 'ALL' GROUP BY 1")}
+    fig, axes = plt.subplots(1, 2, figsize=(COL_W, 1.75), gridspec_kw={"width_ratios": [1.05, 1]})
+    fig.subplots_adjust(left=0.36, right=0.985, bottom=0.22, top=0.97, wspace=0.38)
+    ax = axes[0]
+    for i, (k, label) in enumerate(POSS_STARTS):
+        pts, poss = ps[k]
+        C.claim(int(poss) == var[k][1], f"possessions: possession_seasons' {k} count is the possessions table's")
+        ppp = pts / poss
+        se = math.sqrt(var[k][0] / poss)
+        name = {"steal": "PoPppSteal", "dreb": "PoPppDreb", "made_fg": "PoPppMade"}.get(k)
+        if name:
+            C.expect(name, ppp, 2)
+        ax.plot([ppp - 1.96 * se, ppp + 1.96 * se], [-i, -i], color="black", lw=0.8)
+        ax.plot([ppp], [-i], ls="none", marker="o", ms=3.4, color="black")
+    ax.set_yticks([-i for i in range(len(POSS_STARTS))])
+    ax.set_yticklabels([lab for _k, lab in POSS_STARTS])
+    ax.set_ylim(-len(POSS_STARTS) + 0.4, 0.6)
+    ax.set_xlabel("Points per possession", labelpad=1.5)
+    ax.tick_params(axis="y", length=0)
+    ax.spines["left"].set_visible(False)
+    ax.text(0.98, 0.02, "(a)", transform=ax.transAxes, ha="right", va="bottom")
+    ax = axes[1]
+    tc = rows(cur, "SELECT value FROM possession_meta WHERE key = 'transition_check'")[0][0]
+    tc = tc if isinstance(tc, dict) else json.loads(tc)
+    rules = rows(cur, "SELECT value FROM possession_meta WHERE key = 'rules'")[0][0]
+    rules = rules if isinstance(rules, dict) else json.loads(rules)
+    w = rules["transition_seconds"]
+    y = np.array(tc["dreb_ppp_by_first_attempt_second"], float)
+    x = np.arange(len(y))
+    C.expect("PoDrebPeakPpp", float(y.max()), 2)
+    C.expect("PoDrebPlateauPpp", float(y[int(w) + 2]), 2)
+    ax.axvspan(-0.5, w - 0.5, color="#e6e6e6", lw=0, zorder=0)
+    ax.plot(x, y, color="black", lw=0.8, marker="o", ms=2.2, zorder=2)
+    ax.set_xlim(-0.5, len(y) - 0.5)
+    ax.set_xticks([0, int(w), 12, 18, 23])
+    ax.set_xlabel("First attempt (s)", labelpad=1.5)
+    ax.set_ylabel("Points per possession", labelpad=1.5)
+    ax.text(0.98, 0.97, "(b)", transform=ax.transAxes, ha="right", va="top")
+    return save(fig, out_dir, "fig_possessions", png_dir)
+
+
+def fig_quality(cur, C, out_dir, png_dir):
+    """data_quality_sensitivity: every game vs the flagged games dropped vs random drops of as many games."""
+    cols = ("result", "drop_set", "scope", "variant", "phase", "metric", "model_a", "model_b", "diff", "ci_lo", "ci_hi", "rand_lo", "rand_hi")
+    S = [dict(zip(cols, r)) for r in rows(cur, f"""SELECT {', '.join(cols)} FROM data_quality_sensitivity
+                                                 WHERE drop_set IN ('none', 'flagged') AND model_b <> ''""")]
+
+    def get(result, drop, phase, metric, a, b, scope=None):
+        c = [r for r in S if (r["result"], r["drop_set"], r["phase"], r["metric"], r["model_a"], r["model_b"]) == (result, drop, phase, metric, a, b)
+             and (scope is None or r["scope"] == scope)]
+        assert len(c) == 1, (result, drop, phase, metric, a, b, scope, len(c))
+        return c[0]
+    panels = [
+        ("(a) RAPM + prior $-$ BPM (RMSE)", "impact", "game_rmse", "rapm_prior", "bpm", "everywhere", 1,
+         [("tune", "Tune"), ("validate", "Val."), ("test", "Test")]),
+        ("(b) Who played $-$ pre-game ($\\times10^{3}$ log loss)", "availability", "log_loss", "avail_bpm", "prior_rest", "scoring", 1000,
+         [("tune", "Tune"), ("validate", "Val."), ("test", "Test")]),
+        ("(c) Points per possession", "possessions", "ppp", None, None, "everywhere", 1,
+         [(("steal", "made_fg"), "Steal $-$ make"), (("transition", "settled"), "Trans. $-$ settled")]),
+    ]
+    fig, axes = plt.subplots(3, 1, figsize=(COL_W, 3.3), gridspec_kw={"height_ratios": [3, 3, 2]})
+    fig.subplots_adjust(left=0.22, right=0.97, bottom=0.07, top=0.95, hspace=0.95)
+    for ax, (title, result, metric, a, b, scope, sc, rws) in zip(axes, panels):
+        for i, (key, label) in enumerate(rws):
+            if result == "possessions":
+                (aa, bb), ph = key, "all"
+            else:
+                aa, bb, ph = a, b, key
+            full = get(result, "none", ph, metric, aa, bb)
+            drop = get(result, "flagged", ph, metric, aa, bb, scope)
+            y = -i
+            ax.plot([drop["rand_lo"] * sc, drop["rand_hi"] * sc], [y, y], color="#bdbdbd", lw=5, solid_capstyle="butt", zorder=1)
+            for r, dy, mk, mfc in ((full, 0.16, "o", "white"), (drop, -0.16, "D", "black")):
+                ax.plot([r["ci_lo"] * sc, r["ci_hi"] * sc], [y + dy, y + dy], color="black", lw=0.8, zorder=2)
+                ax.plot([r["diff"] * sc], [y + dy], ls="none", marker=mk, ms=3.2, color="black", mfc=mfc, mew=0.8, zorder=3)
+            if result == "impact":
+                Ph = {"tune": "Tune", "validate": "Val", "test": "Test"}[ph]
+                C.expect(f"EvDNext{Ph}PriorBpmRmse", full["diff"], 2)
+                if ph in ("tune", "test"):
+                    C.expect(f"DqsImpact{Ph}", drop["diff"], 2)
+                    C.expect(f"DqsImpact{Ph}Lo", drop["ci_lo"], 2)
+                    C.expect(f"DqsImpact{Ph}Hi", drop["ci_hi"], 2)
+                    C.expect(f"DqsImpact{Ph}RandLo", drop["rand_lo"], 2)
+                    C.expect(f"DqsImpact{Ph}RandHi", drop["rand_hi"], 2)
+            if result == "availability":
+                C.expect({"tune": "AvDTune", "validate": "AvDVal", "test": "AvDTest"}[ph], full["diff"], 4)
+                if ph == "tune":
+                    C.expect("DqsAvailTune", drop["diff"], 4)
+            if result == "possessions":
+                C.expect("PoDStealMade" if aa == "steal" else "PoDTransSettled", full["diff"], 2)
+        ax.axvline(0, color="black", lw=0.6)
+        ax.set_yticks([-i for i in range(len(rws))])
+        ax.set_yticklabels([lab for _k, lab in rws])
+        ax.set_ylim(-len(rws) + 0.45, 0.55)
+        ax.tick_params(axis="y", length=0)
+        ax.spines["left"].set_visible(False)
+        ax.set_title(title, fontsize=FONT_PT, loc="left", pad=2)
+    h = [Line2D([], [], ls="none", marker="o", color="black", mfc="white", ms=3.4, label="Every game"),
+         Line2D([], [], ls="none", marker="D", color="black", ms=3.2, label="Flagged dropped"),
+         Line2D([], [], color="#bdbdbd", lw=5, label="Random drops")]
+    fig.legend(handles=h, loc="lower center", bbox_to_anchor=(0.55, -0.005), ncol=3, frameon=False, handletextpad=0.5,
+               handlelength=1.6, columnspacing=1.4)
+    fig.subplots_adjust(bottom=0.12)
+    return save(fig, out_dir, "fig_quality", png_dir)
+
+
+REPORT_PANELS = (
+    ("(a) Pre-game log loss ($\\times10^{3}$)", ("pregame", "log_loss", "", "prior_rest", "current"), 1000, "RcPreChosenCurrent", 1),
+    ("(b) Playoff Brier, midpoint", ("sim_playoffs", "brier", "halfway", "model", "record"), 1, "RcSimBrier", 4),
+    ("(c) BPM $-$ RAPM + prior", ("impact_next", "game_rmse", "", "bpm", "rapm_prior"), 1, "RcBpmPrior", 2),
+    ("(d) Tracker $-$ BPM", ("impact_next", "game_rmse", "", "rapm_tracker", "bpm"), 1, "RcTrackerBpm", 2),
+)
+
+
+def fig_reportcard(cur, C, out_dir, png_dir):
+    """report_card_tests (per season) and report_card_pooled (random effects), oriented first model minus second."""
+    T = {}
+    for task, metric, variant, se, a, b, d, lo, hi in rows(cur, """SELECT task, metric, variant, season, model_a, model_b, diff, ci_lo, ci_hi
+                                                               FROM report_card_tests WHERE model_b <> ''"""):
+        T[(task, metric, variant, a, b, se)] = (d, lo, hi)
+        T[(task, metric, variant, b, a, se)] = (-d, -hi, -lo)
+    P = {}
+    for task, metric, variant, a, b, mu, lo, hi, pl, ph in rows(cur, """SELECT task, metric, variant, model_a, model_b, mu, ci_lo, ci_hi,
+                                                                        pi_lo, pi_hi FROM report_card_pooled"""):
+        P[(task, metric, variant, a, b)] = (mu, lo, hi, pl, ph)
+        P[(task, metric, variant, b, a)] = (-mu, -hi, -lo, None if ph is None else -ph, None if pl is None else -pl)
+    fig, axes = plt.subplots(1, 4, figsize=(FULL_W, 2.55), sharey=False)
+    fig.subplots_adjust(left=0.07, right=0.99, bottom=0.1, top=0.9, wspace=0.5)
+    most = max(len({k[5] for k in T if k[:5] == key}) for _t, key, _s, _m, _d in REPORT_PANELS)
+    for ax, (title, (task, metric, variant, a, b), sc, macro, d) in zip(axes, REPORT_PANELS):
+        seasons = sorted(se for (t, m, v, aa, bb, se) in T if (t, m, v, aa, bb) == (task, metric, variant, a, b))
+        for i, se in enumerate(seasons):
+            dd, lo, hi = T[(task, metric, variant, a, b, se)]
+            y = -i
+            ax.plot([lo * sc, hi * sc], [y, y], color="black", lw=0.8)
+            ax.plot([dd * sc], [y], ls="none", marker="o", ms=3.0, color="black", mfc="black" if (lo > 0 or hi < 0) else "white", mew=0.8)
+        mu, lo, hi, pl, ph = P[(task, metric, variant, a, b)]
+        C.expect(macro, mu, d, scale=sc)
+        C.expect(macro + "Lo", lo, d, scale=sc)
+        C.expect(macro + "Hi", hi, d, scale=sc)
+        if pl is not None:
+            C.expect(macro + "PiLo", pl, d, scale=sc, optional=True)
+            C.expect(macro + "PiHi", ph, d, scale=sc, optional=True)
+        y = -len(seasons) - 0.6
+        if pl is not None:
+            ax.plot([pl * sc, ph * sc], [y, y], color="#bdbdbd", lw=5, solid_capstyle="butt", zorder=1)
+        hh = 0.32 * (len(seasons) + 1.9) / (most + 1.9)       # the same printed height in every panel
+        ax.fill([lo * sc, mu * sc, hi * sc, mu * sc], [y, y + hh, y, y - hh], color="black", zorder=2)
+        ax.axvline(0, color="black", lw=0.6)
+        ax.axhline(-len(seasons) + 0.2, color="#8c8c8c", lw=0.5)
+        ax.set_yticks([-i for i in range(len(seasons))] + [y])
+        ax.set_yticklabels([PN.season(se).replace("--", "–") for se in seasons] + ["Pooled"])
+        ax.set_ylim(y - 0.7, 0.6)
+        ax.tick_params(axis="y", length=0)
+        ax.spines["left"].set_visible(False)
+        ax.set_title(title, fontsize=FONT_PT, loc="left", pad=3)
+    return save(fig, out_dir, "fig_reportcard", png_dir)
+
+
 # ---------------------------------------------------------------- driver
 
 FIGURES = {"pipeline": fig_pipeline, "forest": fig_forest, "calibration": fig_calibration,
-           "rapm_sens": fig_rapm_sens, "streaks": fig_streaks}
+           "rapm_sens": fig_rapm_sens, "streaks": fig_streaks, "possessions": fig_possessions, "quality": fig_quality,
+           "reportcard": fig_reportcard}
 
 
 def build(conn, out_dir, only=None, png_dir=None):
