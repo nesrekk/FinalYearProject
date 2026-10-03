@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import Icon from '../common/Icon';
 import InfoTooltip from '../common/InfoTooltip';
 import SaveViewButton from '../common/SaveViewButton';
-import BoardGrid from '../workbench/BoardGrid';
+import BoardGrid, { EAGER } from '../workbench/BoardGrid';
+import { BlockError, Loading } from '../workbench/BlockStatus';
 import ChartBlock from '../workbench/ChartBlock';
 import FinderBlock from '../workbench/FinderBlock';
 import NoteBlock from '../workbench/NoteBlock';
@@ -17,6 +18,7 @@ import { fetchWorkbenchCatalogue, workbenchError } from '../../services/api';
 import { downloadText, slugify } from '../../utils/tableExport';
 import { useAutosave } from '../../utils/useAutosave';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { STARTERS, starterBoard } from '../../utils/starterBoards';
 import { placeNew } from '../../utils/workbenchLayout';
 import { TOOLS, TOOL_KEYS } from '../../utils/workbenchTools';
 import {
@@ -37,6 +39,8 @@ function useNarrow() {
         () => window.matchMedia(NARROW).matches,
     );
 }
+
+const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 async function copyText(text) {
     try {
@@ -62,6 +66,23 @@ function BoardName({ board, onSave }) {
     return (
         <input className="wb-board-name" value={name} maxLength={LIMITS.name} aria-label="Board name"
             onChange={(e) => setName(e.target.value)} onBlur={flush} />
+    );
+}
+
+// Ready-made boards (utils/starterBoards.js): opening one saves a copy.
+function StarterList({ onOpen, busy }) {
+    return (
+        <ul className="wb-starters" aria-label="Starter boards">
+            {STARTERS.map((s) => (
+                <li key={s.key}>
+                    <button type="button" className="wb-starter" onClick={() => onOpen(s.key)} disabled={busy}>
+                        <span className="wb-starter-name"><Icon name={s.icon} size={18} /> {s.name}</span>
+                        <span className="wb-starter-blurb">{s.blurb}</span>
+                        <span className="wb-starter-n">{s.blocks} blocks</span>
+                    </button>
+                </li>
+            ))}
+        </ul>
     );
 }
 
@@ -102,6 +123,13 @@ export default function Workbench({ onNavigate }) {
     const [shareCode] = useState(() => parseParam.str(params, SHARE_PARAM));
     const [shared, setShared] = useState(() => ({ state: shareCode ? 'loading' : 'none' }));
     const [catalogue, setCatalogue] = useState({ data: null, error: '' });
+    const [catalogueTry, setCatalogueTry] = useState(0);
+    const [showStarters, setShowStarters] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [loadAll, setLoadAll] = useState(null); // board id whose blocks all load now
+    const undoRef = useRef(null);
+    const newBoardRef = useRef(null);
+    const focusUndo = useRef(false);
     const [msg, setMsg] = useState({ text: '', bad: false });
     const [undo, setUndo] = useState(null);
     const [confirmDelete, setConfirmDelete] = useState(false);
@@ -111,11 +139,14 @@ export default function Workbench({ onNavigate }) {
     const narrow = useNarrow();
 
     useEffect(() => {
+        let alive = true;
         fetchWorkbenchCatalogue().then(
-            (data) => setCatalogue({ data, error: '' }),
-            (e) => setCatalogue({ data: null, error: workbenchError(e) }),
+            (data) => alive && setCatalogue({ data, error: '' }),
+            (e) => alive && setCatalogue({ data: null, error: workbenchError(e) }),
         );
-    }, []);
+        return () => { alive = false; };
+    }, [catalogueTry]);
+    const retryCatalogue = () => { setCatalogue({ data: null, error: '' }); setCatalogueTry((n) => n + 1); };
 
     useEffect(() => {
         if (!shareCode) return;
@@ -137,9 +168,16 @@ export default function Workbench({ onNavigate }) {
         if (!id) return;
         scrollTo.current = null;
         const el = document.querySelector(`[data-wb-block="${id}"]`);
-        el?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+        el?.scrollIntoView?.({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' });
         el?.querySelector('[data-wb-handle], .wb-steps button:not(:disabled)')?.focus({ preventScroll: true });
     }, [boards]);
+
+    // Removing a block moves focus to its Undo (the block and its buttons are gone).
+    useEffect(() => {
+        if (!focusUndo.current || !undo) return;
+        focusUndo.current = false;
+        undoRef.current?.focus();
+    }, [undo]);
 
     const run = async (work, okText) => {
         try {
@@ -227,6 +265,7 @@ export default function Workbench({ onNavigate }) {
             if (dropSet) bd.sets = bd.sets.filter((s) => s.id !== dropSet.id);
             return bd;
         });
+        focusUndo.current = true;
         setUndo({ boardId: board.id, block, set: dropSet, label: blockLabel(block, board, catalogue.data) });
     };
 
@@ -370,7 +409,20 @@ export default function Workbench({ onNavigate }) {
 
     const onDelete = async () => {
         const ok = await run(async () => { await deleteBoard(board.id); return true; }, 'Board deleted.');
-        if (ok) { setSel(null); setConfirmDelete(false); setUndo(null); }
+        if (ok) { setSel(null); setConfirmDelete(false); setUndo(null); newBoardRef.current?.focus(); }
+    };
+
+    const onStarter = async (key) => {
+        setBusy(true);
+        const draft = (() => { try { return starterBoard(key); } catch (e) { setMsg({ text: e.message, bad: true }); return null; } })();
+        const saved = draft && await run(() => saveNewBoard(draft), `Opened a copy of “${draft.name}”: it’s yours to change, and the starter stays as it was.`);
+        setBusy(false);
+        if (!saved) return;
+        setSel(saved.id);
+        setShowStarters(false);
+        setConfirmDelete(false);
+        setUndo(null);
+        scrollTo.current = saved.blocks.find((b) => b.y === 0 && b.x === 0)?.id || null;
     };
 
     const toggleEditing = (id) => setEditing((s) => {
@@ -423,8 +475,9 @@ export default function Workbench({ onNavigate }) {
         }
         if (b.type === 'note') return <NoteBlock block={b} onSave={(text) => patchSettings(b.id, { text: text.slice(0, LIMITS.note) })} />;
         if (b.type === 'tool') return <ToolBlock block={b} board={board} onSettings={(patch) => patchSettings(b.id, patch)} onNavigate={onNavigate} />;
-        if (catalogue.error) return <p className="wb-error" role="alert">{catalogue.error}</p>;
-        if (!catalogue.data) return <p className="wb-meta" role="status">Loading the stat catalogue…</p>;
+        // One alert for the whole board (above the grid), not one per block.
+        if (catalogue.error) return <p className="wb-hint">Can’t run without the stat catalogue (see the message above the board).</p>;
+        if (!catalogue.data) return <Loading what="the stat catalogue" />;
         if (b.type === 'finder') {
             return (
                 <FinderBlock
@@ -464,12 +517,30 @@ export default function Workbench({ onNavigate }) {
         );
     };
 
-    const addButtons = (
+    const needsCatalogue = (t) => (t === 'table' || t === 'chart' || t === 'finder') && !catalogue.data;
+    // A phone gets one menu instead of a row of buttons.
+    const addButtons = narrow ? (
+        <select className="wb-select wb-add-menu" value="" aria-label="Add a block"
+            onChange={(e) => {
+                const [t, tool] = e.target.value.split(':');
+                if (t) addBlock(t, tool || null);
+            }}>
+            <option value="">Add a block…</option>
+            {['set', 'table', 'chart', 'finder', 'note'].map((t) => (
+                <option key={t} value={t} disabled={needsCatalogue(t)}>{BLOCK_INFO[t].label}</option>
+            ))}
+            {[['player', 'App tool for a player'], ['team', 'App tool for a team']].map(([kind, text]) => (
+                <optgroup key={kind} label={text}>
+                    {TOOL_KEYS.filter((k) => TOOLS[k].entity === kind).map((k) => <option key={k} value={`tool:${k}`}>{TOOLS[k].label}</option>)}
+                </optgroup>
+            ))}
+        </select>
+    ) : (
         <span className="wb-add" role="group" aria-label="Add a block">
             <span className="wb-add-label">Add</span>
             {['set', 'table', 'chart', 'finder', 'note'].map((t) => (
                 <button key={t} type="button" className="table-export-btn" onClick={() => addBlock(t)}
-                    disabled={(t === 'table' || t === 'chart' || t === 'finder') && !catalogue.data}>
+                    disabled={needsCatalogue(t)}>
                     <Icon name={BLOCK_INFO[t].icon} size={15} /> {BLOCK_INFO[t].short}
                 </button>
             ))}
@@ -483,6 +554,23 @@ export default function Workbench({ onNavigate }) {
                 ))}
             </select>
         </span>
+    );
+
+    const boardActions = board && (
+        <>
+            <button type="button" className="table-export-btn" onClick={onShare}><Icon name="share" size={15} /> Share link</button>
+            <button type="button" className="table-export-btn" onClick={() => doExport(false)}><Icon name="download" size={15} /> Export file</button>
+            {confirmDelete ? (
+                <span className="wb-confirm" role="group" aria-label="Confirm delete">
+                    Delete “{board.name}” and its {board.blocks.length} block{board.blocks.length === 1 ? '' : 's'}?
+                    <button type="button" className="table-export-btn" onClick={onDelete}>Delete</button>
+                    {/* Focus lands on the safe choice. */}
+                    <button type="button" className="table-export-btn" onClick={() => setConfirmDelete(false)} autoFocus>Keep</button>
+                </span>
+            ) : (
+                <button type="button" className="table-export-btn" onClick={() => setConfirmDelete(true)}><Icon name="delete" size={15} /> Delete board</button>
+            )}
+        </>
     );
 
     return (
@@ -523,7 +611,13 @@ export default function Workbench({ onNavigate }) {
                 )}
 
                 <div className="wb-picker" role="group" aria-label="Your boards">
-                    {boards.map((b) => (
+                    {narrow && boards.length > 0 && (
+                        <select className="wb-select wb-board-select" aria-label="Board" value={board?.id || ''}
+                            onChange={(e) => { setSel(e.target.value); setConfirmDelete(false); setUndo(null); }}>
+                            {boards.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.blocks.length} block{b.blocks.length === 1 ? '' : 's'})</option>)}
+                        </select>
+                    )}
+                    {!narrow && boards.map((b) => (
                         <button key={b.id} type="button" className={`wb-pill${board && b.id === board.id ? ' wb-pill--on' : ''}`}
                             aria-pressed={!!board && b.id === board.id}
                             onClick={() => { setSel(b.id); setConfirmDelete(false); setUndo(null); }}>
@@ -531,7 +625,13 @@ export default function Workbench({ onNavigate }) {
                             <span className="wb-pill-n">{b.blocks.length}</span>
                         </button>
                     ))}
-                    <button type="button" className="table-export-btn" onClick={onNewBoard}><Icon name="add" size={15} /> New board</button>
+                    <button ref={newBoardRef} type="button" className="table-export-btn" onClick={onNewBoard}><Icon name="add" size={15} /> New board</button>
+                    {(board || boards.length > 0) && (
+                        <button type="button" className={`table-export-btn${showStarters ? ' wb-btn-on' : ''}`} onClick={() => setShowStarters((v) => !v)}
+                            aria-expanded={showStarters} aria-controls="wb-starter-panel">
+                            <Icon name="auto_awesome" size={15} /> Starter boards
+                        </button>
+                    )}
                     <button type="button" className="table-export-btn" onClick={() => fileInput.current?.click()}><Icon name="upload_file" size={15} /> Import file</button>
                     <input ref={fileInput} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={onImport} />
                     {boards.length > 1 && (
@@ -539,12 +639,19 @@ export default function Workbench({ onNavigate }) {
                     )}
                 </div>
 
+                {showStarters && (board || boards.length > 0) && (
+                    <div id="wb-starter-panel" className="wb-starter-panel">
+                        <p className="wb-meta">Open a ready-made board. You get your own copy to change; every number on it loads live.</p>
+                        <StarterList onOpen={onStarter} busy={busy} />
+                    </div>
+                )}
+
                 <p className="wb-msg" role="status" style={{ color: msg.bad ? 'var(--negative)' : undefined }}>
                     {msg.text}
                     {undo && (
                         <>
                             {' '}Removed “{undo.label}”{undo.set ? ` and its set “${undo.set.name}”` : ''}.{' '}
-                            <button type="button" className="wb-link" onClick={onUndo}>Undo</button>
+                            <button ref={undoRef} type="button" className="wb-link" onClick={onUndo}>Undo</button>
                         </>
                     )}
                 </p>
@@ -562,6 +669,8 @@ export default function Workbench({ onNavigate }) {
                             A <strong>Note</strong> holds your own text.
                         </p>
                         {addButtons}
+                        <p className="wb-empty-or">Or start from a ready-made board (you get your own copy to change):</p>
+                        <StarterList onOpen={onStarter} busy={busy} />
                     </div>
                 )}
 
@@ -571,20 +680,16 @@ export default function Workbench({ onNavigate }) {
                             <BoardName key={board.id} board={board} onSave={(v) => run(() => renameBoard(board.id, v))} />
                             <div className="wb-board-actions">
                                 {addButtons}
-                                <button type="button" className="table-export-btn" onClick={onShare}><Icon name="share" size={15} /> Share link</button>
-                                <button type="button" className="table-export-btn" onClick={() => doExport(false)}><Icon name="download" size={15} /> Export file</button>
-                                {confirmDelete ? (
-                                    <span className="wb-confirm">
-                                        Delete “{board.name}” and its {board.blocks.length} block{board.blocks.length === 1 ? '' : 's'}?
-                                        <button type="button" className="table-export-btn" onClick={onDelete}>Delete</button>
-                                        <button type="button" className="table-export-btn" onClick={() => setConfirmDelete(false)}>Keep</button>
-                                    </span>
-                                ) : (
-                                    <button type="button" className="table-export-btn" onClick={() => setConfirmDelete(true)}><Icon name="delete" size={15} /> Delete board</button>
-                                )}
+                                {narrow ? <details className="wb-more"><summary>Board: share, export, delete</summary><div className="wb-more-body">{boardActions}</div></details> : boardActions}
                             </div>
                         </div>
-                        {catalogue.error && <p className="wb-error" role="alert">{catalogue.error}</p>}
+                        {catalogue.error && <BlockError message={`The stat catalogue didn’t load, so tables, charts and the finder can’t run. ${catalogue.error}`} onRetry={retryCatalogue} />}
+                        {board.blocks.length > EAGER && (
+                            <p className="wb-meta wb-board-size">
+                                {board.blocks.length} of up to {LIMITS.blocks} blocks. Blocks further down load as you scroll to them, and at most four queries run at once, so the top of the board fills first.
+                                {loadAll !== board.id && <>{' '}<button type="button" className="wb-link" onClick={() => setLoadAll(board.id)}>Load every block now</button></>}
+                            </p>
+                        )}
                         {board.blocks.length === 0 ? (
                             <div className="wb-empty">
                                 <p className="wb-empty-title">This board is empty</p>
@@ -596,6 +701,7 @@ export default function Workbench({ onNavigate }) {
                                 key={board.id}
                                 blocks={board.blocks}
                                 narrow={narrow}
+                                loadAll={loadAll === board.id}
                                 onCommit={commitLayout}
                                 renderHeader={renderHeader}
                                 renderBody={renderBody}

@@ -8,8 +8,39 @@ import { GAP_PX, GRID_COLS, ROW_PX, readingOrder, withRect } from '../../utils/w
 // focus the handle, arrows move it a cell, Shift+arrows resize it. While a
 // drag is under way the layout is a preview; it is stored once, on release.
 // Below 760 px the blocks stack in reading order and Up/Down buttons replace
-// dragging.
-export default function BoardGrid({ blocks, narrow, onCommit, renderHeader, renderBody, labelOf }) {
+// dragging. Escape during a drag puts the block back.
+//
+// Big boards: the first EAGER blocks in reading order load at once; the rest
+// load when they come within about a screen of the viewport, and stay loaded
+// after that (so scrolling back doesn't refetch or lose a block's state).
+// "Load now" (or the page's "Load every block") skips the wait, for screen
+// readers jumping between blocks and for browsers that don't report
+// visibility (a hidden or printed page).
+export const EAGER = 6;
+
+function LazyBody({ eager, label, children }) {
+    const ref = useRef(null);
+    const [seen, setSeen] = useState(() => eager || typeof IntersectionObserver === 'undefined');
+    if (eager && !seen) setSeen(true);
+    useEffect(() => {
+        const el = ref.current;
+        if (seen || !el) return undefined;
+        const io = new IntersectionObserver((entries) => {
+            if (entries.some((x) => x.isIntersecting)) setSeen(true);
+        }, { rootMargin: '800px 0px' });
+        io.observe(el);
+        return () => io.disconnect();
+    }, [seen]);
+    if (seen) return children;
+    return (
+        <div ref={ref} className="wb-lazy">
+            <p className="wb-meta">Loads when you scroll to it.</p>
+            <button type="button" className="table-export-btn" onClick={() => setSeen(true)} aria-label={`Load ${label} now`}>Load now</button>
+        </div>
+    );
+}
+
+export default function BoardGrid({ blocks, narrow, loadAll = false, onCommit, renderHeader, renderBody, labelOf }) {
     const gridRef = useRef(null);
     const [drag, setDrag] = useState(null);
     // A layout just committed, shown until the stored board comes back (so a
@@ -27,6 +58,19 @@ export default function BoardGrid({ blocks, narrow, onCommit, renderHeader, rend
         focusNext.current = null;
         document.querySelector(`[data-wb-${want.kind}="${want.id}"]`)?.focus();
     }, [blocks]);
+
+    // Escape while dragging: the block goes back where it was.
+    const dragging = !!drag;
+    useEffect(() => {
+        if (!dragging) return undefined;
+        const onKeyDown = (e) => {
+            if (e.key !== 'Escape') return;
+            setDrag(null);
+            setSaid('Move cancelled.');
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [dragging]);
 
     const commit = (next, id, kind) => {
         const before = new Map(blocks.map((b) => [b.id, b]));
@@ -138,7 +182,7 @@ export default function BoardGrid({ blocks, narrow, onCommit, renderHeader, rend
                             data-wb-block={b.id}
                         >
                             {renderHeader(b, handle)}
-                            <div className="wb-block-body">{renderBody(b)}</div>
+                            <div className="wb-block-body"><LazyBody eager={loadAll || i < EAGER} label={label}>{renderBody(b)}</LazyBody></div>
                             {!narrow && (
                                 <button
                                     type="button"

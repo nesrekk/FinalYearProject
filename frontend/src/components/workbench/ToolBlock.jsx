@@ -13,6 +13,7 @@ import shotTotals, { SHOT_GAMES as GAMES } from '../../utils/shotTotals';
 import { openPlayerProfile, openTeamProfile } from '../../utils/useUrlState';
 import { TOOLS, loadPlayerProfile, loadTeamProfile } from '../../utils/workbenchTools';
 import { entityWord, seasonLabel, seriesVar, toolMember } from './workbenchShared';
+import { BlockError, Loading } from './BlockStatus';
 import '../../styles/profile.css';
 import '../../styles/teamprofile.css';
 
@@ -25,32 +26,39 @@ import '../../styles/teamprofile.css';
 // file" reason; team blocks read GET /team-profile/{code}?season= the same way.
 
 const loadError = (e, what) => e?.response?.data?.detail || `The ${what} couldn’t load. Is the impact API (port 8002) running?`;
+// A failed load isn't cached (workbenchTools.cached), so a retry fetches again.
+const canRetry = (e) => !e?.response || e.response.status >= 500;
 
+// Returns [result, retry]; result is null while loading.
 function usePlayerProfile(id) {
-    const [res, setRes] = useState(null); // { id, data } | { id, error }
+    const [res, setRes] = useState(null); // { id, data } | { id, error, retry }
+    const [attempt, setAttempt] = useState(0);
     useEffect(() => {
         let live = true;
         loadPlayerProfile(id).then(
             (data) => live && setRes({ id, data }),
-            (e) => live && setRes({ id, error: loadError(e, 'player profile') }),
+            (e) => live && setRes({ id, error: loadError(e, 'player profile'), retry: canRetry(e) }),
         );
         return () => { live = false; };
-    }, [id]);
-    return res?.id === id ? res : null;
+    }, [id, attempt]);
+    const retry = () => { setRes(null); setAttempt((n) => n + 1); };
+    return [res?.id === id ? res : null, retry];
 }
 
 function useTeamProfile(abbr, season) {
     const key = `${abbr}-${season ?? ''}`;
-    const [res, setRes] = useState(null); // { key, data } | { key, error }
+    const [res, setRes] = useState(null); // { key, data } | { key, error, retry }
+    const [attempt, setAttempt] = useState(0);
     useEffect(() => {
         let live = true;
         loadTeamProfile(abbr, season).then(
             (data) => live && setRes({ key, data }),
-            (e) => live && setRes({ key, error: loadError(e, 'team page') }),
+            (e) => live && setRes({ key, error: loadError(e, 'team page'), retry: canRetry(e) }),
         );
         return () => { live = false; };
-    }, [abbr, season, key]);
-    return res?.key === key ? res : null;
+    }, [abbr, season, key, attempt]);
+    const retry = () => { setRes(null); setAttempt((n) => n + 1); };
+    return [res?.key === key ? res : null, retry];
 }
 
 function NotOnFile({ who, what, why }) {
@@ -114,8 +122,8 @@ function ShotTool({ d, settings, onSettings }) {
                     </div>
                 </div>
             </div>
-            {cur?.error && <p className="wb-error" role="alert">{cur.error}</p>}
-            {!cur && <p className="wb-meta" role="status">Loading shots…</p>}
+            {cur?.error && <BlockError message={cur.error} />}
+            {!cur && <Loading what="shots" />}
             {cur?.data && (
                 <>
                     <p className="wb-summary">
@@ -190,9 +198,9 @@ function hasData(tool, d) {
 }
 
 function PlayerTool({ tool, member, settings, onSettings, onNavigate }) {
-    const res = usePlayerProfile(member.id);
-    if (!res) return <p className="wb-meta" role="status">Loading {member.name}…</p>;
-    if (res.error) return <p className="wb-error" role="alert">{res.error}</p>;
+    const [res, retry] = usePlayerProfile(member.id);
+    if (!res) return <Loading what={member.name} />;
+    if (res.error) return <BlockError message={res.error} onRetry={res.retry ? retry : null} />;
     const d = res.data;
     const p = d.player;
     if (!hasData(tool, d)) {
@@ -247,9 +255,9 @@ function PlayerTool({ tool, member, settings, onSettings, onNavigate }) {
 const TEAM_PART = { rotation: 'rotations', assists: 'assists' };
 
 function TeamTool({ tool, member, settings, onSettings, onNavigate }) {
-    const res = useTeamProfile(member.id, settings.season);
-    if (!res) return <p className="wb-meta" role="status">Loading {member.name}…</p>;
-    if (res.error) return <p className="wb-error" role="alert">{res.error}</p>;
+    const [res, retry] = useTeamProfile(member.id, settings.season);
+    if (!res) return <Loading what={member.name} />;
+    if (res.error) return <BlockError message={res.error} onRetry={res.retry ? retry : null} />;
     const d = res.data;
     const block = d[TEAM_PART[tool]];
     const shown = { season: d.season, abbr: d.abbreviation, onNavigate };

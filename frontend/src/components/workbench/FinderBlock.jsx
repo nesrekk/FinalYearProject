@@ -4,7 +4,8 @@ import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import TeamLink from '../common/TeamLink';
-import { fetchWorkbenchTeams, runWorkbenchFinder, workbenchError } from '../../services/api';
+import { fetchWorkbenchTeams, runWorkbenchFinder, workbenchError, workbenchRetryable } from '../../services/api';
+import { BlockError, Loading } from './BlockStatus';
 import { LIMITS } from '../../utils/workbenchStore';
 import { useAutosave } from '../../utils/useAutosave';
 import { COLOR_NAMES, formatValue, seasonLabel, seriesVar } from './workbenchShared';
@@ -366,17 +367,19 @@ export default function FinderBlock({ block, board, catalogue, editing, onSettin
     const draftCheck = buildFinderSpec(draft, draftDs, draftSet);
     const specKey = spec ? JSON.stringify(spec) : '';
     const dirty = JSON.stringify(draft) !== settingsKey;
-    const [result, setResult] = useState({ key: '', data: null, error: '' });
+    const [result, setResult] = useState({ key: '', data: null, error: '', retry: false });
+    const [attempt, setAttempt] = useState(0);
 
     useEffect(() => {
         if (!specKey) return undefined;
         let alive = true;
         runWorkbenchFinder(JSON.parse(specKey)).then(
-            (data) => alive && setResult({ key: specKey, data, error: '' }),
-            (e) => alive && setResult({ key: specKey, data: null, error: workbenchError(e) }),
+            (data) => alive && setResult({ key: specKey, data, error: '', retry: false }),
+            (e) => alive && setResult({ key: specKey, data: null, error: workbenchError(e), retry: workbenchRetryable(e) }),
         );
         return () => { alive = false; };
-    }, [specKey]);
+    }, [specKey, attempt]);
+    const retry = () => { setResult((r) => ({ ...r, key: '' })); setAttempt((n) => n + 1); };
 
     const current = result.key === specKey ? result : null;
     const data = current?.data;
@@ -438,8 +441,8 @@ export default function FinderBlock({ block, board, catalogue, editing, onSettin
             </div>
             {dirty && draftCheck.problems.length > 0 && <p className="wb-hint">{draftCheck.problems.join(' ')}</p>}
             {!dirty && problems.length > 0 && <p className="wb-hint">{problems.join(' ')}</p>}
-            {spec && !current && <p className="wb-meta" role="status">Looking…</p>}
-            {current?.error && <p className="wb-error" role="alert">{current.error}</p>}
+            {spec && !current && <Loading what="players who match" />}
+            {current?.error && <BlockError message={current.error} onRetry={current.retry ? retry : null} />}
             {data && (
                 <>
                     <p className="wb-fd-ran"><strong>Ran:</strong> {data.sentence}</p>

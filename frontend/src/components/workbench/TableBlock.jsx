@@ -5,11 +5,12 @@ import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import TeamLink from '../common/TeamLink';
 import TeamLogo from '../common/TeamLogo';
-import { runWorkbenchQuery, workbenchError } from '../../services/api';
+import { runWorkbenchQuery, workbenchError, workbenchRetryable } from '../../services/api';
 import { LIMITS } from '../../utils/workbenchStore';
 import { useAutosave } from '../../utils/useAutosave';
 import { isPlainClick, openPage, pageHref, playerProfileHref, openPlayerProfile } from '../../utils/useUrlState';
 import { COLOR_NAMES, METHOD_CARDS, entityWord, formatValue, intervalText, seasonLabel, seriesVar, setFits } from './workbenchShared';
+import { BlockError, Loading } from './BlockStatus';
 import { LIMIT_CHOICES, buildSpec, defaultColumns, groupLabel, one, rowUnit } from './tableSpec';
 
 // ── Settings ───────────────────────────────────────────────────────────
@@ -305,17 +306,19 @@ export default function TableBlock({ block, board, catalogue, editing, onSetting
     const set = board.sets.find((s) => s.id === settings.setId) || null;
     const { spec, problem, dropped } = buildSpec(settings, ds, set);
     const specKey = spec ? JSON.stringify(spec) : '';
-    const [result, setResult] = useState({ key: '', data: null, error: '' });
+    const [result, setResult] = useState({ key: '', data: null, error: '', retry: false });
+    const [attempt, setAttempt] = useState(0);
 
     useEffect(() => {
         if (!specKey) return undefined;
         let alive = true;
         runWorkbenchQuery(JSON.parse(specKey)).then(
-            (data) => alive && setResult({ key: specKey, data, error: '' }),
-            (e) => alive && setResult({ key: specKey, data: null, error: workbenchError(e) }),
+            (data) => alive && setResult({ key: specKey, data, error: '', retry: false }),
+            (e) => alive && setResult({ key: specKey, data: null, error: workbenchError(e), retry: workbenchRetryable(e) }),
         );
         return () => { alive = false; };
-    }, [specKey]);
+    }, [specKey, attempt]);
+    const retry = () => { setResult((r) => ({ ...r, key: '' })); setAttempt((n) => n + 1); };
 
     const colorOf = new Map((set?.members || []).map((m) => [m.id, m.color]));
     const current = result.key === specKey ? result : null;
@@ -374,8 +377,8 @@ export default function TableBlock({ block, board, catalogue, editing, onSetting
                 </p>
             )}
             {problem && <p className="wb-hint">{problem}</p>}
-            {spec && !current && <p className="wb-meta" role="status">Loading…</p>}
-            {current?.error && <p className="wb-error" role="alert">{current.error}</p>}
+            {spec && !current && <Loading />}
+            {current?.error && <BlockError message={current.error} onRetry={current.retry ? retry : null} />}
             {data && (
                 <>
                     <p className="wb-summary">

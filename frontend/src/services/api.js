@@ -1441,7 +1441,8 @@ export async function fetchDataQualitySensitivity(result) {
 // Workbench (round 7). The catalogue is fetched once per page load; query
 // results are kept in memory for this tab (the last 60 specs), so blocks
 // showing the same query, or a block re-mounted after a move, don't refetch.
-// Both clear on reload, so a rebuilt table is picked up then.
+// Both clear on reload, so a rebuilt table is picked up then (the server
+// keeps its own copy of the slow summaries until impact_api restarts).
 let _workbenchCatalogue = null;
 export function fetchWorkbenchCatalogue() {
     if (!_workbenchCatalogue) {
@@ -1449,6 +1450,25 @@ export function fetchWorkbenchCatalogue() {
         _workbenchCatalogue.catch(() => { _workbenchCatalogue = null; });
     }
     return _workbenchCatalogue;
+}
+
+// At most this many Workbench requests are in flight at once; the rest wait
+// their turn (first asked, first sent), so a big board doesn't send dozens of
+// queries in one burst and the blocks on screen, which ask first, fill first.
+const WORKBENCH_PARALLEL = 4;
+let _workbenchActive = 0;
+const _workbenchWaiting = [];
+function queuedWorkbenchPost(path, body) {
+    return new Promise((resolve, reject) => {
+        const send = () => {
+            _workbenchActive += 1;
+            axios.post(`${IMPACT_BASE}/workbench/${path}`, body).then((r) => resolve(r.data), reject).finally(() => {
+                _workbenchActive -= 1;
+                _workbenchWaiting.shift()?.();
+            });
+        };
+        if (_workbenchActive < WORKBENCH_PARALLEL) send(); else _workbenchWaiting.push(send);
+    });
 }
 
 const _workbenchQueries = new Map();
@@ -1460,7 +1480,7 @@ function cachedWorkbenchPost(path, body) {
         _workbenchQueries.set(key, hit); // most recently used last
         return hit;
     }
-    const request = axios.post(`${IMPACT_BASE}/workbench/${path}`, body).then((r) => r.data);
+    const request = queuedWorkbenchPost(path, body);
     _workbenchQueries.set(key, request);
     request.catch(() => _workbenchQueries.delete(key));
     while (_workbenchQueries.size > 60) _workbenchQueries.delete(_workbenchQueries.keys().next().value);
@@ -1498,3 +1518,6 @@ export function workbenchError(e) {
     if (Array.isArray(detail) && detail[0]?.msg) return `The query was refused: ${detail[0].msg}.`;
     return e?.response ? 'The query failed on the server.' : 'The Workbench API (port 8002) isn’t reachable. Is impact_api running?';
 }
+// Worth sending again: no answer, a timeout or a server error (a refused
+// spec, 4xx, would only be refused again).
+export const workbenchRetryable = (e) => !e?.response || e.response.status >= 500;

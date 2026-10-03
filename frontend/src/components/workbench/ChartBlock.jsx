@@ -3,13 +3,14 @@ import ChartExport from '../common/ChartExport';
 import Icon from '../common/Icon';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
-import { runWorkbenchAging, runWorkbenchContext, runWorkbenchQuery, runWorkbenchTrend, workbenchError } from '../../services/api';
+import { runWorkbenchAging, runWorkbenchContext, runWorkbenchQuery, runWorkbenchTrend, workbenchError, workbenchRetryable } from '../../services/api';
 import { LIMITS } from '../../utils/workbenchStore';
 import { useAutosave } from '../../utils/useAutosave';
 import { entityWord, formatValue, intervalText, seasonLabel, setFits } from './workbenchShared';
 import { rowUnit } from './tableSpec';
 import { BIN_CHOICES, CHART_TYPES, MAX_AGING_PLAYERS, buildChart, categories, chartDefaults, isGameData, unitWord } from './chartSpec';
 import { MethodLinks } from './TableBlock';
+import { BlockError, Loading } from './BlockStatus';
 
 // Plot (and d3 under it) loads only when a board has a chart on it.
 const PlotChart = lazy(() => import('./PlotChart'));
@@ -429,7 +430,8 @@ export default function ChartBlock({ block, board, catalogue, editing, onSetting
     const plan = buildChart(settings, ds, set, catalogue.aging);
     const reqKey = plan.main || plan.context || plan.aging
         ? JSON.stringify({ main: plan.main, context: plan.context, kind: plan.contextKind, aging: plan.aging || null }) : '';
-    const [result, setResult] = useState({ key: '', main: null, ctx: null, aging: null, error: '', ctxError: '' });
+    const [result, setResult] = useState({ key: '', main: null, ctx: null, aging: null, error: '', ctxError: '', retry: false });
+    const [attempt, setAttempt] = useState(0);
     const [trend, setTrend] = useState({ key: '', data: null, error: '' });
     const areaRef = useRef(null);
     const svgRef = useRef(null);
@@ -442,7 +444,7 @@ export default function ChartBlock({ block, board, catalogue, editing, onSetting
         if (aging) {
             runWorkbenchAging(aging).then(
                 (a) => alive && setResult({ key: reqKey, main: null, ctx: null, aging: a, error: '', ctxError: '' }),
-                (e) => alive && setResult({ key: reqKey, main: null, ctx: null, aging: null, error: workbenchError(e), ctxError: '' }),
+                (e) => alive && setResult({ key: reqKey, main: null, ctx: null, aging: null, error: workbenchError(e), ctxError: '', retry: workbenchRetryable(e) }),
             );
             return () => { alive = false; };
         }
@@ -452,10 +454,11 @@ export default function ChartBlock({ block, board, catalogue, editing, onSetting
             ctxCall.then((d) => ({ d }), (e) => ({ e: workbenchError(e) })),
         ]).then(
             ([m, c]) => alive && setResult({ key: reqKey, main: m, ctx: c.d || null, aging: null, error: '', ctxError: c.e || '' }),
-            (e) => alive && setResult({ key: reqKey, main: null, ctx: null, aging: null, error: workbenchError(e), ctxError: '' }),
+            (e) => alive && setResult({ key: reqKey, main: null, ctx: null, aging: null, error: workbenchError(e), ctxError: '', retry: workbenchRetryable(e) }),
         );
         return () => { alive = false; };
-    }, [reqKey]);
+    }, [reqKey, attempt]);
+    const retry = () => { setResult((r) => ({ ...r, key: '' })); setAttempt((n) => n + 1); };
 
     const current = result.key === reqKey ? result : null;
     const ctxTruncated = plan.contextKind === 'rows' && current?.ctx?.truncated;
@@ -492,8 +495,8 @@ export default function ChartBlock({ block, board, catalogue, editing, onSetting
                 <ChartSettings settings={settings} title={block.title} catalogue={catalogue} ds={ds} sets={board.sets} onChange={onSettings} onTitle={onTitle} />
             )}
             {plan.problem && <p className="wb-hint">{plan.problem}</p>}
-            {!plan.problem && !current && <p className="wb-meta" role="status">Loading…</p>}
-            {current?.error && <p className="wb-error" role="alert">{current.error}</p>}
+            {!plan.problem && !current && <Loading what="the chart’s data" />}
+            {current?.error && <BlockError message={current.error} onRetry={current.retry ? retry : null} />}
             {current?.ctxError && <p className="wb-warn">Grey population left out: {current.ctxError}</p>}
             {ctxTruncated && (
                 <p className="wb-warn">
@@ -525,7 +528,7 @@ export default function ChartBlock({ block, board, catalogue, editing, onSetting
             )}
             <div ref={areaRef} className="wb-chart-area">
                 {ready && size.w > 80 && (
-                    <Suspense fallback={<p className="wb-meta" role="status">Loading the chart library…</p>}>
+                    <Suspense fallback={<Loading what="the chart library" />}>
                         <PlotChart
                             type={plan.type}
                             enc={plan.enc}

@@ -58,6 +58,29 @@
   margin: var(--space-2) 0;
 }
 .wb-error { color: var(--negative); font-size: 13px; margin: var(--space-2) 0; }
+.wb-error-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--negative);
+  background: var(--surface-2);
+}
+.wb-error-box p { margin: 0; flex: 1 1 220px; }
+.wb-loading { display: inline-flex; align-items: center; gap: 8px; margin: var(--space-2) 0; }
+.wb-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  border-top-color: var(--brand);
+  animation: wb-spin 0.8s linear infinite;
+}
+@keyframes wb-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .wb-spinner { animation: none; border-top-color: var(--line); }
+}
 .wb-warn {
   color: var(--text);
   font-size: 13px;
@@ -130,7 +153,7 @@
 }
 .wb-pill:hover { border-color: var(--brand); }
 .wb-pill--on { background: var(--surface-2); border-color: var(--brand); color: var(--brand-text); }
-.wb-pill-n { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+.wb-pill-n { font-family: var(--font-mono); font-size: 11px; color: var(--text-2); }
 .wb-board-head {
   display: flex;
   flex-wrap: wrap;
@@ -639,4 +662,74 @@
 @media (max-width: 760px) {
   .wb-fd-stat { max-width: 100%; }
   .wb-fd-use .wb-input { flex: 1 1 100%; width: auto; }
+}
+
+/* ── Step 8: starter boards, phone menus, big boards ─────────────────── */
+.wb-btn-on { border-color: var(--brand); color: var(--brand-text); }
+.wb-starter-panel {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.wb-empty-or { margin: var(--space-5) 0 var(--space-2); color: var(--text-2); }
+.wb-starters {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-2);
+  text-align: left;
+}
+.wb-starter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.wb-starter:hover:not(:disabled) { border-color: var(--brand); }
+.wb-starter:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.wb-starter:disabled { opacity: 0.6; cursor: progress; }
+.wb-starter-name { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; }
+.wb-starter-blurb { font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
+.wb-starter-n { margin-top: auto; font-family: var(--font-mono); font-size: 11px; color: var(--text-2); }
+.wb-board-size { margin: 0 0 var(--space-2); }
+.wb-lazy {
+  height: 100%;
+  min-height: 80px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2) var(--space-3);
+  border: 1px dashed var(--line);
+}
+.wb-more { position: relative; }
+.wb-more > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 6px 0;
+}
+.wb-more > summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.wb-more-body { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-top: var(--space-2); }
+.wb-board-select { flex: 1 1 100%; font-weight: 600; }
+@media (max-width: 760px) {
+  .wb-add-menu { flex: 1 1 100%; }
+  .wb-empty { padding: var(--space-4) var(--space-3); }
+  .wb-empty-title { font-size: 22px; }
+  .wb-starters { grid-template-columns: 1fr; }
+  .wb-board-head { gap: var(--space-2); }
+  .wb-board-name { font-size: 16px; flex-basis: 100%; }
+  .wb-settings { grid-template-columns: 1fr; }
 }

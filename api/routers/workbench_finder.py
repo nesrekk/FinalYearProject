@@ -72,7 +72,7 @@ from routers.game_log import _names
 from routers.leaderboard import _sample
 from routers.workbench import (
     NUM_OPS, ROW_CAP, Condition, _bad, _column, _dim_condition, _entities, _gate, _num_condition, _out,
-    _season_label, _stable, _value_sql, column_meta, execute_readonly, _dataset_meta,
+    _season_label, _stable, _value_sql, column_meta, execute_readonly, _dataset_meta, response_cache,
 )
 from source_badge import make_source
 
@@ -396,6 +396,7 @@ def _sentence(ds, spec, lo, hi, filter_words, words):
 # ─── the endpoint ───────────────────────────────────────────────────────────
 
 @router.post("/workbench/finder")
+@response_cache("finder", keep=lambda out: len(out["rows"]) <= 1000)
 def workbench_finder(spec: FinderSpec):
     plan = compile_finder(spec)
     ds = plan["ds"]

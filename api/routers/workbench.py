@@ -64,11 +64,14 @@ process: restart impact_api after rebuilding a source table.
 
 import datetime
 import decimal
+import functools
 import hashlib
 import json
 import math
 import re
+import threading
 import unicodedata
+from collections import OrderedDict
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Literal
@@ -680,6 +683,43 @@ def workbench_query(spec: QuerySpec):
     }
 
 
+# ─── response cache ─────────────────────────────────────────────────────────
+# The summaries below (context, trend, aging) and the Player Finder read many
+# rows and return few, so the same request (a starter board every visitor
+# opens, a chart re-drawn after a move) is answered from memory the second
+# time. Safe for the same reason as the catalogue's lru_caches: the tables
+# change only on a rebuild, after which impact_api is restarted (README). The
+# key is the validated request, so key order or defaults filled in by the
+# schema don't make two copies. Errors are never kept; /workbench/query isn't
+# cached (its responses can hold 5,000 rows, and it runs in milliseconds).
+
+RESPONSE_CACHE_SIZE = 256
+_responses = OrderedDict()
+_responses_lock = threading.Lock()
+
+
+def response_cache(kind, keep=lambda out: True):
+    """Decorator for a POST endpoint taking one request model."""
+    def wrap(fn):
+        @functools.wraps(fn)
+        def endpoint(*args, **kwargs):
+            req = (args or tuple(kwargs.values()))[0]
+            key = (kind, req.model_dump_json())
+            with _responses_lock:
+                if key in _responses:
+                    _responses.move_to_end(key)
+                    return _responses[key]
+            out = fn(*args, **kwargs)
+            if keep(out):
+                with _responses_lock:
+                    _responses[key] = out
+                    while len(_responses) > RESPONSE_CACHE_SIZE:
+                        _responses.popitem(last=False)
+            return out
+        return endpoint
+    return wrap
+
+
 # ─── chart support: the population behind a chart, and its trend line ──────
 # Charts (round 7 step 4) draw a set's rows from /workbench/query. These two
 # read every matching row of the same spec and return only a few numbers, so
@@ -743,6 +783,7 @@ def _summary(vals):
 
 
 @router.post("/workbench/context")
+@response_cache("context")
 def workbench_context(req: ContextRequest):
     """Quantiles (10/25/50/75/90th) of one column over every row the spec
     matches, overall and per value of `by` (a field of the rows, e.g. season),
@@ -811,6 +852,7 @@ def _cluster_boot_r(x, y, groups, seed, resamples=BOOT_RESAMPLES):
 
 
 @router.post("/workbench/trend")
+@response_cache("trend")
 def workbench_trend(req: TrendRequest):
     """Straight-line fit of y on x over exactly the rows the spec returns (the
     points a chart draws). The slope, its interval and the line's 95% band
@@ -1006,6 +1048,7 @@ def _aging_meta():
 
 
 @router.post("/workbench/aging")
+@response_cache("aging")
 def workbench_aging(req: AgingRequest):
     """The typical aging curve of one stat (level and 95% range by age, against
     that season's league average) and each player's seasons on the same scale,

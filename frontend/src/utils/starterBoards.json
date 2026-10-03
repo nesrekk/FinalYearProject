@@ -1,0 +1,171 @@
+{
+  "_about": "Starter boards for the Workbench (round 7 step 8). Each is a board description in the shape cleanBoard() reads (blocks in reading order, placed by openInWorkbench.board()); every number on them is fetched live when the board opens. api/tests/test_workbench_starters.py checks every id, team code, dataset, stat and tool key here against the database and the catalogue, and runs every table's query. Notes state no measured number: those come from the blocks.",
+  "boards": [
+    {
+      "key": "careers",
+      "icon": "timeline",
+      "name": "Two careers: LeBron James and Michael Jordan",
+      "blurb": "Career against career: per-game averages, BPM by age against the typical aging curve, and scoring season by season.",
+      "sets": [
+        { "id": "s0", "name": "LeBron vs Jordan", "kind": "player", "members": [
+          { "id": 2544, "name": "LeBron James", "color": 0 },
+          { "id": 893, "name": "Michael Jordan", "color": 1 }
+        ] }
+      ],
+      "blocks": [
+        { "type": "note", "w": 12, "h": 3, "settings": { "text": "Two careers side by side. The set holds the two players: swap either one for anyone (search in the Set block) and every block on the board follows.\nThe table averages each career over every season on file (per game). The first chart puts each season's BPM against his age, with the typical aging curve from the Aging Curves page moved to each player's level; the second shows points a game season by season over the league's spread (grey band)." } },
+        { "type": "set", "w": 4, "h": 7, "settings": { "setId": "s0" } },
+        { "type": "table", "w": 8, "h": 7, "title": "Career averages", "settings": {
+          "dataset": "player_season", "setId": "s0", "columns": ["min", "pts", "reb", "ast", "stl", "blk", "ts_pct", "bpm", "vorp"],
+          "seasonFrom": 1985, "seasonTo": 2026, "groupBy": "entity", "per": "game", "sort": [{ "key": "pts", "dir": "desc" }], "limit": 25 } },
+        { "type": "chart", "w": 12, "h": 12, "title": "BPM by age", "settings": {
+          "dataset": "player_season", "setId": "s0", "chart": "line", "y": "bpm", "lineX": "age", "agingEra": "all",
+          "seasonFrom": 1985, "seasonTo": 2026, "per": "game", "context": true } },
+        { "type": "chart", "w": 12, "h": 11, "title": "Points a game, season by season", "settings": {
+          "dataset": "player_season", "setId": "s0", "chart": "line", "y": "pts",
+          "seasonFrom": 1985, "seasonTo": 2026, "per": "game", "minGames": 20, "context": true } }
+      ]
+    },
+    {
+      "key": "usage",
+      "icon": "scatter_plot",
+      "name": "Usage vs efficiency, 2025-26",
+      "blurb": "Every player with 20+ games in grey, eight of the busiest scorers in colour, and a fitted line with r and its interval.",
+      "sets": [
+        { "id": "s0", "name": "High-usage scorers", "kind": "player", "members": [
+          { "id": 1629029, "name": "Luka Dončić", "color": 0 },
+          { "id": 203507, "name": "Giannis Antetokounmpo", "color": 1 },
+          { "id": 1628983, "name": "Shai Gilgeous-Alexander", "color": 2 },
+          { "id": 1641705, "name": "Victor Wembanyama", "color": 3 },
+          { "id": 1630162, "name": "Anthony Edwards", "color": 4 },
+          { "id": 201939, "name": "Stephen Curry", "color": 5 },
+          { "id": 1628973, "name": "Jalen Brunson", "color": 6 },
+          { "id": 203999, "name": "Nikola Jokić", "color": 7 }
+        ] }
+      ],
+      "blocks": [
+        { "type": "note", "w": 12, "h": 3, "settings": { "text": "Usage is the share of his team's plays a player finishes while he is on the floor; true shooting is points per shooting chance (free throws counted). Up and to the right means a big load carried efficiently.\nGrey: every player with 20+ games in 2025-26. In colour: the set (add or remove anyone). The line is a straight-line fit over every grey dot, with r and its 95% interval (whole players resampled)." } },
+        { "type": "chart", "w": 8, "h": 13, "title": "Usage vs true shooting, 2025-26", "settings": {
+          "dataset": "player_season", "setId": "s0", "chart": "scatter", "x": "usg_pct", "y": "ts_pct",
+          "seasonFrom": 2026, "seasonTo": 2026, "per": "game", "minGames": 20, "context": true, "trend": true } },
+        { "type": "set", "w": 4, "h": 13, "settings": { "setId": "s0" } },
+        { "type": "table", "w": 12, "h": 8, "settings": {
+          "dataset": "player_season", "setId": "s0", "columns": ["min", "pts", "usg_pct", "ts_pct", "efg_pct", "fta", "tov"],
+          "seasonFrom": 2026, "seasonTo": 2026, "groupBy": "none", "per": "game", "sort": [{ "key": "usg_pct", "dir": "desc" }], "limit": 25 } }
+      ]
+    },
+    {
+      "key": "lineups",
+      "icon": "groups",
+      "name": "A team's lineups: Oklahoma City, 2025-26",
+      "blurb": "Five-man units and pairs from the play-by-play with possession floors, all lineups league-wide in grey, and the rotation chart.",
+      "sets": [
+        { "id": "s0", "name": "Thunder", "kind": "team", "members": [
+          { "id": "OKC", "name": "Oklahoma City Thunder", "color": 0 }
+        ] }
+      ],
+      "blocks": [
+        { "type": "note", "w": 12, "h": 3, "settings": { "text": "A team's five-man units and two-man pairs in 2025-26, from the play-by-play: possessions both ways, ratings per 100. Lineups under 100 possessions and pairs under 250 are left out (change the floors in Settings): below that a net rating is mostly noise.\nChange the team in the Set block (any franchise; lineups run from 2020-21) and every block follows." } },
+        { "type": "set", "w": 4, "h": 7, "settings": { "setId": "s0" } },
+        { "type": "table", "w": 8, "h": 10, "title": "Five-man lineups", "settings": {
+          "dataset": "lineup_season", "setId": "s0", "columns": ["games", "minutes", "poss", "off_rating", "def_rating", "net_rating"],
+          "seasonFrom": 2026, "seasonTo": 2026, "groupBy": "none", "per": "game", "sort": [{ "key": "net_rating", "dir": "desc" }],
+          "limit": 25, "minPoss": 100 } },
+        { "type": "chart", "w": 6, "h": 12, "title": "Lineups: offence vs defence", "settings": {
+          "dataset": "lineup_season", "setId": "s0", "chart": "scatter", "x": "off_rating", "y": "def_rating",
+          "seasonFrom": 2026, "seasonTo": 2026, "per": "game", "minPoss": 100, "context": true } },
+        { "type": "table", "w": 6, "h": 12, "title": "Two-man pairs", "settings": {
+          "dataset": "pair_season", "setId": "s0", "columns": ["minutes", "poss", "off_rating", "def_rating", "net_rating"],
+          "seasonFrom": 2026, "seasonTo": 2026, "groupBy": "none", "per": "game", "sort": [{ "key": "net_rating", "dir": "desc" }],
+          "limit": 100, "minPoss": 250 } },
+        { "type": "tool", "w": 12, "settings": { "tool": "rotation", "setId": "s0", "member": "OKC", "season": 2026 } }
+      ]
+    },
+    {
+      "key": "likejokic",
+      "icon": "person_search",
+      "name": "Find players like Jokić: 20, 10 and 8",
+      "blurb": "The Player Finder looks for seasons of 20+ points, 10+ rebounds and 8+ assists a game since 1949-50; change any box.",
+      "sets": [
+        { "id": "s0", "name": "Jokić", "kind": "player", "members": [
+          { "id": 203999, "name": "Nikola Jokić", "color": 0 }
+        ] }
+      ],
+      "blocks": [
+        { "type": "note", "w": 12, "h": 3, "settings": { "text": "Nikola Jokić's kind of season: at least 20 points, 10 rebounds and 8 assists a game, over at least 40 games. The finder looks through every season on file, from 1949-50.\nChange any box and press Find players. \"Add to set\" puts the players found on this board; the scatter below shows 2025-26 with the set in colour." } },
+        { "type": "finder", "w": 12, "h": 16, "title": "Seasons like Jokić's", "settings": {
+          "dataset": "player_season", "scope": "season", "seasonFrom": 1950, "seasonTo": null, "minGames": 40,
+          "where": "all", "result": "all", "opponent": null, "minMinutes": null,
+          "conditions": [
+            { "type": "value", "stat": "pts", "op": "gte", "value": 20, "value2": null, "per": "game", "minN": null },
+            { "type": "value", "stat": "reb", "op": "gte", "value": 10, "value2": null, "per": "game", "minN": null },
+            { "type": "value", "stat": "ast", "op": "gte", "value": 8, "value2": null, "per": "game", "minN": null }
+          ],
+          "sort": null, "limit": 100 } },
+        { "type": "set", "w": 4, "h": 12, "settings": { "setId": "s0" } },
+        { "type": "chart", "w": 8, "h": 12, "title": "Rebounds vs assists, 2025-26", "settings": {
+          "dataset": "player_season", "setId": "s0", "chart": "scatter", "x": "reb", "y": "ast", "size": "pts",
+          "seasonFrom": 2026, "seasonTo": 2026, "per": "game", "minGames": 40, "context": true } }
+      ]
+    },
+    {
+      "key": "teams",
+      "icon": "sports_basketball",
+      "name": "Offence vs defence, every team, 2025-26",
+      "blurb": "Points scored and allowed per 100 possessions for all 30 teams, the five best by net rating over ten seasons.",
+      "sets": [
+        { "id": "s0", "name": "Top five, 2025-26", "kind": "team", "members": [
+          { "id": "OKC", "name": "Oklahoma City Thunder", "color": 0 },
+          { "id": "SAS", "name": "San Antonio Spurs", "color": 1 },
+          { "id": "DET", "name": "Detroit Pistons", "color": 2 },
+          { "id": "BOS", "name": "Boston Celtics", "color": 3 },
+          { "id": "NYK", "name": "New York Knicks", "color": 4 }
+        ] }
+      ],
+      "blocks": [
+        { "type": "note", "w": 12, "h": 3, "settings": { "text": "Each team's points scored (offensive rating) and allowed (defensive rating) per 100 possessions, Basketball-Reference's. A lower defensive rating is better.\nIn colour: the five best teams by net rating in 2025-26 (change them in the Set block). The line chart follows their net rating over ten seasons, over the league's spread in grey." } },
+        { "type": "chart", "w": 7, "h": 12, "title": "Offensive vs defensive rating, 2025-26", "settings": {
+          "dataset": "team_season", "setId": "s0", "chart": "scatter", "x": "o_rtg", "y": "d_rtg",
+          "seasonFrom": 2026, "seasonTo": 2026, "per": "game", "context": true } },
+        { "type": "chart", "w": 5, "h": 12, "title": "Net rating over ten seasons", "settings": {
+          "dataset": "team_season", "setId": "s0", "chart": "line", "y": "n_rtg",
+          "seasonFrom": 2017, "seasonTo": 2026, "per": "game", "context": true } },
+        { "type": "set", "w": 4, "h": 8, "settings": { "setId": "s0" } },
+        { "type": "table", "w": 8, "h": 8, "title": "Every team, 2025-26", "settings": {
+          "dataset": "team_season", "columns": ["w", "l", "o_rtg", "d_rtg", "n_rtg", "srs", "pace"],
+          "seasonFrom": 2026, "seasonTo": 2026, "groupBy": "none", "per": "game", "sort": [{ "key": "n_rtg", "dir": "desc" }], "limit": 50 } }
+      ]
+    },
+    {
+      "key": "impact",
+      "icon": "insights",
+      "name": "Impact ratings with intervals, 2025-26",
+      "blurb": "BPM, RAPM and the Rating Tracker side by side with their 95% intervals, and each player's on/off.",
+      "sets": [
+        { "id": "s0", "name": "Stars", "kind": "player", "members": [
+          { "id": 203999, "name": "Nikola Jokić", "color": 0 },
+          { "id": 1628983, "name": "Shai Gilgeous-Alexander", "color": 1 },
+          { "id": 1641705, "name": "Victor Wembanyama", "color": 2 },
+          { "id": 203507, "name": "Giannis Antetokounmpo", "color": 3 },
+          { "id": 1629029, "name": "Luka Dončić", "color": 4 },
+          { "id": 201939, "name": "Stephen Curry", "color": 5 },
+          { "id": 1630162, "name": "Anthony Edwards", "color": 6 },
+          { "id": 1628973, "name": "Jalen Brunson", "color": 7 }
+        ] }
+      ],
+      "blocks": [
+        { "type": "note", "w": 12, "h": 3, "settings": { "text": "Three ways to rate a player's impact, per 100 possessions: BPM (from the box score), RAPM with a BPM prior (from who was on the floor), and the Rating Tracker (RAPM whose ratings carry across seasons). Under each model value is its 95% interval; the on/off table's interval is clustered by game.\nAn interval that crosses another player's value means the data can't order the two. How each is estimated: the links under the tables." } },
+        { "type": "table", "w": 12, "h": 10, "title": "Impact ratings", "settings": {
+          "dataset": "player_season", "setId": "s0", "columns": ["min", "bpm", "rapm_prior", "tracker"],
+          "seasonFrom": 2026, "seasonTo": 2026, "groupBy": "none", "per": "game", "sort": [{ "key": "tracker", "dir": "desc" }], "limit": 25, "showCi": true } },
+        { "type": "set", "w": 4, "h": 12, "settings": { "setId": "s0" } },
+        { "type": "chart", "w": 8, "h": 12, "title": "BPM vs the Rating Tracker", "settings": {
+          "dataset": "player_season", "setId": "s0", "chart": "scatter", "x": "bpm", "y": "tracker",
+          "seasonFrom": 2026, "seasonTo": 2026, "per": "game", "minGames": 20, "context": true, "ci": true } },
+        { "type": "table", "w": 12, "h": 9, "title": "On/off", "settings": {
+          "dataset": "player_onoff", "setId": "s0", "columns": ["minutes_on", "net_on", "net_off", "on_off_net"],
+          "seasonFrom": 2026, "seasonTo": 2026, "groupBy": "none", "per": "game", "sort": [{ "key": "on_off_net", "dir": "desc" }], "limit": 25, "showCi": true } }
+      ]
+    }
+  ]
+}

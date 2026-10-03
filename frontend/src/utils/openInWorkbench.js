@@ -12,8 +12,9 @@ import { TOOLS } from './workbenchTools';
 const label = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const range = (a, b) => (a === b ? label(a) : `${label(a)} to ${label(b)}`);
 
-// Blocks listed in reading order, each placed like a block added by hand.
-function board(name, sets, list) {
+// Blocks listed in reading order, each placed like a block added by hand
+// (also used by the Workbench's starter boards, utils/starterBoards.js).
+export function board(name, sets, list) {
     const blocks = [];
     list.filter(Boolean).forEach((b, i) => {
         const w = b.w ?? (b.type === 'tool' ? TOOLS[b.settings.tool].w : 6);
