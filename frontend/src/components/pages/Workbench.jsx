@@ -3,9 +3,11 @@ import Icon from '../common/Icon';
 import InfoTooltip from '../common/InfoTooltip';
 import SaveViewButton from '../common/SaveViewButton';
 import BoardGrid from '../workbench/BoardGrid';
+import ChartBlock from '../workbench/ChartBlock';
 import NoteBlock from '../workbench/NoteBlock';
 import SetBlock from '../workbench/SetBlock';
 import TableBlock from '../workbench/TableBlock';
+import { chartDefaults } from '../workbench/chartSpec';
 import { defaultColumns } from '../workbench/tableSpec';
 import { BLOCK_INFO, blockLabel } from '../workbench/workbenchShared';
 import { fetchWorkbenchCatalogue, workbenchError } from '../../services/api';
@@ -153,7 +155,7 @@ export default function Workbench() {
     };
 
     const addBlock = async (type) => {
-        if (type === 'table' && !catalogue.data) return;
+        if ((type === 'table' || type === 'chart') && !catalogue.data) return;
         const target = board || await run(() => createBoard('My board'));
         if (!target) return;
         setSel(target.id);
@@ -173,6 +175,17 @@ export default function Workbench() {
                 const dsKey = set?.kind === 'team' ? 'team_season' : 'player_season';
                 const ds = catalogue.data.datasets.find((d) => d.key === dsKey) || catalogue.data.datasets[0];
                 settings = cleanSettings('table', { dataset: ds.key, setId: set?.id, columns: defaultColumns(ds) }, new Set(bd.sets.map((s) => s.id)));
+            } else if (type === 'chart') {
+                // A line over seasons for the newest set with members, else a
+                // scatter of the whole league (one season, 20+ games).
+                const set = [...bd.sets].reverse().find((s) => s.members.length);
+                const dsKey = set?.kind === 'team' ? 'team_season' : 'player_season';
+                const ds = catalogue.data.datasets.find((d) => d.key === dsKey) || catalogue.data.datasets[0];
+                const chart = set ? 'line' : 'scatter';
+                settings = cleanSettings('chart', {
+                    dataset: ds.key, setId: set?.id, chart, ...chartDefaults(ds, chart),
+                    minGames: ds.key === 'player_season' ? 20 : null, trend: !set,
+                }, new Set(bd.sets.map((s) => s.id)));
             } else {
                 settings = { text: '' };
             }
@@ -299,7 +312,7 @@ export default function Workbench() {
                 {handle}
                 <h3 className="wb-block-title"><Icon name={info.icon} size={16} /> <span>{label}</span></h3>
                 <span className="wb-block-actions">
-                    {b.type === 'table' && (
+                    {(b.type === 'table' || b.type === 'chart') && (
                         <button type="button" className={`wb-icon-btn${editing.has(b.id) ? ' wb-icon-btn--on' : ''}`} onClick={() => toggleEditing(b.id)}
                             aria-expanded={editing.has(b.id)} aria-label={`Settings for ${label}`} title="Settings">
                             <Icon name="tune" size={17} />
@@ -331,6 +344,19 @@ export default function Workbench() {
         if (b.type === 'note') return <NoteBlock block={b} onSave={(text) => patchSettings(b.id, { text: text.slice(0, LIMITS.note) })} />;
         if (catalogue.error) return <p className="wb-error" role="alert">{catalogue.error}</p>;
         if (!catalogue.data) return <p className="wb-meta" role="status">Loading the stat catalogue…</p>;
+        if (b.type === 'chart') {
+            return (
+                <ChartBlock
+                    block={b}
+                    board={board}
+                    catalogue={catalogue.data}
+                    editing={editing.has(b.id)}
+                    label={labelOf(b.id)}
+                    onSettings={(patch) => patchSettings(b.id, patch)}
+                    onTitle={(title) => setTitle(b.id, title)}
+                />
+            );
+        }
         return (
             <TableBlock
                 block={b}
@@ -346,9 +372,9 @@ export default function Workbench() {
     const addButtons = (
         <span className="wb-add" role="group" aria-label="Add a block">
             <span className="wb-add-label">Add</span>
-            {['set', 'table', 'note'].map((t) => (
+            {['set', 'table', 'chart', 'note'].map((t) => (
                 <button key={t} type="button" className="table-export-btn" onClick={() => addBlock(t)}
-                    disabled={t === 'table' && !catalogue.data}>
+                    disabled={(t === 'table' || t === 'chart') && !catalogue.data}>
                     <Icon name={BLOCK_INFO[t].icon} size={15} /> {BLOCK_INFO[t].short}
                 </button>
             ))}
@@ -365,7 +391,9 @@ export default function Workbench() {
                         A board is a page of blocks you arrange yourself. Start with a <strong>Set</strong>: a named group of
                         players or teams. Then add a <strong>Table</strong>, choose the data (player seasons, player games,
                         team seasons, team games), the stats and the seasons, and bind it to the set; change the set and
-                        every block bound to it follows. Drag a block by its handle to move it and by its corner to resize
+                        every block bound to it follows. A <strong>Chart</strong> draws the set in its colours over
+                        the whole league in grey (same seasons, same games floor), with each value’s n in its
+                        tooltip and the chart’s n written under it. Drag a block by its handle to move it and by its corner to resize
                         it, or focus the handle and use the arrow keys (Shift resizes). Every number is fetched live from
                         the app’s data with its sample (n); values from too small a sample are greyed. Boards are stored
                         in this browser (IndexedDB), not on a server: share one as a link or an exported file.
@@ -422,7 +450,8 @@ export default function Workbench() {
                         <p className="wb-empty-title">Add your first block</p>
                         <p>
                             Start with a <strong>Set</strong> of players or teams, then add a <strong>Table</strong> and pick
-                            its stats. A <strong>Note</strong> holds your own text. Charts and the app’s tools come as blocks next.
+                            its stats, or a <strong>Chart</strong> (scatter, line, bars, histogram, distribution or heatmap)
+                            with every player in grey behind your set. A <strong>Note</strong> holds your own text.
                         </p>
                         {addButtons}
                     </div>
@@ -451,7 +480,7 @@ export default function Workbench() {
                         {board.blocks.length === 0 ? (
                             <div className="wb-empty">
                                 <p className="wb-empty-title">This board is empty</p>
-                                <p>Add a <strong>Set</strong> of players or teams first, then a <strong>Table</strong> bound to it.</p>
+                                <p>Add a <strong>Set</strong> of players or teams first, then a <strong>Table</strong> or a <strong>Chart</strong> bound to it.</p>
                                 {addButtons}
                             </div>
                         ) : (

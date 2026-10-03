@@ -8,6 +8,12 @@ from api/workbench_catalogue.py.
     POST /workbench/query       run a spec (below)
     GET  /workbench/entities    players by name (with their NBA ids) or every
                                 franchise, for the board's player/team sets
+    POST /workbench/context     {spec, column, by?, bins?}: quantiles (and a
+                                histogram) of one column over every row a spec
+                                matches, no row cap: a chart's grey population
+    POST /workbench/trend       {spec, x, y}: straight-line fit over the rows a
+                                chart draws; slope clustered by player/team,
+                                r's interval a cluster bootstrap
 
 Spec:
 
@@ -49,6 +55,8 @@ process: restart impact_api after rebuilding a source table.
 
 import datetime
 import decimal
+import hashlib
+import json
 import math
 import re
 import unicodedata
@@ -56,6 +64,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Literal
 
+import numpy as np
 import psycopg2
 import psycopg2.errors
 from fastapi import APIRouter, HTTPException
@@ -66,6 +75,7 @@ from impact_core import get_db
 from routers.game_log import _names
 from routers.leaderboard import RELIABLE, _sample, stable_samples
 from source_badge import make_source
+from stats_lib import wls_cluster
 from teams_lib import NBA_TO_BREF, franchise_of, lookup_codes
 
 router = APIRouter()
@@ -540,12 +550,13 @@ def column_meta(ds, col, per=None, grouped=False):
     return out
 
 
-@router.post("/workbench/query")
-def workbench_query(spec: QuerySpec):
-    plan = compile_query(spec)
+def _run(spec, limit=None):
+    """Compile and run a spec; returns (plan, rows as dicts, matched, source_rows).
+    `limit` overrides spec.limit for the internal summaries below, which read
+    every matched row but return only a few numbers."""
+    plan = compile_query(spec if limit is None else spec.model_copy(update={"limit": limit, "offset": 0}))
     ds = plan.ds
     rows = execute_readonly(plan.sql, plan.params)
-    grouped = plan.group is not None
     names = _names() if ds.names_from_ids else None
     stables = {c.key: _stable(c) for c in plan.cols}
     out = []
@@ -569,6 +580,15 @@ def workbench_query(spec: QuerySpec):
         out.append(row)
     matched = int(rows[0][-2]) if rows else 0
     source_rows = int(rows[0][-1]) if rows else 0
+    return plan, out, matched, source_rows
+
+
+@router.post("/workbench/query")
+def workbench_query(spec: QuerySpec):
+    plan, out, matched, source_rows = _run(spec)
+    ds = plan.ds
+    grouped = plan.group is not None
+    names = ds.names_from_ids
     notes = list(plan.notes)
     if matched > spec.offset + len(out):
         notes.insert(0, f"Showing {spec.offset + 1:,}-{spec.offset + len(out):,} of {matched:,}; raise the limit "
@@ -577,7 +597,7 @@ def workbench_query(spec: QuerySpec):
     for _a, role, name, _s in plan.select:
         if role == "field" and name not in fields:
             fields.append(name)
-    if names is not None and "player_id" in fields:
+    if names and "player_id" in fields:
         fields.insert(fields.index("player_id") + 1, "player_name")
     return {
         "dataset": {"key": ds.key, "label": ds.label, "entity": ds.entity, "row_label": ds.row_label},
@@ -591,6 +611,206 @@ def workbench_query(spec: QuerySpec):
         "notes": notes,
         "_source": make_source(list(ds.tables), ds.upstream),
     }
+
+
+# ─── chart support: the population behind a chart, and its trend line ──────
+# Charts (round 7 step 4) draw a set's rows from /workbench/query. These two
+# read every matching row of the same spec and return only a few numbers, so
+# they aren't held to the 5,000-row cap of a query that returns rows; they
+# keep its timeout and read-only transaction.
+
+CONTEXT_CAP = 200_000
+QUANTILES = (0.1, 0.25, 0.5, 0.75, 0.9)
+
+
+class ContextRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    spec: QuerySpec
+    column: str = Field(max_length=40)
+    by: str | None = Field(None, max_length=40)
+    bins: int | None = Field(None, ge=1, le=100)
+
+
+class TrendRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    spec: QuerySpec
+    x: str = Field(max_length=40)
+    y: str = Field(max_length=40)
+
+
+def _finite(v):
+    return v is not None and isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _r6(v):
+    return None if v is None else float(f"{float(v):.6g}")
+
+
+def _nice_step(span, bins):
+    raw = span / max(1, bins)
+    mag = 10 ** math.floor(math.log10(raw))
+    for m in (1, 2, 2.5, 5, 10):
+        if m * mag >= raw:
+            return m * mag
+    return 10 * mag
+
+
+def _histogram(vals, bins):
+    lo, hi = float(vals.min()), float(vals.max())
+    if hi <= lo:
+        return {"edges": [_r6(lo), _r6(lo)], "counts": [int(len(vals))]}
+    step = _nice_step(hi - lo, bins)
+    start = math.floor(lo / step) * step
+    k = max(1, math.ceil((hi - start) / step - 1e-9))
+    edges = np.array([start + i * step for i in range(k + 1)])
+    if edges[-1] < hi:
+        edges = np.append(edges, edges[-1] + step)
+    counts, _ = np.histogram(vals, edges)
+    return {"edges": [_r6(e) for e in edges], "counts": [int(c) for c in counts]}
+
+
+def _summary(vals):
+    q = np.quantile(vals, QUANTILES)
+    return {"n": int(len(vals)), "mean": _r6(vals.mean()),
+            **{f"p{int(round(p * 100))}": _r6(v) for p, v in zip(QUANTILES, q)}}
+
+
+@router.post("/workbench/context")
+def workbench_context(req: ContextRequest):
+    """Quantiles (10/25/50/75/90th) of one column over every row the spec
+    matches, overall and per value of `by` (a field of the rows, e.g. season),
+    plus a histogram on round bin edges when `bins` is given. Each row counts
+    once; rows with no value are counted and left out."""
+    spec = req.spec
+    if req.column not in spec.columns:
+        _bad(f"'{req.column}' isn't one of the spec's columns.")
+    plan, rows, matched, _src = _run(spec, limit=CONTEXT_CAP)
+    if matched > CONTEXT_CAP:
+        _bad(f"{matched:,} rows match; summaries read at most {CONTEXT_CAP:,}. Narrow the seasons or add a games floor.")
+    fields = [name for _a, role, name, _s in plan.select if role == "field"]
+    if req.by is not None and req.by not in fields:
+        _bad(f"Can't split by '{req.by}': use one of the rows' fields ({', '.join(fields) or 'none'}).")
+    col = next(c for c in plan.cols if c.key == req.column)
+    vals, groups, missing = [], {}, 0
+    for r in rows:
+        v = r.get(req.column)
+        if not _finite(v):
+            missing += 1
+            continue
+        vals.append(v)
+        if req.by is not None:
+            groups.setdefault(r.get(req.by), []).append(v)
+    arr = np.array(vals, float)
+    grouped = plan.group is not None
+    return {
+        "column": column_meta(plan.ds, col, plan.per, grouped),
+        "by": req.by,
+        "n_rows": matched,
+        "n_missing": missing,
+        "overall": _summary(arr) if len(arr) else None,
+        "groups": [{"key": k, **_summary(np.array(g, float))}
+                   for k, g in sorted(groups.items(), key=lambda kv: (kv[0] is None, kv[0]))],
+        "histogram": _histogram(arr, req.bins) if req.bins and len(arr) else None,
+        "spec": {**spec.model_dump(), "group_by": plan.group if grouped else "none",
+                 "season_from": plan.season_from, "season_to": plan.season_to},
+        "_source": make_source(list(plan.ds.tables), plan.ds.upstream),
+    }
+
+
+BOOT_RESAMPLES = 2000
+
+
+def _cluster_boot_r(x, y, groups, seed, resamples=BOOT_RESAMPLES):
+    """95% percentile interval of Pearson's r from resampling whole clusters
+    (players or teams) with replacement. Each resample's r comes from summed
+    per-cluster moments, so it costs a matrix product, not a refit."""
+    _, inv = np.unique(groups, return_inverse=True)
+    k = int(inv.max()) + 1
+    xc, yc = x - x.mean(), y - y.mean()
+    S = np.zeros((k, 6))
+    np.add.at(S, inv, np.column_stack([np.ones(len(x)), xc, yc, xc * xc, yc * yc, xc * yc]))
+    rng = np.random.default_rng(seed)
+    rs = []
+    for start in range(0, resamples, 250):
+        b = min(250, resamples - start)
+        counts = np.stack([np.bincount(rng.integers(0, k, k), minlength=k) for _ in range(b)])
+        n, sx, sy, sxx, syy, sxy = (counts @ S).T
+        vx, vy = sxx - sx * sx / n, syy - sy * sy / n
+        with np.errstate(invalid="ignore", divide="ignore"):
+            rs.append((sxy - sx * sy / n) / np.sqrt(vx * vy))
+    rs = np.concatenate(rs)
+    rs = rs[np.isfinite(rs)]
+    return np.percentile(rs, [2.5, 97.5]), int(len(rs))
+
+
+@router.post("/workbench/trend")
+def workbench_trend(req: TrendRequest):
+    """Straight-line fit of y on x over exactly the rows the spec returns (the
+    points a chart draws). The slope, its interval and the line's 95% band
+    use errors clustered by player or team, so a player's repeated seasons
+    don't count as independent evidence (stats_lib.wls_cluster: CR1, t on
+    clusters − 1). r is Pearson's; its interval resamples whole players or
+    teams 2,000 times (cluster bootstrap, percentile; the seed is fixed by the
+    request, so the same chart always shows the same interval). A sandwich
+    interval on the standardised slope was tried first and dropped: it treats
+    both SDs as known and ran 2-3 times too wide for strong relationships
+    (minutes vs points 2025-26: ±0.05 against the bootstrap's ±0.016)."""
+    spec = req.spec
+    for k in (req.x, req.y):
+        if k not in spec.columns:
+            _bad(f"'{k}' isn't one of the spec's columns.")
+    if req.x == req.y:
+        _bad("x and y are the same column.")
+    plan, rows, matched, _src = _run(spec)
+    if matched > spec.offset + len(rows) or spec.offset:
+        _bad(f"{matched:,} rows match but the fit uses every row a chart draws, and a chart draws at most "
+             f"{ROW_CAP:,} from the start. Narrow the query.")
+    fields = [name for _a, role, name, _s in plan.select if role == "field"]
+    key = "player_id" if "player_id" in fields else "franchise" if "franchise" in fields else None
+    cluster_by = {"player_id": "player", "franchise": "team"}.get(key, "row")
+    xs, ys, gs = [], [], []
+    for i, r in enumerate(rows):
+        x, y = r.get(req.x), r.get(req.y)
+        if _finite(x) and _finite(y):
+            xs.append(float(x)); ys.append(float(y)); gs.append(r[key] if key else i)
+    x, y, g = np.array(xs), np.array(ys), np.array(gs, dtype=object).astype(str)
+    grouped = plan.group is not None
+    out = {
+        "x": column_meta(plan.ds, next(c for c in plan.cols if c.key == req.x), plan.per, grouped),
+        "y": column_meta(plan.ds, next(c for c in plan.cols if c.key == req.y), plan.per, grouped),
+        "n": int(len(x)), "n_dropped": len(rows) - int(len(x)), "cluster_by": cluster_by,
+        "n_clusters": int(len(set(gs))), "fit": None, "reason": None,
+        "method": ("Least squares, every point weighted equally. Slope and band: errors clustered by "
+                   f"{cluster_by} (CR1, t with clusters − 1 degrees of freedom). r: 95% interval from "
+                   f"{BOOT_RESAMPLES:,} resamples of whole {cluster_by}s."),
+        "_source": make_source(list(plan.ds.tables), plan.ds.upstream),
+    }
+    if out["n"] < 3 or out["n_clusters"] < 3:
+        out["reason"] = f"A fit needs at least 3 points from 3 different {cluster_by}s."
+        return out
+    if x.std() == 0 or y.std() == 0:
+        out["reason"] = "One of the two stats has the same value on every point."
+        return out
+    ones = np.ones(len(x))
+    fit = wls_cluster(y, np.column_stack([ones, x]), ones, g)
+    cov, t = fit["cov"], fit["tcrit"]
+    grid = np.linspace(x.min(), x.max(), 41)
+    se = np.sqrt(np.maximum(0, cov[0, 0] + 2 * grid * cov[0, 1] + grid ** 2 * cov[1, 1]))
+    yhat = fit["beta"][0] + fit["beta"][1] * grid
+    r = float(np.corrcoef(x, y)[0, 1])
+    seed = int(hashlib.md5(json.dumps([req.spec.model_dump(), req.x, req.y], sort_keys=True, default=str)
+                           .encode()).hexdigest()[:8], 16)
+    (lo, hi), kept = _cluster_boot_r(x, y, g, seed)
+    out["fit"] = {
+        "r": _r6(r),
+        "r_ci": [_r6(lo), _r6(hi)],
+        "r_resamples": kept,
+        "p": _r6(fit["p"][1]),
+        "slope": _r6(fit["beta"][1]), "slope_ci": [_r6(fit["ci_low"][1]), _r6(fit["ci_high"][1])],
+        "intercept": _r6(fit["beta"][0]),
+        "line": [{"x": _r6(a), "y": _r6(b), "lo": _r6(b - t * s), "hi": _r6(b + t * s)} for a, b, s in zip(grid, yhat, se)],
+    }
+    return out
 
 
 # ─── players and teams for the board's sets ─────────────────────────────────

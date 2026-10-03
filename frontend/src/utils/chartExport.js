@@ -15,20 +15,32 @@ const STYLE_PROPS = [
     'font-family', 'font-size', 'font-weight', 'text-anchor', 'letter-spacing',
 ];
 
+// SVG properties a child inherits from its parent. When a child's value is
+// the same as its parent's, writing it again changes nothing, so it is left
+// to inheritance: a chart with thousands of marks (a Workbench scatter of
+// every player) would otherwise carry ~18 attributes on every dot (1-2 MB).
+// `opacity` isn't inherited; it is skipped only at its initial value, 1.
+const INHERITED = new Set(STYLE_PROPS.filter((p) => !['opacity', 'stop-color', 'flood-color', 'lighting-color'].includes(p)));
+
 function inlineComputedStyle(liveRoot, cloneRoot) {
     const liveEls = [liveRoot, ...liveRoot.querySelectorAll('*')];
     const cloneEls = [cloneRoot, ...cloneRoot.querySelectorAll('*')];
+    const computed = new Map();
     liveEls.forEach((liveEl, i) => {
         const cloneEl = cloneEls[i];
         if (!cloneEl || cloneEl.nodeType !== 1) return;
         const cs = getComputedStyle(liveEl);
+        const parent = i > 0 ? computed.get(liveEl.parentElement) : null;
+        const mine = {};
         STYLE_PROPS.forEach((prop) => {
             const resolved = cs.getPropertyValue(prop);
-            if (resolved) {
-                cloneEl.setAttribute(prop, resolved);
-                if (cloneEl.style) cloneEl.style.removeProperty(prop);
-            }
+            mine[prop] = resolved;
+            if (cloneEl.style) cloneEl.style.removeProperty(prop);
+            const same = parent && (INHERITED.has(prop) ? parent[prop] === resolved : prop === 'opacity' && resolved === '1');
+            if (same) cloneEl.removeAttribute(prop);
+            else if (resolved) cloneEl.setAttribute(prop, resolved);
         });
+        computed.set(liveEl, mine);
         // Classes drove the now-inlined presentation; keep them out of the
         // standalone file's markup since there's no stylesheet to match them.
         cloneEl.removeAttribute('class');

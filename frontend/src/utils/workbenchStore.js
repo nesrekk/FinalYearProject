@@ -9,7 +9,7 @@
 //   { id, name, created, updated, version: 1,
 //     sets:   [{ id, name, kind: 'player' | 'team',
 //                members: [{ id, name, color, team? }] }]   // color = palette index 0-7
-//     blocks: [{ id, type: 'set' | 'table' | 'note', title,
+//     blocks: [{ id, type: 'set' | 'table' | 'chart' | 'note', title,
 //                x, y, w, h,                                 // grid cells (12 columns)
 //                settings: { … per type, see cleanSettings } }] }
 //
@@ -27,7 +27,7 @@ export const EXPORT_FORMAT = 'nba-hub-workbench';
 export const SHARE_PARAM = 'share';
 
 export const PALETTE_SIZE = 8;
-export const BLOCK_TYPES = ['set', 'table', 'note'];
+export const BLOCK_TYPES = ['set', 'table', 'chart', 'note'];
 export const LIMITS = { boards: 200, blocks: 40, sets: 20, members: 500, columns: 40, note: 20000, name: 120, title: 80 };
 // A share link carries the whole board; past this many characters it goes
 // into a file instead (chat apps and some mail clients cut longer links).
@@ -235,6 +235,8 @@ export function cleanSet(raw) {
 
 const PER = ['game', 'total', 'per36', 'per100'];
 const LIMIT_CHOICES = [25, 50, 100, 250, 500, 1000];
+const CHARTS = ['scatter', 'line', 'bar', 'histogram', 'box', 'heatmap'];
+const BINS = [0, 10, 20, 40];
 
 // One block type's settings, rebuilt from scratch. Catalogue keys are only
 // checked for shape here; the Table block checks them against the live
@@ -244,19 +246,45 @@ export function cleanSettings(type, raw, setIds) {
     const setId = typeof s.setId === 'string' && setIds.has(s.setId) ? s.setId : null;
     if (type === 'set') return { setId };
     if (type === 'note') return { text: str(s.text, LIMITS.note) };
+    const key = (v) => (typeof v === 'string' && KEY_RE.test(v) ? v : null);
+    const season = (v) => (isInt(v) && v >= 1940 && v <= 2100 ? v : null);
+    let seasonFrom = season(s.seasonFrom);
+    let seasonTo = season(s.seasonTo);
+    if (seasonFrom && seasonTo && seasonFrom > seasonTo) [seasonFrom, seasonTo] = [seasonTo, seasonFrom];
+    const dataset = key(s.dataset) || 'player_season';
+    const minGames = typeof s.minGames === 'number' && Number.isFinite(s.minGames) && s.minGames > 0 ? Math.min(Math.round(s.minGames), 5000) : null;
+    if (type === 'chart') {
+        return {
+            dataset,
+            setId,
+            seasonFrom,
+            seasonTo,
+            per: PER.includes(s.per) ? s.per : 'game',
+            minGames,
+            chart: CHARTS.includes(s.chart) ? s.chart : 'scatter',
+            x: key(s.x),
+            y: key(s.y),
+            size: key(s.size),
+            color: key(s.color) || 'member',
+            facet: key(s.facet) || 'none',
+            groupBy: key(s.groupBy) || 'none',
+            lineX: s.lineX === 'date' ? 'date' : 'season',
+            split: key(s.split),
+            bins: BINS.includes(s.bins) ? s.bins : 0,
+            style: s.style === 'dots' ? 'dots' : 'box',
+            context: s.context !== false,
+            trend: s.trend === true,
+        };
+    }
     // table
     const columns = [...new Set((Array.isArray(s.columns) ? s.columns : []).filter((k) => typeof k === 'string' && KEY_RE.test(k)))]
         .slice(0, LIMITS.columns);
-    const season = (v) => (isInt(v) && v >= 1940 && v <= 2100 ? v : null);
     const sort = (Array.isArray(s.sort) ? s.sort : [])
         .filter((k) => k && typeof k.key === 'string' && KEY_RE.test(k.key))
         .slice(0, 1)
         .map((k) => ({ key: k.key, dir: k.dir === 'asc' ? 'asc' : 'desc' }));
-    let seasonFrom = season(s.seasonFrom);
-    let seasonTo = season(s.seasonTo);
-    if (seasonFrom && seasonTo && seasonFrom > seasonTo) [seasonFrom, seasonTo] = [seasonTo, seasonFrom];
     return {
-        dataset: typeof s.dataset === 'string' && KEY_RE.test(s.dataset) ? s.dataset : 'player_season',
+        dataset,
         setId,
         columns,
         seasonFrom,
@@ -265,7 +293,7 @@ export function cleanSettings(type, raw, setIds) {
         per: PER.includes(s.per) ? s.per : 'game',
         sort,
         limit: LIMIT_CHOICES.includes(s.limit) ? s.limit : 50,
-        minGames: typeof s.minGames === 'number' && Number.isFinite(s.minGames) && s.minGames > 0 ? Math.min(Math.round(s.minGames), 5000) : null,
+        minGames,
         showN: s.showN === true,
     };
 }

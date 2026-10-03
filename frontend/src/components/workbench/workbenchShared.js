@@ -32,6 +32,7 @@ export function nextColor(members) {
 export const BLOCK_INFO = {
     set: { label: 'Player or team set', short: 'Set', icon: 'group', w: 4, h: 7 },
     table: { label: 'Table', short: 'Table', icon: 'table_view', w: 8, h: 9 },
+    chart: { label: 'Chart', short: 'Chart', icon: 'monitoring', w: 6, h: 11 },
     note: { label: 'Note', short: 'Note', icon: 'sticky_note_2', w: 4, h: 4 },
 };
 
@@ -43,6 +44,13 @@ export function blockLabel(block, board, catalogue) {
     if (block.type === 'set') return set ? set.name : 'Set';
     if (block.type === 'note') return 'Note';
     const ds = catalogue?.datasets.find((d) => d.key === block.settings.dataset);
+    if (block.type === 'chart') {
+        const s = block.settings;
+        const lab = (k) => ds?.columns.find((c) => c.key === k)?.label;
+        const kind = { scatter: 'Scatter', line: 'Line', bar: 'Bars', histogram: 'Histogram', box: 'Distribution', heatmap: 'Heatmap' }[s.chart] || 'Chart';
+        const what = s.chart === 'scatter' ? [lab(s.y), lab(s.x)].filter(Boolean).join(' vs ') : lab(s.y);
+        return `${kind}${what ? `: ${what}` : ''}${set ? ` · ${set.name}` : ''}`;
+    }
     return `${ds ? ds.label : 'Table'}${set ? ` · ${set.name}` : ''}`;
 }
 

@@ -46,4 +46,5 @@ def wls_cluster(y, X, w, groups):
         "beta": beta, "se": se, "p": p,
         "ci_low": beta - tcrit * se, "ci_high": beta + tcrit * se,
         "r2": float(r2), "n": int(n), "n_clusters": int(G),
+        "cov": cov, "tcrit": float(tcrit),
     }

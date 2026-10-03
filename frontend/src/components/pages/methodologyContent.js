@@ -603,6 +603,20 @@ export const SECTIONS = [
                     'No flag before 2020-21 (no play-by-play here); the season-table classes (wrong team on a season row, two age conventions) are not per game.',
                 ],
             },
+            {
+                id: 'workbench',
+                name: 'Workbench charts (grey population, trend line)',
+                open: { page: 'workbench', label: 'Workbench' },
+                answers: 'Where does my set of players or teams sit against everyone else, and how strongly do two stats move together?',
+                method: 'A chart block draws its set from the same catalogue query as a table (POST /workbench/query: same seasons, games floor and per-game/per-36/per-100 choice), and the grey population behind it from the identical query for every player or team. Scatter: the grey dots are every matching row (up to 5,000; past that the grey is left out and the chart says so). Line, bars, distribution, histogram and heatmap: the grey is a summary over every matching row with no cap (POST /workbench/context): the 10th, 25th, 50th, 75th and 90th percentiles per season or split (numpy\'s default linear rule, the one the chart uses for the set\'s own boxes), or a histogram on round bin edges; each row counts once. A value whose sample is too small to say more about the player than about luck (Stat Stability reliability under 0.5) is drawn hollow or faded. Trend line (scatter, one panel): least squares of y on x over exactly the points drawn (the grey ones when shown, else the set\'s), every point weighted equally (POST /workbench/trend). The slope, its interval and the line\'s 95% band use errors clustered by player or team (stats_lib.wls_cluster: CR1, t on clusters − 1), so five seasons of one player count as one player\'s evidence, not five. r is Pearson\'s; its 95% interval comes from 2,000 resamples of whole players or teams (cluster bootstrap, percentile), seeded by the query so a chart always shows the same interval.',
+                checked: 'Checked 2026-10-03. r and the slope equal numpy\'s corrcoef and polyfit on the same rows (test). Player seasons 2021-22 to 2025-26, 20+ games (2,171 rows, 735 players): usage vs true shooting r = 0.01 (−0.05 to 0.08), threes attempted vs 3P% 0.43 (0.38 to 0.48), assists vs turnovers 0.85 (0.82 to 0.87); 2025-26 alone, minutes vs points 0.88 (0.86 to 0.89, 452 players). A first version took r\'s interval from the clustered fit on standardised x and y: right near r = 0 (−0.05 to 0.08, the same as the bootstrap) but 2-3 times too wide for strong relationships (0.82 to 0.93 for minutes vs points), because it treats both standard deviations as known; it was replaced by the bootstrap before release. Exported charts render the same as on screen: every element\'s fill, stroke, opacity and font compared in a blank page (eight charts covering the six chart types, 7,041 elements, none different).',
+                limits: [
+                    'A straight line and r describe a linear association among the rows drawn; they say nothing about cause, and a curved relationship can have r near zero.',
+                    'Every row counts once: a 20-game season weighs as much as an 82-game one in the fit and in the grey percentiles. The games floor in Settings is the control for that.',
+                    'The grey population follows the same filters as the set, so a high games floor also removes low-minute players from the comparison.',
+                    'Rates in the grey summaries are each row\'s own rate (a player-season\'s TS%), not pooled makes over attempts; a player\'s own value over several seasons (bars) is pooled.',
+                ],
+            },
         ],
     },
 ];

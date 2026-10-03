@@ -12,6 +12,8 @@
   --wb-series-5: #0e7490;
   --wb-series-6: #be185d;
   --wb-series-7: #57534e;
+  /* The grey population behind a chart's coloured marks (step 4); >= 3:1 on the surface in both themes. */
+  --wb-context: #958d7e;
 }
 :root[data-theme='dark'] {
   --wb-series-0: #fb923c;
@@ -22,6 +24,7 @@
   --wb-series-5: #22d3ee;
   --wb-series-6: #f472b6;
   --wb-series-7: #d6d3d1;
+  --wb-context: #77716a;
 }
 @media (prefers-color-scheme: dark) {
   :root[data-theme='system'] {
@@ -33,6 +36,7 @@
     --wb-series-5: #22d3ee;
     --wb-series-6: #f472b6;
     --wb-series-7: #d6d3d1;
+    --wb-context: #77716a;
   }
 }
 
@@ -503,3 +507,30 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+/* Chart block (step 4). The chart fills what the block leaves after its
+   settings and status lines; its <svg> is drawn to the measured size. */
+.wb-chart-block { display: flex; flex-direction: column; gap: var(--space-2); height: 100%; min-height: 0; }
+.wb-chart-block--editing { height: auto; }
+.wb-chart-area {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 240px;
+  color: var(--text-2);
+  --plot-background: var(--surface);
+}
+.wb-chart-area > svg,
+.wb-chart-area > p { position: absolute; inset: 0 auto auto 0; }
+.wb-chart-block--editing .wb-chart-area { flex: 0 0 auto; height: 340px; }
+.wb-grid--stack .wb-chart-area { flex: 0 0 auto; height: 360px; }
+.wb-chart-svg { display: block; overflow: visible; }
+.wb-chart-svg text { white-space: pre; }
+.wb-chart-svg svg { overflow: visible; }
+.wb-chart-svg [aria-label='tip'] path { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18)); }
+.wb-chart-note { font-size: 10.5px; }
+.wb-chart-foot { display: flex; flex-direction: column; gap: var(--space-1); }
+.wb-chart-foot .chart-export { align-self: flex-start; }
+.wb-chart-settings .wb-field--wide { grid-column: 1 / -1; }
+.wb-chart-settings .wb-seg { flex-wrap: wrap; }
+.wb-chart-settings .wb-seg-btn { display: inline-flex; align-items: center; gap: 4px; }
+.wb-chart-settings .wb-seg-btn--on { background: var(--surface); }

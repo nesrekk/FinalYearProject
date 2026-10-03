@@ -17,7 +17,12 @@ Guards round 7 step 1, the Workbench catalogue and query API
   * one known player-season equals the Leaderboard's numbers, one known game
     line equals the Game Finder's, and a rate over a span is summed makes over
     summed attempts (checked against SQL written here, not the query layer);
-  * team games and team seasons agree on every team-season's wins.
+  * team games and team seasons agree on every team-season's wins;
+  * (step 4, charts) /workbench/context's quantiles and histogram equal numpy
+    on the query's own rows and read past the 5,000-row cap; /workbench/trend's
+    r and slope equal numpy's, its intervals cover them, r's interval is a
+    reproducible cluster bootstrap no wider than twice Fisher's when every
+    player appears once, and both endpoints refuse what they can't answer.
 
 Skips when the database is unreachable.
 
@@ -505,3 +510,109 @@ def test_team_list_is_every_franchise(client, cur):
     meta = client.get("/workbench/catalogue").json()
     season_teams = set(next(d for d in meta["datasets"] if d["key"] == "team_season")["teams"])
     assert {t["id"] for t in teams} == season_teams
+
+
+# ─── step 4: chart support ──────────────────────────────────────────────────
+
+import math  # noqa: E402
+
+import numpy as np  # noqa: E402
+
+CHART_SPEC = dict(dataset="player_season", entities="all", columns=["pts"], season_from=2024, season_to=2026,
+                  min_games=20, limit=5000)
+
+
+def _post(client, path, body, status=200):
+    r = client.post(f"/workbench/{path}", json=body)
+    assert r.status_code == status, r.text
+    return r.json()
+
+
+def _close(a, b, rel=1e-5):
+    return abs(a - b) <= rel * max(1.0, abs(b))
+
+
+def test_context_equals_numpy_on_the_query_rows(client):
+    rows = _q(client, **CHART_SPEC)
+    assert not rows["truncated"]
+    vals = [r["pts"] for r in rows["rows"] if r["pts"] is not None]
+    d = _post(client, "context", {"spec": CHART_SPEC, "column": "pts", "by": "season", "bins": 20})
+    assert d["n_rows"] == rows["n"]["matched"] and d["overall"]["n"] + d["n_missing"] == d["n_rows"]
+    q = np.quantile(vals, [0.1, 0.25, 0.5, 0.75, 0.9])
+    assert all(_close(d["overall"][k], v) for k, v in zip(("p10", "p25", "p50", "p75", "p90"), q))
+    for g in d["groups"]:
+        mine = [r["pts"] for r in rows["rows"] if r["season"] == g["key"] and r["pts"] is not None]
+        assert g["n"] == len(mine) and _close(g["p50"], float(np.median(mine)))
+    assert [g["key"] for g in d["groups"]] == [2024, 2025, 2026]
+    h = d["histogram"]
+    assert sum(h["counts"]) == len(vals) and len(h["edges"]) == len(h["counts"]) + 1
+    steps = np.diff(h["edges"])
+    assert np.allclose(steps, steps[0]) and h["edges"][0] <= min(vals) and h["edges"][-1] >= max(vals)
+    assert 10 <= len(h["counts"]) <= 40
+
+
+def test_context_reads_every_row_past_the_cap(client):
+    spec = dict(dataset="player_game", entities="all", columns=["pts"], season_from=2026, season_to=2026, limit=5000)
+    rows = _q(client, **{**spec, "limit": 1})
+    assert rows["n"]["matched"] > 5000
+    d = _post(client, "context", {"spec": spec, "column": "pts", "by": "home"})
+    assert d["n_rows"] == rows["n"]["matched"] == d["overall"]["n"] + d["n_missing"]
+    assert sorted(g["key"] for g in d["groups"]) == [False, True]
+    assert sum(g["n"] for g in d["groups"]) == d["overall"]["n"]
+
+
+def test_context_refusals(client, monkeypatch):
+    _post(client, "context", {"spec": CHART_SPEC, "column": "ast"}, 400)            # not in the spec's columns
+    _post(client, "context", {"spec": CHART_SPEC, "column": "pts", "by": "opponent"}, 400)  # not a field of these rows
+    _post(client, "context", {"spec": CHART_SPEC, "column": "pts", "sql": "1"}, 422)  # unknown key
+    _post(client, "context", {"spec": {**CHART_SPEC, "evil": 1}, "column": "pts"}, 422)
+    import routers.workbench as W
+    monkeypatch.setattr(W, "CONTEXT_CAP", 100)
+    d = _post(client, "context", {"spec": CHART_SPEC, "column": "pts"}, 400)
+    assert "summaries read at most 100" in d["detail"]
+
+
+def _xy(rows, x, y):
+    keep = [r for r in rows if r[x] is not None and r[y] is not None]
+    return (np.array([r[x] for r in keep], float), np.array([r[y] for r in keep], float),
+            {r["player_id"] for r in keep})
+
+
+def test_trend_equals_numpy_and_its_intervals_cover(client):
+    spec = {**CHART_SPEC, "columns": ["fg3a", "fg3_pct"]}
+    rows = _q(client, **spec)["rows"]
+    x, y, players = _xy(rows, "fg3a", "fg3_pct")
+    d = _post(client, "trend", {"spec": spec, "x": "fg3a", "y": "fg3_pct"})
+    f = d["fit"]
+    assert d["n"] == len(x) and d["n_clusters"] == len(players) and d["cluster_by"] == "player"
+    assert _close(f["r"], float(np.corrcoef(x, y)[0, 1]))
+    slope, intercept = np.polyfit(x, y, 1)
+    assert _close(f["slope"], slope) and _close(f["intercept"], intercept)
+    assert f["r_ci"][0] < f["r"] < f["r_ci"][1] and f["slope_ci"][0] < f["slope"] < f["slope_ci"][1]
+    assert f["r_resamples"] == 2000
+    assert all(p["lo"] <= p["y"] <= p["hi"] for p in f["line"]) and len(f["line"]) == 41
+    assert _post(client, "trend", {"spec": spec, "x": "fg3a", "y": "fg3_pct"})["fit"] == f  # seeded
+
+
+def test_trend_r_interval_is_not_too_wide(client):
+    """One row per player: the cluster bootstrap should be close to Fisher's z
+    interval. The first version (a sandwich interval on the standardised slope)
+    ran 2.5 times too wide here."""
+    spec = {**CHART_SPEC, "columns": ["min", "pts"], "season_from": 2026}
+    d = _post(client, "trend", {"spec": spec, "x": "min", "y": "pts"})
+    f = d["fit"]
+    assert d["n"] == d["n_clusters"]
+    z, se = math.atanh(f["r"]), 1 / math.sqrt(d["n"] - 3)
+    fisher = math.tanh(z + 1.96 * se) - math.tanh(z - 1.96 * se)
+    width = f["r_ci"][1] - f["r_ci"][0]
+    assert 0.5 * fisher < width < 2 * fisher
+
+
+def test_trend_refusals(client):
+    spec = {**CHART_SPEC, "columns": ["fg3a", "fg3_pct"]}
+    _post(client, "trend", {"spec": spec, "x": "fg3a", "y": "fg3a"}, 400)
+    _post(client, "trend", {"spec": spec, "x": "ast", "y": "fg3_pct"}, 400)
+    assert "a chart draws" in _post(client, "trend", {"spec": {**spec, "limit": 10}, "x": "fg3a", "y": "fg3_pct"}, 400)["detail"]
+    _post(client, "trend", {"spec": spec, "x": "fg3a", "y": "fg3_pct", "z": 1}, 422)
+    two = _post(client, "trend", {"spec": {**spec, "entities": [203999, 201939]}, "x": "fg3a", "y": "fg3_pct"})
+    assert two["fit"] is None and "3 different players" in two["reason"]

@@ -1447,20 +1447,25 @@ export function fetchWorkbenchCatalogue() {
 }
 
 const _workbenchQueries = new Map();
-export function runWorkbenchQuery(spec) {
-    const key = JSON.stringify(spec);
+function cachedWorkbenchPost(path, body) {
+    const key = `${path} ${JSON.stringify(body)}`;
     if (_workbenchQueries.has(key)) {
         const hit = _workbenchQueries.get(key);
         _workbenchQueries.delete(key);
         _workbenchQueries.set(key, hit); // most recently used last
         return hit;
     }
-    const request = axios.post(`${IMPACT_BASE}/workbench/query`, spec).then((r) => r.data);
+    const request = axios.post(`${IMPACT_BASE}/workbench/${path}`, body).then((r) => r.data);
     _workbenchQueries.set(key, request);
     request.catch(() => _workbenchQueries.delete(key));
     while (_workbenchQueries.size > 60) _workbenchQueries.delete(_workbenchQueries.keys().next().value);
     return request;
 }
+export const runWorkbenchQuery = (spec) => cachedWorkbenchPost('query', spec);
+// Charts: quantiles / a histogram over every row a spec matches, and a
+// clustered straight-line fit over the rows a chart draws.
+export const runWorkbenchContext = (req) => cachedWorkbenchPost('context', req);
+export const runWorkbenchTrend = (req) => cachedWorkbenchPost('trend', req);
 
 // Players by name ({ id, name, from, to, team }), or every franchise.
 export async function searchWorkbenchPlayers(q) {
