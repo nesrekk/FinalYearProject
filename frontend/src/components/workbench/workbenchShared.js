@@ -68,4 +68,26 @@ export function blockLabel(block, board, catalogue) {
     return `${ds ? ds.label : 'Table'}${set ? ` · ${set.name}` : ''}`;
 }
 
+// Methodology cards that explain a column (catalogue `method`), by card id.
+export const METHOD_CARDS = {
+    rapm: 'RAPM and the Rating Tracker',
+    onoff: 'On/Off',
+    projections: 'Next-season projections',
+    shotmaking: 'Expected FG%, shot-making and shot value',
+    aging: 'Aging Curves',
+    lineups: 'Lineups',
+    pairs: 'Pair Chemistry',
+};
+
+// An interval the source gives for one row ("[lo, hi]"), formatted like its value.
+export function intervalText(format, ci) {
+    if (!ci || ci[0] == null || ci[1] == null) return '';
+    const f = (v) => formatValue(format, v);
+    return `${f(ci[0])} to ${f(ci[1])}`;
+}
+
+// Column of a team-entity dataset that can be narrowed by a player set
+// (lineups, pairs): a player set picks the units its players are in.
+export const setFits = (set, ds) => !!set && (set.kind === ds.entity || (set.kind === 'player' && ds.players_filter));
+
 export const entityWord = (kind, plural = true) => (kind === 'team' ? (plural ? 'teams' : 'team') : (plural ? 'players' : 'player'));

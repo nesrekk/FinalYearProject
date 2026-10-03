@@ -462,7 +462,8 @@ def workbench_finder(spec: FinderSpec):
         "n": {"rows": len(results), "matched": matched, "players": players, "pool": pool},
         "truncated": truncated,
         "notes": notes,
-        "_source": make_source(list(ds.tables), ds.upstream),
+        "_source": make_source(*WC.source_tables(ds, [x for _i, _k, col, _s in plan["conds"]
+                                                       for x in (col if isinstance(col, (list, tuple)) else [col])])),
     }
 
 

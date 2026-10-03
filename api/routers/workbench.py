@@ -14,6 +14,9 @@ from api/workbench_catalogue.py.
     POST /workbench/trend       {spec, x, y}: straight-line fit over the rows a
                                 chart draws; slope clustered by player/team,
                                 r's interval a cluster bootstrap
+    POST /workbench/aging       {stat, player_ids, era}: the Aging Curves page's
+                                typical curve (with its 95% range) and each
+                                player's seasons on it, for a chart overlay
 
 Spec:
 
@@ -27,6 +30,10 @@ Spec:
      "per": "game" | "total" | "per36" | "per100",
      "having": [{"key": "pts", "op": "gte", "value": 25}],
      "min_games": 20,
+     "min_poss": 100,                      # datasets with possessions (lineups, pairs)
+     "players": [ids], "players_match": "any" | "all",
+                                           # team-entity datasets with player ids in a row
+                                           # (lineups, pairs): only rows with these players
      "sort": [{"key": "pts", "dir": "desc"}],
      "limit": 100, "offset": 0}
 
@@ -42,7 +49,9 @@ Every row carries its n: `n_rows` (seasons or games combined), `n_games`, and
 `n` per column in that column's own unit (games, attempts, possessions,
 minutes) counting only the rows that went into its value; player stats with a
 Stat Stability estimate also get `reliability` (n / (n + M), "noisy" under
-0.5, the Leaderboard's rule).
+0.5, the Leaderboard's rule). Columns whose source gives an interval for one
+row (model ratings, projections, on/off) also return `ci` [low, high] on
+ungrouped rows; combined rows get none (an interval doesn't pool by summing).
 
 Safety: the request is a fixed schema (unknown keys are refused), every
 dataset/column/field/operator is looked up in the catalogue, values are bound
@@ -72,6 +81,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
 import workbench_catalogue as WC
 from impact_core import get_db
+from routers.aging import ERA_ORDER as AGING_ERAS, _tables as aging_tables, aging_player
 from routers.game_log import _names
 from routers.leaderboard import RELIABLE, _sample, stable_samples
 from source_badge import make_source
@@ -89,7 +99,7 @@ MAX_SORT = 3
 NUM_OPS = {"gte": ">=", "gt": ">", "lte": "<=", "lt": "<", "eq": "=", "ne": "<>"}
 OPS = {**NUM_OPS, "between": "between", "in": "in"}
 DIM_OPS = {"team": ("eq", "ne", "in"), "text": ("eq", "ne", "in"), "bool": ("eq", "ne"),
-           "date": ("gte", "gt", "lte", "lt", "eq", "between")}
+           "date": ("gte", "gt", "lte", "lt", "eq", "between"), "players": ("any", "all")}
 CODE_RE = re.compile(r"^[A-Za-z]{2,4}$")
 GROUP_ALIASES = {"none": None, "all": []}
 
@@ -121,6 +131,9 @@ class QuerySpec(BaseModel):
     per: Literal["game", "total", "per36", "per100"] = "game"
     having: list[Condition] = Field(default_factory=list, max_length=MAX_CONDITIONS)
     min_games: float | None = Field(None, ge=0)
+    min_poss: float | None = Field(None, ge=0)
+    players: list[StrictInt] | None = Field(None, min_length=1, max_length=MAX_ENTITIES)
+    players_match: Literal["any", "all"] = "any"
     sort: list[SortKey] = Field(default_factory=list, max_length=MAX_SORT)
     limit: int = Field(100, ge=1, le=ROW_CAP)
     offset: int = Field(0, ge=0, le=1_000_000)
@@ -188,7 +201,8 @@ class Plan:
     per: str
     sql: str
     params: list
-    select: list                # (alias, role, name, sql); role field | value | n | sample | n_rows | n_games
+    select: list                # (alias, role, name, sql); role field | value | n | sample | ci_lo | ci_hi
+                                # | n_rows | n_games
     season_from: int
     season_to: int
     notes: list
@@ -236,7 +250,7 @@ def _value_sql(ds, col, per, grouped):
                 f"SUM({n})")
     if k in ("sum", "none"):
         v = _gate(ds, col, col.sql)
-        n = f"(CASE WHEN ({v}) IS NOT NULL THEN 1 END)"
+        n = f"(CASE WHEN ({v}) IS NOT NULL THEN {col.n_sql or 1} END)"
         if not grouped:
             return v, n
         if k == "none":
@@ -251,6 +265,16 @@ def _value_sql(ds, col, per, grouped):
             return _gate(ds, col, col.sql), n
         return (f"(SUM(CASE WHEN ({col.den}) IS NOT NULL THEN {num} END)::float8 / "
                 f"NULLIF(SUM(CASE WHEN ({num}) IS NOT NULL THEN {col.den} END)::float8, 0))", f"SUM({n})")
+    if k == "diff":
+        # Two pooled rates, one minus the other (on-court minus off-court net rating).
+        num, num2 = _gate(ds, col, col.num), _gate(ds, col, col.num2)
+        ok = f"({num}) IS NOT NULL AND ({col.den}) IS NOT NULL AND ({num2}) IS NOT NULL AND ({col.den2}) IS NOT NULL"
+        n = f"(CASE WHEN {ok} THEN {col.n_sql or col.den} END)"
+        if not grouped:
+            return _gate(ds, col, col.sql), n
+        rate = lambda a, b: (f"(SUM(CASE WHEN {ok} THEN {a} END)::float8 / "  # noqa: E731
+                             f"NULLIF(SUM(CASE WHEN {ok} THEN {b} END)::float8, 0))")
+        return f"({rate(num, col.den)} - {rate(num2, col.den2)})", f"SUM({n})"
     if k == "wmean":
         v = _gate(ds, col, col.sql)
         n = f"(CASE WHEN ({v}) IS NOT NULL THEN {col.weight} END)"
@@ -305,6 +329,9 @@ def _dim_condition(ds, dim, op, value, params):
             _bad(f"{where} needs true or false.")
         params.append(value)
         return f"({dim.sql} {NUM_OPS[op]} %s)"
+    if dim.type == "players":
+        params.append(_player_ids(value, where))
+        return f"({dim.sql} {'&&' if op == 'any' else '@>'} %s::int[])"
     if dim.type == "date":
         def as_date(v):
             try:
@@ -319,6 +346,15 @@ def _dim_condition(ds, dim, op, value, params):
         params.append(as_date(value))
         return f"({dim.sql} {NUM_OPS[op]} %s)"
     raise AssertionError(dim.type)
+
+
+def _player_ids(value, where):
+    values = value if isinstance(value, list) else [value]
+    if not values or len(values) > MAX_ENTITIES or any(isinstance(v, bool) or not isinstance(v, int) for v in values):
+        _bad(f"{where} needs 1 to {MAX_ENTITIES} NBA player ids (whole numbers).")
+    if any(not 0 < v < 2 ** 31 for v in values):
+        _bad(f"{where}: player ids are positive whole numbers.")
+    return sorted(set(values))
 
 
 def _num_condition(expr, op, value, where, params):
@@ -400,6 +436,12 @@ def compile_query(spec: QuerySpec) -> Plan:
     ent = _entities(ds, spec.entities, params)
     if ent:
         where.append(ent)
+    if spec.players is not None:
+        if not ds.players_sql:
+            _bad(f"players picks rows by the players in them; {ds.label.lower()} have one player a row "
+                 f"(use entities) or none.")
+        params.append(_player_ids(spec.players, "players"))
+        where.append(f"({ds.players_sql} {'&&' if spec.players_match == 'any' else '@>'} %s::int[])")
     for c in spec.filters:
         if c.key in ds.dims:
             where.append(_dim_condition(ds, ds.dims[c.key], c.op, c.value, params))
@@ -435,6 +477,9 @@ def compile_query(spec: QuerySpec) -> Plan:
         if _stable(col):
             s = f"(CASE WHEN ({_gate(ds, col, col.sql)}) IS NOT NULL THEN {col.sample} END)"
             add(f"SUM({s})" if grouped else s, "sample", col.key)
+        if col.ci_lo and not grouped:
+            add(_gate(ds, col, col.ci_lo), "ci_lo", col.key)
+            add(_gate(ds, col, col.ci_hi), "ci_hi", col.key)
 
     having, having_params = [], []
     for c in spec.having:
@@ -445,6 +490,12 @@ def compile_query(spec: QuerySpec) -> Plan:
         games = f"SUM({ds.games_sql})" if grouped else ds.games_sql
         having.append(f"({games} >= %s)")
         having_params.append(float(spec.min_games))
+    if spec.min_poss is not None:
+        if not ds.poss_sql:
+            _bad(f"{ds.label} have no possessions to set a floor on.")
+        poss = f"SUM({ds.poss_sql})" if grouped else ds.poss_sql
+        having.append(f"(COALESCE({poss}, 0) >= %s)")
+        having_params.append(float(spec.min_poss))
 
     # ORDER BY: the requested keys, then the row's own fields so ties come back in one order.
     sortable = {name: sql for alias, role, name, sql in select if role in ("field", "value")}
@@ -484,6 +535,9 @@ def compile_query(spec: QuerySpec) -> Plan:
                      + "; ".join(x for x in (
                          f"{', '.join(ignored)} shown per game" if ignored else "",
                          f"{', '.join(unscaled)} are rates or totals" if unscaled else "") if x) + ".")
+    if spec.players is not None:
+        notes.insert(0, f"Only {ds.label.lower()} with {'any' if spec.players_match == 'any' else 'all'} of the "
+                        f"{len(set(spec.players))} chosen players.")
     notes += list(ds.notes)
     return Plan(ds, cols, group, per, sql, params, select, lo, hi, notes)
 
@@ -543,6 +597,7 @@ def column_meta(ds, col, per=None, grouped=False):
         "reliability": ({"stable_n": stable["stable_n"], "unit_label": stable["unit_label"],
                          "reliable_at": RELIABLE} if stable else None),
         "status": col.status, "reason": col.reason, "note": col.note, "sources": list(col.sources),
+        "interval": col.ci_label, "method": col.method,
     }
     if per is not None:
         p = _applied_per(ds, col, per)
@@ -557,7 +612,7 @@ def _run(spec, limit=None):
     plan = compile_query(spec if limit is None else spec.model_copy(update={"limit": limit, "offset": 0}))
     ds = plan.ds
     rows = execute_readonly(plan.sql, plan.params)
-    names = _names() if ds.names_from_ids else None
+    names = _names() if ds.names_from_ids or ds.name_fields else None
     stables = {c.key: _stable(c) for c in plan.cols}
     out = []
     for r in rows:
@@ -574,8 +629,17 @@ def _run(spec, limit=None):
                 row["n_games"] = v
             elif role == "sample":
                 row.setdefault("reliability", {})[name] = _sample(v, stables[name]["stable_n"])
+            elif role in ("ci_lo", "ci_hi"):
+                pair = row.setdefault("ci", {}).setdefault(name, [None, None])
+                pair[0 if role == "ci_lo" else 1] = v
         if names is not None and "player_id" in row:
             row["player_name"] = names.get(row["player_id"])
+        for id_field, name_field in ds.name_fields:
+            if id_field in row:
+                ids = row[id_field]
+                lookup = names if names is not None else _names()
+                row[name_field] = ([lookup.get(i) for i in ids] if isinstance(ids, list)
+                                   else lookup.get(ids))
         row["n"] = n
         out.append(row)
     matched = int(rows[0][-2]) if rows else 0
@@ -599,6 +663,9 @@ def workbench_query(spec: QuerySpec):
             fields.append(name)
     if names and "player_id" in fields:
         fields.insert(fields.index("player_id") + 1, "player_name")
+    for id_field, name_field in ds.name_fields:
+        if id_field in fields:
+            fields.insert(fields.index(id_field) + 1, name_field)
     return {
         "dataset": {"key": ds.key, "label": ds.label, "entity": ds.entity, "row_label": ds.row_label},
         "spec": {**spec.model_dump(), "group_by": plan.group if grouped else "none",
@@ -609,7 +676,7 @@ def workbench_query(spec: QuerySpec):
         "n": {"rows": len(out), "matched": matched, "source_rows": source_rows},
         "truncated": matched > spec.offset + len(out),
         "notes": notes,
-        "_source": make_source(list(ds.tables), ds.upstream),
+        "_source": make_source(*WC.source_tables(ds, plan.cols)),
     }
 
 
@@ -713,7 +780,7 @@ def workbench_context(req: ContextRequest):
         "histogram": _histogram(arr, req.bins) if req.bins and len(arr) else None,
         "spec": {**spec.model_dump(), "group_by": plan.group if grouped else "none",
                  "season_from": plan.season_from, "season_to": plan.season_to},
-        "_source": make_source(list(plan.ds.tables), plan.ds.upstream),
+        "_source": make_source(*WC.source_tables(plan.ds, plan.cols)),
     }
 
 
@@ -783,7 +850,7 @@ def workbench_trend(req: TrendRequest):
         "method": ("Least squares, every point weighted equally. Slope and band: errors clustered by "
                    f"{cluster_by} (CR1, t with clusters − 1 degrees of freedom). r: 95% interval from "
                    f"{BOOT_RESAMPLES:,} resamples of whole {cluster_by}s."),
-        "_source": make_source(list(plan.ds.tables), plan.ds.upstream),
+        "_source": make_source(*WC.source_tables(plan.ds, plan.cols)),
     }
     if out["n"] < 3 or out["n_clusters"] < 3:
         out["reason"] = f"A fit needs at least 3 points from 3 different {cluster_by}s."
@@ -890,9 +957,13 @@ def workbench_catalogue():
                       "groupable": d.key in ds.groupings, "values": list(d.values) or None, "note": d.note}
                      for d in ds.dims.values()],
             "teams": m.get("franchises"),
+            "players_filter": bool(ds.players_sql),
+            "poss_floor": ds.poss_floor,
+            "name_fields": [{"ids": i, "names": n} for i, n in ds.name_fields],
             "columns": [column_meta(ds, c) for c in ds.columns.values()],
             "notes": list(ds.notes),
-            "_source": make_source(list(ds.tables), ds.upstream),
+            "_source": make_source(list(ds.tables) + list(ds.optional[0] if ds.optional else ()),
+                                   ds.upstream + (f"; {ds.optional[1]}" if ds.optional else "")),
         })
     return {
         "datasets": datasets,
@@ -901,6 +972,82 @@ def workbench_catalogue():
                    "max_conditions": MAX_CONDITIONS, "max_entities": MAX_ENTITIES, "max_sort": MAX_SORT},
         "formats": list(WC.FORMATS),
         "reliable_at": RELIABLE,
+        "aging": _aging_meta(),
         "_source": make_source(sorted({t for d in WC.DATASETS.values() for t in d.tables} | {"stat_stability"}),
                                "nba_api (stats.nba.com), Basketball-Reference, ESPN play-by-play and scoreboard"),
+    }
+
+
+# ─── aging curve overlay (round 7 step 7) ──────────────────────────────────
+# A chart of set members' seasons by age against the Aging Curves page's
+# typical curve. Reuses routers/aging.py: the curves it reads and its
+# per-player route, so the overlay is the page's own numbers.
+
+MAX_AGING_PLAYERS = 12
+
+
+class AgingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    stat: str = Field(max_length=40)
+    player_ids: list[StrictInt] = Field(min_length=1, max_length=MAX_AGING_PLAYERS)
+    era: str = Field("all", max_length=20)
+
+
+def _aging_meta():
+    summary = aging_tables()[0]
+    stats = {}
+    for (stat, era), s in summary.items():
+        e = stats.setdefault(stat, {"key": stat, "label": s["label"], "eras": []})
+        e["eras"].append(era)
+    eras = {era: s["era_label"] for (_st, era), s in summary.items()}
+    return {"dataset": "player_season",
+            "stats": [stats[k] for k in sorted(stats)],
+            "eras": [{"key": e, "label": eras[e]} for e in AGING_ERAS if e in eras]}
+
+
+@router.post("/workbench/aging")
+def workbench_aging(req: AgingRequest):
+    """The typical aging curve of one stat (level and 95% range by age, against
+    that season's league average) and each player's seasons on the same scale,
+    with the curve moved to his level (routers/aging.py's /aging/player)."""
+    summary, curves = aging_tables()
+    if req.era not in AGING_ERAS:
+        _bad(f"era must be one of {', '.join(AGING_ERAS)}.")
+    if (req.stat, req.era) not in summary:
+        have = sorted({k[0] for k in summary})
+        _bad(f"No aging curve for '{req.stat}' in that era. Curves exist for: {', '.join(have)}.")
+    s = summary[(req.stat, req.era)]
+    ref = float(s["ref_level"])
+    curve = [{"age": r["age"], "level": _r6(r["level"]),
+              "lo": _r6(ref + r["ci_lo"]) if r["ci_lo"] is not None else None,
+              "hi": _r6(ref + r["ci_hi"]) if r["ci_hi"] is not None else None,
+              "pairs": r["pairs"], "thin": bool(r["thin"])} for r in curves[(req.stat, req.era)]]
+    players, missing = [], []
+    for pid in dict.fromkeys(req.player_ids):
+        try:
+            p = aging_player(pid, req.stat, req.era)
+        except HTTPException:
+            missing.append(pid)
+            continue
+        players.append({
+            "player_id": pid, "player_name": p["player"]["player_name"], "offset": _r6(p["offset"]),
+            "path": [{"age": x["age"], "level": _r6(x["level"])} for x in (p["path"] or [])],
+            "seasons": [{k: (_r6(x[k]) if isinstance(x[k], float) else x[k])
+                         for k in ("season", "team", "age", "value", "league_average", "vs_league", "qualified",
+                                   "minutes", "weight", "note")} for x in p["seasons"]],
+            "notes": p["notes"],
+        })
+    return {
+        "stat": req.stat, "era": req.era,
+        "summary": {k: s[k] for k in ("label", "kind", "weight", "era_label", "season_from", "season_to", "peak_age",
+                                      "ref_age", "ref_level", "min_minutes", "min_attempts", "higher_is_better",
+                                      "pairs", "players")},
+        "curve": curve, "players": players, "missing": missing,
+        "method": ("The Aging Curves page's typical curve (delta method: every pair of consecutive qualified seasons "
+                   "gives one change, measured against each season's league average; 95% range from 300 resamples "
+                   "of whole careers), anchored at the average 27-year-old. Each player's dashed line is that curve "
+                   "moved to his level (his qualified seasons' weighted gap from it): how a typical player at his "
+                   "level ages, not a forecast."),
+        "_source": make_source(["aging_curves", "aging_curve_summary", "aging_league_average", "player_season_stats",
+                                "player_bio"], "nba_api (stats.nba.com) + Basketball-Reference (seasons, birth dates)"),
     }

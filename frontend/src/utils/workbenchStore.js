@@ -269,6 +269,9 @@ export function cleanSettings(type, raw, setIds) {
     if (seasonFrom && seasonTo && seasonFrom > seasonTo) [seasonFrom, seasonTo] = [seasonTo, seasonFrom];
     const dataset = key(s.dataset) || 'player_season';
     const minGames = typeof s.minGames === 'number' && Number.isFinite(s.minGames) && s.minGames > 0 ? Math.min(Math.round(s.minGames), 5000) : null;
+    // Possessions floor (lineups, pairs) and how a player set picks their rows.
+    const minPoss = typeof s.minPoss === 'number' && Number.isFinite(s.minPoss) && s.minPoss > 0 ? Math.min(Math.round(s.minPoss), 100000) : null;
+    const playersMatch = s.playersMatch === 'all' ? 'all' : 'any';
     if (type === 'chart') {
         return {
             dataset,
@@ -277,6 +280,8 @@ export function cleanSettings(type, raw, setIds) {
             seasonTo,
             per: PER.includes(s.per) ? s.per : 'game',
             minGames,
+            minPoss,
+            playersMatch,
             chart: CHARTS.includes(s.chart) ? s.chart : 'scatter',
             x: key(s.x),
             y: key(s.y),
@@ -284,12 +289,14 @@ export function cleanSettings(type, raw, setIds) {
             color: key(s.color) || 'member',
             facet: key(s.facet) || 'none',
             groupBy: key(s.groupBy) || 'none',
-            lineX: s.lineX === 'date' ? 'date' : 'season',
+            lineX: ['date', 'age'].includes(s.lineX) ? s.lineX : 'season',
+            agingEra: key(s.agingEra) || 'all',
             split: key(s.split),
             bins: BINS.includes(s.bins) ? s.bins : 0,
             style: s.style === 'dots' ? 'dots' : 'box',
             context: s.context !== false,
             trend: s.trend === true,
+            ci: s.ci !== false,
         };
     }
     // table
@@ -310,7 +317,10 @@ export function cleanSettings(type, raw, setIds) {
         sort,
         limit: LIMIT_CHOICES.includes(s.limit) ? s.limit : 50,
         minGames,
+        minPoss,
+        playersMatch,
         showN: s.showN === true,
+        showCi: s.showCi !== false,
     };
 }
 

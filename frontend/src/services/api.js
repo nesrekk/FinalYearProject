@@ -1471,6 +1471,8 @@ export const runWorkbenchQuery = (spec) => cachedWorkbenchPost('query', spec);
 // clustered straight-line fit over the rows a chart draws.
 export const runWorkbenchContext = (req) => cachedWorkbenchPost('context', req);
 export const runWorkbenchTrend = (req) => cachedWorkbenchPost('trend', req);
+// Step 7: a set's seasons by age against the Aging Curves page's typical curve.
+export const runWorkbenchAging = (req) => cachedWorkbenchPost('aging', req);
 // Player Finder (step 6): players meeting sentence-like conditions on any stat.
 export const runWorkbenchFinder = (spec) => cachedWorkbenchPost('finder', spec);
 

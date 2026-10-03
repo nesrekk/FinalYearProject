@@ -7,6 +7,7 @@ import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import { ShotMakingModelStats } from '../common/ShotMaking';
 import { CHECKED_ON, OPEN_ISSUES, PRINCIPLES, SECTIONS } from './methodologyContent';
+import { useInitialParams } from '../../utils/useUrlState';
 import '../../styles/methodology.css';
 
 const pct = (v, d = 0) => `${(v * 100).toFixed(d)}%`;
@@ -136,7 +137,7 @@ function ModelCard({ item, live, onNavigate }) {
         onNavigate(item.open.page, item.open.hash);
     };
     return (
-        <article className="meth-card" id={`m-${item.id}`}>
+        <article className="meth-card" id={`m-${item.id}`} tabIndex={-1}>
             <header className="meth-card-head">
                 <h3>{item.name}</h3>
                 <button type="button" className="meth-open" onClick={open}>
@@ -166,6 +167,18 @@ function ModelCard({ item, live, onNavigate }) {
 
 export default function Methodology({ onNavigate }) {
     const [live, setLive] = useState({ backtest: null, allNba: null, calibration: null, wp: null, shotmaking: null });
+    // ?card=<id> (links from the Workbench's columns): open on that card.
+    const card = useInitialParams().get('card');
+    useEffect(() => {
+        if (!card || !/^[a-z]+$/.test(card)) return undefined;
+        const t = setTimeout(() => {
+            const el = document.getElementById(`m-${card}`);
+            if (!el) return;
+            el.scrollIntoView({ block: 'start' });
+            el.focus({ preventScroll: true });
+        }, 350);
+        return () => clearTimeout(t);
+    }, [card]);
 
     useEffect(() => {
         let alive = true;

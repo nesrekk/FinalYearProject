@@ -1,5 +1,5 @@
-import { entityWord } from './workbenchShared';
-import { one } from './tableSpec';
+import { entityWord, setFits } from './workbenchShared';
+import { entitySpec, rowUnit } from './tableSpec';
 
 // The Chart block's settings → the requests it makes, checked against the
 // live catalogue:
@@ -28,8 +28,16 @@ const SCATTER_DEFAULTS = {
     player_game: ['min', 'pts'],
     team_season: ['o_rtg', 'd_rtg'],
     team_game: ['pace', 'margin'],
+    player_onoff: ['net_on', 'on_off_net'],
+    lineup_season: ['off_rating', 'def_rating'],
+    pair_season: ['poss', 'net_rating'],
+    team_possessions: ['share_steal', 'ppp_steal'],
+    player_projection: ['proj_pts', 'act_pts'],
 };
-const Y_DEFAULTS = { player_season: 'pts', player_game: 'pts', team_season: 'n_rtg', team_game: 'margin' };
+const Y_DEFAULTS = {
+    player_season: 'pts', player_game: 'pts', team_season: 'n_rtg', team_game: 'margin', player_onoff: 'on_off_net',
+    lineup_season: 'net_rating', pair_season: 'net_rating', team_possessions: 'ppp', player_projection: 'proj_pts',
+};
 
 const CATEGORY_LABELS = { season: 'Season', team: 'Team code', opponent: 'Opponent', home: 'Home or away', result: 'Win or loss' };
 
@@ -42,7 +50,7 @@ const isSeasonData = (ds) => !isGameData(ds);
 // row field each one fills in.
 export function categories(ds) {
     return ds.group_by
-        .filter((g) => !['none', 'all', 'entity'].includes(g))
+        .filter((g) => !['none', 'all', 'entity', 'lineup', 'pair'].includes(g))
         .map((g) => ({ key: g, field: ds.fields.group[g]?.[0] || g, label: CATEGORY_LABELS[g] || g }));
 }
 const fieldOf = (ds, g) => (g === 'entity' ? null : ds.fields.group[g]?.[0] || g);
@@ -80,12 +88,17 @@ function seasonsOf(s, ds, set) {
     return { seasonFrom, seasonTo };
 }
 
+// Stats with a typical aging curve (the Aging Curves page's), for a line
+// chart across ages; `aging` is the catalogue's aging block.
+export const agingStat = (aging, ds, key) => !!aging && aging.dataset === ds.key && aging.stats.some((x) => x.key === key);
+export const MAX_AGING_PLAYERS = 12;
+
 // Returns { problem, main, context, contextKind, enc } where enc says how to draw.
-export function buildChart(settings, ds, set) {
+export function buildChart(settings, ds, set, aging = null) {
     const s = settings;
     const type = CHART_TYPES.find((c) => c.key === s.chart) || CHART_TYPES[0];
     const out = { problem: '', main: null, context: null, contextKind: null, enc: null, type: type.key };
-    if (set && set.kind !== ds.entity) {
+    if (set && !setFits(set, ds)) {
         out.problem = `${ds.label} are about ${entityWord(ds.entity)}, but ${set.name} holds ${entityWord(set.kind)}. Choose another set or dataset in Settings.`;
         return out;
     }
@@ -97,8 +110,18 @@ export function buildChart(settings, ds, set) {
         out.problem = `${set.name} is empty. Add ${entityWord(set.kind)} to it in its Set block.`;
         return out;
     }
+    if (set && set.kind !== ds.entity && !['scatter', 'histogram'].includes(type.key)) {
+        out.problem = `${set.name} picks the ${ds.label.toLowerCase()} its players are in, which belong to no one player: use a scatter, a histogram or a table for them, or a set of teams here.`;
+        return out;
+    }
     const keys = statKeys(s, ds);
     const need = type.key === 'scatter' ? [s.x, s.y] : [s.y];
+    if (type.key === 'line' && s.lineX === 'age' && isStat(ds, s.y) && !agingStat(aging, ds, s.y)) {
+        out.problem = aging && aging.dataset === ds.key
+            ? `There is no typical aging curve for this stat. Curves exist for: ${aging.stats.map((x) => x.label).join(', ')}.`
+            : `Across ages needs ${aging ? 'player seasons' : 'the aging curves'} as the data.`;
+        return out;
+    }
     if (need.some((k) => !isStat(ds, k))) {
         out.problem = type.key === 'scatter' ? 'Choose a stat for each axis in Settings.' : 'Choose a stat in Settings.';
         return out;
@@ -118,11 +141,17 @@ export function buildChart(settings, ds, set) {
         per,
         limit: ROW_CAP,
         ...(s.minGames ? { min_games: s.minGames } : {}),
+        ...(ds.poss_floor != null && s.minPoss ? { min_poss: s.minPoss } : {}),
     };
-    const ids = set ? set.members.map((m) => m.id) : 'all';
+    // A player set on lineups or pairs picks the units its players are in;
+    // those rows belong to no one member, so they aren't coloured by member.
+    const bySet = set && set.kind === ds.entity;
+    const pick = entitySpec(s, ds, set);
+    const ids = pick.entities;
+    const extra = pick.players ? { players: pick.players, players_match: pick.players_match } : {};
     const one1 = seasonFrom === seasonTo;
     let group = 'none';
-    const enc = { x: null, y: null, size: null, color: 'member', facet: null, category: null };
+    const enc = { x: null, y: null, size: null, color: bySet ? 'member' : 'none', facet: null, category: null, ci: s.ci !== false };
 
     if (type.key === 'scatter') {
         const g = ds.group_by.includes(s.groupBy) && s.groupBy !== 'all' ? s.groupBy : 'none';
@@ -137,22 +166,36 @@ export function buildChart(settings, ds, set) {
         enc.x = s.x;
         enc.y = s.y;
         enc.size = isStat(ds, s.size) ? s.size : null;
-        enc.color = isStat(ds, s.color) ? s.color : (s.color === 'none' || !set || !hasEntity ? 'none' : 'member');
+        enc.color = isStat(ds, s.color) ? s.color : (s.color === 'none' || !bySet || !hasEntity ? 'none' : 'member');
+        if (facet === 'member' && !bySet) facet = null;
         enc.facet = facet === 'member' ? 'member' : facet ? fieldOf(ds, facet) : null;
         enc.groupBy = group;
         enc.hasEntity = hasEntity;
-        out.main = { ...base, entities: ids, columns: keys, group_by: group };
+        out.main = { ...base, entities: ids, ...extra, columns: keys, group_by: group };
         if (set && s.context) {
             out.context = { ...base, entities: 'all', columns: keys, group_by: group };
             out.contextKind = 'rows';
         }
         enc.trend = !!s.trend && !enc.facet;
+    } else if (type.key === 'line' && s.lineX === 'age' && agingStat(aging, ds, s.y) && bySet) {
+        // Across ages: the set's seasons against the typical aging curve
+        // (POST /workbench/aging, the Aging Curves page's numbers).
+        const era = aging.eras.some((e) => e.key === s.agingEra) ? s.agingEra : 'all';
+        out.aging = { stat: s.y, player_ids: set.members.slice(0, MAX_AGING_PLAYERS).map((m) => m.id), era };
+        out.agingCut = Math.max(0, set.members.length - MAX_AGING_PLAYERS);
+        enc.x = 'age';
+        enc.y = s.y;
+        enc.era = era;
+        out.enc = enc;
+        out.seasonFrom = seasonFrom;
+        out.seasonTo = seasonTo;
+        return out;
     } else if (type.key === 'line') {
         const x = s.lineX === 'date' && isGameData(ds) ? 'date' : 'season';
         group = x === 'date' || isSeasonData(ds) ? 'none' : ['entity', 'season'];
         enc.x = x;
         enc.y = s.y;
-        out.main = { ...base, entities: ids, columns: keys, group_by: group };
+        out.main = { ...base, entities: ids, ...extra, columns: keys, group_by: group };
         if (s.context && x === 'season') {
             out.context = { spec: { ...base, entities: 'all', columns: keys, group_by: group }, column: s.y, by: 'season' };
             out.contextKind = 'summary';
@@ -165,7 +208,7 @@ export function buildChart(settings, ds, set) {
         else group = split ? ['entity', split] : 'entity';
         enc.y = s.y;
         enc.category = split ? fieldOf(ds, split) : null;
-        out.main = { ...base, entities: ids, columns: keys, group_by: group };
+        out.main = { ...base, entities: ids, ...extra, columns: keys, group_by: group };
         if (s.context) {
             out.context = { spec: { ...base, entities: 'all', columns: keys, group_by: group }, column: s.y, by: enc.category };
             out.contextKind = 'summary';
@@ -173,7 +216,7 @@ export function buildChart(settings, ds, set) {
     } else if (type.key === 'box') {
         enc.y = s.y;
         enc.style = s.style === 'dots' ? 'dots' : 'box';
-        out.main = { ...base, entities: ids, columns: keys, group_by: 'none' };
+        out.main = { ...base, entities: ids, ...extra, columns: keys, group_by: 'none' };
         if (s.context) {
             out.context = { spec: { ...base, entities: 'all', columns: keys, group_by: 'none' }, column: s.y, by: null };
             out.contextKind = 'summary';
@@ -181,7 +224,7 @@ export function buildChart(settings, ds, set) {
     } else if (type.key === 'histogram') {
         enc.x = s.y;
         enc.bins = BIN_CHOICES.includes(s.bins) && s.bins ? s.bins : 20;
-        if (set) out.main = { ...base, entities: ids, columns: keys, group_by: 'none' };
+        if (set) out.main = { ...base, entities: ids, ...extra, columns: keys, group_by: 'none' };
         if (s.context || !set) {
             out.context = { spec: { ...base, entities: 'all', columns: keys, group_by: 'none' }, column: s.y, by: null, bins: enc.bins };
             out.contextKind = 'summary';
@@ -191,7 +234,7 @@ export function buildChart(settings, ds, set) {
         group = isSeasonData(ds) && xg === 'season' ? 'none' : ['entity', xg];
         enc.y = s.y;
         enc.category = fieldOf(ds, xg);
-        out.main = { ...base, entities: ids, columns: keys, group_by: group };
+        out.main = { ...base, entities: ids, ...extra, columns: keys, group_by: group };
         if (s.context) {
             out.context = { spec: { ...base, entities: 'all', columns: keys, group_by: group }, column: s.y, by: enc.category };
             out.contextKind = 'summary';
@@ -214,7 +257,7 @@ export function buildChart(settings, ds, set) {
 // "player-seasons", "team-games", "players (combined)" … for the n line.
 export function unitWord(ds, group, n = 2) {
     const plural = n !== 1;
-    if (group === 'none') return `${ds.entity}-${plural ? ds.row_label : one(ds.row_label)}`;
+    if (group === 'none') return rowUnit(ds, plural);
     const g = Array.isArray(group) ? group : [group];
     if (g.length === 1 && g[0] === 'entity') return entityWord(ds.entity, plural);
     if (g.length === 1 && g[0] === 'season') return plural ? 'seasons' : 'season';

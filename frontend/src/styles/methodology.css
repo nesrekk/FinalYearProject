@@ -47,7 +47,10 @@
   box-shadow: var(--shadow-card);
   padding: var(--space-5);
   min-width: 0;
+  scroll-margin-top: 96px;
 }
+/* Opened from a link (?card=): the card says so. */
+.meth-card:focus { outline: 2px solid var(--brand); outline-offset: 3px; }
 .meth-card-head {
   display: flex;
   justify-content: space-between;

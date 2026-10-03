@@ -162,9 +162,11 @@ def test_catalogue_is_well_formed():
             {f for g in ds.groupings.values() for f, _ in g.extra}
         assert set(ds.per_modes) <= set(WC.PER_MODES) and "game" in ds.per_modes
         assert ("per36" in ds.per_modes) == (ds.minutes_sql is not None)
-        assert set(ds.groupings) <= {"entity", "season", "team", "opponent", "home", "result"}
+        assert set(ds.groupings) <= {"entity", "season", "team", "opponent", "home", "result", "lineup", "pair"}
         for d in ds.dims.values():
-            assert d.type in ("team", "text", "bool", "date") and (d.type != "text" or d.values)
+            assert d.type in ("team", "text", "bool", "date", "players") and (d.type != "text" or d.values)
+        assert (ds.players_sql is None) or ds.entity == "team"
+        assert ds.poss_floor is None or ds.poss_sql
         for c in ds.columns.values():
             assert c.kind in WC.KINDS and c.fmt in WC.FORMATS, c.key
             assert c.key not in fields | reserved | set(ds.dims), (ds.key, c.key)
@@ -175,11 +177,15 @@ def test_catalogue_is_well_formed():
                 assert set(c.per_modes or ()) <= set(ds.per_modes), c.key
             if c.kind == "ratio":
                 assert c.num and c.den and c.agg_text, c.key
+            if c.kind == "diff":
+                assert c.num and c.den and c.num2 and c.den2 and c.agg_text, c.key
+            assert bool(c.ci_lo) == bool(c.ci_hi) == bool(c.ci_label), c.key
             if c.kind == "wmean":
                 assert c.weight and c.weight_label, c.key
             if c.stability:
                 assert c.sample, c.key
-            for frag in (c.sql, c.total, c.num, c.den, c.weight, c.n_sql, c.sample):
+            for frag in (c.sql, c.total, c.num, c.den, c.weight, c.n_sql, c.sample, c.num2, c.den2, c.ci_lo, c.ci_hi,
+                         c.among):
                 assert frag is None or "%" not in frag, c.key
             if c.attempts:
                 assert c.attempts in WC.MIN_ATTEMPTS_PER_GAME
@@ -202,11 +208,14 @@ def test_stability_keys_exist(cur):
 def _coverage(cur, ds, col, season):
     """Share of the season's rows with the column recorded; a season-table
     shooting % counts among the rows with attempts (no attempts, no %)."""
-    expr = {"count": col.total, "ratio": f"CASE WHEN ({col.den}) IS NOT NULL THEN {col.num} END"}.get(col.kind) \
+    expr = {"count": col.total, "ratio": f"CASE WHEN ({col.den}) IS NOT NULL THEN {col.num} END",
+            "diff": f"CASE WHEN ({col.den}) IS NOT NULL AND ({col.den2}) IS NOT NULL THEN {col.num} END"}.get(col.kind) \
         or col.sql
     where = [*ds.where, f"{ds.season_sql} = %s"]
     if col.attempts:
         where.append(f"s.{col.attempts} > 0")
+    if col.among:
+        where.append(f"({col.among})")
     where = " AND ".join(where)
     cur.execute(f"SELECT AVG(CASE WHEN ({expr}) IS NOT NULL THEN 1.0 ELSE 0 END) {ds.from_sql} WHERE {where}",
                 [*ds.from_params, season])
@@ -243,25 +252,33 @@ def test_age_on_feb1_matches_aging_curves_formula(cur):
 
 
 def test_every_verified_column_runs(client):
+    rows = {x["key"]: x["rows"] for x in client.get("/workbench/catalogue").json()["datasets"]}
     for ds in WC.DATASETS.values():
-        cols = [k for k, c in ds.columns.items() if c.status == "verified"]
-        aggs = [k for k in cols if ds.columns[k].kind != "none"]
+        all_cols = [k for k, c in ds.columns.items() if c.status == "verified"]
         last = client.get("/workbench/catalogue").json()
         last = next(x for x in last["datasets"] if x["key"] == ds.key)["seasons"]["to"]
-        d = _q(client, dataset=ds.key, columns=cols, season_from=last, limit=200)
-        assert d["n"]["rows"] == min(200, d["n"]["matched"]) >= 30 and d["_source"]["tables"]
-        for k in cols:
-            assert any(r[k] is not None for r in d["rows"]), (ds.key, k)
-            assert all(k in r["n"] for r in d["rows"])
-        for per in ds.per_modes:
-            d = _q(client, dataset=ds.key, columns=aggs, group_by="entity", per=per, limit=5000)
-            assert not d["truncated"] and d["n"]["source_rows"] > 1000
-            for k in aggs:
-                assert any(r[k] is not None for r in d["rows"]), (ds.key, per, k)
-            meta = {m["key"]: m for m in d["columns"]}
-            assert all(meta[k]["format"] in WC.FORMATS for k in aggs)
-        d = _q(client, dataset=ds.key, columns=aggs, group_by="all")
-        assert d["n"]["rows"] == 1 and d["rows"][0]["n_rows"] == d["n"]["source_rows"]
+        # A request takes at most 40 columns; the projections have 136.
+        for at in range(0, len(all_cols), 40):
+            cols = all_cols[at:at + 40]
+            aggs = [k for k in cols if ds.columns[k].kind != "none"]
+            # Actual and miss columns of the projections are empty in the live (latest) season.
+            season = last - 1 if ds.key == "player_projection" else last
+            d = _q(client, dataset=ds.key, columns=cols, season_from=season, season_to=season, limit=200)
+            assert d["n"]["rows"] == min(200, d["n"]["matched"]) >= 30 and d["_source"]["tables"]
+            for k in cols:
+                assert any(r[k] is not None for r in d["rows"]), (ds.key, k)
+                assert all(k in r["n"] for r in d["rows"])
+            if not aggs:
+                continue
+            for per in ds.per_modes:
+                d = _q(client, dataset=ds.key, columns=aggs, group_by="entity", per=per, limit=5000)
+                assert not d["truncated"] and d["n"]["source_rows"] > min(1000, 0.9 * rows[ds.key])
+                for k in aggs:
+                    assert any(r[k] is not None for r in d["rows"]), (ds.key, per, k)
+                meta = {m["key"]: m for m in d["columns"]}
+                assert all(meta[k]["format"] in WC.FORMATS for k in aggs)
+            d = _q(client, dataset=ds.key, columns=aggs, group_by="all")
+            assert d["n"]["rows"] == 1 and d["rows"][0]["n_rows"] == d["n"]["source_rows"]
 
 
 def test_catalogue_endpoint(client):
@@ -273,7 +290,7 @@ def test_catalogue_endpoint(client):
     assert set(by) == set(WC.DATASETS)
     assert by["player_season"]["seasons"]["from"] == 1950 and by["player_game"]["seasons"]["from"] == 2021
     for ds in d["datasets"]:
-        assert ds["rows"] > 1000 and ds["columns"] and ds["_source"]["tables"]
+        assert ds["rows"] > (150 if ds["key"] == "team_possessions" else 1000) and ds["columns"] and ds["_source"]["tables"]
         for c in ds["columns"]:
             assert c["label"] and c["combines"] and c["format"] in WC.FORMATS
             assert (c["status"] == "excluded") == bool(c["reason"])

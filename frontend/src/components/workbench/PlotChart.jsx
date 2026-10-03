@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useRef } from 'react';
 import * as Plot from '@observablehq/plot';
-import { formatValue, seasonLabel, seriesVar } from './workbenchShared';
+import { formatValue, intervalText, seasonLabel, seriesVar } from './workbenchShared';
 import { categoryLabel, unitWord } from './chartSpec';
 
 // Draws a Chart block with Observable Plot. This is the only file that
@@ -143,6 +143,13 @@ function rowSub(row) {
     return bits.join(' · ');
 }
 
+// " · 95% interval +4.1 to +8.7" when the row carries one for the column.
+function ciLine(row, key, col) {
+    const t = intervalText(col?.format, row.ci?.[key]);
+    return t ? ` · ${col.interval} ${t}` : '';
+}
+const MAX_WHISKERS = 60; // intervals drawn for at most this many points; more would hide the points
+
 function nLine(row, key, col) {
     const n = row.n?.[key];
     if (n == null) return '';
@@ -168,9 +175,10 @@ function scatter(o) {
         x: row[enc.x], y: row[enc.y], s: cs ? row[enc.size] : null, c: byStat ? row[enc.color] : null,
         fill: grey ? CONTEXT : enc.color === 'none' ? 'var(--brand)' : p.colorOf(row),
         noisy: p.noisy(row, keys), f: facetKey(row), mine: grey && p.memberOf.has(row[o.entityKey]),
+        xlo: row.ci?.[enc.x]?.[0], xhi: row.ci?.[enc.x]?.[1], ylo: row.ci?.[enc.y]?.[0], yhi: row.ci?.[enc.y]?.[1],
         t: [grey ? null : p.nameOf(row) || null, rowSub(row) || null,
-            `${cx.label}: ${formatValue(cx.format, row[enc.x])} (${nLine(row, enc.x, cx)})`,
-            `${cy.label}: ${formatValue(cy.format, row[enc.y])} (${nLine(row, enc.y, cy)})`,
+            `${cx.label}: ${formatValue(cx.format, row[enc.x])}${ciLine(row, enc.x, cx)} (${nLine(row, enc.x, cx)})`,
+            `${cy.label}: ${formatValue(cy.format, row[enc.y])}${ciLine(row, enc.y, cy)} (${nLine(row, enc.y, cy)})`,
             cs ? `${cs.label}: ${formatValue(cs.format, row[enc.size])}` : null,
             cc ? `${cc.label}: ${formatValue(cc.format, row[enc.color])}` : null,
             grey ? `(${p.nameOf(row)})` : null].filter(Boolean).join('\n'),
@@ -209,6 +217,13 @@ function scatter(o) {
         marks.push(Plot.line(trend.fit.line, { x: 'x', y: 'y', stroke: 'currentColor', strokeWidth: 1.6 }));
     }
     const fill = byStat ? 'c' : 'fill';
+    // The model's interval on each of the set's points, as thin whiskers under the dots.
+    const whisk = enc.ci && set.length <= MAX_WHISKERS;
+    const xw = whisk ? set.filter((d) => isNum(d.xlo) && isNum(d.xhi)) : [];
+    const yw = whisk ? set.filter((d) => isNum(d.ylo) && isNum(d.yhi)) : [];
+    const wStroke = byStat || enc.color === 'none' ? 'currentColor' : 'fill';
+    if (xw.length) marks.push(Plot.ruleY(xw, { y: 'y', x1: 'xlo', x2: 'xhi', stroke: wStroke, strokeOpacity: 0.55, strokeWidth: 1.2, ...facetCh }));
+    if (yw.length) marks.push(Plot.ruleX(yw, { x: 'x', y1: 'ylo', y2: 'yhi', stroke: wStroke, strokeOpacity: 0.55, strokeWidth: 1.2, ...facetCh }));
     marks.push(Plot.dot(set.filter((d) => !d.noisy), { x: 'x', y: 'y', r, fill, stroke: 'var(--surface)', strokeWidth: 0.8, ...facetCh }));
     marks.push(Plot.dot(set.filter((d) => d.noisy), { x: 'x', y: 'y', r, fill: 'none', stroke: fill, strokeWidth: 1.6, ...facetCh }));
     // Names on the points when each member has just one.
@@ -241,9 +256,14 @@ function scatter(o) {
     if (grey.length) legend.push({ label: `All ${o.populationWord}`, color: CONTEXT });
     if ([...set, ...grey].some((d) => d.noisy)) legend.push({ label: 'small sample (hollow)', color: 'currentColor', shape: 'hollow' });
     if (trend?.fit && enc.trend) legend.push({ label: 'straight-line fit, 95% band', color: 'currentColor', shape: 'line' });
+    const intervals = [...new Set([xw.length ? cx.interval : null, yw.length ? cy.interval : null].filter(Boolean))];
+    if (intervals.length) legend.push({ label: `whiskers: ${intervals.join('; ')}`, color: 'currentColor', shape: 'line' });
     const n = [`n = ${set.length.toLocaleString()} ${unitWord(ds, enc.groupBy, set.length)}${o.setName ? ` in ${o.setName}` : ''}`];
     if (grey.length) n.push(`${grey.length.toLocaleString()} in grey (every ${o.populationOne} matching the same filters)`);
     const notes = [`${n.join('; ')}.`];
+    if (enc.ci && !whisk && [cx, cy].some((c) => c?.interval) && set.some((d) => isNum(d.ylo) || isNum(d.xlo))) {
+        notes.push(`Intervals are drawn for up to ${MAX_WHISKERS} points (hover a dot for its own); choose a set to see them.`);
+    }
     if (cs) notes.push(`Dot size: ${axisLabel(cs)}.`);
     if (cc) notes.push(`Colour: ${axisLabel(cc)}${cc.higher_is_better === false ? ' (lower is better)' : ''}.`);
     if (trend?.fit && enc.trend) {
@@ -263,8 +283,10 @@ function line(o) {
     const pts = (main?.rows || []).filter((r) => isNum(r[enc.y])).map((r) => ({
         x: isDate ? new Date(`${r.date}T12:00:00`) : r.season,
         y: r[enc.y], id: r[o.entityKey], stroke: p.colorOf(r), noisy: p.noisy(r, [enc.y]),
-        t: [p.nameOf(r), rowSub(r), `${cy.label}: ${formatValue(cy.format, r[enc.y])}`, nLine(r, enc.y, cy)].filter(Boolean).join('\n'),
+        lo: r.ci?.[enc.y]?.[0], hi: r.ci?.[enc.y]?.[1],
+        t: [p.nameOf(r), rowSub(r), `${cy.label}: ${formatValue(cy.format, r[enc.y])}${ciLine(r, enc.y, cy)}`, nLine(r, enc.y, cy)].filter(Boolean).join('\n'),
     })).sort((a, b) => a.x - b.x);
+    const banded = enc.ci && !isDate ? pts.filter((d) => isNum(d.lo) && isNum(d.hi)) : [];
     const band = ctx?.groups?.filter((g) => isNum(g.p50)) || [];
     const marks = [Plot.gridY({ strokeOpacity: 0.08 })];
     if (band.length) {
@@ -273,6 +295,10 @@ function line(o) {
         marks.push(Plot.line(band, { x: 'key', y: 'p50', stroke: CONTEXT, strokeWidth: 1.5, strokeDasharray: '4 3' }));
     }
     if (cy?.format?.startsWith('signed')) marks.push(Plot.ruleY([0], { strokeOpacity: 0.3 }));
+    if (banded.length) {
+        marks.push(Plot.areaY(banded, { x: 'x', y1: 'lo', y2: 'hi', z: 'id', fill: 'stroke', fillOpacity: 0.14 }));
+        marks.push(Plot.ruleX(banded, { x: 'x', y1: 'lo', y2: 'hi', stroke: 'stroke', strokeOpacity: 0.45, strokeWidth: 1 }));
+    }
     marks.push(Plot.line(pts, { x: 'x', y: 'y', z: 'id', stroke: 'stroke', strokeWidth: isDate ? 1.2 : 2 }));
     marks.push(Plot.dot(pts.filter((d) => !d.noisy), { x: 'x', y: 'y', r: isDate ? 2 : 3.2, fill: 'stroke' }));
     marks.push(Plot.dot(pts.filter((d) => d.noisy), { x: 'x', y: 'y', r: isDate ? 2 : 3.2, fill: 'var(--surface)', stroke: 'stroke', strokeWidth: 1.5 }));
@@ -289,6 +315,7 @@ function line(o) {
         legend.push({ label: 'middle half / middle 80%', color: CONTEXT, shape: 'band' });
     }
     if (pts.some((d) => d.noisy)) legend.push({ label: 'small sample (hollow)', color: 'currentColor', shape: 'hollow' });
+    if (banded.length) legend.push({ label: `shaded: ${cy.interval}`, color: 'currentColor', shape: 'band' });
     const notes = [`n = ${pts.length.toLocaleString()} points${o.setName ? ` from ${o.setName}` : ''}${band.length ? `; grey: ${ctx.overall?.n?.toLocaleString() || 0} ${o.rowWord} matching the same filters` : ''}.`];
     return { options, legend, notes };
 }
@@ -302,8 +329,10 @@ function bar(o) {
     const data = rows.map((r) => ({
         name: p.nameOf(r), y: r[enc.y], fill: p.colorOf(r), noisy: p.noisy(r, [enc.y]),
         c: cat ? categoryText(cat, r[cat]) : null, label: formatValue(cy.format, r[enc.y]),
-        t: [p.nameOf(r), cat ? categoryText(cat, r[cat]) : rowSub(r), `${cy.label}: ${formatValue(cy.format, r[enc.y])}`, nLine(r, enc.y, cy)].filter(Boolean).join('\n'),
+        lo: r.ci?.[enc.y]?.[0], hi: r.ci?.[enc.y]?.[1],
+        t: [p.nameOf(r), cat ? categoryText(cat, r[cat]) : rowSub(r), `${cy.label}: ${formatValue(cy.format, r[enc.y])}${ciLine(r, enc.y, cy)}`, nLine(r, enc.y, cy)].filter(Boolean).join('\n'),
     }));
+    const barCi = enc.ci ? data.filter((d) => isNum(d.lo) && isNum(d.hi)) : [];
     const names = o.members.map((m) => m.name).filter((n) => data.some((d) => d.name === n));
     const cats = cat ? [...new Set(data.map((d) => d.c))].sort() : null;
     const fxCh = cat ? { fx: 'c' } : {};
@@ -315,6 +344,7 @@ function bar(o) {
     }
     marks.push(Plot.barY(data, { x: 'name', y: 'y', fill: 'fill', fillOpacity: (d) => (d.noisy ? 0.4 : 0.92), ...fxCh, insetLeft: 2, insetRight: 2 }));
     marks.push(Plot.ruleY([0], { strokeOpacity: 0.5 }));
+    if (barCi.length) marks.push(Plot.ruleX(barCi, { x: 'name', y1: 'lo', y2: 'hi', stroke: 'currentColor', strokeWidth: 1.4, strokeOpacity: 0.7, ...fxCh }));
     marks.push(Plot.text(data.filter((d) => d.y >= 0), { x: 'name', y: 'y', text: (d) => `${d.label}${d.noisy ? '*' : ''}`, dy: -6, fill: 'currentColor', fontSize: 10, ...fxCh }));
     marks.push(Plot.text(data.filter((d) => d.y < 0), { x: 'name', y: 'y', text: (d) => `${d.label}${d.noisy ? '*' : ''}`, dy: 8, fill: 'currentColor', fontSize: 10, ...fxCh }));
     marks.push(Plot.tip(data, Plot.pointer({ x: 'name', y: 'y', title: 't', ...fxCh })));
@@ -332,8 +362,61 @@ function bar(o) {
         legend.push({ label: `All ${o.populationWord}: median`, color: CONTEXT, shape: 'line', dash: '4 3' });
         legend.push({ label: 'middle half', color: CONTEXT, shape: 'band' });
     }
-    const notes = [`Each bar combines the seasons ${seasonLabel(o.seasonFrom)}${o.seasonTo !== o.seasonFrom ? ` to ${seasonLabel(o.seasonTo)}` : ''}${cat ? `, split by ${categoryLabel(o.ds, cat).toLowerCase()}` : ''}; n ${rows.reduce((a, r) => a + (r.n_games || 0), 0).toLocaleString()} games${band.length ? `; grey: ${band.reduce((a, g) => a + g.n, 0).toLocaleString()} ${o.populationWord} combined the same way` : ''}.`];
+    const games = rows.reduce((a, r) => a + (r.n_games || 0), 0);
+    const notes = [`Each bar combines the seasons ${seasonLabel(o.seasonFrom)}${o.seasonTo !== o.seasonFrom ? ` to ${seasonLabel(o.seasonTo)}` : ''}${cat ? `, split by ${categoryLabel(o.ds, cat).toLowerCase()}` : ''}; n ${games ? `${games.toLocaleString()} games` : `${rows.length.toLocaleString()} ${o.rowWord}`}${band.length ? `; grey: ${band.reduce((a, g) => a + g.n, 0).toLocaleString()} ${o.populationWord} combined the same way` : ''}.`];
     if (data.some((d) => d.noisy)) notes.push('* faded: sample too small to say much (Stat Stability reliability under 0.5).');
+    if (barCi.length) legend.push({ label: `whisker: ${cy.interval}`, color: 'currentColor', shape: 'line' });
+    return { options, legend, notes };
+}
+
+// A set's seasons by age against the Aging Curves page's typical curve
+// (POST /workbench/aging): everything measured against that season's league
+// average, as on that page.
+function agingChart(o) {
+    const a = o.aging;
+    const sm = a.summary;
+    const pct = sm.kind === 'pct' || sm.kind === 'rate';
+    const fmt = pct ? 'pct' : 'signed1';
+    const show = (v) => (pct && v > 0 ? `+${formatValue(fmt, v)}` : formatValue(fmt, v));
+    const colorOf = new Map(o.members.map((m) => [m.id, seriesVar(m.color)]));
+    const seasons = [];
+    const paths = [];
+    for (const p of a.players) {
+        const color = colorOf.get(p.player_id) || 'var(--brand)';
+        for (const x of p.seasons) {
+            if (x.age == null || !isNum(x.vs_league)) continue;
+            seasons.push({ x: x.age, y: x.vs_league, id: p.player_id, color, q: x.qualified,
+                t: [p.player_name, `${seasonLabel(x.season)} · age ${x.age}${x.team ? ` · ${x.team}` : ''}`,
+                    `${sm.label}: ${formatValue(pct ? 'pct' : 'num1', x.value)} (league ${formatValue(pct ? 'pct' : 'num1', x.league_average)})`,
+                    `vs league: ${show(x.vs_league)}`, x.qualified ? null : `not on the curve: ${x.note}`].filter(Boolean).join('\n') });
+        }
+        for (const q of p.path) paths.push({ x: q.age, y: q.level, id: p.player_id, color });
+    }
+    const curve = a.curve.filter((c) => isNum(c.level));
+    const band = curve.filter((c) => isNum(c.lo) && isNum(c.hi));
+    const marks = [Plot.gridY({ strokeOpacity: 0.08 }), Plot.ruleY([0], { strokeOpacity: 0.3 })];
+    marks.push(Plot.areaY(band, { x: 'age', y1: 'lo', y2: 'hi', fill: CONTEXT, fillOpacity: 0.45 }));
+    marks.push(Plot.line(curve, { x: 'age', y: 'level', stroke: CONTEXT, strokeWidth: 2 }));
+    marks.push(Plot.line(paths, { x: 'x', y: 'y', z: 'id', stroke: 'color', strokeWidth: 1.4, strokeDasharray: '5 3', strokeOpacity: 0.9 }));
+    const onCurve = seasons.filter((d) => d.q);
+    marks.push(Plot.line(onCurve, { x: 'x', y: 'y', z: 'id', stroke: 'color', strokeWidth: 2 }));
+    marks.push(Plot.dot(onCurve, { x: 'x', y: 'y', r: 3.2, fill: 'color' }));
+    marks.push(Plot.dot(seasons.filter((d) => !d.q), { x: 'x', y: 'y', r: 3.2, fill: 'var(--surface)', stroke: 'color', strokeWidth: 1.4 }));
+    marks.push(Plot.tip([...seasons, ...curve.map((c) => ({ x: c.age, y: c.level,
+        t: `Typical player, age ${c.age}\n${show(c.level)} vs league${isNum(c.lo) ? `\n95% range ${show(c.lo)} to ${show(c.hi)}` : ''}${c.pairs ? `\n${c.pairs.toLocaleString()} pairs of seasons` : ''}${c.thin ? ' (thin)' : ''}` }))],
+    Plot.pointer({ x: 'x', y: 'y', title: 't' })));
+    const options = {
+        x: { label: 'Age (on February 1 of the season)', nice: false, tickFormat: (d) => (Number.isInteger(d) ? String(d) : '') },
+        y: { label: `${sm.label}, minus that season’s league average`, tickFormat: tickFormatter(fmt), nice: true },
+        color: { type: 'identity' },
+        marks,
+    };
+    const legend = a.players.map((p) => ({ label: p.player_name, color: colorOf.get(p.player_id) || 'var(--brand)', shape: 'line' }));
+    legend.push({ label: 'typical player (curve), 95% range', color: CONTEXT, shape: 'band' });
+    legend.push({ label: 'dashed: the curve moved to his level', color: 'currentColor', shape: 'line', dash: '5 3' });
+    if (seasons.some((d) => !d.q)) legend.push({ label: `not on the curve (under ${sm.min_minutes} minutes${sm.min_attempts ? ` or ${sm.min_attempts} attempts` : ''})`, color: 'currentColor', shape: 'hollow' });
+    const notes = [`n = ${onCurve.length.toLocaleString()} seasons on the curve${seasons.length > onCurve.length ? ` (+${(seasons.length - onCurve.length).toLocaleString()} hollow)` : ''}; the curve: ${sm.pairs.toLocaleString()} pairs of consecutive seasons from ${sm.players.toLocaleString()} players, ${sm.era_label.toLowerCase()}, peak at ${sm.peak_age}.`,
+        'The dashed line is how a typical player at his level ages, not a forecast for him.'];
     return { options, legend, notes };
 }
 
@@ -476,7 +559,7 @@ const DRAW = { scatter, line, bar, box, histogram, heatmap };
 export default function PlotChart(props) {
     const { width, height, svgRef, title } = props;
     const holder = useRef(null);
-    const built = DRAW[props.type]({ ...props, w: width });
+    const built = (props.aging ? agingChart : DRAW[props.type])({ ...props, w: width });
     const legendRows = layoutLegend(built.legend, width - 8);
     const legendH = legendRows.length ? legendRows.length * 18 + 6 : 0;
     const notesRows = [];
