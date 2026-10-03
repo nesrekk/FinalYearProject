@@ -789,10 +789,12 @@ TEAM_GAME = Dataset(
 
 # ─── player_onoff (round 7 step 7) ──────────────────────────────────────────
 # On/off per player-season-team, computed here from the corrected on-floor
-# points, not read from player_on_off: that table (the On/Off page) takes its
-# on-court points from player_game_lines' tm_pts / op_pts, which double-count
-# in games with a stale ESPN score field (README Known real gaps); its on-court
-# +/- differs from player_game_onfloor's by about 10 points a player-season-team.
+# points (so it can combine seasons and carry a closed-form interval).
+# player_on_off (the On/Off page, scripts/build_player_on_off.py) reads the same
+# sources since 2026-10-03 and gives the same numbers in every row
+# (api/tests/test_workbench_step7.py); before, it took its on-court points from
+# player_game_lines' tm_pts / op_pts, which double-count in games with a stale
+# ESPN score field (about 10 points of on-court +/- a player-season-team).
 # Off = the team's game total minus his on-court, over the games he played:
 # points from the real final score (game_scores, which the on-floor points add
 # up to in 12,873 of 12,874 fully tracked team-games), possessions from the
@@ -801,10 +803,10 @@ TEAM_GAME = Dataset(
 #
 # Interval: game-clustered, by linearisation of the ratio difference
 # (z_g = 100 [(a_g - A/B b_g)/B - (c_g - C/E e_g)/E], var = G/(G-1) sum z_g^2).
-# On the On/Off page's own numbers it reproduces that page's 2,000-resample
-# game bootstrap SE: median ratio 1.01, 5th-95th percentile 0.97-1.07
-# (3,665 player-season-teams, 2026-10-03; api/tests/test_workbench_step7.py
-# re-checks it).
+# It reproduces the On/Off page's 2,000-resample game bootstrap SE: median
+# ratio 1.01, 5th-95th percentile 0.97-1.07 on the corrected points (3,610
+# player-season-teams with an SE, 2026-10-03), as it did on the page's old
+# points before the rebuild (api/tests/test_workbench_step7.py re-checks it).
 _ONOFF_GAMES = f"""
         SELECT l.player_id, l.season, l.team_abbreviation AS team, l.seconds,
                o.pts_for AS pf_on, o.pts_against AS pa_on, {ON_COURT_POSS} AS poss_on,
@@ -911,9 +913,7 @@ PLAYER_ONOFF = Dataset(
     ),
     names_from_ids=True,
     notes=("Computed from the corrected on-floor points (free throws credited to the players on the floor at the "
-           "foul), so it differs from the On/Off page, whose on-court points come from the game lines' tm_pts "
-           "(README Known real gaps): on-court +/- by about 10 points a player-season-team, net ratings by about 1 "
-           "point per 100.",
+           "foul) and the real final score, the same numbers as the On/Off page.",
            "Off-court is the team's total minus his on-court in the games he played; games he missed aren't in it "
            "(With/Without a Star's job). The 12 games whose play-by-play doesn't reconcile are left out.",
            "Intervals: 95%, clustered by game (each game resampled as a whole), shown one row at a time."),

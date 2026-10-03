@@ -186,9 +186,10 @@ step derived -        build_shot_making.py               # ~3 min; also shot_xfg
 step derived -        train_wpa_model.py
 step derived -        build_event_clock.py               # ~1.5 min; read by possessions, rotations, play finder
 step derived -        build_player_game_lines.py
-step derived -        build_player_on_off.py             # team_game_totals, read by build_lineup_stints
+step derived -        build_team_game_totals.py          # read by build_lineup_stints, build_possessions, build_player_on_off
 step derived -        build_lineup_stints.py
 step derived -        build_player_game_onfloor.py       # ~35 s; reads lineup_stints, lineup_stint_games
+step derived -        build_player_on_off.py             # reads player_game_onfloor, team_game_totals, game_scores
 step derived -        build_possessions.py               # ~3.5 min; reads lineup_stints, team_game_totals
 step derived -        build_stat_stability.py
 step derived -        build_hot_streak_persistence.py

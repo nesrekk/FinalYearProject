@@ -137,8 +137,8 @@ def test_every_step_exists_and_every_producer_runs():
 def test_order_respects_what_each_step_reads():
     steps = plan()
     assert order_violations(steps) == []
-    # and the check catches a real mistake: stints before the on/off build that writes team_game_totals
-    i = next(k for k, s in enumerate(steps) if s[2] == "build_player_on_off.py")
+    # and the check catches a real mistake: stints before the build that writes team_game_totals
+    i = next(k for k, s in enumerate(steps) if s[2] == "build_team_game_totals.py")
     j = next(k for k, s in enumerate(steps) if s[2] == "build_lineup_stints.py")
     swapped = list(steps)
     swapped[i], swapped[j] = swapped[j], swapped[i]

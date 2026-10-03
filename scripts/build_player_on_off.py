@@ -7,12 +7,21 @@ every game, unlike `lineup_stats`, which stores only each season's 2,000
 most-used five-man lineups).
 
 What it computes, per player, season and team:
-  on-court   points for and against, and possessions, while he was on the
-             floor (the `tm_*` / `op_*` columns of his game lines);
+  on-court   points for and against while he was on the floor from
+             `player_game_onfloor` (scripts/build_player_game_onfloor.py: the
+             stints' lineups with free throws credited to the lineup at the
+             foul, as the official box score does), and possessions from the
+             `tm_*` / `op_*` columns of his game lines;
   off-court  his team's game totals minus his on-court totals, game by game,
              over the games he played (games he missed entirely are not
              "off-court" minutes: a different roster played them, which is
-             what the With/Without a Star tool measures);
+             what the With/Without a Star tool measures): points from the real
+             final score (`game_scores`, ESPN's scoreboard; the on-floor points
+             add up to it in 12,873 of 12,874 fully tracked team-games),
+             possessions from `team_game_totals`;
+  games      only games whose play-by-play reconciles (`player_game_onfloor.
+             game_ok`) and that have a final score through `team_game_fatigue`
+             (which leaves out the three NBA Cup finals, like the Game Log);
   ratings    points per 100 possessions on and off (ORtg, DRtg, net) and the
              on-minus-off differences;
   noise      a game-clustered bootstrap of on minus off net rating (his
@@ -21,28 +30,31 @@ What it computes, per player, season and team:
   usage      his share of his team's shooting possessions while on the floor
              (FGA + 0.44 FTA + TOV), to name each team's top-usage player.
 
+Until 2026-10-03 on-court points came from the lines' tm_pts / op_pts, which
+double-count in games with a stale ESPN score field (on-court plus-minus off
+by about 10 points a player-season-team); the Workbench's `player_onoff`
+dataset (api/workbench_catalogue.py, ONOFF_FROM) reads the same sources as
+this script and gives the same numbers (api/tests/test_workbench_step7.py).
+
 Possessions are the Basketball-Reference convention: FGA + 0.44 FTA - OREB
 + TOV, averaged over the two sides (a stint's two sides differ by a
-possession or so because stints start and end mid-possession). Team totals
-come from the same ESPN play-by-play (`pbp_events`, source 'espn') with the
-same event rules as build_player_game_lines.py, so on + off always equals
-the team's game total: field-goal and free-throw attempts and turnovers
-(including team turnovers) are counted per team from the events, offensive
-rebounds are player rebounds only (team rebounds aren't credited to anyone
-in the lines), points are the final score. Two free throws in six seasons
-carry no team in the ESPN feed and are left out.
+possession or so because stints start and end mid-possession). Team
+possessions come from `team_game_totals` (build_team_game_totals.py: the same
+ESPN play-by-play with the same event rules as the lines, so on + off always
+equals the team's game total; this script wrote that table until
+2026-10-03). Its points are the play-by-play's last score, which differs
+from the real final in 86 of 14,458 team-games, so on/off takes team points
+from `game_scores` instead.
 
 Tables written (all dropped and rebuilt):
-  team_game_totals        one row per team-game: points for/against, the
-                          possession components for both sides, possessions,
-                          game seconds (overtime included) and the share of
-                          player-seconds the rebuilt lineups tracked;
   player_on_off           one row per player-season-team (see columns below);
   player_on_off_seasons   per season: rows, tracked share, league checks.
 
 Checks printed at the end (the README quotes them):
-  * on + off possessions equal the team's game total by construction; the
-    lineups' tracked share of player-seconds is reported per season;
+  * on + off possessions equal the team's game total by construction, and on
+    + off points the final score except where an on-court total exceeded it
+    (clipped to zero off-court); the lineups' tracked share of player-seconds
+    is reported per season;
   * the possession-weighted league mean of on-court net rating is ~0 (each
     possession's margin is credited to the five players on each side);
   * how many qualified players' 95% intervals exclude zero, against the 5%
@@ -51,9 +63,14 @@ Checks printed at the end (the README quotes them):
     on-minus-off among 1,000+ minute players.
 
 Usage:
-    cd scripts && python3 build_player_on_off.py
+    cd scripts && python3 build_player_on_off.py [--dry-run [--csv FILE]]
+    (after build_team_game_totals.py and build_player_game_onfloor.py)
+
+--dry-run computes and prints everything and writes no table (with --csv, the
+player rows go to FILE, to compare with the stored table).
 """
 
+import sys
 import time
 
 import numpy as np
@@ -69,47 +86,24 @@ QUALIFIED_MINUTES = 500     # the API's default floor; stored rows carry minutes
 STAR_MINUTES = 1000         # each team's top-usage player is chosen among players with this many minutes
 FT_POSS = 0.44
 
-# Same event rules as build_player_game_lines.py (order matters there:
-# substitution, then free throw, then field goal, then rebound, then turnover).
-FG_SQL = ("action_type NOT LIKE 'Free Throw%%' AND action_type <> 'Substitution' "
-          "AND (description LIKE '%% blocks %%' OR description ~ ' (makes|misses) ')")
-FT_SQL = "action_type LIKE 'Free Throw%%'"
-TOV_SQL = (f"NOT ({FG_SQL}) AND NOT ({FT_SQL}) AND action_type NOT LIKE '%%Rebound%%' "
-           "AND action_type <> 'No Turnover' AND (action_type LIKE '%%Turnover%%' OR action_type = 'Traveling')")
-
-TEAM_TOTALS_SQL = f"""
-WITH ev AS (
-    SELECT e.game_id, g.season, g.game_date, g.home_team, g.away_team, e.team_tricode AS team,
-           e.action_type, COALESCE(e.description, '') AS description, e.period, e.score_home, e.score_away
-    FROM pbp_events e JOIN pbp_games g USING (game_id)
-    WHERE g.source = 'espn'
-),
-per_team AS (
-    SELECT game_id, season, game_date, home_team, away_team, team,
-           COUNT(*) FILTER (WHERE {FG_SQL}) AS fga,
-           COUNT(*) FILTER (WHERE {FT_SQL}) AS fta,
-           COUNT(*) FILTER (WHERE {TOV_SQL}) AS tov
-    FROM ev WHERE team IS NOT NULL
-    GROUP BY 1, 2, 3, 4, 5, 6
-),
-per_game AS (
-    SELECT game_id, MAX(score_home) AS score_home, MAX(score_away) AS score_away,
-           2880 + 300 * GREATEST(MAX(period) - 4, 0) AS game_seconds
-    FROM ev GROUP BY 1
-)
-SELECT t.game_id, t.season, t.game_date, t.team,
-       CASE WHEN t.team = t.home_team THEN t.away_team ELSE t.home_team END AS opponent,
-       t.team = t.home_team AS is_home,
-       CASE WHEN t.team = t.home_team THEN g.score_home ELSE g.score_away END AS pts_for,
-       CASE WHEN t.team = t.home_team THEN g.score_away ELSE g.score_home END AS pts_against,
-       t.fga, t.fta, t.tov, g.game_seconds
-FROM per_team t JOIN per_game g USING (game_id)
-WHERE t.team IN (t.home_team, t.away_team)
-"""
-
 LINE_COLS = ["player_id", "game_id", "season", "game_date", "team_abbreviation", "seconds",
              "fga", "fta", "oreb", "tov",
-             "tm_fga", "tm_fta", "tm_oreb", "tm_tov", "tm_pts", "op_fga", "op_fta", "op_oreb", "op_tov", "op_pts"]
+             "tm_fga", "tm_fta", "tm_oreb", "tm_tov", "op_fga", "op_fta", "op_oreb", "op_tov"]
+
+# His game lines with the corrected on-floor points and the game's real final
+# score; the same joins as the Workbench's player_onoff (workbench_catalogue._ONOFF_GAMES).
+# Ordered in full: the bootstrap resamples rows by position, so an unordered
+# read gave a different interval on every run.
+LINES_SQL = f"""
+SELECT {', '.join('l.' + c for c in LINE_COLS)},
+       o.pts_for AS pf_on, o.pts_against AS pa_on, gs.pts_for AS final_for, gs.pts_against AS final_against
+FROM player_game_lines l
+JOIN team_game_fatigue f ON f.team_abbreviation = l.team_abbreviation AND f.game_date = l.game_date
+JOIN game_scores gs ON gs.game_id = f.game_id AND gs.team_abbreviation = f.team_abbreviation
+JOIN player_game_onfloor o ON o.player_id = l.player_id AND o.game_id = l.game_id AND o.game_ok
+WHERE l.seconds > 0
+ORDER BY l.player_id, l.season, l.team_abbreviation, l.game_id
+"""
 
 
 def poss(fga, fta, oreb, tov):
@@ -121,23 +115,11 @@ def rating(points, possessions):
 
 
 def team_totals(conn):
-    """Team-game totals from the play-by-play, joined with the lines' own
-    offensive-rebound and tracked-seconds sums."""
-    t = pd.read_sql_query(TEAM_TOTALS_SQL, conn)
-    lines_by_team = pd.read_sql_query(
-        """SELECT game_id, team_abbreviation AS team, SUM(oreb) AS oreb, SUM(seconds) AS tracked_seconds
-           FROM player_game_lines GROUP BY 1, 2""", conn)
-    t = t.merge(lines_by_team, on=["game_id", "team"], how="left")
-    t["oreb"] = t["oreb"].fillna(0).astype(int)
-    t["tracked_seconds"] = t["tracked_seconds"].fillna(0.0)
-    # Opponent side of the same game.
-    opp = t[["game_id", "team", "fga", "fta", "oreb", "tov"]].rename(
-        columns={"team": "opponent", "fga": "opp_fga", "fta": "opp_fta", "oreb": "opp_oreb", "tov": "opp_tov"})
-    t = t.merge(opp, on=["game_id", "opponent"], how="inner")
-    t["poss"] = (poss(t.fga, t.fta, t.oreb, t.tov) + poss(t.opp_fga, t.opp_fta, t.opp_oreb, t.opp_tov)) / 2
-    t["tracked_share"] = t["tracked_seconds"] / (5 * t["game_seconds"])
-    t["win"] = t["pts_for"] > t["pts_against"]
-    return t
+    """team_game_totals (build_team_game_totals.py), keyed like the lines."""
+    return pd.read_sql_query(
+        """SELECT game_id, season, team_abbreviation AS team, pts_for, pts_against, fga, fta, oreb, tov,
+                  opp_fga, opp_fta, opp_oreb, opp_tov, poss, game_seconds, tracked_seconds
+           FROM team_game_totals""", conn)
 
 
 def bootstrap(rng, per_game):
@@ -160,6 +142,7 @@ def bootstrap(rng, per_game):
 
 
 def main():
+    dry_run = "--dry-run" in sys.argv[1:]
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
@@ -167,21 +150,23 @@ def main():
     teams = team_totals(conn)
     print(f"{len(teams)} team-games, {teams.game_id.nunique()} games ({time.time() - t0:.0f}s)")
 
-    lines = pd.read_sql_query(f"SELECT {', '.join(LINE_COLS)} FROM player_game_lines WHERE seconds > 0", conn)
+    all_lines = pd.read_sql_query("SELECT COUNT(*) FROM player_game_lines WHERE seconds > 0", conn).iloc[0, 0]
+    lines = pd.read_sql_query(LINES_SQL, conn)
     lines = lines.merge(
-        teams[["game_id", "team", "pts_for", "pts_against", "fga", "fta", "oreb", "tov",
+        teams[["game_id", "team", "fga", "fta", "oreb", "tov",
                "opp_fga", "opp_fta", "opp_oreb", "opp_tov", "poss", "game_seconds"]]
         .rename(columns={"team": "team_abbreviation", "fga": "t_fga", "fta": "t_fta", "oreb": "t_oreb", "tov": "t_tov",
                          "poss": "t_poss"}),
         on=["game_id", "team_abbreviation"], how="inner")
-    print(f"{len(lines)} player-games with minutes")
+    print(f"{len(lines)} player-games with minutes in reconciled games with a final score "
+          f"({all_lines - len(lines)} of {all_lines} left out)")
 
     # On-court possessions: average of the two sides of his stints.
     lines["poss_on"] = (poss(lines.tm_fga, lines.tm_fta, lines.tm_oreb, lines.tm_tov)
                         + poss(lines.op_fga, lines.op_fta, lines.op_oreb, lines.op_tov)) / 2
     lines["poss_off"] = lines["t_poss"] - lines["poss_on"]
-    lines["pf_off"] = lines["pts_for"] - lines["tm_pts"]
-    lines["pa_off"] = lines["pts_against"] - lines["op_pts"]
+    lines["pf_off"] = lines["final_for"] - lines["pf_on"]
+    lines["pa_off"] = lines["final_against"] - lines["pa_on"]
     lines["seconds_off"] = lines["game_seconds"] - lines["seconds"]
     negative = int(((lines.poss_off < 0) | (lines.pf_off < 0) | (lines.pa_off < 0) | (lines.seconds_off < 0)).sum())
     for c in ("poss_off", "pf_off", "pa_off", "seconds_off"):
@@ -194,13 +179,13 @@ def main():
     groups = lines.groupby(["player_id", "season", "team_abbreviation"], sort=True)
     team_games = teams.groupby(["season", "team"]).size().to_dict()
     for i, ((pid, season, team), g) in enumerate(groups):
-        s = g[["tm_pts", "op_pts", "poss_on", "pf_off", "pa_off", "poss_off", "seconds", "seconds_off",
+        s = g[["pf_on", "pa_on", "poss_on", "pf_off", "pa_off", "poss_off", "seconds", "seconds_off",
                "shooting_poss", "tm_shooting_poss"]].sum()
-        net_on = rating(s.tm_pts - s.op_pts, s.poss_on)
+        net_on = rating(s.pf_on - s.pa_on, s.poss_on)
         net_off = rating(s.pf_off - s.pa_off, s.poss_off)
-        ortg_on, drtg_on = rating(s.tm_pts, s.poss_on), rating(s.op_pts, s.poss_on)
+        ortg_on, drtg_on = rating(s.pf_on, s.poss_on), rating(s.pa_on, s.poss_on)
         ortg_off, drtg_off = rating(s.pf_off, s.poss_off), rating(s.pa_off, s.poss_off)
-        per_game = g[["tm_pts", "op_pts", "poss_on", "pf_off", "pa_off", "poss_off"]].to_numpy(float)
+        per_game = g[["pf_on", "pa_on", "poss_on", "pf_off", "pa_off", "poss_off"]].to_numpy(float)
         se = lo = hi = se_on = None
         if len(g) >= 2 and net_on is not None and net_off is not None:
             se, lo, hi, se_on = bootstrap(rng, per_game)
@@ -209,7 +194,7 @@ def main():
             "games": int(len(g)), "team_games": int(team_games.get((season, team), 0)),
             "minutes_on": round(s.seconds / 60, 1), "minutes_off": round(s.seconds_off / 60, 1),
             "poss_on": round(float(s.poss_on), 1), "poss_off": round(float(s.poss_off), 1),
-            "pts_for_on": int(s.tm_pts), "pts_against_on": int(s.op_pts),
+            "pts_for_on": int(s.pf_on), "pts_against_on": int(s.pa_on),
             "pts_for_off": int(s.pf_off), "pts_against_off": int(s.pa_off),
             "ortg_on": ortg_on, "drtg_on": drtg_on, "net_on": net_on,
             "ortg_off": ortg_off, "drtg_off": drtg_off, "net_off": net_off,
@@ -246,54 +231,42 @@ def main():
     seasons = pd.DataFrame(season_rows)
 
     # ── Write ──
-    cur.execute("DROP TABLE IF EXISTS team_game_totals;")
-    cur.execute("""CREATE TABLE team_game_totals (
-        game_id TEXT NOT NULL, season INTEGER NOT NULL, game_date DATE, team_abbreviation TEXT NOT NULL,
-        opponent TEXT, is_home BOOLEAN, win BOOLEAN, pts_for INTEGER, pts_against INTEGER,
-        fga INTEGER, fta INTEGER, oreb INTEGER, tov INTEGER,
-        opp_fga INTEGER, opp_fta INTEGER, opp_oreb INTEGER, opp_tov INTEGER,
-        poss DOUBLE PRECISION, game_seconds INTEGER, tracked_seconds DOUBLE PRECISION, tracked_share DOUBLE PRECISION,
-        PRIMARY KEY (game_id, team_abbreviation));""")
-    tcols = ["game_id", "season", "game_date", "team", "opponent", "is_home", "win", "pts_for", "pts_against",
-             "fga", "fta", "oreb", "tov", "opp_fga", "opp_fta", "opp_oreb", "opp_tov", "poss", "game_seconds",
-             "tracked_seconds", "tracked_share"]
-    trecs = [tuple(None if (isinstance(v, float) and np.isnan(v)) else (v.item() if hasattr(v, "item") else v)
-                   for v in r) for r in teams[tcols].itertuples(index=False)]
-    psycopg2.extras.execute_values(
-        cur, f"INSERT INTO team_game_totals ({', '.join(c if c != 'team' else 'team_abbreviation' for c in tcols)}) VALUES %s",
-        trecs, page_size=2000)
-    cur.execute("CREATE INDEX ON team_game_totals (season, team_abbreviation);")
+    if dry_run:
+        print("dry run: nothing written")
+        if "--csv" in sys.argv:
+            out.to_csv(sys.argv[sys.argv.index("--csv") + 1], index=False)
+    else:
 
-    cur.execute("DROP TABLE IF EXISTS player_on_off;")
-    cur.execute("""CREATE TABLE player_on_off (
-        player_id BIGINT NOT NULL, season INTEGER NOT NULL, team_abbreviation TEXT NOT NULL,
-        games INTEGER, team_games INTEGER, minutes_on DOUBLE PRECISION, minutes_off DOUBLE PRECISION,
-        poss_on DOUBLE PRECISION, poss_off DOUBLE PRECISION,
-        pts_for_on INTEGER, pts_against_on INTEGER, pts_for_off INTEGER, pts_against_off INTEGER,
-        ortg_on DOUBLE PRECISION, drtg_on DOUBLE PRECISION, net_on DOUBLE PRECISION,
-        ortg_off DOUBLE PRECISION, drtg_off DOUBLE PRECISION, net_off DOUBLE PRECISION,
-        on_off_ortg DOUBLE PRECISION, on_off_drtg DOUBLE PRECISION, on_off_net DOUBLE PRECISION,
-        on_off_se DOUBLE PRECISION, on_off_ci_low DOUBLE PRECISION, on_off_ci_high DOUBLE PRECISION,
-        net_on_se DOUBLE PRECISION, usg_pct DOUBLE PRECISION,
-        PRIMARY KEY (player_id, season, team_abbreviation));""")
-    ocols = list(out.columns)
-    orecs = [tuple(None if (isinstance(v, float) and np.isnan(v)) else (v.item() if hasattr(v, "item") else v)
-                   for v in r) for r in out[ocols].itertuples(index=False)]
-    psycopg2.extras.execute_values(cur, f"INSERT INTO player_on_off ({', '.join(ocols)}) VALUES %s", orecs, page_size=2000)
-    cur.execute("CREATE INDEX ON player_on_off (season, team_abbreviation);")
-    cur.execute("CREATE INDEX ON player_on_off (player_id);")
+        cur.execute("DROP TABLE IF EXISTS player_on_off;")
+        cur.execute("""CREATE TABLE player_on_off (
+            player_id BIGINT NOT NULL, season INTEGER NOT NULL, team_abbreviation TEXT NOT NULL,
+            games INTEGER, team_games INTEGER, minutes_on DOUBLE PRECISION, minutes_off DOUBLE PRECISION,
+            poss_on DOUBLE PRECISION, poss_off DOUBLE PRECISION,
+            pts_for_on INTEGER, pts_against_on INTEGER, pts_for_off INTEGER, pts_against_off INTEGER,
+            ortg_on DOUBLE PRECISION, drtg_on DOUBLE PRECISION, net_on DOUBLE PRECISION,
+            ortg_off DOUBLE PRECISION, drtg_off DOUBLE PRECISION, net_off DOUBLE PRECISION,
+            on_off_ortg DOUBLE PRECISION, on_off_drtg DOUBLE PRECISION, on_off_net DOUBLE PRECISION,
+            on_off_se DOUBLE PRECISION, on_off_ci_low DOUBLE PRECISION, on_off_ci_high DOUBLE PRECISION,
+            net_on_se DOUBLE PRECISION, usg_pct DOUBLE PRECISION,
+            PRIMARY KEY (player_id, season, team_abbreviation));""")
+        ocols = list(out.columns)
+        orecs = [tuple(None if (isinstance(v, float) and np.isnan(v)) else (v.item() if hasattr(v, "item") else v)
+                       for v in r) for r in out[ocols].itertuples(index=False)]
+        psycopg2.extras.execute_values(cur, f"INSERT INTO player_on_off ({', '.join(ocols)}) VALUES %s", orecs, page_size=2000)
+        cur.execute("CREATE INDEX ON player_on_off (season, team_abbreviation);")
+        cur.execute("CREATE INDEX ON player_on_off (player_id);")
 
-    cur.execute("DROP TABLE IF EXISTS player_on_off_seasons;")
-    cur.execute("""CREATE TABLE player_on_off_seasons (
-        season INTEGER PRIMARY KEY, games INTEGER, player_rows INTEGER, players INTEGER,
-        tracked_share DOUBLE PRECISION, league_net_on_weighted DOUBLE PRECISION, league_ortg DOUBLE PRECISION,
-        qualified INTEGER, qualified_ci_excludes_zero INTEGER, qualified_minutes INTEGER, bootstraps INTEGER);""")
-    scols = list(seasons.columns)
-    psycopg2.extras.execute_values(
-        cur, f"INSERT INTO player_on_off_seasons ({', '.join(scols)}) VALUES %s",
-        [tuple(v.item() if hasattr(v, "item") else v for v in r) for r in seasons[scols].itertuples(index=False)])
-    conn.commit()
-    print(f"wrote {len(teams)} team-games, {len(out)} player-season-team rows ({time.time() - t0:.0f}s)")
+        cur.execute("DROP TABLE IF EXISTS player_on_off_seasons;")
+        cur.execute("""CREATE TABLE player_on_off_seasons (
+            season INTEGER PRIMARY KEY, games INTEGER, player_rows INTEGER, players INTEGER,
+            tracked_share DOUBLE PRECISION, league_net_on_weighted DOUBLE PRECISION, league_ortg DOUBLE PRECISION,
+            qualified INTEGER, qualified_ci_excludes_zero INTEGER, qualified_minutes INTEGER, bootstraps INTEGER);""")
+        scols = list(seasons.columns)
+        psycopg2.extras.execute_values(
+            cur, f"INSERT INTO player_on_off_seasons ({', '.join(scols)}) VALUES %s",
+            [tuple(v.item() if hasattr(v, "item") else v for v in r) for r in seasons[scols].itertuples(index=False)])
+        conn.commit()
+        print(f"wrote {len(out)} player-season-team rows ({time.time() - t0:.0f}s)")
     print(f"player-games where on-court exceeded the team total (clipped to 0 off-court): {negative}")
 
     # ── Checks ──

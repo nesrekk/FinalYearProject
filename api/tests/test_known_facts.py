@@ -443,20 +443,27 @@ def test_on_floor_seconds_equal_the_stints(cur):
 
 
 def test_on_plus_off_equals_team_total_over_games_played(cur):
-    """A player's on-court plus off-court games and possessions equal his team's
-    totals over the games he played (off-court is defined that way). Points match
-    too except where a lineup was briefly mis-tracked (2026-09-29: 26 of 3,665
-    rows, all 2022-23 Pistons and Bulls, the largest 79 points on an 8,190-point
-    team total, 1%)."""
-    need(cur, "player_on_off", "player_game_lines", "team_game_totals")
-    n, bad_games, worst_poss, bad_pts, worst_pts = one(
+    """A player's on-court plus off-court games, possessions and points equal his
+    team's totals over the games he played (off-court is defined that way):
+    possessions from team_game_totals, points from the real final score
+    (game_scores), over the games whose play-by-play reconciles. Since the
+    2026-10-03 rebuild on the corrected on-floor points no on-court total
+    exceeds the final, so points match in every row (before, 26 of 3,665 rows
+    were off, the old on-court points double-counting)."""
+    need(cur, "player_on_off", "player_game_lines", "team_game_totals", "game_scores", "player_game_onfloor")
+    n, bad_games, worst_poss, bad_pts = one(
         cur,
         """WITH pgm AS (
-               SELECT DISTINCT player_id, season, team_abbreviation, game_id
-               FROM player_game_lines WHERE seconds > 0),
+               SELECT l.player_id, l.season, l.team_abbreviation, l.game_id,
+                      gs.pts_for, gs.pts_against
+               FROM player_game_lines l
+               JOIN team_game_fatigue f ON f.team_abbreviation = l.team_abbreviation AND f.game_date = l.game_date
+               JOIN game_scores gs ON gs.game_id = f.game_id AND gs.team_abbreviation = f.team_abbreviation
+               JOIN player_game_onfloor o ON o.player_id = l.player_id AND o.game_id = l.game_id AND o.game_ok
+               WHERE l.seconds > 0),
            tot AS (
                SELECT pgm.player_id, pgm.season, pgm.team_abbreviation,
-                      COUNT(*) g, SUM(t.pts_for) pf, SUM(t.pts_against) pa, SUM(t.poss) pos
+                      COUNT(*) g, SUM(pgm.pts_for) pf, SUM(pgm.pts_against) pa, SUM(t.poss) pos
                FROM pgm JOIN team_game_totals t
                  ON t.game_id = pgm.game_id AND t.team_abbreviation = pgm.team_abbreviation
                GROUP BY 1, 2, 3)
@@ -464,23 +471,23 @@ def test_on_plus_off_equals_team_total_over_games_played(cur):
                   SUM((o.games <> tot.g)::int),
                   MAX(ABS(o.poss_on + o.poss_off - tot.pos)),
                   SUM(((o.pts_for_on + o.pts_for_off) <> tot.pf
-                       OR (o.pts_against_on + o.pts_against_off) <> tot.pa)::int),
-                  MAX(GREATEST(ABS(o.pts_for_on + o.pts_for_off - tot.pf)::float / tot.pf,
-                               ABS(o.pts_against_on + o.pts_against_off - tot.pa)::float / tot.pa))
+                       OR (o.pts_against_on + o.pts_against_off) <> tot.pa)::int)
            FROM player_on_off o JOIN tot USING (player_id, season, team_abbreviation)""",
     )
     assert n >= 3600
     assert bad_games == 0
     assert worst_poss <= 0.5
-    assert bad_pts / n <= 0.01
-    assert worst_pts <= 0.015
+    assert bad_pts == 0
 
 
 def test_league_on_court_net_is_about_zero(cur):
     """Every point one side scores is against the other side's five, so summed
-    over all players the on-court points for and against cancel. Not exactly
-    (a lineup is briefly mis-tracked in a few games): within 0.1% of the points
-    scored each season (2026-09-29: at most 0.06%, 2025-26 exactly 1 point)."""
+    over all players the on-court points for and against cancel. Not exactly:
+    players ESPN gives no id get no on-floor row, so a side with one of them on
+    the floor is credited to four (player_game_onfloor sums to 0 in 2025-26,
+    where every player has an id): within 0.1% of the points scored each season
+    (2026-10-03, on the corrected on-floor points: at most 0.064%, 2025-26 2
+    points; 2026-09-29 on the old points: at most 0.06%)."""
     need(cur, "player_on_off")
     data = rows(cur, """SELECT season, SUM(pts_for_on - pts_against_on), SUM(pts_for_on)
            FROM player_on_off GROUP BY 1 ORDER BY 1""")

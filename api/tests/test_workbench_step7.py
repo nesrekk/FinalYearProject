@@ -9,9 +9,10 @@ api/routers/workbench.py):
     stored intervals, and the joins behind them cost nothing when unused
     (Postgres drops them: no model table in the plan of a box-score query);
   * on/off is computed from the corrected on-floor points: equal to the same
-    sums written here in numpy; its interval's game-clustered SE reproduces a
-    numpy game bootstrap, and on the On/Off page's own (old) points it
-    reproduces that page's stored 2,000-resample bootstrap SE;
+    sums written here in numpy and, row for row, to player_on_off (the On/Off
+    page, rebuilt on the same sources 2026-10-03); its interval's
+    game-clustered SE reproduces a numpy game bootstrap and the page's stored
+    2,000-resample bootstrap SE;
   * lineups and pairs equal lineup_seasons / pair_seasons, a player set picks
     exactly the units with any / all of its players, and the possessions floor
     holds;
@@ -148,7 +149,7 @@ def test_model_joins_cost_nothing_when_unused(cur):
 ONOFF_GAMES_SQL = """
     SELECT l.player_id, l.season, l.team_abbreviation, o.pts_for, o.pts_against,
            ((l.tm_fga + 0.44 * l.tm_fta - l.tm_oreb + l.tm_tov) + (l.op_fga + 0.44 * l.op_fta - l.op_oreb + l.op_tov)) / 2.0,
-           gs.pts_for, gs.pts_against, tt.poss, l.tm_pts, l.op_pts, tt.pts_for, tt.pts_against
+           gs.pts_for, gs.pts_against, tt.poss
     FROM player_game_lines l
     JOIN team_game_fatigue f ON f.team_abbreviation = l.team_abbreviation AND f.game_date = l.game_date
     JOIN game_scores gs ON gs.game_id = f.game_id AND gs.team_abbreviation = f.team_abbreviation
@@ -219,28 +220,40 @@ def test_on_off_interval_matches_a_game_bootstrap(cur):
     assert len(ratios) >= 8 and all(0.88 < r < 1.12 for r in ratios), ratios
 
 
+def test_on_off_table_equals_the_workbench(client, cur):
+    """player_on_off (scripts/build_player_on_off.py, the On/Off page) and the Workbench's player_onoff read the
+    same sources: every row agrees to the table's rounding (2 decimals for ratings, 1 for possessions/minutes)."""
+    cols = ["games", "minutes_on", "poss_on", "poss_off", "pm_on", "net_on", "net_off", "on_off_net", "on_off_ortg",
+            "on_off_drtg"]
+    d = _q(client, dataset="player_onoff", entities="all", columns=cols, limit=5000)
+    cur.execute("""SELECT player_id, season, team_abbreviation, games, minutes_on, poss_on, poss_off,
+                          pts_for_on - pts_against_on, net_on, net_off, on_off_net, on_off_ortg, on_off_drtg
+                   FROM player_on_off""")
+    table = {(r[0], r[1], r[2]): r[3:] for r in cur.fetchall()}
+    assert len(table) >= 3600 and len(d["rows"]) == len(table)
+    for row in d["rows"]:
+        g, mins, p_on, p_off, pm, *rates = table[(row["player_id"], row["season"], row["team"])]
+        assert row["games"] == g and row["pm_on"] == pm
+        assert row["minutes_on"] == pytest.approx(mins, abs=0.051)
+        assert row["poss_on"] == pytest.approx(p_on, abs=0.051) and row["poss_off"] == pytest.approx(p_off, abs=0.051)
+        for key, v in zip(("net_on", "net_off", "on_off_net", "on_off_ortg", "on_off_drtg"), rates):
+            assert (row[key] is None) == (v is None), key
+            if v is not None:
+                assert row[key] == pytest.approx(v, abs=0.0051), key
+
+
 def test_on_off_interval_reproduces_the_on_off_pages_bootstrap(cur):
-    """On the On/Off page's own points (player_game_lines' tm_pts, the pbp team totals), the same formula gives
-    the SE that build_player_on_off.py stored from 2,000 game resamples (median ratio ~1.01, measured 2026-10-03)."""
+    """The closed-form game-clustered SE gives the SE that build_player_on_off.py stored from 2,000 game
+    resamples of the same games (median ratio ~1.01 on its old points, measured 2026-10-03, and again on the
+    corrected points it reads since)."""
     cur.execute("""SELECT player_id, season, team_abbreviation, on_off_se FROM player_on_off
                    WHERE on_off_se IS NOT NULL AND minutes_on >= 1000 ORDER BY player_id, season LIMIT 150""")
     stored = {(p, s, t): se for p, s, t, se in cur.fetchall()}
-    ids = sorted({k[0] for k in stored})
-    cur.execute(ONOFF_GAMES_SQL.replace("JOIN player_game_onfloor o ON o.player_id = l.player_id AND o.game_id = "
-                                        "l.game_id AND o.game_ok", "LEFT JOIN player_game_onfloor o ON o.player_id = "
-                                        "l.player_id AND o.game_id = l.game_id")
-                .replace("JOIN team_game_fatigue f", "LEFT JOIN team_game_fatigue f")
-                .replace("JOIN game_scores gs", "LEFT JOIN game_scores gs"), (ids,))
-    games = {}
-    for r in cur.fetchall():
-        k = (r[0], r[1], r[2])
-        if k in stored:
-            # [tm_pts, op_pts, poss_on, pbp team pts for, against, team poss]
-            games.setdefault(k, []).append([float(r[9]), float(r[10]), float(r[5]), float(r[11]), float(r[12]), float(r[8])])
+    arrays = _onoff_arrays(cur, sorted({k[0] for k in stored}))
     ratios = []
-    for k, rows in games.items():
-        on, b, off, e = _net_diff(np.array(rows))
-        ratios.append(_lin_se(on, b, off, e) / stored[k])
+    for k, se in stored.items():
+        on, b, off, e = _net_diff(arrays[k])
+        ratios.append(_lin_se(on, b, off, e) / se)
     assert len(ratios) > 100
     assert 0.97 < float(np.median(ratios)) < 1.04 and np.percentile(ratios, 95) < 1.15, np.percentile(ratios, [5, 50, 95])
 
