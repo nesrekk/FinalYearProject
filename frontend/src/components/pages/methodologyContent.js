@@ -617,6 +617,20 @@ export const SECTIONS = [
                     'Rates in the grey summaries are each row\'s own rate (a player-season\'s TS%), not pooled makes over attempts; a player\'s own value over several seasons (bars) is pooled.',
                 ],
             },
+            {
+                id: 'finder',
+                name: 'Workbench Player Finder (what a condition means)',
+                open: { page: 'workbench', label: 'Workbench' },
+                answers: 'Which players meet conditions I write as a sentence, on any stat: averaged X while shooting Y, in N games had Z, N games in a row?',
+                method: 'Not a model: a search with its rules written down (POST /workbench/finder). A result is a player-season (“in a single season”) or a player over every chosen season (“combined”), from season stats (1949-50 on) or game logs (2020-21 on). Every condition must hold, over the same rows. “Had / averaged”: the stat combined over those rows exactly as a Workbench table combines it: summed stat ÷ summed games (or per 36, per 100, totals); percentages are summed makes ÷ summed attempts (the season table\'s attempt-weighted mean, the same thing), never an average of percentages, with an optional floor on attempts (the box starts at the Leaderboard\'s per-game attempt floor × the games floor). “In a number of games”: how many rows meet every test in the same row; two such conditions are separate counts, not the same games. “In a row”: the longest run of consecutive rows meeting every test, in date (season) order; only rows that count are in the sequence, so a game he sat out, or one a filter leaves out, doesn\'t break a run (the Game Finder\'s rule); “in a single season” ends a run with the season. A row whose stat isn\'t recorded (no attempts for a %) never meets a test. The response restates the search as one sentence and gives each result the n behind each condition.',
+                checked: 'Checked 2026-10-03 against outside pages (test_workbench_finder.py): 2022-23, 30+ points a game over 58+ games = ESPN\'s six (Embiid 33.1, Dončić 32.4, Lillard 32.2, Gilgeous-Alexander 31.4, Antetokounmpo 31.1, Tatum 30.1); Gilgeous-Alexander\'s run of 20-point games = Wikipedia\'s account (72 in 2024-25, the 80th on 2025-11-04, the 100th on 2025-12-22, Chamberlain\'s record broken on 2026-03-12 with the 127th; 140 in all, 2024-11-01 to 2026-04-08). Streaks equal the Game Finder\'s for the same condition; values equal the Workbench table\'s; a rate equals summed makes ÷ summed attempts in SQL written separately.',
+                limits: [
+                    'Game logs start in 2020-21 (the play-by-play the project has); the NBA Cup finals aren\'t regular-season games and are left out, like the Game Log.',
+                    'A streak counts games he played: the NBA\'s convention for scoring streaks, but not for every kind of run (a run of team wins would count games missed).',
+                    'Season stats before 2009-10 are Basketball-Reference\'s, after NBA.com\'s; each stat counts only from its first reliable season, and earlier rows never meet a condition on it.',
+                    'Conditions are joined by “and” only; “or” and “not” need two searches.',
+                ],
+            },
         ],
     },
 ];

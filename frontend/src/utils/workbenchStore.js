@@ -9,7 +9,7 @@
 //   { id, name, created, updated, version: 1,
 //     sets:   [{ id, name, kind: 'player' | 'team',
 //                members: [{ id, name, color, team? }] }]   // color = palette index 0-7
-//     blocks: [{ id, type: 'set' | 'table' | 'chart' | 'note' | 'tool', title,
+//     blocks: [{ id, type: 'set' | 'table' | 'chart' | 'note' | 'tool' | 'finder', title,
 //                x, y, w, h,                                 // grid cells (12 columns)
 //                settings: { … per type, see cleanSettings } }] }
 //
@@ -28,7 +28,7 @@ export const EXPORT_FORMAT = 'nba-hub-workbench';
 export const SHARE_PARAM = 'share';
 
 export const PALETTE_SIZE = 8;
-export const BLOCK_TYPES = ['set', 'table', 'chart', 'note', 'tool'];
+export const BLOCK_TYPES = ['set', 'table', 'chart', 'note', 'tool', 'finder'];
 export const LIMITS = { boards: 200, blocks: 40, sets: 20, members: 500, columns: 40, note: 20000, name: 120, title: 80 };
 // A share link carries the whole board; past this many characters it goes
 // into a file instead (chat apps and some mail clients cut longer links).
@@ -263,6 +263,7 @@ export function cleanSettings(type, raw, setIds) {
             games: tool === 'shots' && SHOT_GAMES.includes(s.games) ? s.games : null,
         };
     }
+    if (type === 'finder') return cleanFinder(s, setId, key, season);
     let seasonFrom = season(s.seasonFrom);
     let seasonTo = season(s.seasonTo);
     if (seasonFrom && seasonTo && seasonFrom > seasonTo) [seasonFrom, seasonTo] = [seasonTo, seasonFrom];
@@ -310,6 +311,53 @@ export function cleanSettings(type, raw, setIds) {
         limit: LIMIT_CHOICES.includes(s.limit) ? s.limit : 50,
         minGames,
         showN: s.showN === true,
+    };
+}
+
+// The Player Finder (step 6): a sentence of conditions, components/workbench/finderSpec.js.
+const FINDER_OPS = ['gte', 'gt', 'lte', 'lt', 'eq', 'ne', 'between'];
+const COUNT_OPS = ['gte', 'gt', 'lte', 'lt', 'eq'];
+const FINDER_SORT = /^(c[0-7]|n_games|season)$/;
+
+function cleanFinder(s, setId, key, season) {
+    const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    const test = (t) => (t && key(t.stat) ? {
+        stat: t.stat,
+        op: FINDER_OPS.includes(t.op) ? t.op : 'gte',
+        value: num(t.value),
+        value2: num(t.value2),
+    } : null);
+    const conditions = (Array.isArray(s.conditions) ? s.conditions : []).slice(0, 8).map((c) => {
+        if (!c || typeof c !== 'object') return null;
+        if (c.type === 'count' || c.type === 'streak') {
+            const tests = (Array.isArray(c.tests) ? c.tests : []).slice(0, 4).map(test).filter(Boolean);
+            if (!tests.length) return null;
+            return { type: c.type, tests, countOp: COUNT_OPS.includes(c.countOp) ? c.countOp : 'gte', count: clampInt(c.count, 1, 100000, 5) };
+        }
+        const t = test(c);
+        if (!t) return null;
+        const minN = num(c.minN);
+        return { type: 'value', ...t, per: PER.includes(c.per) ? c.per : 'game', minN: minN && minN > 0 ? Math.min(Math.round(minN), 1e6) : null };
+    }).filter(Boolean);
+    let seasonFrom = season(s.seasonFrom);
+    let seasonTo = season(s.seasonTo);
+    if (seasonFrom && seasonTo && seasonFrom > seasonTo) [seasonFrom, seasonTo] = [seasonTo, seasonFrom];
+    const minGames = num(s.minGames);
+    const minMinutes = num(s.minMinutes);
+    return {
+        dataset: s.dataset === 'player_game' ? 'player_game' : 'player_season',
+        scope: s.scope === 'span' ? 'span' : 'season',
+        seasonFrom,
+        seasonTo,
+        minGames: minGames && minGames > 0 ? Math.min(Math.round(minGames), 5000) : null,
+        setId,
+        where: ['home', 'away'].includes(s.where) ? s.where : 'all',
+        result: ['W', 'L'].includes(s.result) ? s.result : 'all',
+        opponent: typeof s.opponent === 'string' && TEAM_RE.test(s.opponent) ? s.opponent : null,
+        minMinutes: minMinutes && minMinutes > 0 ? Math.min(minMinutes, 60) : null,
+        conditions: conditions.length ? conditions : [{ type: 'value', stat: 'pts', op: 'gte', value: 25, value2: null, per: 'game', minN: null }],
+        sort: s.sort && typeof s.sort.key === 'string' && FINDER_SORT.test(s.sort.key) ? { key: s.sort.key, dir: s.sort.dir === 'asc' ? 'asc' : 'desc' } : null,
+        limit: LIMIT_CHOICES.includes(s.limit) ? s.limit : 100,
     };
 }
 

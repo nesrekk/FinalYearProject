@@ -1471,6 +1471,8 @@ export const runWorkbenchQuery = (spec) => cachedWorkbenchPost('query', spec);
 // clustered straight-line fit over the rows a chart draws.
 export const runWorkbenchContext = (req) => cachedWorkbenchPost('context', req);
 export const runWorkbenchTrend = (req) => cachedWorkbenchPost('trend', req);
+// Player Finder (step 6): players meeting sentence-like conditions on any stat.
+export const runWorkbenchFinder = (spec) => cachedWorkbenchPost('finder', spec);
 
 // Players by name ({ id, name, from, to, team }), or every franchise.
 export async function searchWorkbenchPlayers(q) {

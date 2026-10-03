@@ -4,13 +4,15 @@ import InfoTooltip from '../common/InfoTooltip';
 import SaveViewButton from '../common/SaveViewButton';
 import BoardGrid from '../workbench/BoardGrid';
 import ChartBlock from '../workbench/ChartBlock';
+import FinderBlock from '../workbench/FinderBlock';
 import NoteBlock from '../workbench/NoteBlock';
 import SetBlock from '../workbench/SetBlock';
 import TableBlock from '../workbench/TableBlock';
 import ToolBlock from '../workbench/ToolBlock';
 import { chartDefaults } from '../workbench/chartSpec';
+import { finderDefaults, finderStats } from '../workbench/finderSpec';
 import { defaultColumns } from '../workbench/tableSpec';
-import { BLOCK_INFO, blockLabel } from '../workbench/workbenchShared';
+import { BLOCK_INFO, blockLabel, nextColor } from '../workbench/workbenchShared';
 import { fetchWorkbenchCatalogue, workbenchError } from '../../services/api';
 import { downloadText, slugify } from '../../utils/tableExport';
 import { useAutosave } from '../../utils/useAutosave';
@@ -18,8 +20,8 @@ import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlStat
 import { placeNew } from '../../utils/workbenchLayout';
 import { TOOLS, TOOL_KEYS } from '../../utils/workbenchTools';
 import {
-    LIMITS, MAX_SHARE_CHARS, SHARE_PARAM, cleanSettings, createBoard, decodeShare, deleteBoard, encodeShare,
-    exportBoardsJson, importBoardsJson, makeId, renameBoard, saveNewBoard, updateBoard, useBoards,
+    LIMITS, MAX_SHARE_CHARS, SHARE_PARAM, cleanBoard, cleanSettings, createBoard, decodeShare, deleteBoard, emptyBoard,
+    encodeShare, exportBoardsJson, importBoardsJson, makeId, renameBoard, saveNewBoard, updateBoard, useBoards,
 } from '../../utils/workbenchStore';
 import '../../styles/workbench.css';
 
@@ -157,7 +159,7 @@ export default function Workbench({ onNavigate }) {
     };
 
     const addBlock = async (type, tool = null) => {
-        if ((type === 'table' || type === 'chart') && !catalogue.data) return;
+        if ((type === 'table' || type === 'chart' || type === 'finder') && !catalogue.data) return;
         const target = board || await run(() => createBoard('My board'));
         if (!target) return;
         setSel(target.id);
@@ -203,6 +205,8 @@ export default function Workbench({ onNavigate }) {
                     dataset: ds.key, setId: set?.id, chart, ...chartDefaults(ds, chart),
                     minGames: ds.key === 'player_season' ? 20 : null, trend: !set,
                 }, new Set(bd.sets.map((s) => s.id)));
+            } else if (type === 'finder') {
+                settings = cleanSettings('finder', finderDefaults(), new Set(bd.sets.map((s) => s.id)));
             } else {
                 settings = { text: '' };
             }
@@ -263,6 +267,65 @@ export default function Workbench({ onNavigate }) {
         });
         return bd;
     });
+
+    // Player Finder results → a set on this board (an existing player set, or a
+    // new one with its own Set block), or a new board of their own.
+    const addMembers = (set, players) => {
+        let added = 0;
+        for (const p of players) {
+            if (set.members.length >= LIMITS.members) break;
+            if (set.members.some((m) => m.id === p.id)) continue;
+            set.members.push({ id: p.id, name: p.name, color: nextColor(set.members), ...(p.team ? { team: p.team } : {}) });
+            added += 1;
+        }
+        return added;
+    };
+    const addPlayersToSet = (setId, players, name) => {
+        let text = '';
+        change((bd) => {
+            let set = setId ? bd.sets.find((x) => x.id === setId && x.kind === 'player') : null;
+            if (!set) {
+                if (bd.sets.length >= LIMITS.sets) throw new Error(`A board holds up to ${LIMITS.sets} sets.`);
+                if (bd.blocks.length >= LIMITS.blocks) throw new Error(`A board holds up to ${LIMITS.blocks} blocks.`);
+                set = { id: makeId(), name: (name || `Found ${bd.sets.length + 1}`).slice(0, 60), kind: 'player', members: [] };
+                bd.sets.push(set);
+                const si = BLOCK_INFO.set;
+                bd.blocks.push({ id: makeId(), type: 'set', title: '', ...placeNew(bd.blocks, narrow ? 12 : si.w, si.h), settings: { setId: set.id } });
+            }
+            const added = addMembers(set, players);
+            const already = players.length - added;
+            text = `Added ${added} player${added === 1 ? '' : 's'} to “${set.name}”${already ? ` (${already} already in it${set.members.length >= LIMITS.members ? ' or over the set’s limit' : ''})` : ''}.`;
+            return bd;
+        }).then((r) => { if (r) setMsg({ text, bad: false }); });
+    };
+    const newBoardFromFinder = async (players, name, finder, sentence) => {
+        const draft = emptyBoard(name || `Found: ${players.length} players`);
+        const set = { id: makeId(), name: (name || 'Found players').slice(0, 60), kind: 'player', members: [] };
+        addMembers(set, players);
+        draft.sets.push(set);
+        const put = (type, w, h, settings, title = '') => draft.blocks.push({ id: makeId(), type, title, ...placeNew(draft.blocks, narrow ? 12 : w, h), settings });
+        put('set', BLOCK_INFO.set.w, BLOCK_INFO.set.h, { setId: set.id });
+        // The table: each found player-season (season stats: the Table block
+        // groups by one key, so game logs judged season by season are shown
+        // through the season table), or each player over the whole span.
+        const bySeason = finder.scope === 'season';
+        const finderDs = catalogue.data?.datasets.find((d) => d.key === finder.dataset);
+        const tableDs = catalogue.data?.datasets.find((d) => d.key === (bySeason ? 'player_season' : finder.dataset));
+        const columns = finderStats(finder).filter((k) => tableDs?.columns.some((c) => c.key === k && c.status === 'verified'));
+        const filtered = finder.where !== 'all' || finder.result !== 'all' || finder.opponent || finder.minMinutes;
+        put('note', 8, 4, {
+            text: `Made from a Player Finder search:\n${sentence}\n\nThe table shows ${bySeason ? 'every season of theirs' : 'each of them'} over the same seasons from ${tableDs?.label.toLowerCase() || 'the same data'}${filtered ? ', over all their games (the finder’s filters aren’t applied to it)' : ''}.`,
+        });
+        put('table', 12, 9, {
+            dataset: tableDs?.key || finder.dataset, setId: set.id, columns: columns.length ? columns : ['pts'],
+            seasonFrom: finder.seasonFrom ?? finderDs?.seasons.from ?? null, seasonTo: finder.seasonTo,
+            groupBy: bySeason ? 'none' : 'entity', per: 'game', sort: [], limit: 100,
+            minGames: filtered ? null : finder.minGames, showN: false,
+        });
+        put('finder', BLOCK_INFO.finder.w, BLOCK_INFO.finder.h, { ...finder, setId: null });
+        const saved = await run(() => saveNewBoard(cleanBoard(draft).board), `New board “${draft.name}” with ${set.members.length} players.`);
+        if (saved) { setSel(saved.id); setConfirmDelete(false); setUndo(null); }
+    };
 
     const onShare = async () => {
         const code = await encodeShare(board);
@@ -329,7 +392,7 @@ export default function Workbench({ onNavigate }) {
                 {handle}
                 <h3 className="wb-block-title"><Icon name={info.icon} size={16} /> <span>{label}</span></h3>
                 <span className="wb-block-actions">
-                    {(b.type === 'table' || b.type === 'chart') && (
+                    {(b.type === 'table' || b.type === 'chart' || b.type === 'finder') && (
                         <button type="button" className={`wb-icon-btn${editing.has(b.id) ? ' wb-icon-btn--on' : ''}`} onClick={() => toggleEditing(b.id)}
                             aria-expanded={editing.has(b.id)} aria-label={`Settings for ${label}`} title="Settings">
                             <Icon name="tune" size={17} />
@@ -362,6 +425,20 @@ export default function Workbench({ onNavigate }) {
         if (b.type === 'tool') return <ToolBlock block={b} board={board} onSettings={(patch) => patchSettings(b.id, patch)} onNavigate={onNavigate} />;
         if (catalogue.error) return <p className="wb-error" role="alert">{catalogue.error}</p>;
         if (!catalogue.data) return <p className="wb-meta" role="status">Loading the stat catalogue…</p>;
+        if (b.type === 'finder') {
+            return (
+                <FinderBlock
+                    block={b}
+                    board={board}
+                    catalogue={catalogue.data}
+                    editing={editing.has(b.id)}
+                    onSettings={(patch) => patchSettings(b.id, patch)}
+                    onTitle={(title) => setTitle(b.id, title)}
+                    onAddToSet={addPlayersToSet}
+                    onNewBoard={newBoardFromFinder}
+                />
+            );
+        }
         if (b.type === 'chart') {
             return (
                 <ChartBlock
@@ -390,9 +467,9 @@ export default function Workbench({ onNavigate }) {
     const addButtons = (
         <span className="wb-add" role="group" aria-label="Add a block">
             <span className="wb-add-label">Add</span>
-            {['set', 'table', 'chart', 'note'].map((t) => (
+            {['set', 'table', 'chart', 'finder', 'note'].map((t) => (
                 <button key={t} type="button" className="table-export-btn" onClick={() => addBlock(t)}
-                    disabled={(t === 'table' || t === 'chart') && !catalogue.data}>
+                    disabled={(t === 'table' || t === 'chart' || t === 'finder') && !catalogue.data}>
                     <Icon name={BLOCK_INFO[t].icon} size={15} /> {BLOCK_INFO[t].short}
                 </button>
             ))}

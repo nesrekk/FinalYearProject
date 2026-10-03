@@ -37,6 +37,8 @@ export const BLOCK_INFO = {
     note: { label: 'Note', short: 'Note', icon: 'sticky_note_2', w: 4, h: 4 },
     // One of the app's own tools; its size when added comes from TOOLS.
     tool: { label: 'App tool', short: 'Tool', icon: 'widgets', w: 6, h: 12 },
+    // Players who meet sentence-like conditions; its result can become a set.
+    finder: { label: 'Player Finder', short: 'Finder', icon: 'person_search', w: 12, h: 18 },
 };
 
 // The member a tool block shows: the one it names, else the set's first.
@@ -49,6 +51,7 @@ export function blockLabel(block, board, catalogue) {
     const set = board.sets.find((s) => s.id === block.settings.setId);
     if (block.type === 'set') return set ? set.name : 'Set';
     if (block.type === 'note') return 'Note';
+    if (block.type === 'finder') return `Player Finder${set ? ` · ${set.name}` : ''}`;
     if (block.type === 'tool') {
         const t = TOOLS[block.settings.tool];
         const member = set?.kind === t?.entity ? toolMember(block, set) : null;
