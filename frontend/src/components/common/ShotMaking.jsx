@@ -11,7 +11,7 @@ import '../../styles/shotmaking.css';
 // Expected FG% / shot-making (GET /shots/shot-making/*, routers/shot_making.py,
 // scripts/build_shot_making.py). Three pieces, reused by the Shot Charts
 // "Shot-making" tab and the player profile:
-//   ShotMakingPlayer      one player's seasons: chart + table (fetches by name)
+//   ShotMakingPlayer      one player's seasons: chart + table (fetches by id when given, else by name)
 //   ShotMakingTable       the seasons table alone (profile block, rows given)
 //   ShotMakingLeaderboard one season's qualified players, ranked
 //   ShotMakingModel       how the per-shot model was chosen and checked
@@ -167,25 +167,26 @@ function careerTotals(qualified) {
 }
 
 // ── One player: fetch + chart + table ────────────────────────────────────
-export function ShotMakingPlayer({ playerName }) {
+export function ShotMakingPlayer({ playerName, playerId }) {
     const [result, setResult] = useState({ for: null, data: null, error: '' });
     const [hover, setHover] = useState(null);
     const [picked, setPicked] = useState(null);
+    const who = `${playerId ?? ''}:${playerName}`;
 
     useEffect(() => {
         if (!playerName) return undefined;
         let active = true;
-        fetchShotMaking(playerName)
-            .then((d) => { if (active) setResult({ for: playerName, data: d, error: '' }); })
+        fetchShotMaking(playerName, playerId)
+            .then((d) => { if (active) setResult({ for: who, data: d, error: '' }); })
             .catch((e) => {
                 if (active) {
-                    setResult({ for: playerName, data: null, error: e?.response?.data?.detail || e?.message || 'Failed to load shot-making.' });
+                    setResult({ for: who, data: null, error: e?.response?.data?.detail || e?.message || 'Failed to load shot-making.' });
                 }
             });
         return () => { active = false; };
-    }, [playerName]);
+    }, [playerName, playerId, who]);
 
-    const loading = result.for !== playerName;
+    const loading = result.for !== who;
     const data = loading ? null : result.data;
     const error = loading ? '' : result.error;
     const rows = data?.rows ?? [];

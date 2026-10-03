@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchLivePlayerSuggestions, fetchQualityMap } from '../../services/api';
+import { fetchQualityMap } from '../../services/api';
 import AutocompleteDropdown from './AutocompleteDropdown';
 import ChartExport from './ChartExport';
 import InfoTooltip from './InfoTooltip';
 import SourceBadge from './SourceBadge';
 import TableExport from './TableExport';
 import { bySign, signed } from '../../utils/format';
+import { playerOption, searchPlayers } from '../../utils/playerChoice';
 import '../../styles/gamelog.css';
 import '../../styles/playfinder.css';
 import '../../styles/qualitymap.css';
@@ -221,35 +222,38 @@ function PlayerPicker({ onPick }) {
         if (query.length < 2) return undefined;
         let live = true;
         const timer = setTimeout(() => {
-            fetchLivePlayerSuggestions(query, 8)
-                .then((d) => { if (live) setHits(d?.results ?? []); })
+            searchPlayers(query)
+                .then((d) => { if (live) setHits(d.slice(0, 8)); })
                 .catch(() => { if (live) setHits([]); });
         }, 200);
         return () => { live = false; clearTimeout(timer); };
     }, [q]);
+    // Labels carry the career span, so two players of one name stay apart.
     const shown = q.trim().length >= 2 ? hits : [];
+    const labels = shown.map(playerOption);
     return (
         <>
             <input ref={inputRef} className="input-field" type="search" value={q} placeholder="Compare with another player"
                 aria-label="Compare with another player" autoComplete="off" onChange={(e) => setQ(e.target.value)} />
-            <AutocompleteDropdown anchorRef={inputRef} items={shown}
-                onPick={(n) => { onPick(n); setQ(''); setHits([]); }} />
+            <AutocompleteDropdown anchorRef={inputRef} items={labels}
+                onPick={(text) => { onPick(shown[labels.indexOf(text)]); setQ(''); setHits([]); }} />
         </>
     );
 }
 
-export default function ShotQualityMap({ playerName, state, onChange }) {
-    const { mode, season, vs, vsSeason, minShots } = state;
+export default function ShotQualityMap({ playerName, playerId, state, onChange }) {
+    const { mode, season, vs, vsId, vsSeason, minShots } = state;
     // Another player's seasons differ: forget the season once the player changes (not on first mount, which may carry a linked one).
-    const lastName = useRef(playerName);
+    const who = `${playerId ?? ''}:${playerName}`;
+    const lastWho = useRef(who);
     useEffect(() => {
-        if (lastName.current !== playerName) {
-            lastName.current = playerName;
+        if (lastWho.current !== who) {
+            lastWho.current = who;
             onChange({ season: null });
         }
         // onChange is a stable state setter wrapper from the parent
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [playerName]);
+    }, [who]);
     return (
         <div className="dashboard-card qm-root" style={{ marginBottom: '1rem' }}>
             <h3 className="section-heading" style={{ marginTop: 0 }}>
@@ -287,14 +291,14 @@ export default function ShotQualityMap({ playerName, state, onChange }) {
                     <span className="gf-player-chip">
                         vs {vs}
                         <button type="button" className="cb-remove" aria-label="Remove the comparison"
-                            onClick={() => onChange({ vs: null, vsSeason: null })}>×</button>
+                            onClick={() => onChange({ vs: null, vsId: null, vsSeason: null })}>×</button>
                     </span>
-                ) : <PlayerPicker onPick={(n) => onChange({ vs: n, vsSeason: null })} />}
+                ) : <PlayerPicker onPick={(p) => onChange({ vs: p.name, vsId: p.id, vsSeason: null })} />}
             </div>
             <div className={vs ? 'qm-grid qm-grid--two' : 'qm-grid'}>
-                <QualityPanel key={playerName} name={playerName} season={season} mode={mode} minShots={minShots}
+                <QualityPanel key={who} name={playerName} playerId={playerId} season={season} mode={mode} minShots={minShots}
                     onSeason={(s) => onChange({ season: s })} />
-                {vs && <QualityPanel key={vs} name={vs} season={vsSeason} mode={mode} minShots={minShots}
+                {vs && <QualityPanel key={`${vsId ?? ''}:${vs}`} name={vs} playerId={vsId} season={vsSeason} mode={mode} minShots={minShots}
                     onSeason={(s) => onChange({ vsSeason: s })} />}
             </div>
         </div>

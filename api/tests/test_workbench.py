@@ -624,7 +624,9 @@ def test_trend_refusals(client):
 def test_shot_endpoints_take_a_player_id(client, cur):
     """Two Brandon Williams: 1585 (1997-98 to 2002-03) and 1630314 (2021-22 on).
     A Workbench set holds ids, so its shot chart, quality map and shot mix ask
-    by id; the Shot Charts page still asks by name and gets what it always did."""
+    by id, and so does the Shot Charts page (shot-making too); a bare name gets
+    what it always did. The page resolves a typed name through
+    /workbench/entities, latest career first."""
     cur.execute("SELECT count(DISTINCT player_id) FROM player_season_stats WHERE player_name = 'Brandon Williams'")
     assert cur.fetchone()[0] == 2
     by_name = client.get("/shots/player/Brandon Williams").json()
@@ -637,7 +639,14 @@ def test_shot_endpoints_take_a_player_id(client, cur):
         assert mix.status_code == 200
         cur.execute("SELECT count(*) FROM player_shots WHERE player_id = %s AND game_id LIKE '002%%'", (pid,))
         assert sum(r["fga"] for r in mix.json()["seasons"]) == cur.fetchone()[0]
+        made = client.get("/shots/player/Brandon Williams/shot-making", params={"player_id": pid}).json()
+        cur.execute("SELECT count(*) FROM player_shot_making WHERE player_id = %s", (pid,))
+        assert made["player_id"] == pid and len(made["rows"]) == cur.fetchone()[0] > 0
     assert by_name["player_id"] in (1585, 1630314)
+    assert client.get("/shots/player/Brandon Williams/shot-making").json() == client.get(
+        "/shots/player/Brandon Williams/shot-making", params={"player_id": by_name["player_id"]}).json()
+    hits = client.get("/workbench/entities", params={"kind": "player", "q": "Brandon Williams"}).json()["results"]
+    assert [h["id"] for h in hits if h["name"] == "Brandon Williams"] == [1630314, 1585]
     assert by_name == client.get("/shots/player/Brandon Williams", params={"player_id": by_name["player_id"]}).json()
     qm = client.get("/shots/quality-map", params={"player": "Brandon Williams", "player_id": 1630314}).json()
     assert qm["player_name"] == "Brandon Williams" and qm["season"] >= 2022

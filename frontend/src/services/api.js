@@ -1025,9 +1025,10 @@ export async function fetchShotZoneHistory(playerName, playerId) {
 }
 
 // Expected FG% / shot-making (routers/shot_making.py, scripts/build_shot_making.py).
-export async function fetchShotMaking(playerName) {
+export async function fetchShotMaking(playerName, playerId) {
     const response = await axios.get(
-        `${IMPACT_BASE}/shots/player/${encodeURIComponent(playerName)}/shot-making`
+        `${IMPACT_BASE}/shots/player/${encodeURIComponent(playerName)}/shot-making`,
+        playerId ? { params: { player_id: playerId } } : undefined
     );
     return response.data;
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchLivePlayerSuggestions, fetchPlayerShots } from '../../services/api';
+import { fetchPlayerShots } from '../../services/api';
 import Icon from '../common/Icon';
 import PlayerName from '../common/PlayerName';
 import TableExport from '../common/TableExport';
@@ -10,7 +10,8 @@ import ShotMixHistory from '../common/ShotMixHistory';
 import { ShotMakingLeaderboard, ShotMakingModel, ShotMakingPlayer } from '../common/ShotMaking';
 import ShotQualityMap from '../common/ShotQualityMap';
 import ShotValue from '../common/ShotValue';
-import shotTotals from '../../utils/shotTotals';
+import shotTotals, { SHOT_GAMES } from '../../utils/shotTotals';
+import { namesakes, playerSpan, searchPlayers } from '../../utils/playerChoice';
 import { SV_MINS, SV_SORTS } from '../../utils/shotValue';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
@@ -49,10 +50,12 @@ function computeZoneStats(shots) {
 }
 
 export default function ShotCharts() {
-  // A shared link carries ?player=&season=&view= (utils/useUrlState.js).
+  // A shared link carries ?player=&pid=&season=&games=&view= (utils/useUrlState.js).
+  // pid (NBA id) picks the player; player (the name) keeps the link readable and,
+  // alone, still works: it opens the latest career of that name.
   const params = useInitialParams();
   const [searchInput, setSearchInput] = useState(() => parseParam.str(params, 'player') ?? 'Stephen Curry');
-  const [suggestions, setSuggestions] = useState([]);
+  const [suggestions, setSuggestions] = useState([]); // [{ id, name, from, to, team }]
   const [searchingSuggestions, setSearchingSuggestions] = useState(false);
 
   const [resolvedPlayer, setResolvedPlayer] = useState('');
@@ -61,6 +64,10 @@ export default function ShotCharts() {
   const [seasons, setSeasons] = useState([]);
   const [season, setSeason] = useState('');
   const [source, setSource] = useState('');
+  // Which games' shots to draw and count (player_shots mixes in playoffs and play-in).
+  const [games, setGames] = useState(() => parseParam.oneOf(params, 'games', ['playoffs', 'all']) ?? 'regular');
+  // Other players with the loaded player's name: { for: id, list }.
+  const [others, setOthers] = useState({ for: null, list: [] });
   const [viewMode, setViewMode] = useState(() => parseParam.oneOf(params, 'view', ['heatmap', 'shotmaking', 'quality', 'value']) ?? 'dots'); // 'dots' | 'heatmap' | 'shotmaking' | 'quality' | 'value'
   // Shot value tab (round 6 step 8): the leaderboard's season, sort, direction and attempts floor (sv=, svby=, svdir=, svmin=).
   const [svState, setSvState] = useState(() => ({
@@ -74,6 +81,7 @@ export default function ShotCharts() {
     mode: parseParam.oneOf(params, 'qm', ['expected', 'league']) ?? 'expected',
     season: parseParam.int(params, 'qs', { min: 1997, max: 2100 }),
     vs: parseParam.str(params, 'vs'),
+    vsId: parseParam.int(params, 'vsid', { min: 1 }),
     vsSeason: parseParam.int(params, 'vss', { min: 1997, max: 2100 }),
     minShots: [1, 2, 3, 5, 10].includes(parseParam.int(params, 'qmin')) ? parseParam.int(params, 'qmin') : 2,
   }));
@@ -87,19 +95,20 @@ export default function ShotCharts() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Debounced live suggestions, same pattern as PlayerStats.jsx.
+  // Debounced suggestions with each player's id and career span.
   useEffect(() => {
     const query = searchInput.trim();
     if (query.length < 2 || query.toLowerCase() === resolvedPlayer.toLowerCase()) {
       setSuggestions([]);
+      setSearchingSuggestions(false);
       return;
     }
     let active = true;
     const timer = setTimeout(async () => {
       setSearchingSuggestions(true);
       try {
-        const data = await fetchLivePlayerSuggestions(query, 8);
-        if (active) setSuggestions(data?.results ?? []);
+        const data = await searchPlayers(query);
+        if (active) setSuggestions(data.slice(0, 8));
       } catch {
         if (active) setSuggestions([]);
       } finally {
@@ -112,13 +121,23 @@ export default function ShotCharts() {
     };
   }, [searchInput, resolvedPlayer]);
 
-  async function loadPlayer(name, seasonOverride) {
-    const target = (name || '').trim();
+  // By id when known; a typed name takes the latest player of exactly that
+  // name (case and accents ignored), else the server's name lookup.
+  async function loadPlayer(name, seasonOverride, id) {
+    const target = (name || '').trim() || (id ? String(id) : '');
     if (!target) return;
     setLoading(true);
     setError('');
     try {
-      const data = await fetchPlayerShots(target, seasonOverride || undefined);
+      let pid = id;
+      if (!pid) {
+        try {
+          pid = (await namesakes(target))[0]?.id;
+        } catch {
+          pid = undefined;
+        }
+      }
+      const data = await fetchPlayerShots(target, seasonOverride || undefined, pid);
       setResolvedPlayer(data.player_name);
       setResolvedPlayerId(data.player_id ?? null);
       setSeasons(data.seasons || []);
@@ -139,9 +158,21 @@ export default function ShotCharts() {
   // Load the linked player and season, or Curry by default (already cached — instant).
   useEffect(() => {
     const linkedSeason = params.get('season');
-    loadPlayer(parseParam.str(params, 'player') ?? 'Stephen Curry',
-      /^\d{4}-\d{2}$/.test(linkedSeason ?? '') ? linkedSeason : undefined);
+    const linkedId = parseParam.int(params, 'pid', { min: 1 });
+    loadPlayer(parseParam.str(params, 'player') ?? (linkedId ? '' : 'Stephen Curry'),
+      /^\d{4}-\d{2}$/.test(linkedSeason ?? '') ? linkedSeason : undefined, linkedId);
   }, [params]);
+
+  // Say so when another player has this name (searching the name picks the latest one).
+  useEffect(() => {
+    if (!resolvedPlayerId) return undefined;
+    let active = true;
+    namesakes(resolvedPlayer)
+      .then((list) => { if (active) setOthers({ for: resolvedPlayerId, list: list.filter((p) => p.id !== resolvedPlayerId) }); })
+      .catch(() => { if (active) setOthers({ for: resolvedPlayerId, list: [] }); });
+    return () => { active = false; };
+  }, [resolvedPlayer, resolvedPlayerId]);
+  const otherNamesakes = others.for === resolvedPlayerId ? others.list : [];
 
   // Nothing is written until a player has loaded, so a slow first load
   // doesn't wipe the link it came from.
@@ -149,13 +180,15 @@ export default function ShotCharts() {
   const onQuality = viewMode === 'quality';
   const onValue = viewMode === 'value';
   useUrlSync(resolvedPlayer ? {
-    player: resolvedPlayer, season, view: viewMode === 'dots' ? null : viewMode,
+    player: resolvedPlayer, pid: resolvedPlayerId, season, view: viewMode === 'dots' ? null : viewMode,
+    games: !onShotMaking && !onQuality && !onValue && games !== 'regular' ? games : null,
     rank: onShotMaking ? rank.season : null,
     by: onShotMaking && rank.sort !== 'shot_making' ? rank.sort : null,
     order: onShotMaking && rank.order !== 'desc' ? rank.order : null,
     qm: onQuality && quality.mode !== 'expected' ? quality.mode : null,
     qs: onQuality ? quality.season : null,
     vs: onQuality ? quality.vs : null,
+    vsid: onQuality && quality.vs ? quality.vsId : null,
     vss: onQuality && quality.vs ? quality.vsSeason : null,
     qmin: onQuality && quality.minShots !== 2 ? quality.minShots : null,
     sv: onValue ? svState.season : null,
@@ -166,12 +199,17 @@ export default function ShotCharts() {
 
   function handleSeasonChange(newSeason) {
     setSeason(newSeason);
-    loadPlayer(resolvedPlayer, newSeason);
+    loadPlayer(resolvedPlayer, newSeason, resolvedPlayerId);
   }
 
-  const totals = useMemo(() => shotTotals(shots), [shots]);
+  // The season's shots in the chosen games; everything below counts only these.
+  const shown = useMemo(() => shots.filter((s) => SHOT_GAMES[games][1](String(s.game_id))), [shots, games]);
+  const leftOut = shots.length - shown.length;
+  const gamesText = { regular: 'regular-season', playoffs: 'playoff and play-in', all: '' }[games];
 
-  const zoneStats = useMemo(() => computeZoneStats(shots), [shots]);
+  const totals = useMemo(() => shotTotals(shown), [shown]);
+
+  const zoneStats = useMemo(() => computeZoneStats(shown), [shown]);
   const hottestZone = useMemo(() => {
     const eligible = zoneStats.filter((z) => z.attempts >= 40);
     if (!eligible.length) return null;
@@ -189,7 +227,7 @@ export default function ShotCharts() {
         </h2>
 
         <div className="input-row" style={{ marginBottom: 0 }}>
-          <div style={{ position: 'relative', flex: 1 }}>
+          <div style={{ position: 'relative', flex: '1 1 260px' }}>
             <input
               type="text"
               className="input-field"
@@ -206,17 +244,18 @@ export default function ShotCharts() {
                 background: 'var(--surface)', border: '2px solid var(--line)', borderRadius: 0, boxShadow: 'var(--shadow-card)',
                 marginTop: 4, maxHeight: 220, overflowY: 'auto', listStyle: 'none', padding: 0,
               }}>
-                {suggestions.map((name) => (
-                  <li key={name}>
+                {suggestions.map((p) => (
+                  <li key={p.id}>
                     <button
                       type="button"
-                      onClick={() => loadPlayer(name)}
+                      onClick={() => loadPlayer(p.name, undefined, p.id)}
                       style={{
                         display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem',
                         background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer',
                       }}
                     >
-                      {name}
+                      {p.name}
+                      <span className="text-eyebrow" style={{ marginLeft: '0.5rem' }}>{playerSpan(p)}{p.team ? ` · ${p.team}` : ''}</span>
                     </button>
                   </li>
                 ))}
@@ -235,6 +274,8 @@ export default function ShotCharts() {
 
           <select
             className="input-field"
+            aria-label="Season"
+            style={{ flex: '0 1 180px' }}
             value={season}
             onChange={(e) => handleSeasonChange(e.target.value)}
             disabled={loading || !seasons.length}
@@ -244,17 +285,47 @@ export default function ShotCharts() {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+
+          {!onShotMaking && !onQuality && !onValue && (
+            <select
+              className="input-field"
+              aria-label="Games"
+              style={{ flex: '0 1 200px' }}
+              value={games}
+              onChange={(e) => setGames(e.target.value)}
+            >
+              {Object.entries(SHOT_GAMES).map(([k, [text]]) => (
+                <option key={k} value={k}>{text}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         <p className="page-subtitle" style={{ marginTop: '0.75rem' }}>
           {resolvedPlayer ? (
             <PlayerName playerId={resolvedPlayerId} name={resolvedPlayer} size={40}>
               <span className="text-eyebrow" style={{ display: 'block', marginTop: 2 }}>
-                {shots.length.toLocaleString()} shots · {seasons.length} seasons{source === 'live' ? ' · fetched live just now' : ''}
+                {onShotMaking || onQuality || onValue
+                  ? `${seasons.length} seasons of shots on file`
+                  : `${shown.length.toLocaleString()} ${gamesText ? `${gamesText} ` : ''}shots in ${season}${leftOut > 0 ? ` · ${leftOut.toLocaleString()} other shots this season not counted` : ''} · ${seasons.length} seasons`}
+                {source === 'live' ? ' · fetched live just now' : ''}
               </span>
             </PlayerName>
           ) : 'Search a player to load their shot chart'}
         </p>
+        {resolvedPlayer && otherNamesakes.length > 0 && (
+          <p className="page-subtitle" style={{ marginTop: '0.5rem' }}>
+            Another player is also called {resolvedPlayer}:{' '}
+            {otherNamesakes.map((p, i) => (
+              <React.Fragment key={p.id}>
+                {i > 0 && ', '}
+                <button type="button" className="pp-link" onClick={() => loadPlayer(p.name, undefined, p.id)}>
+                  the one of {playerSpan(p)}
+                </button>
+              </React.Fragment>
+            ))}
+          </p>
+        )}
 
         {loading && (
           <p className="page-subtitle" style={{ marginTop: '0.75rem' }}>
@@ -309,7 +380,7 @@ export default function ShotCharts() {
       </div>
 
       {!onShotMaking && !onQuality && !onValue && (<>
-      <ShotCourt shots={shots} viewMode={viewMode} playerName={resolvedPlayer} season={season} />
+      <ShotCourt shots={shown} viewMode={viewMode} playerName={resolvedPlayer} season={season} />
 
       <div className="dashboard-card" style={{ marginTop: '1rem' }}>
         <h3 className="section-heading" style={{ marginTop: 0 }}>Summary</h3>
@@ -353,26 +424,27 @@ export default function ShotCharts() {
                 </tr>
               ))}
               {!zoneStats.length && (
-                <tr><td colSpan={4} className="empty-message">No shots loaded for this season.</td></tr>
+                <tr><td colSpan={4} className="empty-message">{shots.length ? `No ${gamesText} shots on file for ${season}.` : 'No shots loaded for this season.'}</td></tr>
               )}
             </tbody>
           </table>
         </div>
         <p className="page-subtitle" style={{ marginTop: '0.75rem' }}>
-          Showing up to 5,000 shots for performance.
+          {SHOT_GAMES[games][0]} only{games === 'regular' ? ' (like the quality map, shot-making and shot mix)' : ''}; choose the games
+          beside the season. Shot Dots draws up to 5,000 shots.
         </p>
       </div>
 
       </>)}
 
       {onQuality && resolvedPlayer && (
-        <ShotQualityMap playerName={resolvedPlayer} state={quality}
+        <ShotQualityMap playerName={resolvedPlayer} playerId={resolvedPlayerId} state={quality}
           onChange={(patch) => setQuality((prev) => ({ ...prev, ...patch }))} />
       )}
 
       {onShotMaking && resolvedPlayer && (
         <>
-          <ShotMakingPlayer key={resolvedPlayer} playerName={resolvedPlayer} />
+          <ShotMakingPlayer key={resolvedPlayerId ?? resolvedPlayer} playerName={resolvedPlayer} playerId={resolvedPlayerId} />
           <ShotMakingLeaderboard season={rank.season} sort={rank.sort} order={rank.order}
             onChange={(patch) => setRank((prev) => ({ ...prev, ...patch }))} />
           <ShotMakingModel />
@@ -384,7 +456,7 @@ export default function ShotCharts() {
           onChange={(patch) => setSvState((prev) => ({ ...prev, ...patch }))} />
       )}
 
-      {resolvedPlayer && <ShotMixHistory key={resolvedPlayer} playerName={resolvedPlayer} />}
+      {resolvedPlayer && <ShotMixHistory key={resolvedPlayerId ?? resolvedPlayer} playerName={resolvedPlayer} playerId={resolvedPlayerId} />}
     </div>
   );
 }

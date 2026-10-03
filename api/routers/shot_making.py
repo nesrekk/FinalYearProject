@@ -13,7 +13,7 @@ so the UI can grey it out.
 
 from fastapi import APIRouter, HTTPException, Query
 
-from impact_core import find_player, get_db
+from impact_core import get_db, resolve_player
 from source_badge import make_source
 
 router = APIRouter()
@@ -105,13 +105,14 @@ def shot_making_leaderboard(
 
 
 @router.get("/shots/player/{player_name}/shot-making")
-def player_shot_making(player_name: str):
+def player_shot_making(player_name: str, player_id: int | None = None):
     """One player's regular seasons: actual vs expected eFG%, shot-making
     with its 95% margin, points above expected, and rank among that
-    season's qualified players."""
+    season's qualified players. `player_id` picks the player by id instead
+    of by name (names aren't unique)."""
     with get_db() as conn:
         cur = conn.cursor()
-        player_id, resolved = find_player(cur, player_name)
+        player_id, resolved = resolve_player(cur, player_name, player_id)
         min_fga = _min_fga(cur)
         league = _league(cur)
         cur.execute(f"SELECT {', '.join(PLAYER_COLS)} FROM player_shot_making WHERE player_id = %s ORDER BY season",

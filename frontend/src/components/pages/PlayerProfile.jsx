@@ -384,12 +384,12 @@ function ShotZones({ playerId, block }) {
     );
 }
 
-function ShotMakingBlock({ block, coverage, onNavigate, name }) {
+function ShotMakingBlock({ block, coverage, onNavigate, name, playerId }) {
     return (
         <Section id="shotmaking" title="Shot-making" info={<ShotMakingInfo />}
             meta={<>Actual eFG% minus what an average shooter would post on the same shots, each regular season
                 ({span(coverage)}); seasons under {block.min_fga} attempts are not ranked.{' '}
-                <button type="button" className="pp-link" onClick={() => onNavigate('shotcharts', null, { player: name, view: 'shotmaking' })}>
+                <button type="button" className="pp-link" onClick={() => onNavigate('shotcharts', null, { player: name, pid: playerId, view: 'shotmaking' })}>
                     Open in Shot Charts
                 </button></>}>
             <ShotMakingTable rows={block.rows} minFga={block.min_fga} />
@@ -984,7 +984,7 @@ export default function PlayerProfile({ onNavigate }) {
             )}
             {d.shot_making.rows.length > 0 && (
                 <ShotMakingBlock block={d.shot_making} coverage={d.coverage.shot_making} onNavigate={onNavigate}
-                    name={d.player.player_name} />
+                    name={d.player.player_name} playerId={d.player.player_id} />
             )}
             {d.scouting.seasons.length > 0 && <Scouting name={d.player.player_name} seasons={d.scouting.seasons} />}
             {d.defense.rows.length > 0 && <Defense block={d.defense} onNavigate={onNavigate} />}

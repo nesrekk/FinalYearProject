@@ -16,3 +16,11 @@ export default function shotTotals(shots) {
     threePct: tAtt ? (tMake / tAtt) : 0,
   };
 }
+
+// Which games' shots to count, by game_id prefix: player_shots holds regular
+// season (002…), playoffs (004…) and play-in (005…) together.
+export const SHOT_GAMES = {
+  regular: ['Regular season', (id) => id.startsWith('002')],
+  playoffs: ['Playoffs and play-in', (id) => id.startsWith('004') || id.startsWith('005')],
+  all: ['All games', () => true],
+};

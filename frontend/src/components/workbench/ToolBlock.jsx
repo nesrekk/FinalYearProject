@@ -9,7 +9,7 @@ import { Glance, Hero, NextSeason, RapmBlock, Section } from '../pages/PlayerPro
 import { Assists, Rotations } from '../pages/TeamProfile';
 import { ProfileEmbedContext, missingReasons } from '../pages/playerProfileShared';
 import { fetchPlayerShots } from '../../services/api';
-import shotTotals from '../../utils/shotTotals';
+import shotTotals, { SHOT_GAMES as GAMES } from '../../utils/shotTotals';
 import { openPlayerProfile, openTeamProfile } from '../../utils/useUrlState';
 import { TOOLS, loadPlayerProfile, loadTeamProfile } from '../../utils/workbenchTools';
 import { entityWord, seasonLabel, seriesVar, toolMember } from './workbenchShared';
@@ -63,12 +63,6 @@ function NotOnFile({ who, what, why }) {
 }
 
 // ── Shot chart (the Shot Charts page's court) ──────────────────────────
-
-const GAMES = {
-    regular: ['Regular season', (id) => id.startsWith('002')],
-    playoffs: ['Playoffs and play-in', (id) => id.startsWith('004') || id.startsWith('005')],
-    all: ['All games', () => true],
-};
 
 function ShotTool({ d, settings, onSettings }) {
     const p = d.player;
