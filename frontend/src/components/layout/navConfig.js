@@ -72,6 +72,12 @@ export const NAV_GROUPS = [
         ],
     },
     {
+        id: 'workbench',
+        label: 'Workbench',
+        icon: 'dashboard_customize',
+        items: [],
+    },
+    {
         id: 'games',
         label: 'Games',
         icon: 'stadium',

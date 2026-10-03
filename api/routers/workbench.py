@@ -6,6 +6,8 @@ from api/workbench_catalogue.py.
                                 excluded, with the reason), groupings,
                                 filters, season range and row count
     POST /workbench/query       run a spec (below)
+    GET  /workbench/entities    players by name (with their NBA ids) or every
+                                franchise, for the board's player/team sets
 
 Spec:
 
@@ -49,6 +51,7 @@ import datetime
 import decimal
 import math
 import re
+import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Literal
@@ -588,6 +591,66 @@ def workbench_query(spec: QuerySpec):
         "notes": notes,
         "_source": make_source(list(ds.tables), ds.upstream),
     }
+
+
+# ─── players and teams for the board's sets ─────────────────────────────────
+
+ENTITY_LIMIT = 25
+# Accented letters in player names and their plain lower-case letters, for the name search.
+# Both cases are listed: lower() only folds ASCII under the database's C locale.
+_LOWER = "áàâäãåāăąçćčďéèêëēėęěğģíìîïīįıķľłńňņñóòôöõøōőřšśşșťțúùûüūůűųýÿžźżđ"
+_ACCENTED = _LOWER + "".join(dict.fromkeys(c.upper() for c in _LOWER if len(c.upper()) == 1 and not c.upper().isascii())) + "İ"
+_PLAIN = "".join({"ø": "o", "ł": "l", "đ": "d", "ı": "i", "İ": "i"}.get(c) or {"ø": "o", "ł": "l", "đ": "d"}.get(c.lower()) or unicodedata.normalize("NFKD", c.lower())[0]
+                 for c in _ACCENTED)
+
+
+def _fold(text):
+    return text.translate(str.maketrans(_ACCENTED, _PLAIN)).lower()
+
+
+@lru_cache(maxsize=1)
+def _franchises():
+    """Every franchise in team_seasons: its latest name and code, and its season span."""
+    rows = execute_readonly("""
+        SELECT franchise, (array_agg(team_name ORDER BY season DESC))[1],
+               (array_agg(abbreviation ORDER BY season DESC))[1], MIN(season), MAX(season)
+        FROM team_seasons WHERE NOT is_league_avg AND franchise IS NOT NULL
+        GROUP BY franchise ORDER BY MAX(season) DESC, franchise""", [])
+    return [{"id": fr, "name": name, "team": code, "from": lo, "to": hi} for fr, name, code, lo, hi in rows]
+
+
+@router.get("/workbench/entities")
+def workbench_entities(kind: Literal["player", "team"], q: str = "", ids: str = "", limit: int = ENTITY_LIMIT):
+    """Players matching `q` (or the comma-separated NBA ids in `ids`) with their
+    span and latest team, or every franchise (today's code, latest name)."""
+    limit = max(1, min(int(limit), ENTITY_LIMIT))
+    source = make_source(["player_season_stats"] if kind == "player" else ["team_seasons"],
+                         "nba_api (stats.nba.com) from 2009-10 + Basketball-Reference")
+    if kind == "team":
+        return {"kind": kind, "results": _franchises(), "_source": source}
+    # Text only: LIKE's wildcards and the escape character are taken out, so a
+    # query matches its letters anywhere in the name and nothing else.
+    text = _fold(q.strip()).replace("\\", "").replace("%", "").replace("_", "")
+    if ids:
+        try:
+            wanted = sorted({int(x) for x in ids.split(",") if x.strip()})[:MAX_ENTITIES]
+        except ValueError:
+            _bad("ids must be comma-separated NBA player ids.")
+        where, params = "s.player_id = ANY(%s)", [wanted]
+    elif len(text) >= 2:
+        # Accents ignored on both sides, so "jokic" finds Nikola Jokić.
+        where, params = "translate(lower(s.player_name), %s, %s) LIKE %s", [_ACCENTED, _PLAIN, f"%{text}%"]
+    else:
+        return {"kind": kind, "results": [], "_source": source}
+    rows = execute_readonly(f"""
+        SELECT s.player_id, (array_agg(s.player_name ORDER BY s.season DESC))[1],
+               MIN(s.season), MAX(s.season), (array_agg(s.team_abbreviation ORDER BY s.season DESC))[1]
+        FROM player_season_stats s WHERE {where} AND s.player_id > 0
+        GROUP BY s.player_id
+        ORDER BY MAX(s.season) DESC, SUM(s.gp * s.min) DESC NULLS LAST, s.player_id
+        LIMIT %s""", params + [len(wanted) if ids else limit])
+    return {"kind": kind, "results": [{"id": pid, "name": name, "from": lo, "to": hi, "team": team}
+                                      for pid, name, lo, hi, team in rows], "_source": source}
 
 
 @router.get("/workbench/catalogue")

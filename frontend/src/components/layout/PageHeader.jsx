@@ -52,6 +52,7 @@ const pageTitles = {
     quality: 'Data Quality',
     saved: 'Saved Analyses',
     report: 'Report Builder',
+    workbench: 'Workbench',
 };
 
 const pageDescriptions = {
@@ -100,6 +101,7 @@ const pageDescriptions = {
     quality: 'The feeds\' known error classes checked live, a quality flag on every game, and whether dropping the flagged games changes the results',
     saved: 'Every tool view you\'ve saved, exactly as you left it',
     report: 'Collect charts and tables from any page, add your own notes, and print or save the result as a PDF',
+    workbench: 'Build your own boards: sets of players or teams, tables of any stat in the catalogue, your own notes, arranged as you like',
 };
 
 function greeting() {

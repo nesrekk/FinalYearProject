@@ -1432,3 +1432,55 @@ export async function fetchDataQualitySensitivity(result) {
     const response = await axios.get(`${IMPACT_BASE}/data-quality/sensitivity`, { params: { result } });
     return response.data;
 }
+
+// Workbench (round 7). The catalogue is fetched once per page load; query
+// results are kept in memory for this tab (the last 60 specs), so blocks
+// showing the same query, or a block re-mounted after a move, don't refetch.
+// Both clear on reload, so a rebuilt table is picked up then.
+let _workbenchCatalogue = null;
+export function fetchWorkbenchCatalogue() {
+    if (!_workbenchCatalogue) {
+        _workbenchCatalogue = axios.get(`${IMPACT_BASE}/workbench/catalogue`).then((r) => r.data);
+        _workbenchCatalogue.catch(() => { _workbenchCatalogue = null; });
+    }
+    return _workbenchCatalogue;
+}
+
+const _workbenchQueries = new Map();
+export function runWorkbenchQuery(spec) {
+    const key = JSON.stringify(spec);
+    if (_workbenchQueries.has(key)) {
+        const hit = _workbenchQueries.get(key);
+        _workbenchQueries.delete(key);
+        _workbenchQueries.set(key, hit); // most recently used last
+        return hit;
+    }
+    const request = axios.post(`${IMPACT_BASE}/workbench/query`, spec).then((r) => r.data);
+    _workbenchQueries.set(key, request);
+    request.catch(() => _workbenchQueries.delete(key));
+    while (_workbenchQueries.size > 60) _workbenchQueries.delete(_workbenchQueries.keys().next().value);
+    return request;
+}
+
+// Players by name ({ id, name, from, to, team }), or every franchise.
+export async function searchWorkbenchPlayers(q) {
+    const response = await axios.get(`${IMPACT_BASE}/workbench/entities`, { params: { kind: 'player', q } });
+    return response.data;
+}
+
+let _workbenchTeams = null;
+export function fetchWorkbenchTeams() {
+    if (!_workbenchTeams) {
+        _workbenchTeams = axios.get(`${IMPACT_BASE}/workbench/entities`, { params: { kind: 'team' } }).then((r) => r.data);
+        _workbenchTeams.catch(() => { _workbenchTeams = null; });
+    }
+    return _workbenchTeams;
+}
+
+// The server's message for a refused query (400/504), else a plain one.
+export function workbenchError(e) {
+    const detail = e?.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail) && detail[0]?.msg) return `The query was refused: ${detail[0].msg}.`;
+    return e?.response ? 'The query failed on the server.' : 'The Workbench API (port 8002) isn’t reachable. Is impact_api running?';
+}

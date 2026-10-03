@@ -451,3 +451,57 @@ def test_team_games_add_up_to_team_seasons(client):
     d = _q(client, dataset="team_game", columns=["games"], entities=["BKN"], season_from=2010, season_to=2013,
            group_by=["team"], sort=[{"key": "team", "dir": "asc"}])
     assert [(r["team"], r["games"]) for r in d["rows"]] == [("BKN", 82), ("NJN", 230)]
+
+
+# ─── /workbench/entities: players and teams for a board's sets (step 3) ──────
+
+def _entities(client, **params):
+    r = client.get("/workbench/entities", params=params)
+    assert r.status_code == 200, r.text
+    return r.json()["results"]
+
+
+def test_player_search_ignores_accents_and_case(client, cur):
+    # Jokić is stored with the accent; Šarić both ways (the latest season without it).
+    for stored, queries in (("Nikola Jokić", ("jokic", "JOKIĆ", "Jokić")), ("Dario Šarić", ("saric", "ŠARIĆ", "Saric"))):
+        cur.execute("SELECT DISTINCT player_id FROM player_season_stats WHERE player_name = %s", (stored,))
+        (pid,), = cur.fetchall()
+        for q in queries:
+            assert pid in {p["id"] for p in _entities(client, kind="player", q=q)}, q
+
+
+def test_player_lookup_by_ids_matches_the_season_table(client, cur):
+    rows = _entities(client, kind="player", ids="201939,2544")
+    assert {p["id"] for p in rows} == {201939, 2544}
+    for p in rows:
+        cur.execute("SELECT MIN(season), MAX(season) FROM player_season_stats WHERE player_id = %s", (p["id"],))
+        assert (p["from"], p["to"]) == cur.fetchone()
+
+
+@pytest.mark.parametrize("q", ["%", "%%", "__", "a%' OR 1=1 --", "\\\\", "'; DROP TABLE player_season_stats; --"])
+def test_player_search_takes_text_as_text(client, q):
+    # Wildcards and quotes are plain characters (or dropped): never "every player".
+    assert _entities(client, kind="player", q=q) == []
+
+
+def test_entity_requests_are_checked(client):
+    assert client.get("/workbench/entities", params={"kind": "player", "ids": "1,x"}).status_code == 400
+    assert client.get("/workbench/entities", params={"kind": "coach"}).status_code == 422
+    assert len(_entities(client, kind="player", q="an", limit=999)) == 25
+
+
+def test_team_list_is_every_franchise(client, cur):
+    teams = _entities(client, kind="team")
+    cur.execute("SELECT COUNT(DISTINCT franchise), MAX(season) FROM team_seasons WHERE NOT is_league_avg")
+    n, latest = cur.fetchone()
+    assert len(teams) == n
+    current = [t for t in teams if t["to"] == latest]
+    assert len(current) == 30
+    okc = next(t for t in teams if t["id"] == "OKC")
+    assert okc["name"] == "Oklahoma City Thunder" and okc["team"] == "OKC"
+    cur.execute("SELECT MIN(season) FROM team_seasons WHERE franchise = 'OKC'")
+    assert okc["from"] == cur.fetchone()[0]
+    # Every code is one the query layer accepts as an entity.
+    meta = client.get("/workbench/catalogue").json()
+    season_teams = set(next(d for d in meta["datasets"] if d["key"] == "team_season")["teams"])
+    assert {t["id"] for t in teams} == season_teams

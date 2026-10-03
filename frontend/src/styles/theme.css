@@ -66,6 +66,16 @@ body {
   border-radius: 0;
 }
 
+/* Ten top-level entries (Workbench joined in round 7): the full bar needs
+   about 1,240 px with tighter items (shell.css shows the hamburger below
+   that; it used to switch at 1,024 px and overflowed up to ~1,200), and the
+   default 12px padding from 1,440 px. */
+@media (min-width: 1240px) and (max-width: 1439px) {
+  .top-nav-center { gap: 2px; }
+  .nav-item-btn { padding-left: 8px; padding-right: 8px; }
+  .nav-underline { left: 8px; right: 8px; }
+}
+
 .nav-dropdown {
   background: var(--surface);
   border: 2px solid var(--line);

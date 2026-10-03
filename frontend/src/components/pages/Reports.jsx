@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../common/Icon';
 import InfoTooltip from '../common/InfoTooltip';
 import {
@@ -6,6 +6,7 @@ import {
     newTextItem, removeItem, renameReport, setActiveReportId, subscribeReports, updateItem, useReports,
 } from '../../utils/reportStore';
 import { downloadText, slugify } from '../../utils/tableExport';
+import { useAutosave } from '../../utils/useAutosave';
 import { isPlainClick, openFullUrl, parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/report.css';
 
@@ -15,28 +16,6 @@ function fmtDate(iso) {
     } catch {
         return iso;
     }
-}
-
-// Text that saves itself: when the box loses focus, and a moment after typing
-// stops, so a click on Print or a nav link right after typing keeps the text.
-function useAutosave(value, save) {
-    const [draft, setDraft] = useState(value);
-    const timer = useRef(null);
-    const latest = useRef({ draft, value, save });
-    useLayoutEffect(() => { latest.current = { draft, value, save }; });
-
-    const flush = () => {
-        clearTimeout(timer.current);
-        const { draft: d, value: v, save: s } = latest.current;
-        if (d !== v) s(d);
-    };
-    const change = (next) => {
-        setDraft(next);
-        clearTimeout(timer.current);
-        timer.current = setTimeout(flush, 700);
-    };
-    useEffect(() => () => flush(), []);
-    return [draft, change, flush];
 }
 
 // A chart is only ever shown through <img>: a stored (or imported) SVG can't
