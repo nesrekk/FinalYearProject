@@ -36,44 +36,24 @@ from fastapi import APIRouter, HTTPException, Query
 
 from impact_core import get_db
 from source_badge import make_source
+from workbench_catalogue import PLAYER_GAME_FROM, PLAYER_GAME_WHERE, TEAM_MARGIN_SQL, game_finder_stats
 
 router = APIRouter()
 
 MAX_CONDITIONS = 8
 MAX_LIMIT = 200
 MIN_STREAK = 2
-# Rows in every query: a line he played, in a game that counts in the standings.
-BASE_FROM = """
-    FROM player_game_lines l
-    JOIN team_game_fatigue f ON f.team_abbreviation = l.team_abbreviation AND f.game_date = l.game_date
-    LEFT JOIN game_scores gs ON gs.game_id = f.game_id AND gs.team_abbreviation = f.team_abbreviation
-"""
-MARGIN_SQL = "(gs.pts_for - gs.pts_against)"
-BASE_WHERE = ["l.seconds > 0"]
+# Rows in every query: a line he played, in a game that counts in the standings
+# (the Workbench's player_game dataset is the same rows: api/workbench_catalogue.py).
+BASE_FROM = PLAYER_GAME_FROM
+MARGIN_SQL = TEAM_MARGIN_SQL
+BASE_WHERE = list(PLAYER_GAME_WHERE)
 
-# key -> (label, per-game SQL expression over l, format). Shooting % are
-# shares (0.6 = 60%); a game with no attempts has none and never matches.
-STATS = {
-    "pts": ("Points", "l.pts", "int"),
-    "reb": ("Rebounds", "(l.oreb + l.dreb)", "int"),
-    "ast": ("Assists", "l.ast", "int"),
-    "stl": ("Steals", "l.stl", "int"),
-    "blk": ("Blocks", "l.blk", "int"),
-    "tov": ("Turnovers", "l.tov", "int"),
-    "oreb": ("Offensive rebounds", "l.oreb", "int"),
-    "dreb": ("Defensive rebounds", "l.dreb", "int"),
-    "fgm": ("Field goals made", "l.fgm", "int"),
-    "fga": ("Field goal attempts", "l.fga", "int"),
-    "fg3m": ("Threes made", "l.fg3m", "int"),
-    "fg3a": ("Three-point attempts", "l.fg3a", "int"),
-    "ftm": ("Free throws made", "l.ftm", "int"),
-    "fta": ("Free throw attempts", "l.fta", "int"),
-    "min": ("Minutes", "(l.seconds / 60.0)", "num1"),
-    "fg_pct": ("FG%", "(l.fgm::float / NULLIF(l.fga, 0))", "pct"),
-    "fg3_pct": ("3P%", "(l.fg3m::float / NULLIF(l.fg3a, 0))", "pct"),
-    "ft_pct": ("FT%", "(l.ftm::float / NULLIF(l.fta, 0))", "pct"),
-    "ts_pct": ("True shooting %", "(l.pts / NULLIF(2 * (l.fga + 0.44 * l.fta), 0))", "pct"),
-}
+# key -> (label, per-game SQL expression over l, format), built from the
+# player_game columns of api/workbench_catalogue.py (round 7): add or change a
+# stat there. Shooting % are shares (0.6 = 60%); a game with no attempts has
+# none and never matches.
+STATS = game_finder_stats()
 OPS = {"gte": ">=", "gt": ">", "lte": "<=", "lt": "<", "eq": "="}
 SORTS = {**{k: v[1] for k, v in STATS.items()}, "date": "l.game_date", "margin": MARGIN_SQL}
 RAW = ["pts", "fgm", "fga", "fg3m", "fg3a", "ftm", "fta", "oreb", "dreb", "ast", "stl", "blk", "tov"]

@@ -20,47 +20,20 @@ from fastapi import APIRouter, HTTPException, Query
 from impact_core import get_db
 from source_badge import make_source
 from stat_samples import SEASON_SAMPLE_SQL
+from workbench_catalogue import MIN_ATTEMPTS_PER_GAME, leaderboard_stats
 
 router = APIRouter()
 
-# key -> (label, group, format, first_season, higher_is_better, attempts_column)
-STATS = {
-    "pts": ("Points", "Per game", "num1", 1950, True, None),
-    "reb": ("Rebounds", "Per game", "num1", 1951, True, None),
-    "ast": ("Assists", "Per game", "num1", 1950, True, None),
-    "stl": ("Steals", "Per game", "num1", 1974, True, None),
-    "blk": ("Blocks", "Per game", "num1", 1974, True, None),
-    "tov": ("Turnovers", "Per game", "num1", 1978, False, None),
-    "fg3m": ("3-pointers made", "Per game", "num1", 1980, True, None),
-    "fg3a": ("3-point attempts", "Per game", "num1", 1980, True, None),
-    "fta": ("Free-throw attempts", "Per game", "num1", 1950, True, None),
-    "oreb": ("Offensive rebounds", "Per game", "num1", 1974, True, None),
-    "min": ("Minutes", "Per game", "num1", 1952, True, None),
-    "fg_pct": ("Field-goal %", "Shooting", "pct", 1950, True, "fga"),
-    "fg3_pct": ("3-point %", "Shooting", "pct", 1980, True, "fg3a"),
-    "ft_pct": ("Free-throw %", "Shooting", "pct", 1950, True, "fta"),
-    "ts_pct": ("True shooting %", "Shooting", "pct", 1950, True, "fga"),
-    "efg_pct": ("Effective FG %", "Shooting", "pct", 1980, True, "fga"),
-    "usg_pct": ("Usage %", "Rates", "pct", 1978, True, None),
-    "ast_pct": ("Assist %", "Rates", "pct", 1965, True, None),
-    "reb_pct": ("Rebound %", "Rates", "pct", 1971, True, None),
-    "oreb_pct": ("Offensive rebound %", "Rates", "pct", 1974, True, None),
-    "tov_pct": ("Turnover %", "Rates", "pct", 1978, False, None),
-    "off_rating": ("Offensive rating", "Impact", "num1", 2010, True, None),
-    "def_rating": ("Defensive rating", "Impact", "num1", 2010, False, None),
-    "net_rating": ("Net rating", "Impact", "signed1", 2010, True, None),
-    "plus_minus": ("Plus-minus", "Impact", "signed1", 2010, True, None),
-    "bpm": ("BPM", "Impact", "signed1", 1974, True, None),
-    "obpm": ("Offensive BPM", "Impact", "signed1", 1974, True, None),
-    "dbpm": ("Defensive BPM", "Impact", "signed1", 1974, True, None),
-    "vorp": ("VORP", "Impact", "num1", 1974, True, None),
-    "impact_score_raw": ("Impact score (raw)", "Impact", "num2", 2010, True, None),
-    "age": ("Age", "Other", "int", 1950, True, None),
-}
+# key -> (label, group, format, first_season, higher_is_better, attempts_column),
+# built from the player_season columns of api/workbench_catalogue.py (round 7):
+# add or change a stat there. The SQL below reads the season-table column named
+# by the key (for age that is the stored, two-convention age; the Workbench
+# offers the birth-date age instead).
+STATS = leaderboard_stats()
 
 # Default minimum attempts per game for shooting percentages (overridable,
 # including to 0): without one, 2025-26's top 3P% was 100% on 0.0 3PA a game.
-ATTEMPT_DEFAULTS = {"fga": 5.0, "fg3a": 2.0, "fta": 2.0}
+ATTEMPT_DEFAULTS = MIN_ATTEMPTS_PER_GAME
 
 # Shown on every row for context, alongside the ranked stat.
 CONTEXT = ["gp", "min", "pts", "reb", "ast", "ts_pct"]
