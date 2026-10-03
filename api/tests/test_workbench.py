@@ -22,7 +22,10 @@ Guards round 7 step 1, the Workbench catalogue and query API
     on the query's own rows and read past the 5,000-row cap; /workbench/trend's
     r and slope equal numpy's, its intervals cover them, r's interval is a
     reproducible cluster bootstrap no wider than twice Fisher's when every
-    player appears once, and both endpoints refuse what they can't answer.
+    player appears once, and both endpoints refuse what they can't answer;
+  * (step 5, the app's tools as blocks) the shot endpoints the tool blocks
+    call take a player id, since names aren't unique: by id they return that
+    player, by name exactly what they returned before.
 
 Skips when the database is unreachable.
 
@@ -616,3 +619,30 @@ def test_trend_refusals(client):
     _post(client, "trend", {"spec": spec, "x": "fg3a", "y": "fg3_pct", "z": 1}, 422)
     two = _post(client, "trend", {"spec": {**spec, "entities": [203999, 201939]}, "x": "fg3a", "y": "fg3_pct"})
     assert two["fit"] is None and "3 different players" in two["reason"]
+
+
+def test_shot_endpoints_take_a_player_id(client, cur):
+    """Two Brandon Williams: 1585 (1997-98 to 2002-03) and 1630314 (2021-22 on).
+    A Workbench set holds ids, so its shot chart, quality map and shot mix ask
+    by id; the Shot Charts page still asks by name and gets what it always did."""
+    cur.execute("SELECT count(DISTINCT player_id) FROM player_season_stats WHERE player_name = 'Brandon Williams'")
+    assert cur.fetchone()[0] == 2
+    by_name = client.get("/shots/player/Brandon Williams").json()
+    for pid in (1585, 1630314):
+        shots = client.get("/shots/player/Brandon Williams", params={"player_id": pid}).json()
+        assert shots["player_id"] == pid
+        cur.execute("SELECT count(*) FROM player_shots WHERE player_id = %s AND season = %s", (pid, shots["season"]))
+        assert len(shots["shots"]) == cur.fetchone()[0]
+        mix = client.get("/shots/player/Brandon Williams/zone-history", params={"player_id": pid})
+        assert mix.status_code == 200
+        cur.execute("SELECT count(*) FROM player_shots WHERE player_id = %s AND game_id LIKE '002%%'", (pid,))
+        assert sum(r["fga"] for r in mix.json()["seasons"]) == cur.fetchone()[0]
+    assert by_name["player_id"] in (1585, 1630314)
+    assert by_name == client.get("/shots/player/Brandon Williams", params={"player_id": by_name["player_id"]}).json()
+    qm = client.get("/shots/quality-map", params={"player": "Brandon Williams", "player_id": 1630314}).json()
+    assert qm["player_name"] == "Brandon Williams" and qm["season"] >= 2022
+    # A name with one player: the id changes nothing.
+    assert client.get("/shots/quality-map", params={"player": "Kyle Korver", "season": 2015}).json() == \
+        client.get("/shots/quality-map", params={"player": "xx", "player_id": 2594, "season": 2015}).json()
+    assert client.get("/shots/player/xx/zone-history", params={"player_id": 99999999}).status_code == 404
+    assert client.get("/shots/player/xx", params={"player_id": "abc"}).status_code == 422

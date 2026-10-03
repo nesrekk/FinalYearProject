@@ -534,3 +534,60 @@
 .wb-chart-settings .wb-seg { flex-wrap: wrap; }
 .wb-chart-settings .wb-seg-btn { display: inline-flex; align-items: center; gap: 4px; }
 .wb-chart-settings .wb-seg-btn--on { background: var(--surface); }
+
+/* App tool blocks (step 5): one set member shown with one of the app's own
+   tools. The tools keep their own markup; inside a block their cards lose
+   their frame (the block is the frame) and headings shrink under the
+   block's own title. */
+.wb-tool { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; container-type: inline-size; }
+.wb-tool-bar,
+.wb-tool-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-3);
+}
+.wb-tool-bar { padding-bottom: var(--space-2); border-bottom: 1px solid var(--hairline); }
+.wb-tool-bar .wb-field,
+.wb-tool-controls .wb-field { flex: 0 1 220px; }
+.wb-tool-member .wb-row { flex-wrap: nowrap; gap: 6px; }
+.wb-tool-member .wb-select { flex: 1 1 auto; }
+.wb-tool-open { align-self: flex-end; padding-bottom: 6px; }
+.wb-tool-body { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.wb-tool-missing {
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--line);
+  background: var(--surface-2);
+}
+.wb-tool-missing-title { margin: 0 0 2px; font-size: 13px; font-weight: 700; color: var(--text); }
+.wb-tool .dashboard-card {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+.wb-tool .pp-section--embedded { min-width: 0; }
+.wb-tool .pp-section--embedded > .pp-section-title,
+.wb-tool .section-heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 var(--space-1);
+  font-size: 15px;
+}
+.wb-tool .pp-hero { padding: 0; gap: var(--space-3) var(--space-4); align-items: center; }
+/* A narrow block (a third of the board, or a phone): photo above the text. */
+@container (max-width: 480px) {
+  .wb-tool .pp-hero { flex-direction: column; align-items: flex-start; }
+}
+.wb-tool .pp-name { font-size: clamp(26px, 3vw, 38px); }
+.wb-tool .pp-glance { margin-top: var(--space-3); }
+.wb-tool .pp-tile-value { font-size: 28px; }
+.wb-tool .pp-glance-tiles { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
+.wb-tool .court-container { max-width: 560px; width: 100%; }
+.wb-tool .qm-panel { min-width: 0; }
+.wb-add-tool { align-self: center; }
+@media (max-width: 760px) {
+  .wb-tool-bar .wb-field,
+  .wb-tool-controls .wb-field { flex: 1 1 100%; }
+}

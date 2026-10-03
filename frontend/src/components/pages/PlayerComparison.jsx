@@ -13,6 +13,8 @@ import TableExport from '../common/TableExport';
 import ChartExport from '../common/ChartExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
+import OpenInWorkbenchButton from '../common/OpenInWorkbenchButton';
+import { compareBoard } from '../../utils/openInWorkbench';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import { withSign } from '../../utils/format';
 
@@ -305,6 +307,8 @@ export default function PlayerComparison() {
                     </InfoTooltip>
                     <CopyLinkButton />
                     <SaveViewButton pageId="compare" />
+                    <OpenInWorkbenchButton disabled={!profileA && !profileB}
+                        build={() => compareBoard({ season, players: [profileA, profileB].filter(Boolean) })} />
                 </h2>
                 <p className="page-subtitle">Pick a season and two players to compare their full statistical profile.</p>
 

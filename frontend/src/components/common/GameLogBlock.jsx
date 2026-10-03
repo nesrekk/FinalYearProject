@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchPlayerGameLog } from '../../services/api';
 import Loader from '../Loader';
 import HotStreakCard from './HotStreakCard';
@@ -10,6 +10,7 @@ import TeamLogo from './TeamLogo';
 import TeamLink from './TeamLink';
 import { openPage } from '../../utils/useUrlState';
 import useChartCrosshair from '../../utils/useChartCrosshair';
+import { ProfileEmbedContext } from '../pages/playerProfileShared';
 import '../../styles/gamelog.css';
 
 // Game log on the player profile: every regular-season game he played in a
@@ -142,9 +143,10 @@ function RollingChart({ rows, stat, win, seasonValue, exportName }) {
     );
 }
 
-export default function GameLogBlock({ playerId, seasons, nbaGp = {} }) {
+// `initialSeason` / `onSeasonChange` (optional): a Workbench block keeps the chosen season in the board.
+export default function GameLogBlock({ playerId, seasons, nbaGp = {}, initialSeason = null, onSeasonChange }) {
     const have = seasons.map((s) => s.season);
-    const [season, setSeason] = useState(have[have.length - 1]);
+    const [season, setSeason] = useState(() => (have.includes(initialSeason) ? initialSeason : have[have.length - 1]));
     const [loaded, setLoaded] = useState({});
     const [error, setError] = useState('');
     const [stat, setStat] = useState('pts');
@@ -164,14 +166,17 @@ export default function GameLogBlock({ playerId, seasons, nbaGp = {} }) {
     const gamesBySeason = Object.fromEntries(seasons.map((s) => [s.season, s.games]));
     const gp = data?.nba_gp ?? nbaGp[season];
 
+    // In a Workbench block (ProfileEmbedContext): no card or page anchor of its own.
+    const embedded = useContext(ProfileEmbedContext);
+    const Title = embedded ? 'h4' : 'h2';
     return (
-        <section id="pp-gamelog" className="dashboard-card pp-section">
-            <h2 className="card-title pp-section-title">
+        <section id={embedded ? undefined : 'pp-gamelog'} className={embedded ? 'pp-section pp-section--embedded' : 'dashboard-card pp-section'}>
+            <Title className={embedded ? 'pp-section-title' : 'card-title pp-section-title'}>
                 Game log
                 <InfoTooltip label="Where the game log comes from" title="Rebuilt from play-by-play">
                     {data ? `${data.notes.coverage} ${data.notes.accuracy}` : 'Rebuilt from ESPN play-by-play, 2020-21 on.'}
                 </InfoTooltip>
-            </h2>
+            </Title>
             <p className="page-subtitle pp-meta">
                 Every regular-season game he played, rebuilt from ESPN play-by-play (2020-21 on; there is no game-level
                 data before that). Opponent, result and rest from the schedule. Rows under {SHORT_MIN} minutes are greyed.
@@ -179,7 +184,7 @@ export default function GameLogBlock({ playerId, seasons, nbaGp = {} }) {
             <div className="pp-row gl-controls">
                 <label className="pp-select">
                     <span>Season</span>
-                    <select className="input-field" value={season} onChange={(e) => { setError(''); setSeason(Number(e.target.value)); }}>
+                    <select className="input-field" value={season} onChange={(e) => { setError(''); setSeason(Number(e.target.value)); onSeasonChange?.(Number(e.target.value)); }}>
                         {[...have].reverse().map((s) => <option key={s} value={s}>{label(s)} ({gamesBySeason[s]} games)</option>)}
                     </select>
                 </label>

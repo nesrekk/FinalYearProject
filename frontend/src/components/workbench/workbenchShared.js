@@ -1,5 +1,6 @@
 import { plain, signed } from '../../utils/format';
 import { PALETTE_SIZE } from '../../utils/workbenchStore';
+import { TOOLS } from '../../utils/workbenchTools';
 
 // Set colours are stored as a palette index; the colours themselves are the
 // --wb-series-N tokens in styles/workbench.css (Paper and Ink each have their
@@ -34,7 +35,12 @@ export const BLOCK_INFO = {
     table: { label: 'Table', short: 'Table', icon: 'table_view', w: 8, h: 9 },
     chart: { label: 'Chart', short: 'Chart', icon: 'monitoring', w: 6, h: 11 },
     note: { label: 'Note', short: 'Note', icon: 'sticky_note_2', w: 4, h: 4 },
+    // One of the app's own tools; its size when added comes from TOOLS.
+    tool: { label: 'App tool', short: 'Tool', icon: 'widgets', w: 6, h: 12 },
 };
+
+// The member a tool block shows: the one it names, else the set's first.
+export const toolMember = (block, set) => (set ? set.members.find((m) => m.id === block.settings.member) || set.members[0] || null : null);
 
 // What a block is called on the board: its own title, else something
 // descriptive from its settings ("Table: Player seasons · Players").
@@ -43,6 +49,11 @@ export function blockLabel(block, board, catalogue) {
     const set = board.sets.find((s) => s.id === block.settings.setId);
     if (block.type === 'set') return set ? set.name : 'Set';
     if (block.type === 'note') return 'Note';
+    if (block.type === 'tool') {
+        const t = TOOLS[block.settings.tool];
+        const member = set?.kind === t?.entity ? toolMember(block, set) : null;
+        return `${t?.label || 'Tool'}${member ? ` · ${member.name}` : ''}`;
+    }
     const ds = catalogue?.datasets.find((d) => d.key === block.settings.dataset);
     if (block.type === 'chart') {
         const s = block.settings;

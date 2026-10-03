@@ -1006,18 +1006,20 @@ export async function fetchShotSeasons(playerName) {
     return response.data;
 }
 
-export async function fetchPlayerShots(playerName, season) {
+// `playerId` (optional, the Workbench): pick the player by id, since names aren't unique.
+export async function fetchPlayerShots(playerName, season, playerId) {
     const response = await axios.get(
         `${IMPACT_BASE}/shots/player/${encodeURIComponent(playerName)}`,
-        { params: season ? { season } : {}, timeout: 6 * 60 * 1000 }
+        { params: { ...(season ? { season } : {}), ...(playerId ? { player_id: playerId } : {}) }, timeout: 6 * 60 * 1000 }
     );
     return response.data;
 }
 
 // Stored shots only (no live fetch), so it's a normal quick call.
-export async function fetchShotZoneHistory(playerName) {
+export async function fetchShotZoneHistory(playerName, playerId) {
     const response = await axios.get(
-        `${IMPACT_BASE}/shots/player/${encodeURIComponent(playerName)}/zone-history`
+        `${IMPACT_BASE}/shots/player/${encodeURIComponent(playerName)}/zone-history`,
+        playerId ? { params: { player_id: playerId } } : undefined
     );
     return response.data;
 }
@@ -1334,8 +1336,10 @@ export async function fetchUpsets(params) {
 
 // ─── Shot quality map (player_shot_hex, shot_hex_league; regular season, 200+ FGA) ────
 // One player-season on the 2-foot hexagon grid next to the league's; season defaults to the latest.
-export async function fetchQualityMap(player, season) {
-    const response = await axios.get(`${IMPACT_BASE}/shots/quality-map`, { params: { player, ...(season ? { season } : {}) } });
+export async function fetchQualityMap(player, season, playerId) {
+    const response = await axios.get(`${IMPACT_BASE}/shots/quality-map`, {
+        params: { player, ...(season ? { season } : {}), ...(playerId ? { player_id: playerId } : {}) },
+    });
     return response.data;
 }
 

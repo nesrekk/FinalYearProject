@@ -116,7 +116,8 @@ function MixChart({ data, active, onHover, onPick }) {
 
 // The parent keys this by player (key={playerName}), so hover/pick state
 // starts fresh for each player.
-export default function ShotMixHistory({ playerName }) {
+// `playerId` (optional, the Workbench): look the player up by id, since names aren't unique.
+export default function ShotMixHistory({ playerName, playerId }) {
     const [result, setResult] = useState({ for: null, data: null, error: '' });
     const [hover, setHover] = useState(null);
     const [picked, setPicked] = useState(null);
@@ -124,7 +125,7 @@ export default function ShotMixHistory({ playerName }) {
     useEffect(() => {
         if (!playerName) return undefined;
         let active = true;
-        fetchShotZoneHistory(playerName)
+        fetchShotZoneHistory(playerName, playerId)
             .then((d) => { if (active) setResult({ for: playerName, data: d, error: '' }); })
             .catch((e) => {
                 if (active) {
@@ -136,7 +137,7 @@ export default function ShotMixHistory({ playerName }) {
                 }
             });
         return () => { active = false; };
-    }, [playerName]);
+    }, [playerName, playerId]);
 
     const loading = result.for !== playerName;
     const data = loading ? null : result.data;

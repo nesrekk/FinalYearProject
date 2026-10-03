@@ -7,6 +7,8 @@ import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
+import OpenInWorkbenchButton from '../common/OpenInWorkbenchButton';
+import { leaderboardBoard } from '../../utils/openInWorkbench';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import { signed as signedNum } from '../../utils/format';
 import CompositeBuilder from './CompositeBuilder';
@@ -201,6 +203,14 @@ export default function LeaderboardBuilder() {
                         <SourceBadge source={data?._source ?? options._source} />
                         <CopyLinkButton />
                         <SaveViewButton pageId="builder" />
+                        <OpenInWorkbenchButton disabled={!data?.results.length || loading}
+                            build={() => leaderboardBoard({
+                                stat: data.stat.key, statLabel: data.stat.label,
+                                from: data.filters.season_from, to: data.filters.season_to,
+                                minGp: data.filters.min_gp, minMpg: data.filters.min_mpg,
+                                minAttempts: data.filters.min_attempts, attemptsLabel: ATTEMPT_LABELS[data.stat.attempts],
+                                team: data.filters.team, order: data.filters.order, results: data.results,
+                            })} />
                     </h2>
 
                     <div className="lb-presets" aria-label="Presets">

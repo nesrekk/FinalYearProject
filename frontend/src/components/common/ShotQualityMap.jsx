@@ -74,7 +74,8 @@ function where(c) {
     return `${d.toFixed(0)} ft out, ${side}`;
 }
 
-function QualityPanel({ name, season, mode, minShots, onSeason }) {
+// One player's map. Also a Workbench block (`playerId` there: names aren't unique).
+export function QualityPanel({ name, playerId, season, mode, minShots, onSeason }) {
     const svgRef = useRef(null);
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
@@ -86,7 +87,7 @@ function QualityPanel({ name, season, mode, minShots, onSeason }) {
         const timer = setTimeout(() => {
             setLoading(true);
             setError('');
-            fetchQualityMap(name, season ?? undefined)
+            fetchQualityMap(name, season ?? undefined, playerId)
                 .then((d) => { if (live) setData(d); })
                 .catch((e) => {
                     if (!live) return;
@@ -96,7 +97,7 @@ function QualityPanel({ name, season, mode, minShots, onSeason }) {
                 .finally(() => { if (live) setLoading(false); });
         }, 100);
         return () => { live = false; clearTimeout(timer); };
-    }, [name, season]);
+    }, [name, season, playerId]);
 
     const cells = useMemo(() => {
         if (!data) return [];

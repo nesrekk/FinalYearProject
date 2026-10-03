@@ -9,7 +9,7 @@
 //   { id, name, created, updated, version: 1,
 //     sets:   [{ id, name, kind: 'player' | 'team',
 //                members: [{ id, name, color, team? }] }]   // color = palette index 0-7
-//     blocks: [{ id, type: 'set' | 'table' | 'chart' | 'note', title,
+//     blocks: [{ id, type: 'set' | 'table' | 'chart' | 'note' | 'tool', title,
 //                x, y, w, h,                                 // grid cells (12 columns)
 //                settings: { … per type, see cleanSettings } }] }
 //
@@ -19,6 +19,7 @@
 
 import { useEffect, useState } from 'react';
 import { GRID_COLS, MAX_H, MIN_H, compact } from './workbenchLayout';
+import { SHOT_GAMES, TOOL_KEYS, TOOL_VIEWS } from './workbenchTools';
 
 const DB_NAME = 'nba-hub-workbench';
 const STORE = 'boards';
@@ -27,7 +28,7 @@ export const EXPORT_FORMAT = 'nba-hub-workbench';
 export const SHARE_PARAM = 'share';
 
 export const PALETTE_SIZE = 8;
-export const BLOCK_TYPES = ['set', 'table', 'chart', 'note'];
+export const BLOCK_TYPES = ['set', 'table', 'chart', 'note', 'tool'];
 export const LIMITS = { boards: 200, blocks: 40, sets: 20, members: 500, columns: 40, note: 20000, name: 120, title: 80 };
 // A share link carries the whole board; past this many characters it goes
 // into a file instead (chat apps and some mail clients cut longer links).
@@ -248,6 +249,20 @@ export function cleanSettings(type, raw, setIds) {
     if (type === 'note') return { text: str(s.text, LIMITS.note) };
     const key = (v) => (typeof v === 'string' && KEY_RE.test(v) ? v : null);
     const season = (v) => (isInt(v) && v >= 1940 && v <= 2100 ? v : null);
+    if (type === 'tool') {
+        // One of the app's own tools (utils/workbenchTools.js), shown for one
+        // set member: a player id or a team code, checked for shape only.
+        const tool = TOOL_KEYS.includes(s.tool) ? s.tool : 'card';
+        const memberOk = (isInt(s.member) && s.member > 0 && s.member <= 1e9) || (typeof s.member === 'string' && TEAM_RE.test(s.member));
+        return {
+            tool,
+            setId,
+            member: memberOk ? s.member : null,
+            season: season(s.season),
+            view: (TOOL_VIEWS[tool] || []).includes(s.view) ? s.view : null,
+            games: tool === 'shots' && SHOT_GAMES.includes(s.games) ? s.games : null,
+        };
+    }
     let seasonFrom = season(s.seasonFrom);
     let seasonTo = season(s.seasonTo);
     if (seasonFrom && seasonTo && seasonFrom > seasonTo) [seasonFrom, seasonTo] = [seasonTo, seasonFrom];
@@ -300,6 +315,7 @@ export function cleanSettings(type, raw, setIds) {
 
 export function cleanBlock(raw, setIds) {
     if (!raw || typeof raw !== 'object' || !BLOCK_TYPES.includes(raw.type)) return null;
+    if (raw.type === 'tool' && !TOOL_KEYS.includes(raw.settings?.tool)) return null;
     const w = clampInt(raw.w, 2, GRID_COLS, 6);
     return {
         id: typeof raw.id === 'string' && ID_RE.test(raw.id) ? raw.id : makeId(),

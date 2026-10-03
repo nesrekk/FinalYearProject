@@ -9,6 +9,7 @@ from source_badge import make_source
 from impact_core import (
     find_player,
     get_db,
+    resolve_player,
 )
 
 router = APIRouter()
@@ -42,15 +43,16 @@ def get_shot_seasons(player_name: str):
     }
 
 @router.get("/shots/player/{player_name}")
-def get_player_shots(player_name: str, season: Optional[str] = None):
+def get_player_shots(player_name: str, season: Optional[str] = None, player_id: Optional[int] = None):
     """
     Shots for one season (defaults to the player's most recent cached
     season). Triggers the same cache-or-fetch flow as /seasons, so this can
-    be called directly without hitting /seasons first.
+    be called directly without hitting /seasons first. `player_id` (the
+    Workbench) picks the player by id instead of by name.
     """
     with get_db() as conn:
         cursor = conn.cursor()
-        player_id, resolved_name = find_player(cursor, player_name)
+        player_id, resolved_name = resolve_player(cursor, player_name, player_id)
 
     try:
         result = shots_lib.ensure_player_shots_cached(int(player_id), resolved_name)
@@ -160,15 +162,16 @@ ZONE_HISTORY_MIN_FGA = 200
 
 
 @router.get("/shots/player/{player_name}/zone-history")
-def get_player_zone_history(player_name: str):
+def get_player_zone_history(player_name: str, player_id: Optional[int] = None):
     """A player's shot mix season by season: attempts, makes and share of
     their shots in each of the five zones, regular season only (game_id
     '002…'), from the stored player_shots rows (no live fetch). Each season
     carries the league's own share per zone (league_zone_mix) for context.
-    A season with several teams is one row (player_shots is per player)."""
+    A season with several teams is one row (player_shots is per player).
+    `player_id` (the Workbench) picks the player by id instead of by name."""
     with get_db() as conn:
         cur = conn.cursor()
-        player_id, resolved_name = find_player(cur, player_name)
+        player_id, resolved_name = resolve_player(cur, player_name, player_id)
         cur.execute(
             """SELECT season, loc_x, loc_y, shot_distance, shot_type, shot_zone_basic, shot_made_flag
                FROM player_shots WHERE player_id = %s AND game_id LIKE '002%%'""",

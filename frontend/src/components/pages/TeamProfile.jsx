@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchTeamProfile } from '../../services/api';
 import Loader from '../Loader';
 import CopyLinkButton from '../common/CopyLinkButton';
@@ -12,8 +12,11 @@ import TeamLink from '../common/TeamLink';
 import TeamLogo from '../common/TeamLogo';
 import TeamRotationBlock from '../common/TeamRotationBlock';
 import TeamAssistBlock from '../common/TeamAssistBlock';
+import OpenInWorkbenchButton from '../common/OpenInWorkbenchButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import { bySign, MINUS, shownSign, signed } from '../../utils/format';
+import { ProfileEmbedContext } from './playerProfileShared';
+import { teamBoard } from '../../utils/openInWorkbench';
 import '../../styles/profile.css';
 import '../../styles/teamprofile.css';
 
@@ -55,7 +58,18 @@ function useWidth() {
     return [ref, W];
 }
 
+// Inside a Workbench block (ProfileEmbedContext): no card or page anchor of its own.
 function Section({ id, title, info, meta, children }) {
+    const embedded = useContext(ProfileEmbedContext);
+    if (embedded) {
+        return (
+            <section className="pp-section pp-section--embedded">
+                <h4 className="pp-section-title">{title}{info}</h4>
+                {meta && <p className="page-subtitle pp-meta">{meta}</p>}
+                {children}
+            </section>
+        );
+    }
     return (
         <section id={`tp-${id}`} className="dashboard-card pp-section">
             <h2 className="card-title pp-section-title">{title}{info}</h2>
@@ -103,6 +117,7 @@ function Hero({ d, onSeason }) {
                     </label>
                     <CopyLinkButton />
                     <SaveViewButton pageId="team" title={`${d.team_name} ${label(d.season)}`} />
+                    <OpenInWorkbenchButton build={() => teamBoard(d)} />
                     <SourceBadge source={d._source} />
                 </div>
             </div>
@@ -495,7 +510,7 @@ function Lineups({ l, pairs, season, abbr, onNavigate }) {
     );
 }
 
-function Rotations({ r, season, abbr, onNavigate }) {
+export function Rotations({ r, season, abbr, onNavigate }) {
     return (
         <Section id="rotations" title="Rotation" meta={`${r.coverage} · every stint rebuilt from play-by-play`}
             info={<InfoTooltip label="How the rotation is built" title="Rotation">
@@ -508,7 +523,7 @@ function Rotations({ r, season, abbr, onNavigate }) {
     );
 }
 
-function Assists({ a, season, abbr, onNavigate }) {
+export function Assists({ a, season, abbr, onNavigate }) {
     return (
         <Section id="assists" title="Assist network" meta={`${a.coverage} · every assisted basket in the play-by-play`}
             info={<InfoTooltip label="How the assist network is built" title="Assist network">

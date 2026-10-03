@@ -1648,6 +1648,22 @@ def find_player(cursor, player_name: str):
             return pid, pname
 
     raise HTTPException(status_code=404, detail=f"Player '{player_name}' not found.")
+
+
+def resolve_player(cursor, player_name: str, player_id: Optional[int] = None):
+    """find_player(), unless an NBA id is given. Names aren't unique (19 names
+    belong to two players in player_season_stats, e.g. two Brandon Williams
+    and two Mike James), so callers that know the id (the Workbench) pass it."""
+    if player_id is None:
+        return find_player(cursor, player_name)
+    cursor.execute(
+        "SELECT player_name FROM player_season_stats WHERE player_id = %s ORDER BY season DESC LIMIT 1;",
+        (player_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"No player with id {player_id}.")
+    return player_id, row[0]
 def _fetch_team_game_log(team_id: int, season: int):
     cached = _CACHE["team_game_log"].get((team_id, season))
     if cached and time.time() - cached["ts"] < _CACHE_TTL_SECONDS:

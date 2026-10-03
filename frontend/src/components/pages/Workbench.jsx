@@ -7,6 +7,7 @@ import ChartBlock from '../workbench/ChartBlock';
 import NoteBlock from '../workbench/NoteBlock';
 import SetBlock from '../workbench/SetBlock';
 import TableBlock from '../workbench/TableBlock';
+import ToolBlock from '../workbench/ToolBlock';
 import { chartDefaults } from '../workbench/chartSpec';
 import { defaultColumns } from '../workbench/tableSpec';
 import { BLOCK_INFO, blockLabel } from '../workbench/workbenchShared';
@@ -15,6 +16,7 @@ import { downloadText, slugify } from '../../utils/tableExport';
 import { useAutosave } from '../../utils/useAutosave';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import { placeNew } from '../../utils/workbenchLayout';
+import { TOOLS, TOOL_KEYS } from '../../utils/workbenchTools';
 import {
     LIMITS, MAX_SHARE_CHARS, SHARE_PARAM, cleanSettings, createBoard, decodeShare, deleteBoard, encodeShare,
     exportBoardsJson, importBoardsJson, makeId, renameBoard, saveNewBoard, updateBoard, useBoards,
@@ -90,7 +92,7 @@ function SharedPreview({ shared, onAdd, onClose }) {
     );
 }
 
-export default function Workbench() {
+export default function Workbench({ onNavigate }) {
     const { boards, loaded, error } = useBoards();
     const params = useInitialParams();
     const [sel, setSel] = useState(() => parseParam.str(params, 'b'));
@@ -154,17 +156,32 @@ export default function Workbench() {
         if (created) { setSel(created.id); setConfirmDelete(false); setUndo(null); }
     };
 
-    const addBlock = async (type) => {
+    const addBlock = async (type, tool = null) => {
         if ((type === 'table' || type === 'chart') && !catalogue.data) return;
         const target = board || await run(() => createBoard('My board'));
         if (!target) return;
         setSel(target.id);
         const id = makeId();
-        const info = BLOCK_INFO[type];
+        const info = type === 'tool' ? TOOLS[tool] : BLOCK_INFO[type];
         const added = await run(() => updateBoard(target.id, (bd) => {
             if (bd.blocks.length >= LIMITS.blocks) throw new Error(`A board holds up to ${LIMITS.blocks} blocks.`);
             let settings = {};
-            if (type === 'set') {
+            if (type === 'tool') {
+                // Bound to the newest set of its kind (one with members first);
+                // with none, a new empty set comes with it in its own Set block.
+                const kind = info.entity;
+                let set = [...bd.sets].reverse().find((x) => x.kind === kind && x.members.length)
+                    || [...bd.sets].reverse().find((x) => x.kind === kind);
+                if (!set) {
+                    if (bd.sets.length >= LIMITS.sets) throw new Error(`A board holds up to ${LIMITS.sets} sets.`);
+                    if (bd.blocks.length + 2 > LIMITS.blocks) throw new Error(`A board holds up to ${LIMITS.blocks} blocks.`);
+                    set = { id: makeId(), name: `${kind === 'team' ? 'Teams' : 'Players'} ${bd.sets.length + 1}`, kind, members: [] };
+                    bd.sets.push(set);
+                    const si = BLOCK_INFO.set;
+                    bd.blocks.push({ id: makeId(), type: 'set', title: '', ...placeNew(bd.blocks, narrow ? 12 : si.w, si.h), settings: { setId: set.id } });
+                }
+                settings = cleanSettings('tool', { tool, setId: set.id }, new Set(bd.sets.map((x) => x.id)));
+            } else if (type === 'set') {
                 if (bd.sets.length >= LIMITS.sets) throw new Error(`A board holds up to ${LIMITS.sets} sets.`);
                 const set = { id: makeId(), name: `Players ${bd.sets.length + 1}`, kind: 'player', members: [] };
                 bd.sets.push(set);
@@ -305,7 +322,7 @@ export default function Workbench() {
     };
 
     const renderHeader = (b, handle) => {
-        const info = BLOCK_INFO[b.type];
+        const info = b.type === 'tool' ? TOOLS[b.settings.tool] : BLOCK_INFO[b.type];
         const label = labelOf(b.id);
         return (
             <header className="wb-block-head">
@@ -342,6 +359,7 @@ export default function Workbench() {
             );
         }
         if (b.type === 'note') return <NoteBlock block={b} onSave={(text) => patchSettings(b.id, { text: text.slice(0, LIMITS.note) })} />;
+        if (b.type === 'tool') return <ToolBlock block={b} board={board} onSettings={(patch) => patchSettings(b.id, patch)} onNavigate={onNavigate} />;
         if (catalogue.error) return <p className="wb-error" role="alert">{catalogue.error}</p>;
         if (!catalogue.data) return <p className="wb-meta" role="status">Loading the stat catalogue…</p>;
         if (b.type === 'chart') {
@@ -378,6 +396,15 @@ export default function Workbench() {
                     <Icon name={BLOCK_INFO[t].icon} size={15} /> {BLOCK_INFO[t].short}
                 </button>
             ))}
+            <select className="wb-select wb-add-tool" value="" aria-label="Add one of the app's tools"
+                onChange={(e) => { if (e.target.value) addBlock('tool', e.target.value); }}>
+                <option value="">App tool…</option>
+                {[['player', 'For a player'], ['team', 'For a team']].map(([kind, text]) => (
+                    <optgroup key={kind} label={text}>
+                        {TOOL_KEYS.filter((k) => TOOLS[k].entity === kind).map((k) => <option key={k} value={k}>{TOOLS[k].label}</option>)}
+                    </optgroup>
+                ))}
+            </select>
         </span>
     );
 
@@ -391,7 +418,9 @@ export default function Workbench() {
                         A board is a page of blocks you arrange yourself. Start with a <strong>Set</strong>: a named group of
                         players or teams. Then add a <strong>Table</strong>, choose the data (player seasons, player games,
                         team seasons, team games), the stats and the seasons, and bind it to the set; change the set and
-                        every block bound to it follows. A <strong>Chart</strong> draws the set in its colours over
+                        every block bound to it follows. An <strong>App tool</strong> shows one member of a set with one of
+                        the app&rsquo;s own tools (player card, shot chart, quality map, shot mix, game log, Rating Tracker,
+                        RAPM, projection; a team&rsquo;s rotation or assist network). A <strong>Chart</strong> draws the set in its colours over
                         the whole league in grey (same seasons, same games floor), with each value’s n in its
                         tooltip and the chart’s n written under it. Drag a block by its handle to move it and by its corner to resize
                         it, or focus the handle and use the arrow keys (Shift resizes). Every number is fetched live from
@@ -451,7 +480,9 @@ export default function Workbench() {
                         <p>
                             Start with a <strong>Set</strong> of players or teams, then add a <strong>Table</strong> and pick
                             its stats, or a <strong>Chart</strong> (scatter, line, bars, histogram, distribution or heatmap)
-                            with every player in grey behind your set. A <strong>Note</strong> holds your own text.
+                            with every player in grey behind your set. An <strong>App tool</strong> puts one of the app&rsquo;s
+                            own tools (shot chart, game log, RAPM, a team&rsquo;s rotation…) on the board for a member of a set.
+                            A <strong>Note</strong> holds your own text.
                         </p>
                         {addButtons}
                     </div>
