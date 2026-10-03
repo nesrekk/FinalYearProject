@@ -456,6 +456,13 @@ COVERAGE_MAP = [
         "used_by": ["rotations"],
     },
     {
+        "table": "player_game_onfloor", "label": "On-floor plus-minus per player-game", "group": "Games",
+        "range_sql": "SELECT MIN(season), MAX(season) FROM player_game_onfloor", "range_fmt": "season_int",
+        "source": "scripts/build_player_game_onfloor.py: the lineup_stints lineups and points per player-game, with free throws credited to the players on the floor at the foul (the box score's convention). Matches ESPN's box-score +/- for 98% of player-games and within 2 points for 99.7% (300 random games, checked 2026-10-03).",
+        "gap": "Regular season 2020-21 on. The Workbench shows it only in the 7,220 of 7,232 games whose play-by-play reconciles with the final score. Replaces player_game_lines' on-court points (tm_pts/op_pts), which credit stale ESPN score fields and don't add up in about 1 team-game in 4.",
+        "used_by": [],
+    },
+    {
         "table": "possessions", "label": "Possessions from play-by-play", "group": "Teams",
         "range_sql": "SELECT MIN(season), MAX(season) FROM possessions", "range_fmt": "season_int",
         "source": "ESPN play-by-play cut into possessions by scripts/build_possessions.py (rules in scripts/pbp_possessions.py, on the same parser as lineup_stints); times on a clock rebuilt from the NBA shot chart, because ESPN logs made shots a median 14 s late; per-game checks in possession_games, team-season totals by start type in possession_seasons.",

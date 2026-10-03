@@ -270,7 +270,8 @@ def test_catalogue_endpoint(client):
             assert c["label"] and c["combines"] and c["format"] in WC.FORMATS
             assert (c["status"] == "excluded") == bool(c["reason"])
     excluded = {(ds["key"], c["key"]) for ds in d["datasets"] for c in ds["columns"] if c["status"] == "excluded"}
-    assert ("player_game", "plus_minus") in excluded and ("player_season", "age") in excluded
+    # Round 7 step 2 rebuilt per-game on-floor +/- from the stints; only the two-convention age stays out.
+    assert excluded == {("player_season", "age")}
 
 
 @pytest.mark.parametrize("spec, status, words", [
@@ -298,7 +299,6 @@ def test_catalogue_endpoint(client):
      400, "isn't a date"),
     (dict(dataset="team_season", columns=["w"], filters=[{"key": "league", "op": "eq", "value": "ABA"}]),
      400, "must be among"),
-    (dict(dataset="player_game", columns=["plus_minus"]), 400, "isn't offered"),
     (dict(dataset="player_season", columns=["age"]), 400, "two conventions"),
     (dict(dataset="player_season", columns=["impact_score_raw"], group_by="entity"), 400, "can't be combined"),
     (dict(dataset="team_season", columns=["w"], per="per36"), 400, "isn't available"),
@@ -386,6 +386,29 @@ def test_known_game_line_matches_game_finder(client):
             assert w[k] == pytest.approx(g[k], abs=0.05 if k == "min" else 5e-5), k
     assert w["pts"] == 83 and w["fta"] == 43
     assert w["fg_pct"] == pytest.approx(20 / 44, abs=5e-5)
+
+
+def test_on_floor_plus_minus(client, cur):
+    """Per-game on-floor +/- comes from player_game_onfloor (round 7 step 2): Adebayo's 83 was +20 (ESPN's
+    box score, test_known_facts), a span sums the games, and the 12 games that don't reconcile are left out."""
+    d = _q(client, dataset="player_game", columns=["plus_minus", "onfloor_pts_for", "onfloor_pts_against"],
+           entities=[1628389], filters=[{"key": "date", "op": "eq", "value": "2026-03-10"}])
+    (w,) = d["rows"]
+    assert (w["plus_minus"], w["onfloor_pts_for"] - w["onfloor_pts_against"]) == (20, 20)
+    pid = 203999
+    cur.execute("""SELECT SUM(plus_minus), SUM(pts_for), COUNT(*) FILTER (WHERE NOT game_ok) FROM player_game_onfloor
+                   WHERE player_id = %s AND season = 2024 AND game_ok AND seconds > 0""", (pid,))
+    total, pts_for, _ = cur.fetchone()
+    (w,) = _q(client, dataset="player_game", columns=["plus_minus", "onfloor_pts_for"], entities=[pid],
+              group_by="entity", season_from=2024, season_to=2024, per="total")["rows"]
+    assert (w["plus_minus"], w["onfloor_pts_for"]) == (total, pts_for)
+    cur.execute(f"""SELECT l.player_id, l.game_date {WC.PLAYER_GAME_FROM}
+                    JOIN player_game_onfloor o ON o.player_id = l.player_id AND o.game_id = l.game_id
+                    WHERE NOT o.game_ok AND l.seconds > 0 LIMIT 1""")
+    bad_pid, bad_date = cur.fetchone()
+    (w,) = _q(client, dataset="player_game", columns=["plus_minus", "pts"], entities=[bad_pid],
+              filters=[{"key": "date", "op": "eq", "value": str(bad_date)}])["rows"]
+    assert w["plus_minus"] is None and w["pts"] is not None and w["n"]["plus_minus"] in (0, None)
 
 
 def test_rate_over_a_span_is_summed_makes_over_summed_attempts(client, cur):

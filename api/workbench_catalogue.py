@@ -297,9 +297,22 @@ TEAM_MARGIN_SQL = "(gs.pts_for - gs.pts_against)"
 ON_COURT_POSS = ("((l.tm_fga + 0.44 * l.tm_fta - l.tm_oreb + l.tm_tov) + "
                  "(l.op_fga + 0.44 * l.op_fta - l.op_oreb + l.op_tov)) / 2.0")
 PG_SOURCES = ("player_game_lines",)
-ON_COURT_REASON = ("Per-game on-court points from the play-by-play rebuild don't reconcile with the final score "
-                   "in about 1 team-game in 4 (some stretches credit the wrong number of points; README Known "
-                   "real gaps). Not offered until it's rebuilt from five-man stints.")
+# On-floor points and plus-minus (round 7 step 2): from player_game_onfloor (scripts/
+# build_player_game_onfloor.py), the stints' lineups and points with free throws credited to the
+# lineup at the foul, as the box score does. Not player_game_lines' tm_pts / op_pts, which credit stale
+# ESPN score fields (a team's five don't add up to 5x the margin in 1 team-game in 4). Shown only
+# in games that reconcile (game_ok: 7,220 of 7,232).
+ONFLOOR_SOURCES = ("player_game_onfloor", "lineup_stints")
+ONFLOOR_NOTE = ("From the five-man stints (points from made shots and free throws, free throws credited to "
+                "the players on the floor at the foul, as the box score does): equals ESPN's box-score +/- for "
+                "98% of player-games, within 2 for 99.7% (300 random games, 2026-10-03). Left out of the 12 "
+                "games whose play-by-play doesn't reconcile with the final score.")
+
+
+def _onfloor(col):
+    return f"(CASE WHEN o.game_ok THEN o.{col} END)"
+
+
 GAME_FIRST = 2021
 
 
@@ -361,14 +374,15 @@ PLAYER_GAME_COLUMNS = _cols(
            "date_part('year', age(make_date(l.season, 2, 1), b.birth_date))", GAME_FIRST, None, weight="1",
            weight_label="games", n_unit="games", sources=("player_bio",),
            note="Age on February 1 of the season, from player_bio's birth date."),
-    Column("plus_minus", "On-court plus-minus", "+/-", "On the floor", "signed1", "count", "(l.tm_pts - l.op_pts)",
-           GAME_FIRST, total="(l.tm_pts - l.op_pts)", n_unit="games", sources=PG_SOURCES,
-           status="excluded", reason=ON_COURT_REASON),
-    Column("onfloor_pts_for", "Team points while on the floor", "PTS on", "On the floor", "int", "count", "l.tm_pts",
-           GAME_FIRST, total="l.tm_pts", n_unit="games", sources=PG_SOURCES, status="excluded", reason=ON_COURT_REASON),
+    Column("plus_minus", "On-court plus-minus", "+/-", "On the floor", "signed1", "count", _onfloor("plus_minus"),
+           GAME_FIRST, total=_onfloor("plus_minus"), n_unit="games", sources=ONFLOOR_SOURCES, agg_fmt="signed1",
+           note="The team's points minus the opponent's while he was on the floor. " + ONFLOOR_NOTE),
+    Column("onfloor_pts_for", "Team points while on the floor", "PTS on", "On the floor", "int", "count",
+           _onfloor("pts_for"), GAME_FIRST, total=_onfloor("pts_for"), n_unit="games", sources=ONFLOOR_SOURCES,
+           note=ONFLOOR_NOTE),
     Column("onfloor_pts_against", "Opponent points while on the floor", "OPP on", "On the floor", "int", "count",
-           "l.op_pts", GAME_FIRST, False, total="l.op_pts", n_unit="games", sources=PG_SOURCES, status="excluded",
-           reason=ON_COURT_REASON),
+           _onfloor("pts_against"), GAME_FIRST, False, total=_onfloor("pts_against"), n_unit="games",
+           sources=ONFLOOR_SOURCES, note=ONFLOOR_NOTE),
 )
 
 # The Game Finder's own wording, kept so its page's responses don't change.
@@ -381,11 +395,13 @@ PLAYER_GAME = Dataset(
     key="player_game", label="Player games", entity="player",
     description=("One row per player-game he played, regular season 2020-21 on, rebuilt from ESPN play-by-play "
                  "(the Game Log's rows)."),
-    from_sql=PLAYER_GAME_FROM + "    LEFT JOIN player_bio b ON b.player_id = l.player_id\n",
+    from_sql=(PLAYER_GAME_FROM + "    LEFT JOIN player_bio b ON b.player_id = l.player_id\n"
+              "    LEFT JOIN player_game_onfloor o ON o.player_id = l.player_id AND o.game_id = l.game_id\n"),
     where=PLAYER_GAME_WHERE,
     season_sql="l.season", entity_sql="l.player_id", games_sql="1", minutes_sql="(l.seconds / 60.0)",
     poss_sql=ON_COURT_POSS, per_modes=("game", "total", "per36", "per100"), row_label="games",
-    tables=("player_game_lines", "team_game_fatigue", "game_scores", "player_bio", "player_season_stats"),
+    tables=("player_game_lines", "team_game_fatigue", "game_scores", "player_bio", "player_season_stats",
+            "player_game_onfloor"),
     upstream="ESPN play-by-play (lines rebuilt from it) and scoreboard, nba_api (stats.nba.com) schedule",
     row_fields=(("player_id", "l.player_id"), ("season", "l.season"), ("date", "l.game_date"),
                 ("game_id", "f.game_id"), ("team", "l.team_abbreviation"), ("opponent", "f.opponent"),

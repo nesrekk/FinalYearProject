@@ -281,6 +281,50 @@ def test_srs_matches_basketball_reference(cur):
     assert worst <= 0.3
 
 
+# Every player's +/- in the same five 70+ point games, from ESPN's box score
+# (the "+/-" column; read 2026-10-03 from the box score data behind the pages
+# above, https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=<id>,
+# whose numbers the www.espn.com/nba/boxscore/_/gameId/<id> pages show).
+# player_id -> ESPN +/-.
+BOX_PLUS_MINUS = {
+    "espn_401810793": {1628389: 20, 1642857: 10, 1631170: 15, 1642066: 15, 1641796: 13, 1630558: 16, 1630696: 7,
+                       1631323: 6, 1642352: 7, 1631211: -2, 1642884: -2, 1642860: -10, 1642267: -20, 1641731: -19,
+                       1630264: -5, 1642848: -14, 1630702: -8, 1642259: -9, 1630551: -7, 1630536: -2, 1641774: -11},
+    "espn_401585262": {1630180: -14, 1627749: -21, 1630552: 6, 1629027: 9, 203992: 3, 203991: -7, 1630168: 2,
+                       1629726: 5, 201988: -8, 1629029: 13, 1630182: 9, 203501: -5, 1629684: 5, 1641726: 16, 203957: 2,
+                       1627884: -2, 1626158: -3, 1630702: -10},
+    "espn_401585236": {1630178: 12, 203954: 11, 202699: 21, 201587: 3, 1626162: -5, 1627863: 2, 1630231: 9,
+                       1630194: -6, 1627788: 13, 1641741: -5, 1630170: -17, 1630200: -13, 1631110: -6, 1641705: 0,
+                       203926: -7, 1629640: 4, 1628380: -10, 1631104: 3, 1630577: 0, 1626224: -4},
+    "espn_401469072": {1631095: -27, 1630231: -7, 1631102: -4, 1630227: -9, 1631106: -11, 1630578: -14, 1630256: -7,
+                       1630528: -10, 1630586: 5, 1626246: -1, 203081: 21, 1629680: 29, 203924: 14, 1629629: 30,
+                       1630570: 9, 1629234: 14, 1629642: -7, 1631101: -14, 1631133: -7, 1630553: -4, 1628995: 0},
+    "espn_401468707": {201942: -9, 202696: -19, 203897: -12, 1630245: -9, 1630172: -2, 1627936: -1, 1627884: -6,
+                       1629632: -4, 201609: 2, 203083: 5, 1628378: 19, 1627747: 7, 1628386: 11, 201567: 6, 1626224: 15,
+                       1630171: 3, 1630205: -6, 203526: 3, 201577: -3},
+}
+# Mitchell's game (overtime): four Bulls are one point off, one free throw the
+# play-by-play places in a different lineup than the official box (pinned).
+BOX_PLUS_MINUS_OFF_BY_ONE = {"espn_401468707": {1630172, 1627936, 1627884, 1629632}}
+
+
+@pytest.mark.parametrize("game_id", list(BOX_PLUS_MINUS))
+def test_on_floor_plus_minus_matches_box_score(cur, game_id):
+    """player_game_onfloor (free throws credited to the lineup at the foul) gives
+    every player's box-score +/-; player_game_lines' tm_pts - op_pts gets 3 to 8
+    of the ~20 right in these games (2026-10-03)."""
+    need(cur, "player_game_onfloor")
+    ours = dict(rows(cur, "SELECT player_id, plus_minus FROM player_game_onfloor WHERE game_id = %s", (game_id,)))
+    box = BOX_PLUS_MINUS[game_id]
+    assert set(ours) == set(box)
+    pinned = BOX_PLUS_MINUS_OFF_BY_ONE.get(game_id, set())
+    for pid, pm in box.items():
+        if pid in pinned:
+            assert abs(ours[pid] - pm) == 1, pid
+        else:
+            assert ours[pid] == pm, pid
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # B. INTERNAL INVARIANTS
 # ═════════════════════════════════════════════════════════════════════════════
@@ -357,6 +401,43 @@ def test_lineup_stint_rows_add_up_to_game_length(cur):
         """SELECT COUNT(*) FROM lineup_stint_games g
            JOIN (SELECT game_id, SUM(seconds) s FROM lineup_stints GROUP BY 1) x USING (game_id)
            WHERE g.game_ok AND ABS(x.s - g.game_length) > 0.5""",
+    )
+    assert bad == 0
+
+
+def test_on_floor_plus_minus_adds_up_to_five_times_the_margin(cur):
+    """player_game_onfloor: in a game_ok game, a side with five on the floor all
+    game sums to 5 x the real final margin (all 12,874 such team-games on
+    2026-10-03); the rest (a stretch with four or six listed) mostly don't."""
+    need(cur, "player_game_onfloor", "lineup_stint_games", "lineup_stints")
+    n, bad = one(
+        cur,
+        """WITH five AS (
+               SELECT game_id, home_team AS team, bool_and(n_home = 5) ok FROM lineup_stints GROUP BY 1, 2
+               UNION ALL
+               SELECT game_id, away_team, bool_and(n_away = 5) FROM lineup_stints GROUP BY 1, 2),
+           pm AS (SELECT game_id, team, SUM(plus_minus) s FROM player_game_onfloor GROUP BY 1, 2)
+           SELECT COUNT(*), SUM((pm.s <> 5 * CASE WHEN pm.team = g.home_team THEN g.final_home - g.final_away
+                                                  ELSE g.final_away - g.final_home END)::int)
+           FROM pm JOIN five USING (game_id, team) JOIN lineup_stint_games g USING (game_id)
+           WHERE g.game_ok AND five.ok""",
+    )
+    assert n >= 12800
+    assert bad == 0
+
+
+def test_on_floor_seconds_equal_the_stints(cur):
+    """Same lineups as lineup_stints: a player's on-floor seconds equal his
+    stints' (to their 0.1 s rounding)."""
+    need(cur, "player_game_onfloor", "lineup_stints")
+    (bad,) = one(
+        cur,
+        """WITH sides AS (
+               SELECT game_id, u.pid, seconds FROM lineup_stints, unnest(home_ids) u(pid)
+               UNION ALL SELECT game_id, u.pid, seconds FROM lineup_stints, unnest(away_ids) u(pid)),
+           s AS (SELECT game_id, pid AS player_id, SUM(seconds) sec, COUNT(*) n FROM sides GROUP BY 1, 2)
+           SELECT COUNT(*) FROM player_game_onfloor o JOIN s USING (game_id, player_id)
+           WHERE ABS(o.seconds - s.sec) > 0.05 * s.n + 0.1""",
     )
     assert bad == 0
 

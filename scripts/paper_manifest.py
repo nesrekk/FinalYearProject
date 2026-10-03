@@ -179,6 +179,7 @@ PRODUCERS = {
     "build_player_on_off.py": ("derived", ["team_game_totals", "player_on_off", "player_on_off_seasons"]),
     "build_lineup_stints.py": ("derived", ["lineup_stints", "lineup_stint_games", "lineup_stint_seasons",
                                            "lineup_seasons", "pair_seasons"]),
+    "build_player_game_onfloor.py": ("derived", ["player_game_onfloor", "player_game_onfloor_meta"]),
     "build_possessions.py": ("derived", ["possessions", "possession_games", "possession_seasons", "possession_meta"]),
     "build_coaching_decisions.py": ("derived", ["coaching_decisions", "coaching_decision_tests", "coaching_decision_summary",
                                                 "coaching_decision_meta"]),
