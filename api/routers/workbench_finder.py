@@ -160,7 +160,8 @@ def _stat_phrase(col, per, op, value, grouped):
         return f"averaged {_op_text(op, value, col.fmt)} {label} {unit}"
     if col.kind == "sum":
         return f"had {_op_text(op, value, col.fmt)} {label}"
-    return f"had a {label} of {_op_text(op, value, col.fmt)}"
+    article = "an" if label[:1].lower() in "aeio" else "a"
+    return f"had {article} {label} of {_op_text(op, value, col.fmt)}"
 
 
 def _row_phrase(col, test, game_rows):
@@ -207,8 +208,9 @@ def compile_finder(spec: FinderSpec):
         else:
             col = _column(ds, c.key, "Filter")
             where.append(_num_condition(_gate(ds, col, col.sql), c.op, c.value, f"Filter on {c.key}", wparams))
-            filter_words.append(f"{'games' if game_rows else 'seasons'} with {col.label.lower()} "
-                                f"{_op_text(c.op, c.value, col.fmt)}")
+            a_game = " a game" if col.kind == "count" and not game_rows else ""
+            filter_words.append(f"{'games' if game_rows else 'seasons'} with {_op_text(c.op, c.value, col.fmt)} "
+                                f"{col.label.lower()}{a_game}")
     where_sql = " AND ".join(where)
 
     unit = [f"{ds.entity_sql}"] + ([ds.season_sql] if spec.scope == "season" else [])
@@ -216,12 +218,13 @@ def compile_finder(spec: FinderSpec):
     unit_sel = ", ".join(f"{u} AS {n}" for u, n in zip(unit, unit_names))
     join_on = " AND ".join(f"a.{n} = b{{i}}.{n}" for n in unit_names)
     order = ", ".join(ORDER[ds.key])
+    latest = ", ".join(f"{o} DESC" for o in ORDER[ds.key])     # every key descending: the last row first
 
     # agg: one row per unit, every value and count condition.
     agg_sel = [unit_sel, "COUNT(*) AS n_rows", f"SUM({ds.games_sql}) AS n_games",
-               f"(array_agg({TEAM[ds.key]} ORDER BY {order} DESC))[1] AS team"]
+               f"(array_agg({TEAM[ds.key]} ORDER BY {latest}))[1] AS team"]
     if not ds.names_from_ids:
-        agg_sel.append(f"(array_agg(s.player_name ORDER BY {order} DESC))[1] AS player_name")
+        agg_sel.append(f"(array_agg(s.player_name ORDER BY {latest}))[1] AS player_name")
     agg_params = []
     streaks = []            # (index, hit SQL, params)
     conds, cmeta, words = [], [], []

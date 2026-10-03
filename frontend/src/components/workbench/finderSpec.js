@@ -143,6 +143,34 @@ export function buildFinderSpec(s, ds, set) {
     return { spec, problems };
 }
 
+// A finder spec (POST /workbench/parse's answer) → the block's settings, so
+// the boxes show exactly that spec: buildFinderSpec(specToSettings(spec))
+// gives it back. The set and the rows shown stay as they were (the typed
+// sentence doesn't choose them).
+export function specToSettings(spec, prev) {
+    const ends = (x) => (Array.isArray(x.value) ? { value: x.value[0], value2: x.value[1] } : { value: x.value, value2: null });
+    const conditions = spec.conditions.map((c) => (c.type === 'value'
+        ? { type: 'value', stat: c.stat, op: c.op, ...ends(c), per: c.per || 'game', minN: c.min_n ?? null }
+        : { type: c.type, tests: c.tests.map((t) => ({ stat: t.stat, op: t.op, ...ends(t) })), countOp: c.count_op || 'gte', count: c.count }));
+    const filter = (key) => (spec.filters || []).find((f) => f.key === key);
+    const home = filter('home');
+    const result = filter('result');
+    return {
+        ...prev,
+        dataset: spec.dataset,
+        scope: spec.scope,
+        seasonFrom: spec.season_from ?? null,
+        seasonTo: spec.season_to ?? null,
+        minGames: spec.min_games ?? null,
+        where: home ? (home.value ? 'home' : 'away') : 'all',
+        result: result ? (result.value ? 'W' : 'L') : 'all',
+        opponent: filter('opponent')?.value ?? null,
+        minMinutes: filter('min')?.value ?? null,
+        conditions,
+        sort: null,
+    };
+}
+
 // The stats a finder's conditions use, for a table made from its result.
 export function finderStats(s) {
     const keys = [];

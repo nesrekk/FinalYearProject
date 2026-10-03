@@ -1496,6 +1496,23 @@ export const runWorkbenchAging = (req) => cachedWorkbenchPost('aging', req);
 // Player Finder (step 6): players meeting sentence-like conditions on any stat.
 export const runWorkbenchFinder = (spec) => cachedWorkbenchPost('finder', spec);
 
+// Step 9: a typed sentence → the finder's boxes (Google's Gemini, called by
+// the server; the key never reaches the browser). Nothing runs until the
+// user presses Find players. Not queued or cached here: the server keeps
+// today's answers and spaces calls out for the free tier.
+let _workbenchParseStatus = null;
+export function fetchWorkbenchParseStatus() {
+    if (!_workbenchParseStatus) {
+        _workbenchParseStatus = axios.get(`${IMPACT_BASE}/workbench/parse/status`).then((r) => r.data);
+        _workbenchParseStatus.catch(() => { _workbenchParseStatus = null; });
+    }
+    return _workbenchParseStatus;
+}
+export async function parseWorkbenchSentence(text) {
+    const response = await axios.post(`${IMPACT_BASE}/workbench/parse`, { text });
+    return response.data;
+}
+
 // Players by name ({ id, name, from, to, team }), or every franchise.
 export async function searchWorkbenchPlayers(q) {
     const response = await axios.get(`${IMPACT_BASE}/workbench/entities`, { params: { kind: 'player', q } });
@@ -1515,6 +1532,7 @@ export function fetchWorkbenchTeams() {
 export function workbenchError(e) {
     const detail = e?.response?.data?.detail;
     if (typeof detail === 'string') return detail;
+    if (typeof detail?.message === 'string') return detail.message;
     if (Array.isArray(detail) && detail[0]?.msg) return `The query was refused: ${detail[0].msg}.`;
     return e?.response ? 'The query failed on the server.' : 'The Workbench API (port 8002) isn’t reachable. Is impact_api running?';
 }

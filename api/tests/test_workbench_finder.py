@@ -249,6 +249,21 @@ def test_reliability_and_n_are_reported(client):
     assert d["conditions"][0]["column"]["n_unit"] == "3-point attempts"
 
 
+def test_team_is_the_latest_rows(client, cur):
+    # A traded player's team is the one of his last row in range (found in
+    # step 9: game logs showed the first, since DESC sorted only the game id).
+    d = _find(client, dataset="player_game", scope="span", season_from=2025, season_to=2026, limit=5000,
+              conditions=[{"type": "count", "tests": _tests(("pts", "gte", 40)), "count": 1}])
+    cur.execute("""SELECT DISTINCT ON (player_id) player_id, team_abbreviation FROM player_game_lines
+                   WHERE game_date BETWEEN '2024-10-01' AND '2026-07-01' AND player_id = ANY(%s)
+                   ORDER BY player_id, game_date DESC, game_id DESC""", ([r["player_id"] for r in d["rows"]],))
+    latest = dict(cur.fetchall())
+    assert {r["player_id"]: r["team"] for r in d["rows"]} == latest
+    assert latest[1629029] == "LAL"   # Dončić, traded from DAL in February 2025
+    seasons = _find(client, scope="span", season_from=2024, season_to=2026, conditions=[_value("pts", "gte", 25)])
+    assert next(r["team"] for r in seasons["rows"] if r["player_id"] == 1629029) == "LAL"
+
+
 def test_sorting_and_paging(client):
     spec = dict(dataset="player_season", season_from=2020, season_to=2026, min_games=40,
                 conditions=[_value("pts", "gte", 25), _value("tov", "lte", 4)])

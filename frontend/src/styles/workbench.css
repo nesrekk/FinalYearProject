@@ -659,9 +659,29 @@
   border-top: 1px solid var(--hairline);
 }
 .wb-fd-use .wb-input { width: 12em; }
+/* Step 9: type it in English, above the boxes it fills */
+.wb-fd-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--hairline);
+  font-size: 14px;
+}
+.wb-fd-ask-row { display: flex; align-items: center; gap: 6px; flex: 1 1 28em; min-width: 0; }
+.wb-fd-ask-row .wb-input { flex: 1 1 auto; min-width: 0; width: 100%; }
+.wb-fd-ask-row .wb-fd-lead { white-space: nowrap; }
+.wb-fd-ask-about { flex: 1 1 100%; margin: 0; line-height: 1.5; }
+.wb-fd-ask-out { flex: 1 1 100%; display: flex; flex-direction: column; gap: 4px; }
+.wb-fd-ask-out:empty { display: none; }
+.wb-fd-ask-out p { margin: 0; }
+.wb-fd-ask-notes { font-size: 13px; color: var(--text-2); }
+.wb-fd-ask-notes ul { margin: 2px 0 0; padding-left: 1.2em; }
 @media (max-width: 760px) {
   .wb-fd-stat { max-width: 100%; }
   .wb-fd-use .wb-input { flex: 1 1 100%; width: auto; }
+  .wb-fd-ask-row { flex-basis: 100%; }
 }
 
 /* ── Step 8: starter boards, phone menus, big boards ─────────────────── */

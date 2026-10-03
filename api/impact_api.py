@@ -54,6 +54,7 @@ from routers import (
     data_quality,
     workbench,
     workbench_finder,
+    workbench_parse,
     lineup_chemistry,
     luck_schedule,
     matchup_finder,
@@ -154,6 +155,7 @@ for _router_module in (
     data_quality,
     workbench,
     workbench_finder,
+    workbench_parse,
 ):
     app.include_router(_router_module.router)
 

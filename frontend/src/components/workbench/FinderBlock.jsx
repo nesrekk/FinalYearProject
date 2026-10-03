@@ -4,16 +4,114 @@ import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import TeamLink from '../common/TeamLink';
-import { fetchWorkbenchTeams, runWorkbenchFinder, workbenchError, workbenchRetryable } from '../../services/api';
+import {
+    fetchWorkbenchParseStatus, fetchWorkbenchTeams, parseWorkbenchSentence, runWorkbenchFinder, workbenchError, workbenchRetryable,
+} from '../../services/api';
 import { BlockError, Loading } from './BlockStatus';
 import { LIMITS } from '../../utils/workbenchStore';
 import { useAutosave } from '../../utils/useAutosave';
+import { isPlainClick, openPage, pageHref } from '../../utils/useUrlState';
 import { COLOR_NAMES, formatValue, seasonLabel, seriesVar } from './workbenchShared';
 import {
     COUNT_OPS, FINDER_DATASETS, MAX_CONDITIONS, MAX_TESTS, PER_WORDS, VALUE_OPS, buildFinderSpec, conditionTitle,
-    defaultMinN, hasSampleFloor, rowWord, shown, stored,
+    defaultMinN, hasSampleFloor, rowWord, shown, specToSettings, stored,
 } from './finderSpec';
 import { LIMIT_CHOICES } from './tableSpec';
+
+// ── Type it in English (step 9): a sentence → the boxes below ──────────
+
+const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
+
+function Measured({ ev }) {
+    if (!ev) return <span>Its accuracy hasn’t been measured yet.</span>;
+    const best = Math.max(...ev.all_right_by_run);
+    const worst = Math.min(...ev.all_right_by_run);
+    const runs = ev.runs > 1 ? `; ${ev.runs} runs: ${ev.all_right_by_run.join(', ')}` : '';
+    return (
+        <span>
+            Measured on {ev.n} test sentences written before the prompt: every box right in{' '}
+            {worst === best ? best : `${worst}-${best}`} of {ev.n} ({pct(worst, ev.n)}{worst === best ? '' : `-${pct(best, ev.n)}`}%{runs}){ev.current ? '' : ', with an earlier version of the prompt'}.{' '}
+            <a href={pageHref('methodology', { card: 'finderparse' })} onClick={(e) => { if (!isPlainClick(e)) return; e.preventDefault(); openPage('methodology', { card: 'finderparse' }); }}>
+                How it was measured
+            </a>
+        </span>
+    );
+}
+
+function NoteList({ title, items }) {
+    if (!items?.length) return null;
+    return (
+        <div className="wb-fd-ask-notes">
+            <span>{title}</span>
+            <ul>{items.map((x) => <li key={x}>{x}</li>)}</ul>
+        </div>
+    );
+}
+
+function AskBox({ onFill }) {
+    const [status, setStatus] = useState(null);
+    const [text, setText] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [heard, setHeard] = useState(null);
+    const [failed, setFailed] = useState(null);
+    useEffect(() => {
+        let alive = true;
+        fetchWorkbenchParseStatus().then((s) => alive && setStatus(s), () => {});
+        return () => { alive = false; };
+    }, []);
+    if (!status) return null;
+    const off = !status.available;
+    const submit = (e) => {
+        e.preventDefault();
+        if (off || busy || !text.trim()) return;
+        setBusy(true);
+        setHeard(null);
+        setFailed(null);
+        parseWorkbenchSentence(text.trim()).then(
+            (d) => { setBusy(false); setHeard(d); onFill(d.spec); },
+            (err) => {
+                const detail = err?.response?.data?.detail;
+                setBusy(false);
+                setFailed({ message: workbenchError(err), notUnderstood: detail?.not_understood, dropped: detail?.dropped });
+            },
+        );
+    };
+    return (
+        <form className="wb-fd-ask" onSubmit={submit} aria-label="Type the search in English">
+            <label className="wb-fd-ask-row">
+                <span className="wb-fd-lead">Type it</span>
+                <input className="wb-input" type="text" value={text} maxLength={status.max_text} disabled={off}
+                    placeholder="e.g. players who averaged 25 points on 60% true shooting in a season since 2023"
+                    onChange={(e) => setText(e.target.value)} />
+            </label>
+            <button type="submit" className="table-export-btn" disabled={off || busy || !text.trim()}>
+                <Icon name="edit_note" size={15} /> {busy ? 'Reading it…' : 'Fill the boxes'}
+            </button>
+            <p className="wb-meta wb-fd-ask-about">
+                {off
+                    ? 'Typing a sentence isn’t set up on this server: it needs a free Gemini key (GEMINI_API_KEY in api/.env). The boxes below do everything it would.'
+                    : <>An AI turns it into the boxes below; it never searches the data. {status.sends} <Measured ev={status.evaluation} /></>}
+            </p>
+            <div role="status" className="wb-fd-ask-out">
+                {heard && (
+                    <>
+                        <p className="wb-fd-ran"><strong>Understood as:</strong> {heard.sentence}</p>
+                        <p className="wb-meta">The boxes below now say this. Check them, change any that are wrong, then press Find players.</p>
+                        <NoteList title="Not understood, so left out:" items={heard.not_understood} />
+                        <NoteList title="Left out by the finder’s checks:" items={heard.dropped} />
+                    </>
+                )}
+            </div>
+            {failed && (
+                <div role="alert" className="wb-fd-ask-out">
+                    <p className="wb-hint">{failed.message} Nothing in the boxes was changed.</p>
+                    <NoteList title="Not understood:" items={failed.notUnderstood} />
+                    <NoteList title="Left out by the finder’s checks:" items={failed.dropped} />
+                </div>
+            )}
+        </form>
+    );
+}
 
 // ── The sentence's boxes ───────────────────────────────────────────────
 
@@ -429,6 +527,7 @@ export default function FinderBlock({ block, board, catalogue, editing, onSettin
                     </label>
                 </div>
             )}
+            <AskBox onFill={(spec) => setDraft((d) => specToSettings(spec, d))} />
             <Sentence draft={draft} ds={draftDs} catalogue={catalogue} sets={board.sets} teams={teams} onDraft={setDraft} />
             <div className="wb-row wb-fd-run">
                 <button type="button" className="table-export-btn wb-fd-go" disabled={!draftCheck.spec || !dirty} onClick={() => onSettings(draft)}>
