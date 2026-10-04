@@ -17,6 +17,7 @@ import {
     defaultMinN, hasSampleFloor, rowWord, shown, specToSettings, stored,
 } from './finderSpec';
 import { LIMIT_CHOICES } from './tableSpec';
+import { studyEvent } from '../../utils/studyLog';
 
 // ── Type it in English (step 9): a sentence → the boxes below ──────────
 
@@ -68,9 +69,10 @@ function AskBox({ onFill }) {
         setHeard(null);
         setFailed(null);
         parseWorkbenchSentence(text.trim()).then(
-            (d) => { setBusy(false); setHeard(d); onFill(d.spec); },
+            (d) => { setBusy(false); setHeard(d); onFill(d.spec); studyEvent('parse', { ok: true, text: text.trim() }); },
             (err) => {
                 const detail = err?.response?.data?.detail;
+                studyEvent('parse', { ok: false, text: text.trim(), message: workbenchError(err) });
                 setBusy(false);
                 setFailed({ message: workbenchError(err), notUnderstood: detail?.not_understood, dropped: detail?.dropped });
             },
@@ -530,7 +532,7 @@ export default function FinderBlock({ block, board, catalogue, editing, onSettin
             <AskBox onFill={(spec) => setDraft((d) => specToSettings(spec, d))} />
             <Sentence draft={draft} ds={draftDs} catalogue={catalogue} sets={board.sets} teams={teams} onDraft={setDraft} />
             <div className="wb-row wb-fd-run">
-                <button type="button" className="table-export-btn wb-fd-go" disabled={!draftCheck.spec || !dirty} onClick={() => onSettings(draft)}>
+                <button type="button" className="table-export-btn wb-fd-go" disabled={!draftCheck.spec || !dirty} onClick={() => { studyEvent('find', { conditions: draft.conditions.length }); onSettings(draft); }}>
                     <Icon name="person_search" size={15} /> Find players
                 </button>
                 {dirty && <button type="button" className="wb-link" onClick={() => setDraft(settings)}>Undo changes</button>}

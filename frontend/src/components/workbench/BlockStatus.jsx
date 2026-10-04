@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Icon from '../common/Icon';
+import { studyEvent } from '../../utils/studyLog';
 
 // A block's loading and error lines, the same in every block. A failed
 // request is never kept in the query cache (services/api.js), so "Try again"
@@ -15,6 +16,8 @@ export function Loading({ what = '' }) {
 }
 
 export function BlockError({ message, onRetry }) {
+    // Counted during a usability session (utils/studyLog.js; a no-op otherwise).
+    useEffect(() => { studyEvent('block_error', { message: String(message || '') }); }, [message]);
     return (
         <div className="wb-error wb-error-box" role="alert">
             <p>{message}</p>

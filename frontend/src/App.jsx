@@ -15,6 +15,7 @@ import LandingPage from './components/pages/LandingPage';
 import Loader from './components/Loader';
 import { prefetchCoreData } from './services/api';
 import { NAVIGATE_EVENT, PAGE_PARAM, currentPageParam, pushPage } from './utils/useUrlState';
+import { STUDY_PARAM, activeStudy } from './utils/studyLog';
 import './styles/dashboard.css';
 import './styles/theme.css';
 
@@ -71,6 +72,9 @@ const DataCoverage = lazy(() => import('./components/pages/DataCoverage'));
 const ModelReportCard = lazy(() => import('./components/pages/ModelReportCard'));
 const DataQuality = lazy(() => import('./components/pages/DataQuality'));
 const Workbench = lazy(() => import('./components/pages/Workbench'));
+// The usability study's moderator panel (?study=1; docs/USABILITY_STUDY.md).
+const StudyPanel = lazy(() => import('./components/common/StudyPanel'));
+const studyOn = () => !!activeStudy() || new URLSearchParams(window.location.search).has(STUDY_PARAM);
 
 // Every page the app can show, by the id used in navConfig and `?page=`.
 const PAGES = {
@@ -225,6 +229,7 @@ export default function App() {
         </AnimatePresence>
       </main>
       <Footer />
+      {studyOn() && <Suspense fallback={null}><StudyPanel activePage={activePage} /></Suspense>}
     </div>
   );
 }

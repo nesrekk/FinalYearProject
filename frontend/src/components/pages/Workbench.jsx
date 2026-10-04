@@ -19,6 +19,7 @@ import { downloadText, slugify } from '../../utils/tableExport';
 import { useAutosave } from '../../utils/useAutosave';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import { STARTERS, starterBoard } from '../../utils/starterBoards';
+import { studyEvent } from '../../utils/studyLog';
 import { placeNew } from '../../utils/workbenchLayout';
 import { TOOLS, TOOL_KEYS } from '../../utils/workbenchTools';
 import {
@@ -186,12 +187,14 @@ export default function Workbench({ onNavigate }) {
             return result;
         } catch (e) {
             setMsg({ text: e.message || 'That did not work.', bad: true });
+            studyEvent('error', { where: 'board', message: e.message || '' });
             return null;
         }
     };
     const change = (fn, okText) => board && run(() => updateBoard(board.id, fn), okText);
 
     const onNewBoard = async () => {
+        studyEvent('new_board', {});
         const created = await run(() => createBoard(`Board ${boards.length + 1}`));
         if (created) { setSel(created.id); setConfirmDelete(false); setUndo(null); }
     };
@@ -252,9 +255,11 @@ export default function Workbench({ onNavigate }) {
             return bd;
         }));
         if (added) scrollTo.current = id;
+        studyEvent('add_block', { block: type, tool, ok: !!added });
     };
 
     const removeBlock = (block) => {
+        studyEvent('remove_block', { block: block.type });
         const others = board.blocks.filter((b) => b.id !== block.id);
         const sid = block.settings.setId;
         // A set goes with the last Set block showing it, unless a table still reads it.
@@ -270,6 +275,7 @@ export default function Workbench({ onNavigate }) {
     };
 
     const onUndo = async () => {
+        studyEvent('undo', {});
         const u = undo;
         setUndo(null);
         await run(() => updateBoard(u.boardId, (bd) => {
@@ -280,6 +286,7 @@ export default function Workbench({ onNavigate }) {
     };
 
     const patchSettings = (blockId, patch) => change((bd) => {
+        studyEvent('settings', { block: bd.blocks.find((b) => b.id === blockId)?.type || '', keys: Object.keys(patch).join(',') });
         bd.blocks = bd.blocks.map((b) => (b.id === blockId ? { ...b, settings: { ...b.settings, ...patch } } : b));
         return bd;
     });
@@ -289,6 +296,7 @@ export default function Workbench({ onNavigate }) {
     });
     const updateSet = (setId, fn) => change((bd) => {
         bd.sets = bd.sets.map((s) => (s.id === setId ? fn(structuredClone(s)) : s));
+        studyEvent('set_change', { members: bd.sets.find((s) => s.id === setId)?.members.length ?? 0 });
         return bd;
     });
     const newSetFor = (blockId, kind) => change((bd) => {
@@ -299,6 +307,7 @@ export default function Workbench({ onNavigate }) {
         return bd;
     });
     const commitLayout = (next) => change((bd) => {
+        studyEvent('layout', {});
         const pos = new Map(next.map((b) => [b.id, b]));
         bd.blocks = bd.blocks.map((b) => {
             const p = pos.get(b.id);
@@ -332,6 +341,7 @@ export default function Workbench({ onNavigate }) {
                 bd.blocks.push({ id: makeId(), type: 'set', title: '', ...placeNew(bd.blocks, narrow ? 12 : si.w, si.h), settings: { setId: set.id } });
             }
             const added = addMembers(set, players);
+            studyEvent('finder_to_set', { found: players.length, added });
             const already = players.length - added;
             text = `Added ${added} player${added === 1 ? '' : 's'} to “${set.name}”${already ? ` (${already} already in it${set.members.length >= LIMITS.members ? ' or over the set’s limit' : ''})` : ''}.`;
             return bd;
@@ -362,6 +372,7 @@ export default function Workbench({ onNavigate }) {
             minGames: filtered ? null : finder.minGames, showN: false,
         });
         put('finder', BLOCK_INFO.finder.w, BLOCK_INFO.finder.h, { ...finder, setId: null });
+        studyEvent('finder_new_board', { found: players.length });
         const saved = await run(() => saveNewBoard(cleanBoard(draft).board), `New board “${draft.name}” with ${set.members.length} players.`);
         if (saved) { setSel(saved.id); setConfirmDelete(false); setUndo(null); }
     };
@@ -369,6 +380,7 @@ export default function Workbench({ onNavigate }) {
     const onShare = async () => {
         const code = await encodeShare(board);
         if (code.length > MAX_SHARE_CHARS) {
+            studyEvent('share', { ok: false, chars: code.length, tooBig: true });
             setMsg({
                 text: `This board is too big for a link (${code.length.toLocaleString()} characters even compressed; links stay under ${MAX_SHARE_CHARS.toLocaleString()} so chat apps and mail don’t cut them). Use Export file and send that instead.`,
                 bad: true,
@@ -377,12 +389,14 @@ export default function Workbench({ onNavigate }) {
         }
         const url = `${window.location.origin}${window.location.pathname}?page=workbench&${SHARE_PARAM}=${code}`;
         const ok = await copyText(url);
+        studyEvent('share', { ok, chars: url.length });
         setMsg(ok
             ? { text: `Share link copied (${url.length.toLocaleString()} characters). Whoever opens it can add a copy of this board: blocks, sets and settings travel in the link; the numbers load live. Later edits here don’t reach their copy.`, bad: false }
             : { text: 'Couldn’t copy the link. Use Export file instead.', bad: true });
     };
 
     const doExport = (all) => {
+        studyEvent('export', { all });
         const list = all ? boards : [board];
         const stamp = new Date().toISOString().slice(0, 10);
         downloadText(exportBoardsJson(list), `${all ? 'nba-hub-boards' : `nba-hub-board-${slugify(board.name)}`}-${stamp}.json`, 'application/json');
@@ -413,6 +427,7 @@ export default function Workbench({ onNavigate }) {
     };
 
     const onStarter = async (key) => {
+        studyEvent('starter', { key });
         setBusy(true);
         const draft = (() => { try { return starterBoard(key); } catch (e) { setMsg({ text: e.message, bad: true }); return null; } })();
         const saved = draft && await run(() => saveNewBoard(draft), `Opened a copy of “${draft.name}”: it’s yours to change, and the starter stays as it was.`);
@@ -427,6 +442,7 @@ export default function Workbench({ onNavigate }) {
 
     const toggleEditing = (id) => setEditing((s) => {
         const next = new Set(s);
+        studyEvent('open_settings', { block: board?.blocks.find((b) => b.id === id)?.type || '', open: !next.has(id) });
         if (next.has(id)) next.delete(id); else next.add(id);
         return next;
     });

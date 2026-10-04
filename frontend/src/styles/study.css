@@ -1,0 +1,134 @@
+/* Usability study moderator panel (components/common/StudyPanel.jsx). */
+
+.study-root {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 900;
+  max-width: calc(100vw - 32px);
+  font-family: var(--font);
+  color: var(--text);
+}
+
+.study-panel {
+  width: 380px;
+  max-width: 100%;
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 2px solid var(--brand);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.study-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.study-head strong { display: inline-flex; align-items: center; gap: 6px; }
+
+.study-body { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.study-body:last-child { border-bottom: none; }
+
+.study-task-title { margin: 0 0 4px; font-weight: 700; font-size: 13px; color: var(--brand-text); }
+.study-task { margin: 0; font-size: 16px; line-height: 1.45; }
+.study-q { margin-top: 8px; font-weight: 700; }
+.study-small { margin: 0 0 6px; font-size: 12px; color: var(--text-2); line-height: 1.4; }
+.study-success { margin-top: 6px; }
+.study-msg { margin: 0; padding: 8px 12px; font-size: 12px; color: var(--negative); }
+
+.study-row { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.study-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.study-primary { font-weight: 700; }
+
+.study-clock { font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.study-x {
+  display: inline-flex;
+  padding: 2px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.study-x:hover { border-color: var(--line); color: var(--text); }
+
+.study-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.study-input {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: 5px 8px;
+  min-width: 0;
+}
+
+.study-x:focus-visible,
+.study-link:focus-visible,
+.study-input:focus-visible,
+.study-pill:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+
+.study-field { display: flex; flex-direction: column; gap: 4px; margin: 0 0 8px; font-size: 12px; color: var(--text-2); }
+.study-check { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 13px; }
+
+.study-mod { margin-top: 10px; font-size: 13px; }
+.study-mod summary { cursor: pointer; color: var(--text-2); }
+.study-mod[open] summary { margin-bottom: 6px; }
+.study-stuck { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 8px; }
+
+.study-scale { margin: 8px 0; padding: 0; border: none; font-size: 13px; }
+.study-scale legend { margin-bottom: 4px; font-size: 12px; color: var(--text-2); }
+.study-scale > label { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; }
+.study-seq > label { margin-right: 6px; }
+.study-ends { display: flex; justify-content: space-between; margin-top: 2px; }
+
+.study-sus { margin: 0; padding-left: 18px; font-size: 13px; }
+.study-sus li { margin-bottom: 8px; }
+.study-sus li > span:first-child { display: block; margin-bottom: 2px; }
+.study-sus label { display: inline-flex; align-items: center; gap: 2px; }
+
+.study-list ul { margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.study-list li { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-top: 1px solid var(--line); }
+
+.study-foot { padding: 6px 12px; text-align: right; }
+
+.study-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface);
+  border: 2px solid var(--brand);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+}
+
+@media print { .study-root { display: none; } }

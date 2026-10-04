@@ -313,6 +313,23 @@ def test_stored_evaluation_is_of_these_sentences(P):
     assert ev["all_right_by_run"] == [r["summary"]["all_right"] for r in ev["runs_detail"]]
 
 
+def test_stored_evaluation_stays_current_after_its_day(P, router, monkeypatch):
+    # The prompt names today's date, so its hash changes every day; the page
+    # must not call the stored evaluation "an earlier version of the prompt"
+    # the morning after (found 2026-10-04, round 7 step 10's pilot).
+    import datetime
+    ev = {"evaluated": "2026-10-03", "model": P.MODEL, "prompt_version": P.prompt_version(datetime.date(2026, 10, 3))}
+    assert P.prompt_version(datetime.date(2026, 10, 3)) != P.prompt_version(datetime.date(2026, 10, 4))
+    real = P.latest_seasons
+    monkeypatch.setattr(P, "latest_seasons", lambda today=None: real(today or datetime.date(2026, 10, 4)))
+    assert router._eval_current(ev)
+    assert not router._eval_current({**ev, "prompt_version": "000000000000"})
+    assert not router._eval_current({**ev, "model": "another-model"})
+    # When "this season" means another season, it is no longer the same prompt.
+    monkeypatch.setattr(P, "latest_seasons", lambda today=None: (2027, 2027) if today is None else real(today))
+    assert not router._eval_current(ev)
+
+
 def test_key_is_in_no_file_git_would_commit(P):
     key = P.api_key()
     if not key:

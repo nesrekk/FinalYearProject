@@ -20,6 +20,7 @@
 import { useEffect, useState } from 'react';
 import { GRID_COLS, MAX_H, MIN_H, compact } from './workbenchLayout';
 import { SHOT_GAMES, TOOL_KEYS, TOOL_VIEWS } from './workbenchTools';
+import { studyBoardDb, subscribeStudy } from './studyLog';
 
 const DB_NAME = 'nba-hub-workbench';
 const STORE = 'boards';
@@ -38,10 +39,20 @@ const STORAGE_MESSAGE = 'This browser is not letting the app store boards (a pri
 
 // ── IndexedDB plumbing (same pattern as reportStore.js) ────────────────
 
+// During a usability session (utils/studyLog.js) the boards live in that
+// session's own database, so a participant starts on an empty Workbench and
+// the moderator's boards stay untouched.
 let dbPromise = null;
+let dbOpenName = null;
 
 function openDb() {
-    if (dbPromise) return dbPromise;
+    const name = studyBoardDb() || DB_NAME;
+    if (dbPromise && dbOpenName === name) return dbPromise;
+    if (dbPromise) {
+        const old = dbPromise;
+        old.then((db) => db.close(), () => {});
+    }
+    dbOpenName = name;
     dbPromise = new Promise((resolve, reject) => {
         if (typeof indexedDB === 'undefined') {
             reject(new Error(STORAGE_MESSAGE));
@@ -49,7 +60,7 @@ function openDb() {
         }
         let req;
         try {
-            req = indexedDB.open(DB_NAME, 1);
+            req = indexedDB.open(name, 1);
         } catch {
             reject(new Error(STORAGE_MESSAGE));
             return;
@@ -543,7 +554,9 @@ export function useBoards() {
         );
         load();
         const unsubscribe = subscribeBoards(load);
-        return () => { alive = false; unsubscribe(); };
+        // A study session opening or closing switches the board database.
+        const unsubscribeStudy = subscribeStudy(load);
+        return () => { alive = false; unsubscribe(); unsubscribeStudy(); };
     }, []);
     return state;
 }

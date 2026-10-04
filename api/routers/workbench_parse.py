@@ -66,8 +66,21 @@ def _evaluation():
                                  "of": sum(r["unsupported_reported"]["of"] for r in runs)},
         "false_reports": sum(r["false_reports"] for r in runs),
         "median_seconds": first["median_seconds"],
-        "current": ev["prompt_version"] == P.prompt_version() and ev["model"] == P.MODEL,
+        "current": _eval_current(ev),
     }
+
+
+def _eval_current(ev):
+    """Is the stored evaluation of the prompt the model gets today? The prompt
+    names today's date, so its hash changes daily: compare the prompt as it
+    was on the evaluation day (same text but for the date) with the stored
+    hash, and today's seasons with that day's ("this season" moves on 1 July)."""
+    try:
+        day = datetime.date.fromisoformat(ev["evaluated"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return (ev["model"] == P.MODEL and ev["prompt_version"] == P.prompt_version(day)
+            and P.latest_seasons(day) == P.latest_seasons())
 
 
 def _source():

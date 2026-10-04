@@ -1,0 +1,113 @@
+{
+  "taskSet": "workbench-2026-10-04",
+  "note": "Round 7 step 10 usability tasks. The wording, answers and checks are fixed before any session; scripts/usability_summary.py grades the stored boards against `check` and api/tests/test_usability_study.py re-derives every answer from the database. Never edit a task after the first real session: add a new taskSet instead.",
+  "tasks": [
+    {
+      "key": "t1",
+      "title": "Two players side by side",
+      "text": "Open the Workbench. Make a table that compares Nikola Jokić and Joel Embiid: their points, rebounds and assists per game in every season from 2020-21 to 2025-26.",
+      "question": "In which season did Jokić average the most assists per game?",
+      "answer": "2025-26",
+      "answerAccept": ["2025-26", "2025-2026", "2026", "25-26"],
+      "hint": "Start with a Set: it holds the players. Then add a Table.",
+      "success": "A table on the board shows both players' points, rebounds and assists per game, one row per season, 2020-21 to 2025-26; and the answer is 2025-26 (10.7 a game).",
+      "check": { "kind": "table", "players": [203999, 203954], "columns": ["pts", "reb", "ast"], "dataset": "player_season", "seasonFrom": 2021, "seasonTo": 2026, "latest": 2026 }
+    },
+    {
+      "key": "t2",
+      "title": "Find players, then plot them",
+      "text": "Find every player who, in a season from 2022-23 on, averaged at least 20 points a game on at least 60% true shooting (in at least 40 games). Put them on your board and draw a chart of their usage against their true shooting.",
+      "question": null,
+      "answer": null,
+      "hint": "The Finder block searches by conditions; its results can go into a set, and a Chart can use that set.",
+      "success": "A scatter chart with usage % and true shooting % on its axes, drawn for a set that holds the players the search finds (42 players, 80 player-seasons).",
+      "check": {
+        "kind": "finder_chart",
+        "finder": {
+          "dataset": "player_season", "scope": "season", "season_from": 2023, "season_to": 2026, "min_games": 40, "limit": 500,
+          "conditions": [
+            { "type": "value", "stat": "pts", "per": "game", "op": "gte", "value": 20 },
+            { "type": "value", "stat": "ts_pct", "op": "gte", "value": 0.6 }
+          ]
+        },
+        "players": 42,
+        "share": 0.9,
+        "axes": ["usg_pct", "ts_pct"],
+        "chart": "scatter"
+      }
+    },
+    {
+      "key": "t3",
+      "title": "Count big games",
+      "text": "In the 2025-26 regular season, in how many games did Shai Gilgeous-Alexander score 40 points or more?",
+      "question": "How many games?",
+      "answer": "8",
+      "answerAccept": ["8", "eight"],
+      "hint": "Game-by-game numbers are in the player games data, in a Table or in the Finder.",
+      "success": "The answer 8 (of his 68 games), found on the Workbench by any route.",
+      "check": { "kind": "answer", "player": 1628983, "season": 2026, "stat": "pts", "min": 40 }
+    },
+    {
+      "key": "t4",
+      "title": "One of the app's tools",
+      "text": "Add Stephen Curry's shot chart from his 2015-16 season to your board.",
+      "question": null,
+      "answer": null,
+      "hint": "The app's own tools (shot chart, game log…) are under App tool; they show one player of a set.",
+      "success": "A shot chart block on the board showing Curry, season 2015-16.",
+      "check": { "kind": "tool", "tool": "shots", "player": 201939, "season": 2016 }
+    },
+    {
+      "key": "t5",
+      "title": "Send it to someone",
+      "text": "You want a friend to see your board. Get something you could send them in a chat or by email.",
+      "question": null,
+      "answer": null,
+      "hint": "Look at the buttons next to the board's name.",
+      "success": "A share link copied, or the board exported as a file (a board too big for a link says so and points to the file).",
+      "check": { "kind": "event", "any": [{ "type": "share", "ok": true }, { "type": "export" }] }
+    },
+    {
+      "key": "t6",
+      "title": "Type it in English (optional)",
+      "optional": true,
+      "text": "Use the Finder's type-in box to find players who averaged at least 10 rebounds and 10 assists a game in a season, and run the search.",
+      "question": null,
+      "answer": null,
+      "hint": "Add a Finder block; the box at its top takes a sentence.",
+      "success": "The sentence filled the Finder's boxes (rebounds ≥ 10 and assists ≥ 10 per game) and Find players was run. Skip this task when the computer is offline or the Gemini key isn't set.",
+      "check": { "kind": "parse_finder", "conditions": [["reb", "gte", 10], ["ast", "gte", 10]] }
+    }
+  ],
+  "stuckTags": [
+    ["start", "Where to begin / what a block is"],
+    ["set", "Adding players or teams to a set"],
+    ["bind", "Connecting a block to a set"],
+    ["columns", "Choosing stats or columns"],
+    ["seasons", "Choosing seasons"],
+    ["data", "Choosing the data (seasons vs games, players vs teams)"],
+    ["finder", "Writing the Finder's conditions"],
+    ["results", "Getting Finder results into a set"],
+    ["chart", "Chart type or axes"],
+    ["tool", "App tool: which player or season"],
+    ["read", "Reading the answer off the screen"],
+    ["share", "Share link or export"],
+    ["english", "The type-in box"],
+    ["layout", "Moving, resizing or finding blocks"],
+    ["slow", "Waiting for data"],
+    ["error", "An error message"],
+    ["other", "Other (write a note)"]
+  ],
+  "sus": [
+    "I think that I would like to use this system frequently.",
+    "I found the system unnecessarily complex.",
+    "I thought the system was easy to use.",
+    "I think that I would need the support of a technical person to be able to use this system.",
+    "I found the various functions in this system were well integrated.",
+    "I thought there was too much inconsistency in this system.",
+    "I would imagine that most people would learn to use this system very quickly.",
+    "I found the system very cumbersome to use.",
+    "I felt very confident using the system.",
+    "I needed to learn a lot of things before I could get going with this system."
+  ]
+}
