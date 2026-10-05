@@ -164,7 +164,7 @@ export default function GuessThePlayer() {
                     <span className="card-icon"><Icon name="sports_esports" /></span>
                     Guess the Player
                     <InfoTooltip label="How this works" title="One mystery player, real clues">
-                        Everyone gets the same daily mystery player, picked from this season's qualified pool
+                        Everyone gets the same daily mystery player, picked from the latest loaded season's qualified pool
                         (min≥15 mpg, gp≥20 — the same pool used by Radar Comparison and Player Comparison).
                         Each guess checks against real data: team and per-game stat direction always come straight
                         from player_season_stats. "Position" is an estimated label derived from this project's own
@@ -173,7 +173,7 @@ export default function GuessThePlayer() {
                     </InfoTooltip>
                 </h2>
                 <p className="page-subtitle">
-                    {daily ? `Season ${daily.season} · pool of ${daily.pool_size} qualified players · ${puzzleDate}` : 'Loading today’s puzzle…'}
+                    {daily ? `${daily.season - 1}-${String(daily.season).slice(-2)} season · pool of ${daily.pool_size} qualified players · ${puzzleDate}` : 'Loading today’s puzzle…'}
                 </p>
 
                 {loadError && <p className="error-message">{loadError}</p>}

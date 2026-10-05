@@ -142,7 +142,7 @@ export default function BlurredPlayer() {
                     </InfoTooltip>
                 </h2>
                 <p className="page-subtitle">
-                    {daily ? `Season ${daily.season} · pool of ${daily.pool_size} qualified players · ${puzzleDate}` : 'Loading today’s puzzle…'}
+                    {daily ? `${daily.season - 1}-${String(daily.season).slice(-2)} season · pool of ${daily.pool_size} qualified players · ${puzzleDate}` : 'Loading today’s puzzle…'}
                 </p>
 
                 {loadError && <p className="error-message">{loadError}</p>}

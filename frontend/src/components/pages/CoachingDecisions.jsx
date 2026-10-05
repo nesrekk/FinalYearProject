@@ -6,6 +6,7 @@ import InfoTooltip from '../common/InfoTooltip';
 import SaveViewButton from '../common/SaveViewButton';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
+import TeamLink from '../common/TeamLink';
 import TeamLogo from '../common/TeamLogo';
 import { IntervalChart } from '../common/CoachingCharts';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
@@ -545,6 +546,7 @@ export default function CoachingDecisions() {
                             <TrendChart d={d} unit={unit} />
                             <p className="page-subtitle px-foot">
                                 {d.team ? 'A team-season is a small sample: dots only, no interval or p-value.' : 'One stored test per season (not in any family).'}
+                                {d.team && <>{' '}<TeamLink abbr={d.team} season={form.season ?? undefined} className="px-link">Open the {d.team} team page</TeamLink></>}
                             </p>
                             <h3 className="px-h">Every team</h3>
                             <TeamTable d={d} unit={unit} sort={form.sort} dir={form.dir} onSort={onSort} onPick={(t) => set({ team: t })} />

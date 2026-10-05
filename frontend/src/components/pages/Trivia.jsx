@@ -97,7 +97,7 @@ export default function Trivia() {
                     <span className="card-icon"><Icon name="quiz" /></span>
                     Trivia
                     <InfoTooltip label="How this works" title="Real answers, rotating decoys">
-                        Five multiple-choice questions a day, built from this season's qualified player pool
+                        Five multiple-choice questions a day, built from the latest loaded season's qualified player pool
                         (min≥15 mpg, gp≥20). The correct answer is always today's real value — the actual
                         current league leader, or the real most-common statistical archetype — never invented.
                         The three wrong options are always other real players (or real archetype labels) from the
@@ -105,7 +105,7 @@ export default function Trivia() {
                     </InfoTooltip>
                 </h2>
                 <p className="page-subtitle">
-                    {daily ? `Season ${daily.season} · ${puzzleDate}` : 'Loading today’s trivia…'}
+                    {daily ? `${daily.season - 1}-${String(daily.season).slice(-2)} season · ${puzzleDate}` : 'Loading today’s trivia…'}
                 </p>
                 {loadError && <p className="error-message">{loadError}</p>}
                 {daily && (

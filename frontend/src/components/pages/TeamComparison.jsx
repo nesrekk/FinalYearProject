@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { fetchCurrentMeta, fetchTeamComparisonExtra } from '../../services/api';
 import TeamLogo from '../common/TeamLogo';
 import TeamLink from '../common/TeamLink';
-import PlayerHeadshot from '../common/PlayerHeadshot';
+import PlayerName from '../common/PlayerName';
 import BigStat from '../ui/BigStat';
 import InfoTooltip from '../common/InfoTooltip';
 import SourceBadge from '../common/SourceBadge';
@@ -105,10 +105,7 @@ function RosterTable({ roster }) {
                         {roster.map((p) => (
                             <tr key={p.player_id}>
                                 <td>
-                                    <div className="entity-row">
-                                        <PlayerHeadshot playerId={p.player_id} playerName={p.player_name} size={24} />
-                                        {p.player_name}
-                                    </div>
+                                    <PlayerName playerId={p.player_id} name={p.player_name} size={24} />
                                 </td>
                                 <td>{p.gp}</td>
                                 <td>{p.min?.toFixed(1)}</td>

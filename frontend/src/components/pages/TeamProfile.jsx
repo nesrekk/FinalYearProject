@@ -504,7 +504,9 @@ function Lineups({ l, pairs, season, abbr, onNavigate }) {
                         Open the Pair Chemistry grid →
                     </button>
                 )}
-                <button type="button" className="pp-link" onClick={() => onNavigate('analytics', 'lineups')}>Open Lineup Chemistry →</button>
+                <button type="button" className="pp-link" onClick={() => onNavigate('analytics', 'lineups', { season })}>
+                    Open Lineup Chemistry (every team's best and worst fives, {season - 1}-{String(season).slice(-2)}) →
+                </button>
             </div>
         </Section>
     );

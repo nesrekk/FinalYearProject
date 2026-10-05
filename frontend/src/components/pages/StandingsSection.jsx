@@ -16,6 +16,7 @@ export default function StandingsSection() {
     const [conference, setConference] = useState('eastern');
     const [standings, setStandings] = useState({ eastern: [], western: [] });
     const [loading, setLoading] = useState(false);
+    const [season, setSeason] = useState(null);
     const data = standings[conference] || [];
 
     const { isAdvanced } = useMotionMode();
@@ -29,6 +30,7 @@ export default function StandingsSection() {
                 const meta = await fetchCurrentMeta();
                 if (active && meta?.standings?.eastern && meta?.standings?.western) {
                     setStandings(meta.standings);
+                    setSeason(meta.season ?? null);
                 }
             } catch {
                 // keep mock fallback
@@ -42,12 +44,20 @@ export default function StandingsSection() {
         };
     }, []);
 
-    const leader = data[0] || null;
+    // Before a season's first game every team is 0-0 (round 8 R8-004): no "#1 seed" and no streaks then.
+    const played = data.some((t) => (t.w || 0) + (t.l || 0) > 0);
+    const leader = played ? data[0] || null : null;
 
     return (
         <div className="page page-standings page-wide fade-in">
             {loading && <p className="page-subtitle" style={{ marginBottom: '0.75rem' }}>Loading current season standings...</p>}
 
+            {season && data.length > 0 && (
+                <p className="page-subtitle" style={{ marginBottom: '0.75rem' }}>
+                    {season - 1}-{String(season).slice(-2)} standings
+                    {played ? '.' : ': no games played yet, so every team is 0-0 until the first tip-off.'}
+                </p>
+            )}
             <div className="hb-segmented" style={{ marginBottom: '1rem' }}>
                 {CONFERENCES.map((c) => (
                     <button
@@ -121,9 +131,11 @@ export default function StandingsSection() {
                                 <td>{team.gb}</td>
                                 <td>{team.last10}</td>
                                 <td>
-                                    <span className={`streak-badge ${team.streak.startsWith('W') ? 'streak--win' : 'streak--loss'}`}>
-                                        {team.streak}
-                                    </span>
+                                    {played ? (
+                                        <span className={`streak-badge ${team.streak.startsWith('W') ? 'streak--win' : 'streak--loss'}`}>
+                                            {team.streak}
+                                        </span>
+                                    ) : '—'}
                                 </td>
                             </tr>
                         ))}

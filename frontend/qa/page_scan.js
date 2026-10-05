@@ -29,12 +29,20 @@
 // Also: linkRoundTrip() (change a <select>, open the URL fresh, compare), followLinks() (open one link of
 // each kind), followButtons() (click navigation-looking buttons).
 
-const BAD_TEXT = /\b(undefined|NaN|null)\b|\[object Object\]|\bInfinity\b/;
+// "the null" / "a null" is statistics wording (Coaching Decisions' footnotes), not a leaked value.
+const BAD_TEXT = /\b(undefined|NaN)\b|(?<!\b(?:the|a) )\bnull\b|\[object Object\]|\bInfinity\b/;
 const LOADING_TEXT = /\bLoading\b|\bloading…|\bLoading…/;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function parseColor(str) {
+  // color-mix() computes to `color(srgb r g b / a)` with 0-1 channels (step 2b: the Simulator's seed cells
+  // were read as transparent before this).
+  const s = str && str.match(/color\(srgb ([^)]+)\)/);
+  if (s) {
+    const p = s[1].split(/[\s/]+/).filter(Boolean).map(Number);
+    return { r: p[0] * 255, g: p[1] * 255, b: p[2] * 255, a: p.length > 3 ? p[3] : 1 };
+  }
   const m = str && str.match(/rgba?\(([^)]+)\)/);
   if (!m) return null;
   const p = m[1].split(/[\s,/]+/).filter(Boolean).map(Number);

@@ -36,7 +36,14 @@
   border: 1px solid var(--hairline);
   cursor: default;
 }
-.ss-seed--hot { color: var(--on-brand); font-weight: 700; }
+.ss-seed--hot { color: var(--text); font-weight: 700; }
+/* Tint = finish odds × --seed-max. Ink caps it at 65% so the light digits stay ≥ 4.5:1 on the darkened
+   orange (at 100% they were 2.7:1; the dark digits used before were ~1.1-2.5:1 between 50% and 80%). */
+.ss-seed { --seed-max: 100%; background: color-mix(in srgb, var(--brand) calc(var(--v, 0) * var(--seed-max)), transparent); }
+:root[data-theme='dark'] .ss-seed { --seed-max: 65%; }
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='system'] .ss-seed { --seed-max: 65%; }
+}
 .ss-badge {
   display: inline-block;
   padding: 1px 6px;

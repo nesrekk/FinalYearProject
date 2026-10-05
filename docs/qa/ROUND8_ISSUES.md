@@ -12,10 +12,12 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
-Counts (2026-10-05, after Step 2a): **43 entries**, 33 open, 10 fixed: 5 broken, 16 wrong number,
-4 slow, 18 looks wrong. 17 are new from Step 1 (R8-001 to R8-017); 15 are known gaps already written
+Counts (2026-10-05, after Step 2b): **49 entries**, 33 open, 16 fixed: 6 broken, 16 wrong number,
+4 slow, 23 looks wrong. 17 are new from Step 1 (R8-001 to R8-017); 15 are known gaps already written
 down in README "Known real gaps" / Methodology open issues, listed so a step owns each (R8-018 to
-R8-032); 11 are from Step 2a's sweep of the Players pages (R8-033 to R8-043, 10 fixed in its commit).
+R8-032); 11 are from Step 2a's sweep of the Players pages (R8-033 to R8-043, 10 fixed in its commit);
+6 are from Step 2b's sweep of the Teams, Games and Today pages (R8-044 to R8-049, 5 fixed in its commit,
+which also fixed R8-016 and the 2b parts of R8-004, R8-014 and R8-043).
 
 ## Step 1 health check (2026-10-05)
 
@@ -98,6 +100,29 @@ LeBron James (2544), Michael Jordan (893, pre-2000) and Cooper Flagg (1642843, r
 | Back / Forward | Leaderboard Builder, RAPM, Game Finder → profile → Back → Forward, and profile → profile: each returns the same view and inputs. |
 | Empty results | Game Finder, Leaderboard Builder, Stat Line Finder, Play Finder say what happened; Breakout Detector and Regression Explorer didn't (R8-038). |
 
+## Step 2b page sweep: Teams, Games, Live Scores and the Today pages (2026-10-05)
+
+Same scanner and harness as 2a (the harness deleted again before the commit). The scanner learned two
+things: `color-mix()` backgrounds compute to `color(srgb …)`, which it read as transparent (so the
+Simulator's seed cells passed when they didn't, R8-044), and "the null" / "a null" is statistics wording,
+not a leaked value (Coaching Decisions' footnotes). Pages: Dashboard, Live Scores, News, Standings (the
+Today group, which no other sweep lists); Team Comparison, Trade Analyzer (empty and a run trade), Trade
+Impact, Rotations (league, BOS season, a LAL game in "own" measure), Assist Network (default, DEN duos),
+Possession Explorer (default, OKC defence from every start), Coaching Decisions (all five views, BOS),
+Season Simulator (today and 2024-25 mid-season with a game's what-if), Forecast Ledger (both tabs), Best
+Games & Upsets (both views, GSW 2022-23); team pages of LAL (latest), OKC 2004-05 (relocated: opens as
+the Seattle SuperSonics), BKN 2009-10 (as the New Jersey Nets), MEM 1998-99 (as the Vancouver Grizzlies),
+GSW 2025-26; the Games hub and all five games (Trivia and Higher or Lower played one move).
+
+| Check | Result |
+|---|---|
+| Scan at 1280 and 375 px, Paper and Ink (about 190 renders of 40 views: 19 default, 16 filled in, 5 games; then the 40 renders of the changed pages again) | Before: the Simulator's seed cells in Ink (R8-044), Live Scores' fallback badge (R8-045), and two false positives (Standings' active segment, whose dark pill is a sibling layer; Coaching's "the null"). After the fixes every render is clean apart from: the Dashboard's 404 probe (R8-049), its scroll-in sections at opacity 0 (`whileInView`: IntersectionObserver never fires in a hidden pane, a harness artefact), the Standings false positive, and `/news/current` over 3 s on a cold app-shell prefetch (R8-011). |
+| By eye (screenshots, 1280 Paper/Ink, 375) | R8-045 (Live Scores: no team names), R8-004 (Standings' 0-0 "#1 seed"), seed digits after the fix, the trade cards, a rotation chart at 375 in Ink, Seattle's 2004-05 page. |
+| Copy link → open fresh = same view | 9 of 9 pages with link state match after changing a control (Trade Analyzer, Trade Impact, Rotations, Assist Network, Possession Explorer, Coaching Decisions, Season Simulator, Best Games, team page); a full trade link reruns the trade. The Forecast Ledger has no select on its default view (its tabs and views are buttons, kept in the link). The Games hub had no link state (R8-048, fixed). Live Scores, Standings, News, Team Comparison and the Dashboard keep nothing in the link. |
+| Links out | One of each kind per page opened fresh (team, player, Replay): all real views. Team page buttons (7 on LAL's: Workbench, Luck & Schedule, Pair Chemistry, Lineup Chemistry, Rotations, Assist Network, On/Off) and the Simulator's (Opening day, Luck & Schedule, What-if) open the page they name, with the team selected; Lineup Chemistry lost the season (R8-047). Possession Explorer and Coaching rows pick a team on the page (by design); Coaching had no way on to the team page (R8-047). Player names on three pages weren't links (R8-046). |
+| Back / Forward | Rotations → profile, team page → Rotations, Best Games → team page, each Back then Forward: same URL and view. |
+| Empty and pre-season states | Standings and the Dashboard before opening night (R8-004, fixed for the page); Live Scores for a date without games says so (future dates: R8-002, Step 4); the Forecast Ledger's Live tab before any game is final says so. |
+
 ## Constraints (not defects)
 
 - **Layerbase:** 4,202 of 5,000 MB used (2026-10-04). A Step 6 rebuild rewrites tables of about the same size; any sync needs the owner's OK (Step 10 decides whether the biggest tables stay local).
@@ -116,6 +141,7 @@ LeBron James (2544), Michael Jordan (893, pre-2000) and Cooper Flagg (1642843, r
 - **Where:** Live Scores, `GET /games/by-date?date=` (`impact_core.fetch_nba_games_by_date`).
 - **Reproduce:** `/games/by-date?date=2026-10-20` → 0 games in 6.2 s, and the page reads "No games found for 2026-10-20". `ledger_schedule` (ESPN) has 3 games that day. Today (2026-10-05) returns 5 preseason games. The team objects carry `name: ""`, and some have `logo: null` (MEM); Step 2b should check whether that shows.
 - **Found by:** crawl + manual calls. Opening night itself works only if stats.nba.com answers on the day; there is no ESPN or stored fallback (cdn.nba.com is 403, R8-003).
+- **Step 2b:** the empty `name` and the null/third-party logos did show (bare logos, no team names, a white-on-orange fallback at 2.6:1); the page now uses the app's names and NBA.com logos (R8-045). The route's own fields stay Step 4's.
 
 ### R8-003 · The cdn.nba.com fallbacks are dead (403)
 - **Severity:** broken · **Step:** 4 · **Status:** open
@@ -128,12 +154,14 @@ LeBron James (2544), Michael Jordan (893, pre-2000) and Cooper Flagg (1642843, r
 - **Where:** Dashboard (`DashboardHome.jsx`), Team Comparison, Standings; `GET /meta/current`.
 - **Reproduce:** `/meta/current` → `season: 2027` and every team 0-0 from stats.nba.com (streak "W 0"), but `top_scorer` = Luka Dončić 33.5 (2025-26 `player_season_stats`) and `team_stats` = 2025-26 DB values. None of these carries a season label. The "#1 Seed" tile takes `standings.western[0]`, i.e. only the West's first row (never the East), which is a 0-0 team before the season.
 - **Found by:** reading the crawl answer and the components.
+- **Step 2b (Standings, Dashboard tile):** Standings now names the season ("2026-27 standings: no games played yet, so every team is 0-0 until the first tip-off"), shows no "#1 Seed" hero and no "W 0" streaks before a game is played; the Dashboard tile is "Best record" over both conferences (it was the West's first row) and says "no games played yet" before the season. Test: `test_standings_say_when_no_game_has_been_played`. Left for Step 4: `top_scorer` and `team_stats` from 2025-26 without a season label, and the 2026-27 standings coming only from stats.nba.com.
 
 ### R8-005 · Live box score shows "nan" as +/- for players who didn't play
 - **Severity:** looks wrong · **Step:** 4 · **Status:** open
 - **Where:** Live Scores box score, `GET /games/boxscore/{game_id}` (`impact_core.fetch_boxscore`).
 - **Reproduce:** `/games/boxscore/0022400062` → 9 of 28 rows (DNPs, `min: "0"`) have `pm: "nan"`. Every other row has plus-minus as text with a decimal (`"19.0"`).
 - **Found by:** crawl (placeholder-text check).
+- **Step 2b:** not visible on the page: the Live Scores box score has no +/- column (Player, MIN, PTS, REB, AST, FG, 3PT, FT). Still worth fixing in the route (Step 4).
 
 ### R8-006 · stats.nba.com is reachable again, but the docs and code comments say it isn't
 - **Severity:** looks wrong · **Step:** 4 · **Status:** open
@@ -189,6 +217,7 @@ LeBron James (2544), Michael Jordan (893, pre-2000) and Cooper Flagg (1642843, r
 - **Reproduce:** crawl column `source` = `no`.
 - **Found by:** crawl. The convention asks for a badge on the main Analytics endpoints. Each page sweep decides per page (add one, or note why the page doesn't need one).
 - **Step 2a (Players pages):** `/players/table/{season}` (Player Stats) and `/players/compare-profile/{name}` (Player Comparison) now return `_source`, and both pages show the badge; Rookie Class Tracker now shows the one `/roy/predict` already returned. Left: `/leaders/{stat}` (Stat Leaders, with R8-001 in Step 4), `/players/pair-synergy` (a live call, Step 4), and the profile's sub-routes (`/player-profile/{id}/shot-zones`, `/contracts/player/{id}`, `/players/playtype-profile/{name}`), which sit under the profile's own badge for `/player-profile/{id}`. Shot routes: 2c.
+- **Step 2b (Teams, Games, Today):** `/trade/teams/{season}`, `/trade/roster/{team}/{season}` and `/trade/simulate` now return `_source`, shown on the Trade Analyzer's result (test `test_trade_analyzer_carries_a_source`). Left, all live and Step 4's: `/games/by-date`, `/games/boxscore/{id}` (Live Scores), `/meta/current` (Dashboard, Standings, Team Comparison), `/news/current` (News). `/games/wp-replay/*` is 2c's (Analytics › Game Replay).
 
 ### R8-015 · Season shown as a raw end year ("2027") in labels
 - **Severity:** looks wrong · **Step:** 2 (2a Stat Leaders, 2c Prediction Ledger) · **Status:** open
@@ -197,10 +226,11 @@ LeBron James (2544), Michael Jordan (893, pre-2000) and Cooper Flagg (1642843, r
 - **Step 2a:** Stat Leaders now reads "Top 10 · 2026-27" (test `test_stat_leaders_season_label`). The same kind of raw-year box was on Player Stats, Player Comparison and Rookie Class Tracker (R8-037, fixed). Prediction Ledger is 2c's; still open for it.
 
 ### R8-016 · Trivia asks about "this season" from last season's numbers
-- **Severity:** looks wrong · **Step:** 2b · **Status:** open
+- **Severity:** looks wrong · **Step:** 2b · **Status:** fixed in the Step 2b commit
 - **Where:** Games › Trivia, `GET /games/trivia/daily`.
 - **Reproduce:** on 2026-10-05 the answer's `season` is 2026 (2025-26), and every question says "this season" ("Who leads the league in points per game this season?").
 - **Found by:** reading the crawl answer.
+- **Fix:** every question names the pool's season in the past tense ("Who led the league in points per game in 2025-26?"; `impact_core._trivia_season`); Trivia, Guess the Player and Blurred Player headers read "2025-26 season · …" instead of "Season 2026 · …", and their tooltips say "the latest loaded season's" pool. Tests: `test_trivia_questions_name_the_season`, `test_puzzles_name_their_season`.
 
 ### R8-017 · Routes and API wrappers nothing calls
 - **Severity:** looks wrong (code hygiene) · **Step:** 8 · **Status:** open
@@ -339,3 +369,36 @@ LeBron James (2544), Michael Jordan (893, pre-2000) and Cooper Flagg (1642843, r
 - **Severity:** looks wrong · **Step:** 2b / 2c · **Status:** open
 - **Where:** `useState(2025)` in Analytics sections `WithWithoutStarSection`, `OffensiveStyleSection`, `RadarCompareSection`, `PlayerArchetypesSection`, `PlayoffForecasterSection` (2c); Trade Impact's number box (2b). Check each page's data range before changing the default (Contract Value has no 2025-26).
 - **Found by:** grep during Step 2a (same pattern as R8-037).
+- **Step 2b:** Trade Analyzer opened on 2023-24 (`?? 2024`) although its rosters and win model cover 2025-26 (checked: `/trade/simulate?season=2026` runs); it now opens on 2025-26. Both trade pages have a labelled season picker (2025-26 … 2009-10) instead of the number box; Trade Impact keeps its 2024-25 default (the last season with all three blocks, said on the page). Test: `test_trade_pages_use_season_pickers`. Left: the five Analytics sections (2c).
+
+### R8-044 · The Simulator's finish-odds cells were unreadable in Ink
+- **Severity:** looks wrong · **Step:** 2b · **Status:** fixed in the Step 2b commit
+- **Where:** Season Simulator, the 1st-15th "Finish" cells (`SeasonSimulator.jsx` `Seeds`, `simulator.css`). Each cell is tinted with the brand orange in proportion to its odds; from 50% the digit turned `--on-brand` (#0d0d0d).
+- **Reproduce:** Ink, any team with a likely seed: dark digits on a darkened orange, 1.1:1 at 50% and 3.4:1 at 80%; light digits under 50% fell to 4.4:1. Paper was fine.
+- **Found by:** the scanner, once it could read `color-mix()` backgrounds (it had passed the cells before). **Fix:** digits use `--text` in both themes and Ink caps the tint at 65% of the cell (`--seed-max`, the Data Quality heat-map pattern): ≥ 4.68:1 at every tint in both themes, on both surfaces. Test: `test_simulator_seed_cells_read_in_both_themes` (computes every 5% step).
+
+### R8-045 · Live Scores showed no team names, mixed logos and an unreadable fallback badge
+- **Severity:** looks wrong · **Step:** 2b · **Status:** fixed in the Step 2b commit
+- **Where:** `LiveScores.jsx` game cards and box-score header. `/games/by-date` returns `name: ""` and a thesportsdb logo or null (R8-002), so each card showed a logo with no name, and for a null logo a white abbreviation on the team colour (NYK: 2.56:1). The cards weren't reachable from the keyboard, nothing linked to a team, and preseason games weren't marked as such.
+- **Found by:** the scanner (badge contrast) and screenshots. **Fix:** the card uses the app's full team name (`TEAM_NAME_TO_ABBR` inverted) and NBA.com logo (`TeamLogo`, the same as every other page) wrapped in `TeamLink`; the card is a keyboard button with a label; a Preseason / Playoffs / Play-in badge from the NBA game id. Test: `test_live_scores_names_and_logos_come_from_the_app`.
+
+### R8-046 · Player names on three Teams pages weren't links
+- **Severity:** looks wrong · **Step:** 2b · **Status:** fixed in the Step 2b commit
+- **Where:** Trade Analyzer and Trade Impact (the four player cards; Trade Impact's likely five) and Team Comparison (the two top-8 rosters) drew headshot + name by hand: no profile link, no watchlist star (the same pattern as Hall of Fame in R8-039).
+- **Found by:** following links (Trade Analyzer: 0 player links on a run trade). **Fix:** `PlayerName`. Test: `test_team_pages_link_player_names`.
+
+### R8-047 · The team page's Lineup Chemistry link lost the season; Coaching Decisions had no way to the team page
+- **Severity:** broken (link to the wrong view) · **Step:** 2b · **Status:** fixed in the Step 2b commit
+- **Where:** `TeamProfile.jsx` "Open Lineup Chemistry →" called `onNavigate('analytics', 'lineups')` with nothing, so a 2004-05 Seattle page opened Lineup Chemistry on 2025-26. Lineup Chemistry has no team filter, which the label didn't say. Coaching Decisions with a team picked had no link to that team's page (Possession Explorer has one).
+- **Found by:** clicking every navigation button on the team pages. **Fix:** the link passes the season and reads "Open Lineup Chemistry (every team's best and worst fives, 2004-05) →"; Coaching gains "Open the BOS team page". Test: `test_team_page_lineup_link_keeps_the_season`.
+
+### R8-048 · The Games hub didn't keep the open game in the link
+- **Severity:** looks wrong · **Step:** 2b · **Status:** fixed in the Step 2b commit
+- **Where:** `GamesHub.jsx`: the chosen game was component state only, so a copied or saved link (or a reload) always opened the hub.
+- **Found by:** the copy-link round trip. **Fix:** `?page=games&g=trivia` (`guess`, `blurred`, `higherlower`, `trivia`, `guessgame`) through `useInitialParams` / `useUrlSync`; checked in the browser (a fresh load of the link opens Trivia). Test: `test_games_hub_keeps_the_open_game_in_the_link`.
+
+### R8-049 · The Dashboard requests next season's MVP prediction and gets a 404 on every load
+- **Severity:** looks wrong · **Step:** 4 · **Status:** open
+- **Where:** `DashboardHome.jsx` `resolveSeasonWithData()` starts at `/meta/current`'s season (2027) and walks back on failure, so every Dashboard load logs `404 GET /mvp/predict/2027` in the browser's network panel before 2025-26's answer. The page itself is right ("MVP Favorite · 2025-26").
+- **Found by:** the scanner's failed-request list. Fix with R8-004's season work in Step 4 (e.g. a route that says which seasons the award models cover), not a guess in the page.
+

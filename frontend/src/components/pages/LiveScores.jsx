@@ -1,6 +1,34 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchGameBoxscore, fetchGamesByDate } from '../../services/api';
-import { TEAM_COLORS } from '../../utils/teamAssets';
+import { TEAM_NAME_TO_ABBR } from '../../utils/teamAssets';
+import TeamLink from '../common/TeamLink';
+import TeamLogo from '../common/TeamLogo';
+
+// abbr -> "Boston Celtics". The scoreboard's own nickname field comes back empty and its logo is a
+// third-party image or null (round 8 step 2b), so the card uses the app's names and NBA.com logos.
+const TEAM_FULL_NAME = Object.fromEntries(Object.entries(TEAM_NAME_TO_ABBR).map(([name, abbr]) => [abbr, name]));
+const teamName = (t) => TEAM_FULL_NAME[t.abbr] || [t.city, t.name].filter(Boolean).join(' ') || t.abbr;
+
+function GameTeam({ team, isScheduled }) {
+    const rest = team.rest || {};
+    return (
+        <div className="game-team">
+            <TeamLink abbr={team.abbr}>
+                <TeamLogo abbreviation={team.abbr} size={48} className="team-badge" />
+            </TeamLink>
+            <span className="team-name">{teamName(team)}</span>
+            {rest.is_b2b && (
+                <span className="badge" title="Back-to-back — no real rest day before this game" style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--negative)', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>B2B</span>
+            )}
+            {!rest.is_b2b && rest.rest_disadvantage && (
+                <span className="badge" title={`${rest.rest_days} real rest days vs. the other team's more`} style={{ background: 'rgba(250,204,21,0.15)', color: 'var(--streak)', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>REST DISADV.</span>
+            )}
+            <span className={`team-score ${!isScheduled ? '' : 'team-score--dim'}`}>
+                {isScheduled ? '-' : team.score}
+            </span>
+        </div>
+    );
+}
 
 function toIsoDate(dateObj) {
     const y = dateObj.getFullYear();
@@ -65,14 +93,8 @@ export default function LiveScores() {
                         status: g.status === 'SCHEDULED' ? (g.status_text || 'SCHEDULED') : g.status,
                         quarter: g.status === 'LIVE' ? 'LIVE' : '',
                         clock: g.status === 'LIVE' ? '' : '',
-                        away: {
-                            ...g.away,
-                            color: TEAM_COLORS[g.away.abbr] || '#334155',
-                        },
-                        home: {
-                            ...g.home,
-                            color: TEAM_COLORS[g.home.abbr] || '#334155',
-                        },
+                        away: g.away,
+                        home: g.home,
                     }));
                     setGames(mapped);
                 } else if (active) {
@@ -93,6 +115,20 @@ export default function LiveScores() {
         };
     }, [selectedDate]);
 
+    async function openGame(game) {
+        setSelectedGame(game);
+        setActiveTeamSide('away');
+        setLoadingBoxscore(true);
+        try {
+            const data = await fetchGameBoxscore(game.id);
+            setBoxscore(data?.boxscore || { away: [], home: [] });
+        } catch {
+            setBoxscore({ away: [], home: [] });
+        } finally {
+            setLoadingBoxscore(false);
+        }
+    }
+
     return (
         <div className="page page-scores fade-in">
             <div className="input-row" style={{ marginBottom: '1rem' }}>
@@ -112,25 +148,19 @@ export default function LiveScores() {
                     const isLive = game.status === 'LIVE';
                     const isFinal = game.status === 'FINAL';
                     const isScheduled = !isLive && !isFinal;
+                    // NBA.com game ids: 001… preseason, 002… regular season, 004… playoffs, 005… play-in.
+                    const kind = { '001': 'Preseason', '004': 'Playoffs', '005': 'Play-in' }[String(game.id).slice(0, 3)];
 
                     return (
                         <div
                             key={game.id}
                             className={`game-card ${isLive ? 'game-card--live' : ''}`}
                             style={{ cursor: 'pointer' }}
-                            onClick={async () => {
-                                setSelectedGame(game);
-                                setActiveTeamSide('away');
-                                setLoadingBoxscore(true);
-                                try {
-                                    const data = await fetchGameBoxscore(game.id);
-                                    setBoxscore(data?.boxscore || { away: [], home: [] });
-                                } catch {
-                                    setBoxscore({ away: [], home: [] });
-                                } finally {
-                                    setLoadingBoxscore(false);
-                                }
-                            }}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`${teamName(game.away)} at ${teamName(game.home)}: open the box score`}
+                            onClick={() => openGame(game)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openGame(game); } }}
                         >
                             {/* Status badge */}
                             <div className="game-status-row">
@@ -141,57 +171,16 @@ export default function LiveScores() {
                                 )}
                                 {isFinal && <span className="badge badge--final">FINAL</span>}
                                 {isScheduled && <span className="badge badge--scheduled">{game.status}</span>}
+                                {kind && <span className="badge badge--scheduled">{kind}</span>}
                             </div>
 
                             {/* Teams */}
                             <div className="game-matchup">
-                                <div className="game-team">
-                                    {game.away.logo ? (
-                                        <img
-                                            src={game.away.logo}
-                                            alt={game.away.abbr}
-                                            className="team-badge"
-                                            style={{ objectFit: 'cover' }}
-                                        />
-                                    ) : (
-                                        <div className="team-badge" style={{ background: game.away.color }}>{game.away.abbr}</div>
-                                    )}
-                                    <span className="team-name">{game.away.name}</span>
-                                    {game.away.rest?.is_b2b && (
-                                        <span className="badge" title="Back-to-back — no real rest day before this game" style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--negative)', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>B2B</span>
-                                    )}
-                                    {!game.away.rest?.is_b2b && game.away.rest?.rest_disadvantage && (
-                                        <span className="badge" title={`${game.away.rest.rest_days} real rest days vs. the other team's more`} style={{ background: 'rgba(250,204,21,0.15)', color: 'var(--streak)', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>REST DISADV.</span>
-                                    )}
-                                    <span className={`team-score ${!isScheduled ? '' : 'team-score--dim'}`}>
-                                        {isScheduled ? '-' : game.away.score}
-                                    </span>
-                                </div>
+                                <GameTeam team={game.away} isScheduled={isScheduled} />
 
                                 <span className="game-vs">VS</span>
 
-                                <div className="game-team">
-                                    {game.home.logo ? (
-                                        <img
-                                            src={game.home.logo}
-                                            alt={game.home.abbr}
-                                            className="team-badge"
-                                            style={{ objectFit: 'cover' }}
-                                        />
-                                    ) : (
-                                        <div className="team-badge" style={{ background: game.home.color }}>{game.home.abbr}</div>
-                                    )}
-                                    <span className="team-name">{game.home.name}</span>
-                                    {game.home.rest?.is_b2b && (
-                                        <span className="badge" title="Back-to-back — no real rest day before this game" style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--negative)', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>B2B</span>
-                                    )}
-                                    {!game.home.rest?.is_b2b && game.home.rest?.rest_disadvantage && (
-                                        <span className="badge" title={`${game.home.rest.rest_days} real rest days vs. the other team's more`} style={{ background: 'rgba(250,204,21,0.15)', color: 'var(--streak)', fontSize: '0.65rem', padding: '2px 6px', marginLeft: 4 }}>REST DISADV.</span>
-                                    )}
-                                    <span className={`team-score ${!isScheduled ? '' : 'team-score--dim'}`}>
-                                        {isScheduled ? '-' : game.home.score}
-                                    </span>
-                                </div>
+                                <GameTeam team={game.home} isScheduled={isScheduled} />
                             </div>
                         </div>
                     );
@@ -210,14 +199,14 @@ export default function LiveScores() {
                         <button className="bsm-close" onClick={() => setSelectedGame(null)}>X</button>
                         <div className="bsm-header">
                             <div className="bsm-team">
-                                <span className="bsm-name">{selectedGame.away.city} {selectedGame.away.name}</span>
+                                <span className="bsm-name">{teamName(selectedGame.away)}</span>
                                 <span className="bsm-score">{selectedGame.away.score ?? '-'}</span>
                             </div>
                             <div className="bsm-vs-block">
                                 <span className="bsm-status">{selectedGame.status}</span>
                             </div>
                             <div className="bsm-team">
-                                <span className="bsm-name">{selectedGame.home.city} {selectedGame.home.name}</span>
+                                <span className="bsm-name">{teamName(selectedGame.home)}</span>
                                 <span className="bsm-score">{selectedGame.home.score ?? '-'}</span>
                             </div>
                         </div>

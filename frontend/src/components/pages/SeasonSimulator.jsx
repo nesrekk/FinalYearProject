@@ -90,7 +90,7 @@ function Seeds({ p, teamName }) {
         <span className="ss-seeds" aria-label={`Finish odds for ${teamName}`}>
             {p.map((v, i) => (
                 <span key={i} className={`ss-seed ${v >= 0.5 ? 'ss-seed--hot' : ''}`}
-                    style={{ background: `color-mix(in srgb, var(--brand) ${Math.round(Math.min(1, v) * 100)}%, transparent)` }}
+                    style={{ '--v': Math.min(1, v).toFixed(2) }}
                     title={`${i + 1}${['st', 'nd', 'rd'][i] ?? 'th'}: ${pct(v, 1)}`}>
                     {v >= 0.1 ? i + 1 : ''}
                 </span>

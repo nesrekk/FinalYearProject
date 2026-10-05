@@ -7,6 +7,7 @@ import BlurredPlayer from './BlurredPlayer';
 import HigherOrLower from './HigherOrLower';
 import Trivia from './Trivia';
 import GuessTheGame from './GuessTheGame';
+import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 const tabs = [
     { id: 'guess', label: 'Guess the Player', icon: 'sports_esports', tagline: 'One mystery player, one clue-filled guess at a time.' },
@@ -17,7 +18,10 @@ const tabs = [
 ];
 
 export default function GamesHub() {
-    const [activeTab, setActiveTab] = useState(null);
+    // The open game is in the link (?page=games&g=trivia), so a copied or saved link reopens it.
+    const params = useInitialParams();
+    const [activeTab, setActiveTab] = useState(() => parseParam.oneOf(params, 'g', tabs.map((t) => t.id)));
+    useUrlSync({ g: activeTab });
 
     if (activeTab) {
         return (

@@ -636,6 +636,9 @@ body {
 
 .game-status-row {
   margin-bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .badge {

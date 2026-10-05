@@ -183,9 +183,13 @@ export default function DashboardHome({ onNavigate }) {
     const liveGames = useMemo(() => games.filter((g) => g.status === 'LIVE').length, [games]);
     const finalGames = useMemo(() => games.filter((g) => g.status === 'FINAL').length, [games]);
     const scheduledGames = useMemo(() => games.filter((g) => g.status !== 'LIVE' && g.status !== 'FINAL').length, [games]);
+    // The league's best record, from both conferences (it used to be the West's first row only), and
+    // none before the season's first game, when every team is 0-0 (round 8 R8-004).
     const topSeed = useMemo(() => {
-        const west = meta?.standings?.western || [];
-        return west.length > 0 ? west[0] : null;
+        const all = [...(meta?.standings?.eastern || []), ...(meta?.standings?.western || [])];
+        const played = all.filter((t) => (t.w || 0) + (t.l || 0) > 0);
+        if (!played.length) return all.length ? { notStarted: true } : null;
+        return played.reduce((best, t) => (t.w / (t.w + t.l) > best.w / (best.w + best.l) ? t : best));
     }, [meta]);
 
     const standingsPreview = useMemo(() => {
@@ -323,8 +327,12 @@ export default function DashboardHome({ onNavigate }) {
                 </Tile>
 
                 <Tile span={4} className="dashboard-tile" onClick={() => onNavigate('standings')}>
-                    <p className="text-eyebrow">#1 Seed</p>
-                    {topSeed ? (
+                    <p className="text-eyebrow">Best record</p>
+                    {topSeed?.notStarted ? (
+                        <span className="dashboard-tile-sub">
+                            {meta?.season ? `${meta.season - 1}-${String(meta.season).slice(-2)}: ` : ''}no games played yet.
+                        </span>
+                    ) : topSeed ? (
                         <>
                             <p className="text-stat dashboard-seed-value">{topSeed.w}-{topSeed.l}</p>
                             <span className="dashboard-tile-sub">{topSeed.team} · {topSeed.pct}</span>

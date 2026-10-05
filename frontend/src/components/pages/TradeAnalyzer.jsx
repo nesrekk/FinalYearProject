@@ -6,7 +6,8 @@ import Loader from '../Loader';
 import InfoTooltip from '../common/InfoTooltip';
 import Icon from '../common/Icon';
 import TeamLogo from '../common/TeamLogo';
-import PlayerHeadshot from '../common/PlayerHeadshot';
+import PlayerName from '../common/PlayerName';
+import SourceBadge from '../common/SourceBadge';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import TableExport from '../common/TableExport';
@@ -52,14 +53,9 @@ function PlayerCard({ label, player }) {
     return (
         <div className="hb-trade-card">
             <div className="page-subtitle" style={{ marginBottom: 6 }}>{label}</div>
-            <span className="entity-row">
-                <PlayerHeadshot playerId={player.player_id} playerName={player.player_name} size={36} />
-                <span className="entity-row-text">
-                    <span className="hb-trade-name">{player.player_name}</span>
-                    <span className="entity-row-sub">
-                        {player.archetype || 'Unclustered'} · {fmt(player.pts)} pts · {fmt(player.reb)} reb · {fmt(player.ast)} ast · {fmt(player.min)} mpg
-                    </span>
-                </span>
+            <span className="hb-trade-name"><PlayerName playerId={player.player_id} name={player.player_name} size={36} /></span>
+            <span className="entity-row-sub" style={{ display: 'block', marginTop: 4 }}>
+                {player.archetype || 'Unclustered'} · {fmt(player.pts)} pts · {fmt(player.reb)} reb · {fmt(player.ast)} ast · {fmt(player.min)} mpg
             </span>
         </div>
     );
@@ -127,13 +123,17 @@ function TeamPanel({ side, isAdvanced, preset }) {
 }
 
 // Keep a player id only if they're on the roster that just loaded.
+// Rosters and the win model cover 2009-10 to the latest finished season (GET /trade/teams/{season}).
+const TRADE_SEASONS = Array.from({ length: 2026 - 2010 + 1 }, (_, i) => 2026 - i);
+const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
+
 const onRoster = (roster) => (id) => (roster.some((p) => String(p.player_id) === id) ? id : '');
 
 export default function TradeAnalyzer({ onNavigate }) {
     // A shared link carries ?season=&ta=&pa=&tb=&pb= (utils/useUrlState.js).
     const params = useInitialParams();
     const linkedId = (key) => (parseParam.int(params, key, { min: 1 }) ?? '').toString();
-    const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: 2026 }) ?? 2024);
+    const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: 2026 }) ?? 2026);
     const [teams, setTeams] = useState([]);
 
     const [teamA, setTeamA] = useState(() => parseParam.str(params, 'ta')?.toUpperCase() ?? '');
@@ -251,14 +251,9 @@ export default function TradeAnalyzer({ onNavigate }) {
                 </p>
 
                 <div className="input-row">
-                    <input
-                        type="number"
-                        className="input-field"
-                        value={season}
-                        onChange={(e) => changeSeason(Number(e.target.value))}
-                        min={2010}
-                        max={2026}
-                    />
+                    <select className="input-field" value={season} onChange={(e) => changeSeason(Number(e.target.value))} aria-label="Season">
+                        {TRADE_SEASONS.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
+                    </select>
                     <select className="input-field" value={teamA} onChange={(e) => changeTeamA(e.target.value)}>
                         <option value="">Team A…</option>
                         {teams.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -321,7 +316,7 @@ export default function TradeAnalyzer({ onNavigate }) {
                         <TeamPanel side={panels.a} isAdvanced={isAdvanced} preset={preset} />
                         <TeamPanel side={panels.b} isAdvanced={isAdvanced} preset={preset} />
                     </div>
-                    <p className="page-subtitle" style={{ marginTop: '1rem' }}>{result.caveat}</p>
+                    <p className="page-subtitle" style={{ marginTop: '1rem' }}>{result.caveat} <SourceBadge source={result._source} /></p>
                     <TradeContractValue
                         season={season}
                         players={[

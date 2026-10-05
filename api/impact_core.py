@@ -1852,6 +1852,10 @@ TRIVIA_ARCHETYPES = [
     "Bench Role Player", "Elite Two-Way Big", "Primary Scorer",
     "3-and-D Wing", "Rim Protector", "Playmaker",
 ]
+def _trivia_season(season: int) -> str:
+    # The pool is the latest *loaded* season, which before and early in a season is last season's
+    # (round 8 R8-016: the questions used to say "this season" for it).
+    return f"{season - 1}-{str(season)[-2:]}"
 def _trivia_rng(season: int, puzzle_date: date, question_id: str) -> random.Random:
     seed = f"trivia-{question_id}-{puzzle_date.isoformat()}-{season}"
     return random.Random(seed)
@@ -1890,7 +1894,7 @@ def _trivia_youngest_question(pool_rows, season, puzzle_date):
     rng.shuffle(options)
     question = {
         "id": "youngest_top10",
-        "question": "Who is the youngest player among this season's top 10 scorers?",
+        "question": f"Who was the youngest player among the top 10 scorers in {_trivia_season(season)}?",
         "options": [{"id": str(o["player_id"]), "label": o["player_name"]} for o in options],
     }
     return question, str(correct["player_id"])
@@ -1910,15 +1914,16 @@ def _trivia_archetype_question(pool_rows, season, puzzle_date):
     rng.shuffle(options)
     question = {
         "id": "top_archetype",
-        "question": "Which statistical archetype has the most players this season?",
+        "question": f"Which statistical archetype had the most players in {_trivia_season(season)}?",
         "options": [{"id": a, "label": a} for a in options],
     }
     return question, correct_label
 def _trivia_build_all(pool_rows, season: int, puzzle_date: date):
+    label = _trivia_season(season)
     specs = [
-        ("top_scorer", "Who leads the league in points per game this season?", "pts"),
-        ("top_rebounder", "Who leads the league in rebounds per game this season?", "reb"),
-        ("top_assister", "Who leads the league in assists per game this season?", "ast"),
+        ("top_scorer", f"Who led the league in points per game in {label}?", "pts"),
+        ("top_rebounder", f"Who led the league in rebounds per game in {label}?", "reb"),
+        ("top_assister", f"Who led the league in assists per game in {label}?", "ast"),
     ]
     results = []
     for question_id, prompt, stat_key in specs:

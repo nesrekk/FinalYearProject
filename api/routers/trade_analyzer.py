@@ -8,6 +8,7 @@ from impact_core import (
     _team_summary,
     get_db,
 )
+from source_badge import make_source
 
 router = APIRouter()
 
@@ -24,7 +25,8 @@ def get_trade_teams(season: int):
         teams = [r[0] for r in cursor.fetchall()]
     if not teams:
         raise HTTPException(status_code=404, detail=f"No team data for season {season}.")
-    return {"season": season, "teams": teams}
+    return {"season": season, "teams": teams,
+            "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Basketball-Reference")}
 
 @router.get("/trade/roster/{team_abbr}/{season}")
 def get_trade_roster(team_abbr: str, season: int):
@@ -36,7 +38,8 @@ def get_trade_roster(team_abbr: str, season: int):
             status_code=404,
             detail=f"No roster found for {team_abbr.upper()} in season {season}.",
         )
-    return {"team": team_abbr.upper(), "season": season, "roster": roster}
+    return {"team": team_abbr.upper(), "season": season, "roster": roster,
+            "_source": make_source(["player_season_stats", "player_clusters"], "nba_api (stats.nba.com) + Basketball-Reference")}
 
 @router.get("/trade/simulate")
 def simulate_trade(season: int, team_a: str, player_a_id: int, team_b: str, player_b_id: int):
@@ -79,4 +82,6 @@ def simulate_trade(season: int, team_a: str, player_a_id: int, team_b: str, play
             "leave-one-season-out validated: R2=0.92, average error ~2.5 wins over an 82-game season) — "
             "an estimate, not a guarantee."
         ),
+        "_source": make_source(["player_season_stats", "player_clusters", "season_similarity"],
+                               "nba_api (stats.nba.com) + Basketball-Reference; win model scripts/train_win_model.py"),
     }

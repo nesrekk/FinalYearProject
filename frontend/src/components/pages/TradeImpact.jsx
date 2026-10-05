@@ -5,7 +5,7 @@ import Loader from '../Loader';
 import InfoTooltip from '../common/InfoTooltip';
 import Icon from '../common/Icon';
 import TeamLogo from '../common/TeamLogo';
-import PlayerHeadshot from '../common/PlayerHeadshot';
+import PlayerName from '../common/PlayerName';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
@@ -19,6 +19,7 @@ import '../../styles/trade-impact.css';
 // says which seasons it covers and shows nothing when the data isn't there.
 
 const DEFAULT_SEASON = 2025; // the latest season with all three blocks on file
+const TRADE_SEASONS = Array.from({ length: 2026 - 2010 + 1 }, (_, i) => 2026 - i); // the Trade Analyzer's range
 
 function fmt(v, digits = 1) {
     return v == null ? '—' : Number(v).toFixed(digits);
@@ -65,14 +66,9 @@ function PlayerRow({ label, player }) {
     return (
         <div className="hb-trade-card">
             <div className="page-subtitle" style={{ marginBottom: 6 }}>{label}</div>
-            <span className="entity-row">
-                <PlayerHeadshot playerId={player.player_id} playerName={player.player_name} size={36} />
-                <span className="entity-row-text">
-                    <span className="hb-trade-name">{player.player_name}</span>
-                    <span className="entity-row-sub">
-                        {player.archetype || 'Unclustered'} · {fmt(player.pts)} pts · {fmt(player.min)} mpg
-                    </span>
-                </span>
+            <span className="hb-trade-name"><PlayerName playerId={player.player_id} name={player.player_name} size={36} /></span>
+            <span className="entity-row-sub" style={{ display: 'block', marginTop: 4 }}>
+                {player.archetype || 'Unclustered'} · {fmt(player.pts)} pts · {fmt(player.min)} mpg
             </span>
         </div>
     );
@@ -119,7 +115,7 @@ function FiveList({ report, replacedId, incomingId }) {
                 return (
                     <li key={p.player_id} className={swappedOut ? 'ti-five-out' : swappedIn ? 'ti-five-in' : ''}>
                         <span className="ti-five-name">
-                            {p.player_name}
+                            <PlayerName playerId={p.player_id} name={p.player_name} size={20} />
                             {swappedOut && <span className="ti-tag">leaves</span>}
                             {swappedIn && <span className="ti-tag ti-tag-in">arrives</span>}
                         </span>
@@ -406,8 +402,9 @@ export default function TradeImpact({ onNavigate }) {
                 </p>
 
                 <div className="input-row">
-                    <input type="number" className="input-field" value={season} min={2010} max={2026}
-                        onChange={(e) => changeSeason(Number(e.target.value))} aria-label="Season end year" />
+                    <select className="input-field" value={season} onChange={(e) => changeSeason(Number(e.target.value))} aria-label="Season">
+                        {TRADE_SEASONS.map((s) => <option key={s} value={s}>{`${s - 1}-${String(s).slice(-2)}`}</option>)}
+                    </select>
                     <select className="input-field" value={teamA} onChange={(e) => changeTeamA(e.target.value)} aria-label="Team A">
                         <option value="">Team A…</option>
                         {teams.map((t) => <option key={t} value={t}>{t}</option>)}
