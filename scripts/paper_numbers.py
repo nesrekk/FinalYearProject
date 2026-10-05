@@ -264,9 +264,13 @@ def data_and_pipeline(cur, N):
 
     # Minutes with an unidentified player on court, per season before the last.
     un = rows(cur, "SELECT season, bad_lineup_minutes / minutes FROM lineup_stint_seasons WHERE season < %s ORDER BY 1", (s1,))
-    N.add("UnidMinutesPctMin", pct(min(v for _, v in un), 0),
+    # Two decimals since round 8 step 6a: the parser finds most of ESPN's no-id players by exact name, season and team
+    # (pbp_lineups.load_season_names, player_bio), so what is left is a few hundredths of a per cent (it was 2-6%).
+    N.add("UnidMinutesPctMin", pct(min(v for _, v in un), 2),
           "min over seasons before the last of lineup_stint_seasons.bad_lineup_minutes / minutes")
-    N.add("UnidMinutesPctMax", pct(max(v for _, v in un), 0), "max of the same")
+    N.add("UnidMinutesPctMax", pct(max(v for _, v in un), 2), "max of the same")
+    N.claim(max(v for _, v in un) < 0.005,
+            "Data / Table audit: after the exact-name match only a fraction of a per cent of minutes a season lack five identified players a side")
     names = rows(cur, """SELECT g.season, count(DISTINCT e.player_name) FROM pbp_events e
                          JOIN lineup_stint_games g ON g.game_id = e.game_id
                          WHERE e.person_id IS NULL AND coalesce(e.player_name, '') <> '' AND g.season < %s
@@ -652,7 +656,9 @@ def tests(cur, N):
     mb = diff("EvDNextTestMultiBpmRmse", "impact_next", "test", "game_rmse", "rapm_multi", "bpm", 2, dm=True, cell=True)
     N.claim(not excludes_zero(mb), "Results: the three-season RAPM is indistinguishable from BPM on the test season")
     mp = diff("EvDNextTestMultiPriorRmse", "impact_next", "test", "game_rmse", "rapm_multi", "rapm_prior", 2)
-    N.claim(mp["diff"] < 0 and excludes_zero(mp), "Results: the three-season window is ahead of the one-season prior version on the test season")
+    # (No sentence uses this difference since round 6: the claim that the three-season window was ahead of the prior version on
+    # the test season, true until round 8 step 6b's rebuild (-0.15, p 0.06 since), guarded nothing; the macros stay defined.)
+    del mp
     bs = {ph: diff(f"EvDNext{P}BpmScaledBpmRmse", "impact_next", ph, "game_rmse", "bpm_scaled", "bpm", 2)
           for ph, P in (("validate", "Val"), ("test", "Test"))}
     N.claim(not excludes_zero(bs["validate"]) and not excludes_zero(bs["test"]),
@@ -863,9 +869,8 @@ def xrapm(cur, N):
             N.add(f"EvHeldTest{m}Rmse", dec(v, 2), f"paper_eval_metrics impact_heldout test {model} game_rmse ({se}, n {n})")
     N.claim(all(nx[(p, "xrapm_single")] > nx[(p, "rapm_single")] for p in ("tune", "validate", "test")),
             "Results: expected-points RAPM (one season) predicts next season's margins worse than actual-points RAPM in every phase")
-    N.claim(nx[("tune", "xrapm_prior")] > nx[("tune", "rapm_prior")] and nx[("validate", "xrapm_prior")] > nx[("validate", "rapm_prior")]
-            and nx[("test", "xrapm_prior")] < nx[("test", "rapm_prior")],
-            "Results: with a prior, the expected-points version is behind on the tune and validation seasons and marginally ahead on the test season")
+    N.claim(nx[("tune", "xrapm_prior")] > nx[("tune", "rapm_prior")] and nx[("validate", "xrapm_prior")] > nx[("validate", "rapm_prior")],
+            "Results: with a prior, the expected-points version is behind on the tune and validation seasons")
     N.claim(all(nx[(p, "xrapm_prior")] > nx[(p, "bpm")] for p in ("tune", "validate", "test")),
             "Results: expected-points RAPM with a prior never beats BPM on next-season margins")
     N.claim(all(yty[(p, "xrapm_prior")] > yty[(p, "rapm_prior")] for p in ("tune", "validate", "test")),
@@ -926,8 +931,7 @@ def xrapm(cur, N):
         N.claim(d_["tune"]["diff"] > 0 and excludes_zero(d_["tune"]) and d_["validate"]["diff"] > 0 and excludes_zero(d_["validate"]),
                 f"Results: expected-points RAPM ({what}) is behind its actual-points twin on the tune pairs and the validation season by more than its interval")
         N.claim(not excludes_zero(d_["test"]), f"Results: expected-points RAPM ({what}) is indistinguishable from its actual-points twin on the test season")
-    N.claim(all(r["diff"] > 0 for r in xb.values()) and not excludes_zero(xb["test"]),
-            "Results: expected-points RAPM with a prior is never ahead of BPM, and level with it on the test season")
+    N.claim(all(r["diff"] > 0 for r in xb.values()), "Results: expected-points RAPM with a prior is never ahead of BPM")
     N.claim(hs["diff"] > 0 and excludes_zero(hs) and hp["diff"] > 0 and excludes_zero(hp),
             "Results: on the test season's held-out games both expected-points versions are behind by more than their intervals")
     N.claim(all(not excludes_zero(r) for r in ys.values()), "Results: without the prior, the reliability gain is inside its interval in every phase")
@@ -970,9 +974,19 @@ def data_audit(cur, N):
     # Sentences of the Data quality subsection and the table.
     N.claim(a("wrong_player_left") == 0, "Table audit: the wrong-player tags are repaired (repair_espn_player_ids.find() finds none)")
     N.claim(a("twin_same_teams") + a("twin_neutral") == a("twin_games"), "Table audit: every nba_api game is an ESPN game again")
-    N.claim(a("teamless_player_games") == a("teamless_lines_higher") == a("teamless_pg_in_sub_games") == a("teamless_pg_games")
-            == a("teamless_games") and a("nan_team_in_sub_games") == a("nan_team_rows"),
-            "Data quality: one player-game per team-less-substitution game gets extra minutes, all in those games; the 'NaN' line is one of them")
+    # Round 8 step 6a: the parser ignores a team-less substitution naming nobody leaving and gives the one naming both players
+    # their team; before it, one player-game per such game gained minutes and one line had team 'NaN' (class 'disclosed').
+    N.claim(a("teamless_player_games") == 0 and a("teamless_lines_higher") == 0 and a("nan_team_rows") == 0,
+            "Table audit: no team-less substitution leaves a game line with extra minutes or without a team (handling: repaired)")
+    off_unrec = one(cur, """
+        WITH l AS (SELECT game_id, team_abbreviation t, sum(seconds::numeric) secs, sum((tm_pts - op_pts)::numeric) onc
+                   FROM player_game_lines GROUP BY 1, 2),
+             g AS (SELECT 'espn_' || espn_id game_id, team_abbreviation t, pts_for - pts_against m, periods gp
+                   FROM game_scores WHERE espn_id IS NOT NULL)
+        SELECT count(*) FROM l JOIN g USING (game_id, t) JOIN lineup_stint_games s ON s.game_id = l.game_id
+        WHERE abs(secs - 5 * (2880 + 300 * greatest(gp - 4, 0))) < 1 AND onc <> 5 * m AND NOT s.game_ok""")[0]
+    N.claim(a("oncourt_off") == off_unrec,
+            "Table audit: the game lines' on-court margin misses five times the final only in games whose play-by-play does not reconcile")
     N.claim(a("clock_signed_median") == -a("clock_median") < 0 and a("clock_espn_more_share") < 0.05,
             "Data quality: ESPN's clock runs behind the chart's (it shows less time left in all but a few per cent of shots)")
     N.claim(a("miss_threes_as_twos") > 3 * a("miss_twos_as_threes"), "Data quality: the text mostly turns missed threes into twos, not the reverse")
@@ -1186,22 +1200,30 @@ def ablations(cur, N):
     spec = {k.split(":")[2]: v for k, v in meta.items() if k.startswith("impact:rapm_prior:") and k.endswith(":spec")}
     N.add("AbPriorFullScale", dec(spec["scale=1"]["prior_scale"], 2), "paper_ablation_meta impact:rapm_prior:scale=1:spec")
     N.add("AbPriorDoubleScale", dec(spec["scale=2"]["prior_scale"], 2), "paper_ablation_meta impact:rapm_prior:scale=2:spec")
-    N.add("AbLamHighLambda", integer(spec["lambda=12000"]["lambda"]), "paper_ablation_meta impact:rapm_prior:lambda=12000:spec")
+    # Table ablations' "LamHigh" row is the protocol's free minimum, the grid point its rule sets aside (lambda 12,000 until round
+    # 8 step 6b's rebuild, 8,000 since; scripts/paper_ablations.py TABLE_ROWS).
+    lam_high = next(r["ablation"] for r in meta["table:rows"] if r["stem"] == "LamHigh")
+    N.add("AbLamHighLambda", integer(spec[lam_high]["lambda"]), f"paper_ablation_meta impact:rapm_prior:{lam_high}:spec")
     rp = {abl: {ph: t("impact_next", "rapm_prior", abl, "game_rmse", ph) for ph in ("tune", "validate", "test")}
-          for abl in ("scale=0", "scale=1", "scale=2", "lambda=12000", "no_poss_weight", "no_home", "no_home_rated")}
+          for abl in ("scale=0", "scale=1", "scale=2", lam_high, "no_poss_weight", "no_home", "no_home_rated")}
+    ab_p = dict(rows(cur, """SELECT model_a, p_boot FROM paper_ablation_tests WHERE task = 'impact_next' AND phase = 'test'
+                             AND metric = 'game_rmse' AND variant = '' AND model_b = 'rapm_prior:full'"""))
+    N.add("AbPriorFullP", pval(ab_p["rapm_prior:scale=1"]), "paper_ablation_tests p_boot, impact_next rapm_prior:scale=1 game_rmse test")
     N.claim(all(r[0] > 0 and r[1] > 0 for r in rp["scale=0"].values()),
             "Ablations: without the prior next-season RMSE rises in every phase, each outside its interval")
-    N.claim(rp["scale=1"]["tune"][1] > 0 and rp["scale=1"]["test"][2] < 0 and not out_of_ci(rp["scale=1"]["validate"]),
-            "Ablations: at scale 1 the prior is behind on the tuning pairs and ahead on the test season, both outside their intervals, level on validation")
+    N.claim(rp["scale=1"]["tune"][1] > 0 and rp["scale=1"]["test"][0] < 0 and not out_of_ci(rp["scale=1"]["test"])
+            and 0.05 <= ab_p["rapm_prior:scale=1"] < 0.06 and not out_of_ci(rp["scale=1"]["validate"]),
+            "Ablations: at scale 1 the prior is behind on the tuning pairs, outside the interval, ahead on the test season with an interval "
+            "that just reaches zero (p 0.05), level on validation")
     N.claim(all(r[1] > 0 for r in rp["scale=2"].values()), "Ablations: at scale 2 the prior version is behind in every phase")
     free = as_json(one(cur, "SELECT value FROM paper_eval_choices WHERE task = 'impact' AND model = 'rapm_prior' AND parameter = 'free_minimum'")[0])
-    N.claim(free["lambda"] == spec["lambda=12000"]["lambda"] and free["prior_scale"] == spec["lambda=12000"]["prior_scale"],
-            "Ablations: lambda = 12,000 at the chosen scale is the tuning grid's free minimum that the rule sets aside")
-    lh = rp["lambda=12000"]
+    N.claim(free["lambda"] == spec[lam_high]["lambda"] and free["prior_scale"] == spec[lam_high]["prior_scale"],
+            "Ablations: Table ablations' lambda row at the chosen scale is the tuning grid's free minimum that the rule sets aside")
+    lh = rp[lam_high]
     N.claim(lh["tune"][0] < 0 and lh["test"][2] < 0 and lh["validate"][0] > 0 and not out_of_ci(lh["validate"]),
             "Ablations: the free minimum is ahead on the tuning pairs and the test season (outside its interval) and behind, inside its interval, on validation")
     lh_rmse = one(cur, """SELECT value FROM paper_ablation_metrics WHERE task = 'impact_next' AND base = 'rapm_prior'
-                          AND ablation = 'lambda=12000' AND phase = 'test' AND metric = 'game_rmse'""")[0]
+                          AND ablation = %s AND phase = 'test' AND metric = 'game_rmse'""", (lam_high,))[0]
     bpm_rmse = one(cur, """SELECT value FROM paper_eval_metrics WHERE task = 'impact_next' AND model = 'bpm' AND phase = 'test'
                            AND metric = 'game_rmse'""")[0]
     N.claim(lh_rmse > bpm_rmse, "Ablations: with the grid minimum lambda RAPM + prior would still be behind BPM on the test season")
@@ -1220,13 +1242,16 @@ def ablations(cur, N):
             and meta["impact:no_home:prior_scale"] == meta["impact:no_poss_weight:prior_scale"],
             "Methods, Ablations: re-chosen, the prior scale stays at the full model's in every ablation and the home ablations keep one lambda")
     sw = {ph: t("impact_next", "rapm_single", "no_poss_weight", "game_rmse", ph) for ph in ("tune", "validate", "test")}
-    N.claim(all(r[1] > 0 for r in sw.values()), "Ablations: without possession weights one-season RAPM is worse in every phase, outside its interval")
+    N.claim(sw["tune"][1] > 0 and sw["validate"][1] > 0 and sw["test"][0] > 0 and not out_of_ci(sw["test"]),
+            "Ablations: without possession weights one-season RAPM is worse on the tuning and validation seasons, outside the interval, "
+            "and worse on the test season inside it")
     N.add("AbNoWeightSingleTest", dec(sw["test"][0], 2), f"{src}, impact_next rapm_single:no_poss_weight game_rmse test")
     N.add("AbNoWeightSingleLo", dec(sw["test"][1], 2), "paper_ablation_tests ci_lo, same row")
     N.add("AbNoWeightSingleHi", dec(sw["test"][2], 2), "paper_ablation_tests ci_hi, same row")
     nw = rp["no_poss_weight"]
-    N.claim(nw["tune"][1] > 0 and nw["validate"][1] > 0 and not out_of_ci(nw["test"]),
-            "Ablations: RAPM + prior without weights is worse on the tuning and validation seasons, inside its interval on the test season")
+    N.claim(nw["tune"][1] > 0 and nw["validate"][0] > 0 and not out_of_ci(nw["validate"]) and not out_of_ci(nw["test"]),
+            "Ablations: RAPM + prior without weights is worse on the tuning pairs, outside the interval; on the validation and test seasons "
+            "the difference is inside its interval")
     rel = {ph: t("impact_reliability", "rapm_prior", "no_poss_weight", "corr", ph) for ph in ("tune", "validate", "test")}
     N.claim(all(r[1] > 0 for r in rel.values()), "Ablations: without weights RAPM + prior is more reliable year to year in every phase")
     N.add("AbNoWeightRelTest", dec(rel["test"][0], 2), "paper_ablation_tests diff, impact_reliability rapm_prior:no_poss_weight corr test")
@@ -1500,6 +1525,8 @@ def data_quality_effect(cur, N):
     metric and scope of one drop set; its call is which side is lower with the interval excluding zero, or none."""
     N.start("Data quality, downstream (Section: Data quality; round 6 step 11) -- data_quality_game_flags, data_quality_sensitivity")
     lv = dict(rows(cur, "SELECT level, count(*) FROM data_quality_game_flags GROUP BY 1"))
+    cg = one(cur, "SELECT count(*) FROM data_quality_game_flags WHERE level = 'flagged' AND 'chart_gaps' = ANY(classes)")[0]
+    N.claim(cg > lv.get("flagged", 0) / 2, "Data quality: the flagged games are mostly games where the shot chart misses attempts")
     for k, K in (("flagged", "Flagged"), ("excluded", "Excluded"), ("worked_around", "Worked"), ("clean", "Clean")):
         N.add(f"DqsGames{K}", integer(lv.get(k, 0)), f"data_quality_game_flags level = {k}")
     cols = ("result", "drop_set", "scope", "games_dropped", "phase", "metric", "model_a", "model_b", "diff", "ci_lo", "ci_hi", "rand_p",
@@ -1527,14 +1554,20 @@ def data_quality_effect(cur, N):
     R = {(r["phase"]): r for r in S if r["drop_set"] == "flagged" and r["scope"] == "everywhere" and r["result"] == "impact"
          and (r["model_a"], r["model_b"], r["metric"]) == ("rapm_prior", "bpm", "game_rmse")}
     N.add("DqsImpactFlagGames", integer(R["test"]["games_dropped"]), "games dropped (flagged or excluded) for the impact result")
-    for ph, Ph in (("tune", "Tune"), ("test", "Test")):
+    for ph, Ph in (("tune", "Tune"), ("validate", "Val"), ("test", "Test")):
         r = P.diff(f"DqsImpact{Ph}", "impact_next", ph, "game_rmse", "rapm_prior", "bpm", 2, variant="drop:flagged", p=False)
         N.add(f"DqsImpact{Ph}RandLo", dec(R[ph]["rand_lo"], 2), "data_quality_sensitivity rand_lo: 2.5th percentile over the random drops")
         N.add(f"DqsImpact{Ph}RandHi", dec(R[ph]["rand_hi"], 2), "rand_hi: 97.5th percentile")
         N.add(f"DqsImpact{Ph}RandP", pval(R[ph]["rand_p"]), "rand_p: (1 + random drops moving it as far) / (1 + draws)")
     t = R["test"]
-    N.claim(not excl(P.get("impact_next", "test", "game_rmse", "rapm_prior", "bpm", "drop:flagged")) and t["rand_p"] > 0.05 and R["tune"]["rand_p"] > 0.05,
-            "Data quality: without the flagged games the test-season gap's interval reaches zero, but no further than random drops of as many games move it")
+    # Until round 8 step 6c the flagged games' move stayed inside the random drops (p 0.065 at 6b); with the team-less class
+    # no longer flagged (306 games, not 315) both phases' moves pass every one of the 30 random drops (p at its floor, 1/31).
+    vf = P.get("impact_next", "validate", "game_rmse", "rapm_prior", "bpm", "drop:flagged")
+    N.claim(vf["diff"] < 0 and not excl(vf), "Data quality: without the flagged games the validation season's lead keeps its sign but its interval reaches zero")
+    tf, uf = P.get("impact_next", "test", "game_rmse", "rapm_prior", "bpm", "drop:flagged"), P.get("impact_next", "tune", "game_rmse", "rapm_prior", "bpm", "drop:flagged")
+    N.claim(tf["diff"] > 0 and excl(tf) and uf["diff"] < 0 and excl(uf) and max(t["rand_p"], R["tune"]["rand_p"]) * (1 + t["rand_draws"]) < 1.5,
+            "Data quality: without the flagged games the test-season gap shrinks and the tuning seasons' lead grows, each further than every random drop (p at its floor), "
+            "and neither interval changes side")
     A = Pairs(cur, N, "data_quality_sensitivity", "drop_set = 'flagged' AND result = 'availability'")
     a = A.diff("DqsAvailTune", "pregame", "tune", "log_loss", "avail_bpm", "prior_rest", 4, variant="drop:flagged", p=False, lo_hi=False)
     ar = next(r for r in S if r["drop_set"] == "flagged" and r["result"] == "availability" and r["phase"] == "tune"
@@ -1542,8 +1575,10 @@ def data_quality_effect(cur, N):
     N.add("DqsAvailTuneRandP", pval(ar["rand_p"]), "availability, tune, log loss: rand_p of the flagged drop set")
     full_a = next(r for r in S if r["drop_set"] == "none" and r["result"] == "availability" and r["phase"] == "tune"
                   and r["metric"] == "log_loss" and r["model_a"] == "avail_bpm")
-    N.claim(a["diff"] > full_a["diff"] and ar["rand_p"] <= 0.05,
-            "Data quality: on the tuning seasons the gain from knowing who played shrinks without the flagged games, beyond random drops")
+    # Before round 8's play-by-play rebuild the flagged games were mostly games with an unidentified player and the gain halved
+    # without them (p 0.03); those players are identified now and the gain is unchanged.
+    N.claim(abs(a["diff"] - full_a["diff"]) < 0.001 and ar["rand_p"] > 0.05,
+            "Data quality: on the tuning seasons the gain from knowing who played is the same without the flagged games, within random drops")
 
 
 def rating_tracker(cur, N):
@@ -1579,34 +1614,38 @@ def rating_tracker(cur, N):
     allm = [m for m in ("bpm", "bpm_scaled", "rapm_prior", "rapm_multi", "rapm_single", "zero", "onoff", "onoff_scaled",
                         "xrapm_prior", "xrapm_single", "rapm_tracker", "xrapm_sa_prior", "xrapm_sa_single")]
     test_all = {m: pick("impact_next", "test", m, "game_rmse")[0] for m in allm}
-    N.claim(min(test_all, key=test_all.get) == "rapm_tracker",
-            "Results: the Rating Tracker has the lowest test-season next-season error of any estimator in Table rapm (BPM second)")
-    N.claim(sorted(test_all, key=test_all.get)[1] == "bpm", "Results: BPM is the best of the round-5 estimators on the test season")
+    # Round 8 step 6b: on the rebuilt stints the tracker's settings were re-chosen by the same rule (weaker carry-over) and BPM,
+    # not the tracker, has the lowest test-season error (the tracker had it before; R8-076).
+    N.claim(min(test_all, key=test_all.get) == "bpm",
+            "Results: BPM has the lowest test-season next-season error of any estimator in Table rapm, the Rating Tracker included")
     v, n, se = pick("impact_reliability", "test", "rapm_tracker", "corr")
     N.add("EvYtyTestTracker", dec(v, 2), f"paper_eval_metrics impact_reliability test rapm_tracker corr ({se}, n {n})")
     P = Pairs(cur, N, "paper_eval_tests")
     tb = {ph: P.diff(f"EvDNext{Ph}TrackerBpmRmse", "impact_next", ph, "game_rmse", "rapm_tracker", "bpm", 2,
                      dm=(ph == "test"), cell=(ph == "test")) for ph, Ph in PHASE_NAMES}
-    N.claim(all(tb[ph]["diff"] < 0 and excl(tb[ph]) for ph in ("tune", "validate")) and not excl(tb["test"]),
-            "Results: the tracker is ahead of BPM on the tuning and validation seasons by more than the interval and level on the test season")
+    N.claim(all(tb[ph]["diff"] < 0 and excl(tb[ph]) for ph in ("tune", "validate")) and tb["test"]["diff"] > 0 and excl(tb["test"]),
+            "Results: the tracker is ahead of BPM on the tuning and validation seasons and behind it on the test season, each by more than the interval")
     tp = {ph: P.diff(f"EvDNext{Ph}TrackerPriorRmse", "impact_next", ph, "game_rmse", "rapm_tracker", "rapm_prior", 2, cell=(ph == "test"),
                      dm=(ph == "test")) for ph, Ph in PHASE_NAMES}
-    N.claim(tp["tune"]["diff"] < 0 and excl(tp["tune"]) and tp["test"]["diff"] < 0 and excl(tp["test"]) and not excl(tp["validate"]),
-            "Results: the tracker is ahead of RAPM + prior on the tuning and test seasons by more than the interval, level on the validation season")
+    N.claim(tp["tune"]["diff"] < 0 and excl(tp["tune"]) and not excl(tp["validate"]) and not excl(tp["test"]),
+            "Results: the tracker is ahead of RAPM + prior on the tuning seasons by more than the interval, level on the validation and test seasons")
     ts = {ph: P.diff(f"EvDNext{Ph}TrackerSingleRmse", "impact_next", ph, "game_rmse", "rapm_tracker", "rapm_single", 2,
                      lo_hi=(ph == "test"), p=False) for ph, Ph in PHASE_NAMES}
     tm = {ph: P.diff(f"EvDNext{Ph}TrackerMultiRmse", "impact_next", ph, "game_rmse", "rapm_tracker", "rapm_multi", 2,
                      lo_hi=(ph == "test"), p=(ph == "test")) for ph, Ph in PHASE_NAMES}
-    N.claim(all(ts[ph]["diff"] < 0 and excl(ts[ph]) for ph in ts) and all(tm[ph]["diff"] < 0 for ph in tm) and not excl(tm["test"]),
-            "Results: the tracker is ahead of every RAPM version in every phase (of one-season RAPM by more than the interval; of the "
-            "three-season window on the test season inside it)")
+    N.claim(all(ts[ph]["diff"] < 0 and excl(ts[ph]) for ph in ts) and not any(excl(tm[ph]) for ph in tm),
+            "Results: the tracker is ahead of one-season RAPM in every phase by more than the interval and level with the three-season "
+            "window in every phase")
     hb = P.diff("EvDHeldTestTrackerBpmRmse", "impact_heldout", "test", "game_rmse", "rapm_tracker", "bpm", 2, p=False)
     hp = P.diff("EvDHeldTestTrackerPriorRmse", "impact_heldout", "test", "game_rmse", "rapm_tracker", "rapm_prior", 2, p=False)
     N.claim(hb["diff"] > 0 and excl(hb) and hp["diff"] < 0 and excl(hp),
             "Results: on held-out games of the same season BPM (which saw them) stays ahead of the tracker; the tracker is ahead of RAPM + prior")
     yb = {ph: P.get("impact_reliability", ph, "corr", "bpm", "rapm_tracker") for ph, _ in PHASE_NAMES}
-    P.diff("EvDYtyTestBpmTracker", "impact_reliability", "test", "corr", "bpm", "rapm_tracker", 2, p=False)
-    N.claim(all(r["diff"] < 0 and excl(r) for r in yb.values()), "Results: the tracker is more reliable year to year than BPM in every phase")
+    P.diff("EvDYtyTestBpmTracker", "impact_reliability", "test", "corr", "bpm", "rapm_tracker", 2)
+    yp = [P.get("impact_reliability", ph, "corr", "rapm_tracker", b) for ph, _ in PHASE_NAMES for b in ("rapm_prior", "rapm_single")]
+    N.claim(all(r["diff"] > 0 and excl(r) for r in yb.values()) and all(r["diff"] > 0 and excl(r) for r in yp),
+            "Results: year to year the tracker is more reliable than RAPM with or without a prior and less reliable than BPM, in every phase "
+            "by more than the interval")
     # Table tests rows and Table rapm claims for the shooter-aware version (step 8)
     sp = {ph: P.diff(f"EvDNext{Ph}XsaPriorPriorRmse", "impact_next", ph, "game_rmse", "xrapm_sa_prior", "rapm_prior", 2,
                      cell=(ph == "test"), dm=(ph == "test")) for ph, Ph in PHASE_NAMES}
@@ -1701,6 +1740,9 @@ def lineup_predictor(cur, N):
     N.add("LpLaterGame", integer(float(fit["const:later_after"][0])), "lineup_predictor_fit const:later_after (later = first used after this game)")
     N.add("LpNoiseModel", dec(float(fit["const:noise_check_model_var"][0]), 1), "lineup_predictor_fit noise check: real variance under the noise model")
     N.add("LpNoiseSplit", dec(float(fit["const:noise_check_split_cov"][0]), 1), "the same from the split-half covariance (no noise assumption)")
+    nm, ns = float(fit["const:noise_check_model_var"][0]), float(fit["const:noise_check_split_cov"][0])
+    N.claim(ns > nm, "Lineups: the split-half check puts the real variance above the noise model's, so the shares may read high")
+    N.add("LpNoiseOverPct", dec((ns / nm - 1) * 100, 0), "(split-half / noise-model real variance - 1) x 100: how far too high the shares may read (%)")
     P = Pairs(cur, N, "lineup_predictor_tests", "variant = 'later'")
     r = P.value("LpSumPct", "lineup", "test", "r2_true", "sum", 1, "later", scale=100, lo_hi=True)
     N.add("LpTestUnits", integer(r["n"]), "lineup_predictor_tests test later: lineups")
@@ -1846,14 +1888,19 @@ def report_card(cur, N):
     N.claim(sm["ci_hi"] < 0 and sc["ci_lo"] > 0, "Season by season: the simulator's win totals and ranges beat the record's in pooled terms, outside the interval")
     bp = put("RcBpmPrior", "impact_next", "game_rmse", "bpm", "rapm_prior", 2, pi=True, tau=True)
     N.add("RcBpmPriorLoses", word(bp["b_better"]), "seasons where RAPM + prior scores better")
-    N.claim(bp["ci_lo"] < 0 < bp["ci_hi"] and bp["pi_lo"] < 0 < bp["pi_hi"] and bp["a_better"] == bp["b_better"],
-            "Season by season: BPM and RAPM + prior split the seasons, the pooled difference and a new season's prediction interval include zero")
+    # Split 2-2 until round 8 step 6b's rebuild; 1-3 since (RAPM + prior ahead in three seasons), pooled still inside its interval.
+    N.claim(bp["ci_lo"] < 0 < bp["ci_hi"] and bp["pi_lo"] < 0 < bp["pi_hi"] and bp["a_better"] >= 1 and bp["b_better"] >= 1,
+            "Season by season: each of BPM and RAPM + prior wins some seasons; the pooled difference and a new season's prediction interval include zero")
     gaps = [abs(r[0]) for r in rows(cur, """SELECT diff FROM paper_eval_tests WHERE task = 'impact_next' AND metric = 'game_rmse'
                                              AND model_a = 'rapm_prior' AND model_b = 'bpm' AND variant = ''""")]
     N.claim(len(gaps) == 3 and bp["tau"] >= 0.5 * max(gaps),
             "Abstract: the true BPM - RAPM + prior difference varies between seasons (tau) by about as much as the protocol's gaps")
     tb = put("RcTrackerBpm", "impact_next", "game_rmse", "rapm_tracker", "bpm", 2, p=True)
     N.claim(tb["ci_lo"] < 0 < tb["ci_hi"] and tb["a_better"] == tb["k"] - 1, "Season by season: the tracker is ahead of BPM in all but one season, the pooled difference inside its interval")
+    lost = [se for se, d in rows(cur, """SELECT season, diff FROM report_card_tests WHERE task = 'impact_next' AND metric = 'game_rmse'
+                                          AND variant = '' AND model_a = 'bpm' AND model_b = 'rapm_tracker'""") if d < 0]
+    test_end = one(cur, "SELECT max(season) FROM paper_eval_predictions WHERE phase = 'test'")[0]
+    N.claim(lost == [test_end], "Season by season: the one season the tracker loses to BPM by game margins is the protocol's test season")
     tp = put("RcTrackerPrior", "impact_next", "game_rmse", "rapm_tracker", "rapm_prior", 2)
     ps = put("RcPriorSingle", "impact_next", "game_rmse", "rapm_prior", "rapm_single", 2)
     N.claim(ps["ci_hi"] < 0 and ps["a_better"] == ps["k"], "Season by season: the prior beats one-season RAPM every season, outside the interval")
@@ -1861,8 +1908,9 @@ def report_card(cur, N):
     N.claim(xb["a_better"] == 0, "Season by season: shooter-aware xRAPM + prior is behind BPM every season")
     pp = put("RcPossTrackerBpm", "impact_poss", "poss_rmse", "rapm_tracker", "bpm", 2, scale=10000, p=True)
     pq = put("RcPossTrackerPrior", "impact_poss", "poss_rmse", "rapm_tracker", "rapm_prior", 2, scale=10000, p=True)
-    N.claim(pp["a_better"] == pp["k"] and pp["ci_hi"] < 0 and pq["a_better"] == pq["k"] and pq["ci_hi"] < 0,
-            "Season by season: per possession the tracker is ahead of BPM and of RAPM + prior in every season, outside the interval")
+    # Every season and outside the interval until round 8 step 6b's rebuild (R8-076); since, most seasons and inside it.
+    N.claim(pp["a_better"] > pp["k"] / 2 and pq["a_better"] > pq["k"] / 2 and pp["ci_lo"] < 0 < pp["ci_hi"] and pq["ci_lo"] < 0 < pq["ci_hi"],
+            "Season by season: per possession the tracker is ahead of BPM and of RAPM + prior in most seasons, neither pooled difference outside its interval")
     sh = put("RcShotSaLf", "xfg", "log_loss", "sa", "lf", 1, scale=1000)
     N.claim(sh["a_better"] == sh["k"] and sh["ci_hi"] < 0, "Season by season: the shooter-aware price beats the shooter-blind one every season")
     k = rows(cur, "SELECT count(DISTINCT task || metric || variant || model_a || model_b) FROM report_card_pooled")[0][0]

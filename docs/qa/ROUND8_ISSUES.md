@@ -12,7 +12,8 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
-Counts (2026-10-05, after Step 6b): **77 entries**, 18 open, 59 fixed: 8 broken, 26 wrong number,
+Counts (2026-10-06, after Step 6c): **79 entries**, 16 open, 63 fixed: 8 broken, 27 wrong number,
+5 slow, 39 looks wrong. Step 6c fixed R8-074 and R8-076 and two it found (R8-078, R8-079). After Step 6b: 77 entries, 18 open, 59 fixed: 8 broken, 26 wrong number,
 5 slow, 38 looks wrong. Step 6b fixed R8-026 (the models fitted on the stints) and two it found (R8-075, R8-077), logged R8-076 (6c) and did R8-074's rerun (its rewrite is 6c's). After Step 6a: 74 entries, 18 open, 56 fixed: 7 broken, 24 wrong number,
 5 slow, 38 looks wrong. Step 6a fixed R8-022 to R8-025 and R8-027, the stints' part of R8-026 (open for 6b's
 refits) and one it found (R8-072); it logged R8-073 (Step 7) and R8-074 (6b/6c). After Step 5 it was 71 entries,
@@ -372,6 +373,66 @@ ones above).
 team-less class now that no game line carries its error (it crashes on the None excess); the claims that break are
 the paper's sentences on the stints (R8-074), the Rating Tracker (R8-076: "never behind BPM out of sample" no longer
 holds on the test season) and the ablation on possession weights.
+
+## Step 6c: the paper on the rebuilt data (2026-10-06)
+
+`scripts/rebuild_all.sh paper-inputs` passes again (manifest digest `6bd7540fca2384ca`, 1,353 macros in `paper/numbers.tex`,
+270 plotted numbers checked); `paper_numbers.py --check --paper` passes for the 8- and 6-page versions; `scripts/paper_build.sh`:
+long 18 pages, 8p 8, 6p 6, each in both review states, 0 overfull boxes, 0 undefined references. Copies of the three papers
+before the step: `paper/versions/nba_hub_paper{,_8p,_6p}_2026-10-06_r8.tex` (and `numbers_2026-10-06_r8_before.tex`).
+
+**Generators (R8-074):** `paper_data_audit.py` stores the team-less class's min/max excess (NULL since 6a) without a macro,
+prints the on-court class as a count (`DqOnCourtOff`, 12 of 14,399 team-games; `paper_numbers.py` claims all 12 are in
+unreconciled games), and its table now calls the team-less class **repaired** ("ignored, or given the players' team; none
+left in the game lines": `paper_numbers.py` claims 0 player-games and 0 lines without a team) and the unidentified class
+"matched by exact name; the rest's stints left out" with the minutes left untracked printed to two decimals (0.02-0.16%, was
+2-6%). Data Quality follows: a team-less substitution no longer makes a game "flagged" (`data_quality_lib.LEVEL_OF` →
+worked around): 315 → 306 flagged games. Reran `paper_data_audit.py`, `build_data_quality.py` (all 268 audit rows
+reproduce) and `paper_ablations.py` (R8-078; full models reproduce paper_eval exactly).
+
+**Claims:** 18 of `paper_numbers.py`'s claims failed on the rebuilt data. Each sentence was rewritten in every length that
+carries it, and each claim now states what the data say (no number typed, no model re-tuned on the test season); one claim
+that guarded no sentence (the three-season window ahead of RAPM + prior on the test season) was dropped; new claims guard
+the new sentences (the tracker's one losing season in the report card is the protocol's test season; the flagged games are
+mostly chart gaps; the lineup shares may read up to `LpNoiseOverPct` = 15% high).
+
+**Conclusions that moved (old → new):**
+- Rating Tracker vs BPM, test season: level, −0.01 [−0.13, +0.10] → **behind, +0.22 [+0.05, +0.40]** (p 0.009); still ahead
+  on tune (−0.29) and validate (−0.26). Abstract, contribution 3, the tracker section and the conclusion said it "ties BPM" /
+  is "the first RAPM version never behind BPM out of sample": now "trails BPM on the test season by more than its interval".
+- Lowest test-season next-season error in Table rapm: the tracker (15.31) → **BPM** (15.30; tracker 15.53, fourth). Bold moved.
+- Tracker vs RAPM + prior: ahead on tune and test → ahead on tune only, level on validate and test; vs the three-season window:
+  ahead in every phase → level in every phase; year to year: more reliable than BPM → **less** reliable than BPM (0.71 vs
+  0.74, p 0.04), still more than every RAPM version.
+- Report card: BPM vs RAPM + prior split 2-2 → 1-3 (pooled +0.06 [−0.33, +0.44], τ 0.22: still a property of the seasons);
+  tracker per possession ahead of BPM and RAPM + prior in every season, outside the interval → 3 and 4 of 4, both inside
+  (p 0.47, 0.17); by game the tracker loses only 2025-26.
+- Ablations: prior at scale 1 ahead on the test season outside its interval → at its edge (−0.09 [−0.17, 0.00], p 0.05);
+  the free minimum the rule sets aside λ 12,000 → 8,000 (same pattern: ahead on test, level on validate); possession weights
+  help one-season RAPM in every phase outside the interval → on tune and validate only (test +0.08 [−0.07, +0.23]); RAPM +
+  prior without weights worse on tune and validate → on tune only. "The best setting moves by more than one season's
+  interval" → "differs from season to season".
+- Data quality: flagged games 1,569 → 306, now mostly chart gaps (200), not unidentified players (56). Without them the
+  RAPM + prior − BPM gap: test 0.30 → 0.13 inside random drops → 0.29 → **0.21 [0.01, 0.40], past every random drop**
+  (0.24-0.37, p 0.03 = the floor of 30 draws), tune lead −0.16 → −0.19 (p 0.03), validate's interval now reaches zero; no
+  sign changes. The one effect beyond random drops was the who-played gain halving without the flagged games: now the same
+  (−0.0175 → −0.0173, p 0.68). Controlled cells beyond random drops 35 → 26 (13 expected).
+- Data section: minutes without ten identified players 2-6% → 0.02-0.16% a season; points: "a free throw counts for the five
+  on the court at the foul" added (long version).
+- Smaller: lineup shares may read "about a tenth" → "up to about 15%" too high; xRAPM + prior vs RAPM + prior on the test
+  season −0.04 → 0.00 (still level); xRAPM + prior vs BPM on test +0.25 (p 0.07) → +0.30 (p 0.04), "never ahead of BPM" holds.
+- Unchanged: RAPM + prior vs BPM reversal (−0.16 / −0.21 / +0.29, each outside), on/off worse than zero, xRAPM's negative
+  result, the shooter-aware price, shot quality vs shot-making, pre-game and simulator results, beliefs (0 clutch, 0 split
+  survivors; referees, luck), coaching (2-for-1 +0.43, won challenge), who-played odds (−0.0173 test), lineups (15.9% →
+  15.9%; fit adds nothing).
+
+**Page counts:** with the rebuilt numbers (and before any sentence changed) the 8p and 6p ran one page over (R8-079): trimmed in
+8p the platform sentence of "Limitations and Conclusion" and the ablations' "best setting" sentence, in 6p a clause each on
+identity errors and the pre-game favourite. The long version's ablation table moved to the top of its section and its caption
+lost the Tune column's RAPM clause (a float overran a column by 26 pt). The stats.nba.com sentence of Data and Code
+Availability now says the site stopped answering "for part of the time" (R8-006).
+
+Tests: full suite **513 passed, 1 skipped** (ledger), exit 0, 126 s; eslint 0. The 2 failed + 5 errors Step 6b left pass.
 
 ## Constraints (not defects)
 
@@ -805,10 +866,11 @@ holds on the test season) and the ablation on possession weights.
 - **Found by:** `test_pair_chemistry_grid_known_team` after Step 6a's rebuild tracked all of his minutes (the gap hid it before; the test's bound now allows 0.2%). Fix: sum seconds (or unrounded minutes) and round once.
 
 ### R8-074 · The paper's audit classes on the lines and stints measure what Step 6a fixed
-- **Severity:** wrong number (paper) · **Step:** 6b (rerun) + 6c (rewrite) · **Status:** open for 6c (the rerun done in the Step 6b commit)
+- **Severity:** wrong number (paper) · **Step:** 6b (rerun) + 6c (rewrite) · **Status:** fixed in the Step 6c commit (the rerun in the Step 6b commit)
 - **Where:** `paper_data_audit.py`: `oncourt_off_share` (the paper's "on-court margin isn't 5 × the final in 25% of full-minute team-games") reads `player_game_lines.tm_pts - op_pts`, now 0.1%; `unidentified` (untracked minutes, 2-6% a season) is now 0.02-0.4%; `teamless_sub` and the NaN team are no longer in the lines. The feed's own errors are still there (`score_steps_miss` measures the stale score fields directly; ESPN still sends the no-id names and the team-less substitutions).
 - **Found by:** Step 6a (`test_audit_matches_the_database_now`, `test_paper_data_audit.py`). Fix: Step 6b reruns the audit and `build_data_quality.py`; Step 6c rewrites the sentences (what the feed gets wrong vs what the platform now corrects), e.g. measure the on-court class from the score steps if the paper keeps it.
 - **Step 6b:** the audit and Data Quality reran. The audit now measures `oncourt_off_share` 0.08% (was 25%), unidentified minutes 0.02-0.16% a season (2-6%), the team-less class 12 substitutions in 9 games adding 0 player-game seconds (`teamless_extra_min/max` are None), 0 'NaN' lines, missed threes worded as twos 8,708 (8,688). The script crashed after writing on that None (fixed: the print), and `api/data_quality_lib.py` words the empty class and sub-1% shares; `paper_numbers.py` still stops on it (`float(None)`), so Step 6c decides the paper's wording for the class before regenerating.
+- **Step 6c:** the class is printed as what the parser now does: team-less substitutions 'repaired' (none left in the game lines; claimed 0), unidentified minutes 0.02-0.16% with two decimals and the exact-name match named in the handling, the on-court class a count (12 of 14,399 team-games, claimed to be in unreconciled games); the NULL excess is stored without a macro. The paper's Data section says how the no-id players are matched and that a free throw counts for the five at the foul. Data Quality: a team-less substitution no longer flags a game (306 flagged).
 
 ### R8-075 · Rotations' glue-back check failed in 5,189 games after Step 6a
 - **Severity:** broken (a build check) · **Step:** 6b · **Status:** fixed in the Step 6b commit
@@ -816,10 +878,21 @@ holds on the test season) and the ablation on possession weights.
 - **Found by:** Step 6b's rebuild (the build's own printed check; the smoke test reads the stored flag and would have failed). Fix: pass `miss_three_calls()` like `build_lineup_stints.py`. Now 7,229 of 7,232: the known espn_401468511 and two new ones the 6a free-throw rule exposed (espn_401468743, espn_401704644: substitutions between two free throws that ESPN's clock puts 12-15 s apart and the corrected clock at the trip's first free throw; with the second free throw credited at the foul the lineup in between has neither time nor anything credited on the corrected clock, while the stints, on ESPN's clock, keep its 12-15 s). The smoke test now pins the three game ids; README Known real gaps and the build's docstring say why.
 
 ### R8-076 · The Rating Tracker re-chose its settings on the rebuilt stints and now trails BPM on the test season
-- **Severity:** wrong number (paper) · **Step:** 6c (rewrite) · **Status:** open
+- **Severity:** wrong number (paper) · **Step:** 6c (rewrite) · **Status:** fixed in the Step 6c commit (the paper says it plainly in all its places; README's round-6 note annotated)
 - **Where:** `rating_tracker_fit` / `paper_eval` model `rapm_tracker`. The same rule (pooled next-season RMSE over the three tune pairs, Powell from two starts, both agreeing) picks λ₀ 421, λq 576, λb 10,443, k 0.58, φ 0.80 (was 4,918, 3,424, 11,050, 0.76, 0.89): much weaker carry-over. On the rebuilt stints the earlier settings score 14.416 on the tune pairs against 14.384, so the rule's choice is right by its own criterion; on 2025-26 they would have scored 15.30 against the new 15.53. Under the protocol the tracker − BPM difference is −0.29 (tune), −0.26 (validate) and **+0.22 [+0.05, +0.40] on the test season** (was −0.01 [−0.13, +0.10]); year-to-year r 0.80 → 0.71 (BPM 0.74); the platform's next-season scale for 2025-26 is 0.85.
 - **Found by:** Step 6b. Not changed (re-picking after seeing the test season would be peeking). The app's cards and README say it; the paper's "the first RAPM version never behind BPM out of sample" (README Round 6 step 7 and the paper's tracker paragraph) is Step 6c's to rewrite. `test_rating_tracker.py`'s scale bound restated (0.9-1.1 → 0.8-1.1).
+- **Step 6c:** the paper's abstract, contribution 3, the tracker subsection, the report-card paragraph and the conclusion now say the tracker trails BPM on the test season by more than its interval (+0.22 [0.05, 0.40]), that BPM has the lowest test-season error, that the tracker is level with RAPM + prior (validate, test) and the three-season window (every phase) and less reliable than BPM year to year; the 8p/6p versions never carried the tracker. Claims in `paper_numbers.py` pin each sentence.
 
 ### R8-077 · Card and README numbers that were already stale before the rebuild
 - **Severity:** wrong number · **Step:** 6b · **Status:** fixed in the Step 6b commit
 - **Where / what:** found while re-reading every number on the rebuilt tables. Assist Network card: "0 of 3,172 player-seasons differ" from the Game Log (4 differ by one assist, the known-facts suite pins them; now "all but 4 of 3,761 player-team-seasons"). Rim Deterrence card: year-to-year "948 player pairs, 0.34 / 0.17 / 0.36" could not be reproduced by any pairing tried; restated with its definition (913 pairs, one row per player-season, 0.34 / 0.19 / 0.37). RAPM card and README: "the Nuggets were +0.5 without him" in 2020-21 (on/off before the 2026-10-03 rebuild; −1.4 since). Pair Chemistry card and README: the 2023-24 Nuggets' 97% tracked and Jokić–Murray 1,410 minutes at +14.6 (Step 6a's rebuild: 100%, 1,424 at +15.8). README Possessions: "after a defensive rebound 1.16" (1.155 rounded; now 1.15). README Situational Splits: "73,306 qualified" (73,319 before, 73,330 now). Data Coverage: the Rating Tracker's settings "estimated by marginal likelihood" (they are chosen by next-season RMSE; the likelihood estimate is stored, not used).
+
+### R8-078 · The ablation table named the protocol's free minimum λ = 12,000 by hand
+- **Severity:** wrong number (paper) · **Step:** 6c · **Status:** fixed in the Step 6c commit
+- **Where:** `scripts/paper_ablations.py` `TABLE_ROWS` row `lambda=12000`, `paper_numbers.py` (`spec["lambda=12000"]`) and `paper_figures.py` (`AbLamHighLambda` expected 12000). The paper calls that row "the tuning grid's own minimum, which the rule sets aside"; after Step 6b the protocol's free minimum (`paper_eval_choices` impact rapm_prior free_minimum) is λ 8,000, so the row would have described a different setting.
+- **Found by:** the claim "lambda = 12,000 ... is the tuning grid's free minimum" failing in 6c. Fix: the row is λ 8,000 (comment says why); `paper_numbers.py` reads the row's λ from `table:rows` and claims it equals the stored free minimum; `paper_figures.py` reads it from `paper_eval_choices`. Same pattern as before: ahead on the test season (−0.14 [−0.23, −0.06]), level on validate.
+
+### R8-079 · The 8- and 6-page papers ran a page over with the rebuilt numbers
+- **Severity:** looks wrong (paper) · **Step:** 6c · **Status:** fixed in the Step 6c commit
+- **Where:** `paper/nba_hub_paper_8p.tex` (9 pages), `_6p.tex` (7 pages) with the regenerated numbers and tables, before any sentence changed; the long version's ablation table overran a column by 26 pt.
+- **Found by:** `scripts/paper_build.sh`. Fix: trimmed sentences that carry no result in the short versions (list in the Step 6c section); moved the long version's ablation table and shortened its caption. Now 18 / 8 / 6 pages, no overfull box.

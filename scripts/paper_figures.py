@@ -65,6 +65,7 @@ Usage (Python: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3):
 """
 
 import argparse
+import json
 import math
 import os
 import re
@@ -457,6 +458,11 @@ def fig_rapm_sens(cur, C, out_dir, png_dir):
             if kind in grid:
                 grid[kind].append(float(val))
     C.claim(chosen_scale not in grid["scale"] and chosen_lam not in grid["lambda"], "the chosen settings are the full model, not a grid point")
+    # The table's "LamHigh" row is the protocol's free minimum (the grid point its rule sets aside): 12,000 until round 8
+    # step 6b's rebuild, 8,000 since (scripts/paper_ablations.py TABLE_ROWS).
+    cur.execute("SELECT value FROM paper_eval_choices WHERE task = 'impact' AND model = 'rapm_prior' AND parameter = 'free_minimum'")
+    free = cur.fetchone()[0]
+    free_lam = float((free if isinstance(free, dict) else json.loads(free))["lambda"])
     fig, axes = plt.subplots(1, 2, figsize=(COL_W, 1.9), sharey=True)
     fig.subplots_adjust(left=0.135, right=0.985, bottom=0.21, top=0.86, wspace=0.08)
     xoff = {"scale": {"tune": -0.035, "validate": 0.0, "test": 0.035}, "lambda": {"tune": 0.94, "validate": 1.0, "test": 1.064}}
@@ -494,7 +500,7 @@ def fig_rapm_sens(cur, C, out_dir, png_dir):
                 C.expect(f"AbPriorNone{P}", r0["diff"], 2)
                 C.expect(f"AbPriorFull{P}", r1["diff"], 2)
             else:
-                rh = A[("impact_next", phase, "game_rmse", "rapm_prior:lambda=12000", "rapm_prior:full", "")]
+                rh = A[("impact_next", phase, "game_rmse", f"rapm_prior:lambda={free_lam:g}", "rapm_prior:full", "")]
                 C.expect(f"AbLamHigh{P}", rh["diff"], 2)
             C.expect(f"EvDNext{P}PriorBpmRmse", -bpm, 2)
         ax.set_ylim(*ylim)
@@ -525,7 +531,7 @@ def fig_rapm_sens(cur, C, out_dir, png_dir):
         C.claim(len(set(best.values())) > 1, f"rapm_sens caption: the best {kind} differs between phases")
     C.expect("AbPriorFullScale", 1.0, 2)
     C.expect("AbPriorDoubleScale", 2.0, 2)
-    C.expect("AbLamHighLambda", 12000.0, 0)
+    C.expect("AbLamHighLambda", free_lam, 0)
     bpm_h = Line2D([], [], color="black", lw=0.7, ls=(0, (4, 2)), label="BPM, same phase")
     phase_legend(fig, 0.995, handles_extra=(bpm_h,), short=True)
     return save(fig, out_dir, "fig_rapm_sens", png_dir)

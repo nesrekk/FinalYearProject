@@ -30,16 +30,24 @@ Error classes (key: what is measured)
                       player tagged in the same game, and how many a teammate
     unidentified      events with a player name and no player id, the distinct
                       names per season, and the share of minutes with fewer than
-                      five identified players a side (lineup_stint_seasons)
+                      five identified players a side (lineup_stint_seasons; since
+                      round 8 step 6a the parser finds most no-id players by exact
+                      name, season and team in player_bio, so the feed's count and
+                      the minutes left untracked are far apart)
     teamless_sub      substitutions logged with no team, the games they are in,
                       and the player-games where the game lines (Game.run) credit
                       more seconds than the stints (Game.stints); the one
-                      player_game_lines row with team 'NaN' comes from one of them
+                      player_game_lines row with team 'NaN' came from one of them.
+                      Since round 8 step 6a the parser ignores the ones naming
+                      nobody leaving and gives the one naming both players their
+                      team, so both counts are 0 (paper_numbers.py claims it)
     score_fields      per season, games where summing every positive step of
                       ESPN's score fields misses the real final score; games where
                       a score field steps backwards; and the consequence for the
                       game lines' on-court points (team-games with full minutes
-                      whose summed on-court margin is not five times the final)
+                      whose summed on-court margin is not five times the final;
+                      since round 8 step 6a the lines take their points from the
+                      stints, so only the unreconciled games are left)
     last_score        games whose last play-by-play score differs from ESPN's own
                       scoreboard final (team_game_totals vs game_scores)
     unreconciled      games whose stints fail the reconciliation against the real
@@ -239,8 +247,10 @@ def feed_checks(cur, A):
     A.put("teamless_lines_higher", higher, "of those, the lines credit more")
     A.put("teamless_pg_games", games, "games they are in")
     A.put("teamless_pg_in_sub_games", in_teamless, "of those player-games, in a game with a team-less substitution")
-    A.put("teamless_extra_min", lo, "smallest excess (seconds)", macro="DqTeamlessExtraMin", fmt="int_round")
-    A.put("teamless_extra_max", hi, "largest excess (seconds)", macro="DqTeamlessExtraMax", fmt="int_round")
+    # Since round 8 step 6a the parser ignores a team-less substitution that names nobody leaving (and applies the one
+    # naming both players to their team), so no game line differs from the stints and these are NULL: stored, not printed.
+    A.put("teamless_extra_min", lo, "smallest excess (seconds)", macro=None if lo is None else "DqTeamlessExtraMin", fmt="int_round")
+    A.put("teamless_extra_max", hi, "largest excess (seconds)", macro=None if hi is None else "DqTeamlessExtraMax", fmt="int_round")
     nan = q(cur, """SELECT l.game_id FROM player_game_lines l WHERE l.team_abbreviation = 'NaN' OR l.team_abbreviation IS NULL""")
     A.put("nan_team_rows", len(nan), "player_game_lines rows with team 'NaN'", macro="DqNanTeamRows", fmt="word")
     A.put("nan_team_in_sub_games", sum(1 for (g,) in nan if q(cur, """SELECT 1 FROM pbp_events WHERE game_id = %s
@@ -281,8 +291,9 @@ def score_checks(cur, A):
     A.put("oncourt_full", full, "of those, players' seconds within 1 s of 5 x the game length",
           macro="DqOnCourtFull", fmt="integer")
     A.put("oncourt_five", five, "of those, summed on-court margin (tm_pts - op_pts) exactly 5 x the final margin")
-    A.put("oncourt_off_share", 1 - five / full, "share of full-minute team-games whose on-court margin is not 5 x the final",
-          macro="DqOnCourtOffPct", fmt="pct0")
+    A.put("oncourt_off", full - five, "full-minute team-games whose on-court margin is not 5 x the final",
+          macro="DqOnCourtOff", fmt="integer")
+    A.put("oncourt_off_share", 1 - five / full, "share of full-minute team-games whose on-court margin is not 5 x the final")
 
     (n, bad), = q(cur, """SELECT count(DISTINCT t.game_id), count(DISTINCT t.game_id) FILTER (
                               WHERE t.pts_for <> g.pts_for OR t.pts_against <> g.pts_against)
@@ -583,16 +594,15 @@ CLASSES = [
      "named events with no player id; minutes with fewer than five identified players",
      "\\pnDqUnidEvents{} events (\\pnDqUnidEventsPct\\%); \\pnUnidMinutesPctMin--\\pnUnidMinutesPctMax\\% of minutes "
      "a season before \\pnStintLastSeason",
-     "excluded", "stints left out of lineup tables"),
+     "excluded", "matched by exact name; the rest's stints left out"),
     ("Play-by-play", "teamless_sub", "Substitution with no team",
-     "substitutions with an empty team; game-line minutes above stint minutes",
-     "\\pnDqTeamlessSubs{} events in \\pnDqTeamlessGames{} games; \\pnDqTeamlessPlayerGames{} player-games "
-     "+\\pnDqTeamlessExtraMin{} to +\\pnDqTeamlessExtraMax{} s; \\pnDqNanTeamRows{} line with no team",
-     "disclosed", "stints right; game lines not rebuilt"),
+     "substitutions with an empty team; game-line minutes vs.\\ stint minutes",
+     "\\pnDqTeamlessSubs{} events in \\pnDqTeamlessGames{} games; none left in the game lines",
+     "repaired", "ignored, or given the players' team"),
     ("Play-by-play", "score_fields", "Stale or backward score fields",
      "summed positive score steps vs.\\ the real final; score falling between events",
      "\\pnStaleGamesPct\\% of games \\pnStaleFirstSeason{} to \\pnStaleLastSeason; backward steps in \\pnDqScoreBackwardGames{} "
-     "of \\pnDqEspnGames{} games; on-court margin $\\neq 5\\times$ final in \\pnDqOnCourtOffPct\\% of team-games",
+     "of \\pnDqEspnGames{} games; on-court margin $\\neq 5\\times$ final in \\pnDqOnCourtOff{} of \\pnDqOnCourtFull{} team-games",
      "worked around", "points from made shots; score fields only as fallback"),
     ("Play-by-play", "last_score", "Last score $\\neq$ final score",
      "last play-by-play score vs.\\ ESPN scoreboard final",

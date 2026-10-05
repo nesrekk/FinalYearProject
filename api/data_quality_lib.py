@@ -30,15 +30,19 @@ CHART_UNMATCHED_SHARE = 0.05        # a game's chart gap: no chart rows, or more
 # Quality level of a game, worst first. The level is the worst handling among the classes that touch it.
 LEVELS = (
     ("excluded", "Excluded", "Left out of every ranking: no real final (an NBA Cup final) or it does not reconcile."),
-    ("flagged", "Flagged", "Kept, with an error left in the data: an event's tag and text disagree, a substitution has no team, "
+    ("flagged", "Flagged", "Kept, with an error left in the data: an event's tag and text disagree, "
                            "a player has no id (those stints are left out of lineup tables) or the shot chart is missing attempts."),
     ("worked_around", "Worked around", "Touched only by errors the pipeline repairs or works around (stale score fields, the clock, "
-                                       "missed threes worded as twos, zero distances, the plus-minus field, a duplicate copy)."),
+                                       "missed threes worded as twos, zero distances, the plus-minus field, a duplicate copy, "
+                                       "a substitution with no team)."),
     ("clean", "Clean", "No error class touches the game."),
 )
 LEVEL_OF = {
     "cup_finals": "excluded", "unreconciled": "excluded",
-    "tag_text": "flagged", "teamless_sub": "flagged", "unidentified": "flagged", "chart_gaps": "flagged",
+    "tag_text": "flagged", "unidentified": "flagged", "chart_gaps": "flagged",
+    # round 8 step 6a: the parser ignores a team-less substitution naming nobody leaving and gives the one naming both
+    # players their team, so no game line or stint keeps its error (the paper's audit calls the class repaired)
+    "teamless_sub": "worked_around",
     "twin_copies": "worked_around", "wrong_player": "worked_around", "score_fields": "worked_around", "last_score": "worked_around",
     "missed_threes": "worked_around", "clock_offset": "worked_around", "zero_distance": "worked_around", "plus_minus": "worked_around",
 }
