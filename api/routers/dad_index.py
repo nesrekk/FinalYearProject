@@ -3,6 +3,7 @@ import math
 from typing import Optional
 
 from source_badge import make_source
+from season_team import select_list, season_team_sql
 
 from fastapi import APIRouter, HTTPException
 
@@ -71,7 +72,7 @@ def get_dad_index(season: Optional[int] = None):
             raise HTTPException(status_code=404, detail=f"No real matchup data for season {season}.")
 
         cursor.execute(
-            """SELECT player_id, player_name, team_abbreviation, position, pos_group, total_poss, n_assignments,
+            f"""SELECT player_id, player_name, {season_team_sql(cursor)}, position, pos_group, total_poss, n_assignments,
                       dad, dad_z, dad_pos_z, replacement_share, top3, d_fga, d_fg_pct, normal_fg_pct, dfg_diff
                FROM defender_dad WHERE season = %s AND qualified ORDER BY dad DESC;""",
             (season,),

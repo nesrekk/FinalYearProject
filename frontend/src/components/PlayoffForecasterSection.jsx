@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { fetchPlayoffComparison, fetchLivePlayerSuggestions } from '../services/api';
+import { fetchPlayoffComparison } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import AutocompleteDropdown from './common/AutocompleteDropdown';
+import NamesakeNote from './common/NamesakeNote';
+import usePlayerSuggestions from '../utils/usePlayerSuggestions';
 import { STAT_GLOSSARY } from '../utils/statGlossary';
 import TableExport from './common/TableExport';
 import SeasonSelect from './common/SeasonSelect';
@@ -33,31 +35,14 @@ function deltaColor(v) {
 export default function PlayoffForecasterSection() {
     const searchInputRef = useRef(null);
     const [searchInput, setSearchInput] = useState('Shai Gilgeous-Alexander');
-    const [suggestions, setSuggestions] = useState([]);
-    const [playerName, setPlayerName] = useState('Shai Gilgeous-Alexander');
+    // { name, id }: the id (from a suggestion) picks the player exactly; a typed name opens the latest of that name.
+    const [player, setPlayer] = useState({ name: 'Shai Gilgeous-Alexander', id: null });
     const [season, setSeason] = useState(2026);
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const query = searchInput.trim();
-        if (query.length < 2 || query.toLowerCase() === playerName.toLowerCase()) {
-            setSuggestions([]);
-            return;
-        }
-        let active = true;
-        const timer = setTimeout(async () => {
-            try {
-                const res = await fetchLivePlayerSuggestions(query, 8);
-                if (active) setSuggestions(res?.results ?? []);
-            } catch {
-                if (active) setSuggestions([]);
-            }
-        }, 200);
-        return () => { active = false; clearTimeout(timer); };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchInput]);
+    const sug = usePlayerSuggestions(searchInput, player.name);
 
     useEffect(() => {
         let active = true;
@@ -65,7 +50,7 @@ export default function PlayoffForecasterSection() {
         setError('');
         (async () => {
             try {
-                const res = await fetchPlayoffComparison(playerName, season);
+                const res = await fetchPlayoffComparison(player.name, season, player.id || undefined);
                 if (active) setData(res);
             } catch (e) {
                 if (active) {
@@ -77,12 +62,12 @@ export default function PlayoffForecasterSection() {
             }
         })();
         return () => { active = false; };
-    }, [playerName, season]);
+    }, [player, season]);
 
-    function pick(name) {
-        setSearchInput(name);
-        setSuggestions([]);
-        setPlayerName(name);
+    function pick(next) {
+        sug.dismiss();
+        setSearchInput(next.name);
+        setPlayer(next);
     }
 
     return (
@@ -108,14 +93,18 @@ export default function PlayoffForecasterSection() {
                             type="text"
                             className="input-field"
                             placeholder="Player name…"
+                            aria-label="Player"
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && searchInput.trim()) pick({ name: searchInput.trim(), id: null }); }}
                             style={{ width: '100%' }}
                         />
-                        <AutocompleteDropdown anchorRef={searchInputRef} items={suggestions} onPick={pick} />
+                        <AutocompleteDropdown anchorRef={searchInputRef} items={sug.labels}
+                            onPick={(label) => { const p = sug.pick(label); if (p) pick({ name: p.name, id: p.id }); }} />
                     </div>
                     <SeasonSelect value={season} onChange={setSeason} from={2010} />
                 </div>
+                <NamesakeNote name={data?.player_name} id={data?.player_id} onPick={pick} />
                 {error && <p className="error-message" style={{ marginTop: '0.5rem' }}>{error}</p>}
             </div>
 

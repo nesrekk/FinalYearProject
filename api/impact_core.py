@@ -928,11 +928,18 @@ def _fetch_current_news_uncached(date_str: Optional[str], limit: int, team: Opti
         dedup[item["headline"]] = item
     unique_items = list(dedup.values())[:limit]
     return unique_items
+# Players by name, latest career first: names aren't unique (19 belong to two players, e.g. two
+# Brandon Williams), and an unordered DISTINCT ... LIMIT 1 used to return the lower id, i.e. usually
+# the retired one. Same order as the frontend's namesakes() (utils/playerChoice.js): last season,
+# then career minutes. Pass an id through resolve_player() whenever the caller knows it.
+_PLAYER_ORDER = "ORDER BY MAX(season) DESC, SUM(COALESCE(min, 0) * COALESCE(gp, 0)) DESC, player_id"
+
+
 def find_player(cursor, player_name: str):
     # Exact match
     cursor.execute(
-        "SELECT DISTINCT player_id, player_name FROM player_season_stats "
-        "WHERE LOWER(player_name) = LOWER(%s) LIMIT 1;",
+        "SELECT player_id, (array_agg(player_name ORDER BY season DESC))[1] FROM player_season_stats "
+        f"WHERE LOWER(player_name) = LOWER(%s) GROUP BY player_id {_PLAYER_ORDER} LIMIT 1;",
         (player_name,),
     )
     row = cursor.fetchone()
@@ -941,8 +948,8 @@ def find_player(cursor, player_name: str):
 
     # Partial match
     cursor.execute(
-        "SELECT DISTINCT player_id, player_name FROM player_season_stats "
-        "WHERE LOWER(player_name) LIKE LOWER(%s) LIMIT 1;",
+        "SELECT player_id, (array_agg(player_name ORDER BY season DESC))[1] FROM player_season_stats "
+        f"WHERE LOWER(player_name) LIKE LOWER(%s) GROUP BY player_id {_PLAYER_ORDER} LIMIT 1;",
         (f"%{player_name}%",),
     )
     row = cursor.fetchone()
@@ -953,7 +960,10 @@ def find_player(cursor, player_name: str):
     # LOWER() above doesn't strip accents, so an un-accented query against
     # an accented name falls through to here.
     normalized_query = _normalize_search_text(player_name)
-    cursor.execute("SELECT DISTINCT player_id, player_name FROM player_season_stats;")
+    cursor.execute(
+        "SELECT player_id, player_name FROM player_season_stats "
+        f"GROUP BY player_id, player_name {_PLAYER_ORDER};"
+    )
     candidates = cursor.fetchall()
     for pid, pname in candidates:
         if normalized_query == _normalize_search_text(pname):
@@ -968,7 +978,8 @@ def find_player(cursor, player_name: str):
 def resolve_player(cursor, player_name: str, player_id: Optional[int] = None):
     """find_player(), unless an NBA id is given. Names aren't unique (19 names
     belong to two players in player_season_stats, e.g. two Brandon Williams
-    and two Mike James), so callers that know the id (the Workbench) pass it."""
+    and two Mike James): every route that takes a typed name also takes an
+    optional player_id, and the pages pass it whenever they know it."""
     if player_id is None:
         return find_player(cursor, player_name)
     cursor.execute(
@@ -1093,9 +1104,11 @@ def _percentile_rank(value, pool_values):
     return round(100 * below_or_equal / n, 1)
 GUESS_GAME_MAX_GUESSES = 8
 def _guess_game_pool(cursor, season: int):
+    # The team clue: the play-by-play's where the season row names one he never played for (season_team.py).
+    from season_team import season_team_sql
     cursor.execute(
-        """
-        SELECT p.player_id, p.player_name, p.team_abbreviation, p.age,
+        f"""
+        SELECT p.player_id, p.player_name, {season_team_sql(cursor, 'p.')} AS team_abbreviation, p.age,
                p.pts, p.reb, p.ast, p.bpm_position, c.archetype
         FROM player_season_stats p
         LEFT JOIN player_clusters c
@@ -1281,13 +1294,15 @@ TRADE_ROSTER_COLS = [
     "p.impact_score_raw", "c.archetype",
 ]
 def _fetch_roster(cursor, team_abbr: str, season: int):
+    # Who played for the team: the play-by-play's team where the season row names one he never played for.
+    from season_team import season_team_sql
     cursor.execute(
         f"""
         SELECT {', '.join(TRADE_ROSTER_COLS)}
         FROM player_season_stats p
         LEFT JOIN player_clusters c
             ON c.player_id = p.player_id AND c.season = p.season
-        WHERE p.team_abbreviation = %s AND p.season = %s
+        WHERE {season_team_sql(cursor, 'p.')} = %s AND p.season = %s
         ORDER BY p.min DESC;
         """,
         (team_abbr.upper(), season),

@@ -54,6 +54,7 @@ if _API_DIR not in sys.path:
     sys.path.insert(0, _API_DIR)
 
 from db_config import DB_CONFIG  # noqa: E402
+from season_team import shown_team  # noqa: E402
 
 SEED = 20261005
 N_PLAYERS = 8
@@ -149,8 +150,11 @@ def test_player_season_line_everywhere(cur, client, sim_client, players):
         name, team, gp, pts, ts, mins, reb, ast = one(
             cur, """SELECT player_name, team_abbreviation, gp, pts, ts_pct, min, reb, ast
                     FROM player_season_stats WHERE player_id = %s AND season = %s""", (pid, season))
+        # The team the pages show and filter on (season_team.py, R8-020): not one he never played for.
+        team = shown_team(cur, pid, season, team)
         prow = next(r for r in _profile(client, pid)["seasons"]["rows"] if r["season"] == season)
         assert (prow["gp"], prow["pts"], prow["ts_pct"], prow["min"]) == (gp, pts, ts, mins), (name, season)
+        assert prow["team_abbreviation"] == team, (name, season)
         trow = next(r for r in client.get(f"/players/table/{season}").json()["results"] if r["player_id"] == pid)
         assert (trow["gp"], trow["traditional"]["pts"], trow["advanced"]["ts_pct"], trow["min"]) == \
             (gp, round(pts, 1), round(ts, 3), round(mins, 1)), (name, season)

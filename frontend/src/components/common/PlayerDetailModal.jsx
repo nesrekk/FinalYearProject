@@ -24,6 +24,8 @@ export default function PlayerDetailModal({ player, onClose }) {
     const [playtypes, setPlaytypes] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    // Placeholder rows carry 0 or negative ids: those go by name.
+    const pid = Number(player.player_id) > 0 ? Number(player.player_id) : undefined;
 
     useEffect(() => {
         let cancelled = false;
@@ -32,9 +34,10 @@ export default function PlayerDetailModal({ player, onClose }) {
             setLoading(true);
             setError('');
             Promise.allSettled([
-                fetchPlayerHistory(player.player_name),
-                fetchPlayerClusterHistory(player.player_name),
-                fetchPlaytypeProfile(player.player_name),
+                // By id where the row has a real one: two players can share a name.
+                fetchPlayerHistory(player.player_name, pid),
+                fetchPlayerClusterHistory(player.player_name, pid),
+                fetchPlaytypeProfile(player.player_name, undefined, pid),
             ]).then(([historyResult, clusterResult, playtypeResult]) => {
                 if (cancelled) return;
                 if (historyResult.status === 'fulfilled') {
@@ -52,7 +55,7 @@ export default function PlayerDetailModal({ player, onClose }) {
             });
         });
         return () => { cancelled = true; };
-    }, [player.player_name]);
+    }, [player.player_name, pid]);
 
     useEffect(() => {
         function onKeyDown(e) {
@@ -184,7 +187,7 @@ export default function PlayerDetailModal({ player, onClose }) {
                         </div>
                     )}
 
-                    <ScoutingReportCard playerName={player.player_name} />
+                    <ScoutingReportCard playerName={player.player_name} playerId={pid} />
 
                     <div>
                         <div className="player-modal-section-title">Year-by-Year Stats</div>

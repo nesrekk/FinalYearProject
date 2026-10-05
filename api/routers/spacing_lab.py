@@ -1,6 +1,7 @@
 from typing import Optional
 
 from source_badge import make_source
+from season_team import select_list, season_team_sql
 
 from fastapi import APIRouter, HTTPException
 
@@ -80,7 +81,7 @@ def get_gravity(season: Optional[int] = None, top_n: int = 25):
         _require(cursor)
         season, seasons = _season(cursor, season)
         cursor.execute(
-            """SELECT player_id, player_name, team_abbreviation, minutes, fg3a_total, three_rate, cs_fg3m, cs_fg3a,
+            f"""SELECT player_id, player_name, {season_team_sql(cursor)}, minutes, fg3a_total, three_rate, cs_fg3m, cs_fg3a,
                       cs_pct_raw, cs_pct_shrunk, def_fg3a, contested_fg3a, contested_share_shrunk,
                       z_three_rate, z_cs_pct, z_contested, gravity, obpm_used
                FROM player_gravity WHERE season = %s AND in_pool AND gravity IS NOT NULL
@@ -125,7 +126,7 @@ def lineup_report(cursor, season, ids):
     that season. Shared by /spacing/lineup and /trade/impact. Raises
     HTTPException (404) when a player has no real Gravity that season."""
     cursor.execute(
-        """SELECT player_id, player_name, team_abbreviation, gravity, in_pool
+        f"""SELECT player_id, player_name, {season_team_sql(cursor)}, gravity, in_pool
            FROM player_gravity WHERE season = %s AND player_id = ANY(%s);""",
         (season, ids),
     )

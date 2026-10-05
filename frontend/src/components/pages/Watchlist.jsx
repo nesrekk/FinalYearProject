@@ -33,7 +33,7 @@ export default function Watchlist() {
 
         async function load() {
             setLoading(starred.length > 0);
-            const results = await Promise.allSettled(starred.map((p) => fetchPlayerHistory(p.name)));
+            const results = await Promise.allSettled(starred.map((p) => fetchPlayerHistory(p.name, Number(p.playerId) > 0 ? p.playerId : undefined)));
             if (cancelled) return;
             const ok = [];
             const bad = [];

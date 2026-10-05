@@ -2,6 +2,7 @@ import time
 from typing import Optional
 from psycopg2 import pool
 from source_badge import make_source
+from season_team import season_team_sql
 
 from fastapi import APIRouter, HTTPException
 
@@ -30,8 +31,8 @@ def get_heliocentricity_leaderboard(season: Optional[int] = None, top_n: int = 2
         resolved_season = season or get_latest_season(cursor)
         check_season_exists(cursor, resolved_season)
         cursor.execute(
-            """
-            SELECT player_id, player_name, team_abbreviation, usg_pct, ast_pct
+            f"""
+            SELECT player_id, player_name, {season_team_sql(cursor)}, usg_pct, ast_pct
             FROM player_season_stats
             WHERE season = %s AND min >= %s AND gp >= %s
               AND usg_pct IS NOT NULL AND ast_pct IS NOT NULL;

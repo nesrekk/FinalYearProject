@@ -1,7 +1,9 @@
+from typing import Optional
 from psycopg2 import pool
 
 from fastapi import APIRouter, HTTPException
 
+from season_team import season_team_sql
 from source_badge import make_source
 from impact_core import (
     COMPARE_DETAIL_STATS,
@@ -10,7 +12,7 @@ from impact_core import (
     RADAR_MIN_MINUTES,
     _percentile_rank,
     _position_label,
-    find_player,
+    resolve_player,
     get_db,
 )
 
@@ -18,7 +20,7 @@ router = APIRouter()
 
 
 @router.get("/players/compare-profile/{player_name}")
-def get_compare_profile(player_name: str, season: int):
+def get_compare_profile(player_name: str, season: int, player_id: Optional[int] = None):
     """
     Everything the Player Comparison page needs for one player: bio, "Tale
     of the Tape" raw stats (mapping the reference's Offensive/Defensive/
@@ -39,11 +41,12 @@ def get_compare_profile(player_name: str, season: int):
     ]
     with get_db() as conn:
         cursor = conn.cursor()
-        player_id, resolved_name = find_player(cursor, player_name)
+        player_id, resolved_name = resolve_player(cursor, player_name, player_id)
 
         cursor.execute(
             f"""
-            SELECT p.player_id, {', '.join(f'p.{c}' for c in cols)}, c.archetype
+            SELECT p.player_id, {', '.join(season_team_sql(cursor, 'p.') if c == 'team_abbreviation' else f'p.{c}' for c in cols)},
+                   c.archetype
             FROM player_season_stats p
             LEFT JOIN player_clusters c
                 ON c.player_id = p.player_id AND c.season = p.season

@@ -18,6 +18,7 @@ Shooting percentages need a minimum number of attempts per game, so a
 from fastapi import APIRouter, HTTPException, Query
 
 from impact_core import get_db
+from season_team import season_team_sql
 from source_badge import make_source
 from stat_samples import SEASON_SAMPLE_SQL
 from workbench_catalogue import MIN_ATTEMPTS_PER_GAME, leaderboard_stats
@@ -49,9 +50,9 @@ def leaderboard_options():
     with get_db() as conn:
         cur = conn.cursor()
         first, last = _bounds(cur)
-        cur.execute("""SELECT team_abbreviation, MIN(season), MAX(season), COUNT(*)
-                       FROM player_season_stats WHERE team_abbreviation IS NOT NULL
-                       GROUP BY 1 ORDER BY 1;""")
+        cur.execute(f"""SELECT {season_team_sql(cur)}, MIN(season), MAX(season), COUNT(*)
+                        FROM player_season_stats WHERE team_abbreviation IS NOT NULL
+                        GROUP BY 1 ORDER BY 1;""")
         teams = [{"team": t, "from": a, "to": b, "rows": n} for t, a, b, n in cur.fetchall()]
     return {
         "seasons": {"from": first, "to": last},
@@ -120,19 +121,22 @@ def custom_leaderboard(
         if attempts and min_attempts > 0:
             where.append(f"{attempts} >= %s")
             params.append(min_attempts)
+        # The team shown and filtered on: the play-by-play's where the row names one he never played for.
+        team_sql = season_team_sql(cur)
         if team:
-            where.append("team_abbreviation = %s")
+            where.append(f"{team_sql} = %s")
             params.append(team.upper())
         direction = "DESC" if order == "high" else "ASC"
         cols = ["player_id", "player_name", "team_abbreviation", "season", stat] + \
             [c for c in CONTEXT + ([attempts] if attempts else []) if c != stat]
+        select = [f"{team_sql} AS team_abbreviation" if c == "team_abbreviation" else c for c in cols]
         stability = stable_samples(cur).get(stat)
         sample_sql = f", ({SEASON_SAMPLE_SQL[stat]})::float AS sample_n" if stability else ""
 
         cur.execute(f"SELECT COUNT(*) FROM player_season_stats WHERE {' AND '.join(where)};", params)
         qualified = cur.fetchone()[0]
         cur.execute(
-            f"""SELECT {', '.join(cols)}{sample_sql} FROM player_season_stats
+            f"""SELECT {', '.join(select)}{sample_sql} FROM player_season_stats
                 WHERE {' AND '.join(where)}
                 ORDER BY {stat} {direction}, gp DESC, player_name
                 LIMIT %s;""",
@@ -364,8 +368,10 @@ def composite_leaderboard(
         attempt_cols = sorted({STATS[k][5] for k in stats if STATS[k][5]})
         cols = ["player_id", "player_name", "team_abbreviation", "season", "gp", "min"] + \
             [c for c in stats + attempt_cols if c not in ("gp", "min")]
+        team_sql = season_team_sql(cur)
         cur.execute(
-            f"""SELECT {', '.join(cols)} FROM player_season_stats
+            f"""SELECT {', '.join(f'{team_sql} AS team_abbreviation' if c == 'team_abbreviation' else c for c in cols)}
+                FROM player_season_stats
                 WHERE season BETWEEN %s AND %s AND gp >= %s AND min >= %s;""",
             (clipped_from, season_to, min_gp, min_mpg),
         )

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { fetchPlayerSuggestions, fetchPlayerMatchups } from '../services/api';
+import React, { useRef, useState } from 'react';
+import { fetchPlayerMatchups } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
@@ -8,6 +8,9 @@ import PlayerName from './common/PlayerName';
 import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
 import SeasonSelect from './common/SeasonSelect';
+import AutocompleteDropdown from './common/AutocompleteDropdown';
+import NamesakeNote from './common/NamesakeNote';
+import usePlayerSuggestions from '../utils/usePlayerSuggestions';
 
 // Small samples were faded with opacity (text at 2.1-4.1:1, R8-051) and got an extra cell the header
 // didn't have; they now say "small sample" under the name.
@@ -34,35 +37,24 @@ export default function MatchupFinderSection() {
     const [player, setPlayer] = useState('');
     const [role, setRole] = useState('scorer');
     const [season, setSeason] = useState(2026);
-    const [suggestions, setSuggestions] = useState([]);
+    const [picked, setPicked] = useState(null); // { name, id } from a suggestion
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    useEffect(() => {
-        const query = player.trim();
-        if (query.length < 2) {
-            setSuggestions([]);
-            return;
-        }
-        const timer = setTimeout(async () => {
-            try {
-                const data = await fetchPlayerSuggestions(query, 10);
-                setSuggestions(data?.results ?? []);
-            } catch {
-                setSuggestions([]);
-            }
-        }, 200);
-        return () => clearTimeout(timer);
-    }, [player]);
+    // A suggestion carries the NBA id (two players can share a name); typed text opens the latest of that name.
+    const sug = usePlayerSuggestions(player, picked?.name);
+    const inputRef = useRef(null);
 
-    const handleSearch = async () => {
-        if (!player.trim()) return;
+    const handleSearch = async (choice) => {
+        const target = choice ?? (picked && picked.name === player.trim() ? picked : { name: player.trim(), id: null });
+        if (!target.name) return;
+        sug.dismiss();
         setLoading(true);
         setError('');
         setResult(null);
         try {
-            const data = await fetchPlayerMatchups(player.trim(), role, season || undefined, 10);
+            const data = await fetchPlayerMatchups(target.name, role, season || undefined, 10, target.id || undefined);
             setResult(data);
         } catch (e) {
             setError(e?.response?.data?.detail || 'Could not load matchup data.');
@@ -93,18 +85,23 @@ export default function MatchupFinderSection() {
 
             <div className="input-row">
                 <input
+                    ref={inputRef}
                     type="text"
                     placeholder="Player Name"
+                    aria-label="Player"
                     value={player}
                     onChange={(e) => setPlayer(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
                     className="input-field"
-                    list="matchup-player-suggestions"
                 />
-                <datalist id="matchup-player-suggestions">
-                    {suggestions.map((name) => (
-                        <option key={name} value={name} />
-                    ))}
-                </datalist>
+                <AutocompleteDropdown anchorRef={inputRef} items={sug.labels}
+                    onPick={(label) => {
+                        const p = sug.pick(label);
+                        if (!p) return;
+                        setPlayer(p.name);
+                        setPicked({ name: p.name, id: p.id });
+                        sug.dismiss();
+                    }} />
                 <select className="input-field" value={role} onChange={(e) => setRole(e.target.value)}>
                     <option value="scorer">As scorer — who guards them best?</option>
                     <option value="defender">As defender — who do they shut down?</option>
@@ -112,7 +109,7 @@ export default function MatchupFinderSection() {
                 <SeasonSelect value={season} onChange={setSeason} from={2018} label="Season" />
                 <button
                     className="action-btn"
-                    onClick={handleSearch}
+                    onClick={() => handleSearch()}
                     disabled={loading || !player.trim()}
                 >
                     {loading ? 'Searching…' : 'Find Matchups'}
@@ -124,6 +121,8 @@ export default function MatchupFinderSection() {
 
             {result && (
                 <>
+                    <NamesakeNote name={result.player_name} id={result.player_id}
+                        onPick={(p) => { setPlayer(p.name); setPicked(p); handleSearch(p); }} />
                     <div className="entity-row" style={{ marginTop: '1rem', marginBottom: '0.75rem' }}>
                         <PlayerHeadshot playerId={result.player_id} playerName={result.player_name} size={40} />
                         <span style={{ fontWeight: 700 }}>{result.player_name}</span>

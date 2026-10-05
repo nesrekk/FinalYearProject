@@ -21,6 +21,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from impact_core import get_db
 from source_badge import make_source
+from season_team import select_list, season_team_sql
 
 router = APIRouter()
 
@@ -203,7 +204,7 @@ def _shape(d, rates):
 def _season_rows(season):
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute(f"SELECT {', '.join(ROW_COLS)} FROM shot_value_added WHERE season = %s ORDER BY sva DESC", (season,))
+        cur.execute(f"SELECT {select_list(cur, ROW_COLS)} FROM shot_value_added WHERE season = %s ORDER BY sva DESC", (season,))
         return [dict(zip(ROW_COLS, r)) for r in cur.fetchall()]
 
 
@@ -253,7 +254,7 @@ def shot_value_player(player_id: int):
     rates = _rates()
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute(f"SELECT {', '.join(ROW_COLS)} FROM shot_value_added WHERE player_id = %s ORDER BY season", (player_id,))
+        cur.execute(f"SELECT {select_list(cur, ROW_COLS)} FROM shot_value_added WHERE player_id = %s ORDER BY season", (player_id,))
         rows = [_shape(dict(zip(ROW_COLS, r)), rates) for r in cur.fetchall()]
     if not rows:
         raise HTTPException(status_code=404, detail="No attempts on file for this player from 2020-21 on.")

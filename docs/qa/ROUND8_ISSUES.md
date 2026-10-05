@@ -12,9 +12,10 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
-Counts (2026-10-05, after Step 4): **68 entries**, 22 open, 46 fixed: 6 broken, 21 wrong number,
-5 slow, 36 looks wrong. 1 is new from Step 4 (R8-068, open). Step 4 fixed 12: R8-001 to R8-008, R8-021,
-R8-031 (Step 7's, taken with R8-002), R8-049, plus the Step 4 parts of R8-014 and R8-017. Before that: 6 from Step 3's
+Counts (2026-10-05, after Step 5): **71 entries**, 21 open, 50 fixed: 7 broken, 21 wrong number,
+5 slow, 38 looks wrong (recounted from the entries; the Step 4 line said 22 open / 46 fixed, one off).
+Step 5 fixed R8-018, R8-019, R8-020 and two it found (R8-069, R8-070), and logged R8-071 (open). Step 4 fixed 12: R8-001 to R8-008, R8-021,
+R8-031 (Step 7's, taken with R8-002), R8-049, plus the Step 4 parts of R8-014 and R8-017; it found R8-068 (open). Before that: 6 from Step 3's
 cross-page checks (R8-062 to R8-067, all fixed in its commit); 17 new from Step 1 (R8-001 to R8-017); 15 known
 gaps already written down in README "Known real gaps" / Methodology open issues, listed so a step owns each
 (R8-018 to R8-032); 11 from Step 2a's sweep of the Players pages (R8-033 to R8-043, 10 fixed in its commit);
@@ -353,19 +354,22 @@ floor, Step 7).
 
 - **Step 4:** `/players/profile/{name}` is DB-only now (its live path is gone); `/shots/league-zones/{season}` no longer fetches by default (R8-007). The unused routes themselves are still Step 10's call.
 ### R8-018 · Typed-name tools pick the first of two same-name players
-- **Severity:** wrong number · **Step:** 5 · **Status:** open
+- **Severity:** wrong number · **Step:** 5 · **Status:** fixed in the Step 5 commit
 - **Where:** every caller of `impact_core.find_player()`: Player Comparison (+ `/shots/player/{name}/zones`), Trend Analysis, Radar, Scouting Report, With/Without a Star, and others. 19 names belong to two players.
 - **Found by:** known gap (README Known real gaps, round 7 step 5). Fix: `resolve_player` + optional `player_id`, the Shot Charts pattern.
+- **Step 5:** worse than written: the lookup was an unordered `SELECT DISTINCT ... LIMIT 1`, which returned the lower id, so typing "Brandon Williams", "Nate Williams" or "Johnny Davis" opened the *retired* player. `find_player()` (and similarity_api's `find_player_id()`) now take the latest career of an exact name (last season, then career minutes: the frontend's `namesakes()` order), deterministically. Every route that takes a typed name takes an optional `player_id` (14 in impact_api incl. pair synergy's `player_a_id/player_b_id`, 4 in similarity_api); only `/player-profile/resolve` (name → id for links that only know a name) still calls `find_player`, and a test checks that. Frontend: one id-aware picker (`utils/usePlayerSuggestions.js`, suggestions "Name · 2021-22 to 2025-26" from `/workbench/entities` in an `AutocompleteDropdown`) and `common/NamesakeNote.jsx` ("Another player is also called …: the one of …") on Player Comparison (`aid=`/`bid=` in the link), Trend Analysis, Radar, Playoff Forecaster, Matchup Finder, Season Similarity, Career Trajectory and Player Archetypes; ids passed from the scouting cards, the player modal, Watchlist, Rookie Class Tracker and Ctrl+K (opens the profile by id, no name round trip). The Draft Prospect headshot lookup takes the NBA player whose career starts after the college season. Tests: `api/tests/test_round8_ids.py` (all 19 names by name and by id; 8 season routes and 4 similarity routes on both Brandon Williamses and both Mike Jameses).
 
 ### R8-019 · Game Log and Game Finder show no +/-
-- **Severity:** looks wrong · **Step:** 5 · **Status:** open
+- **Severity:** looks wrong · **Step:** 5 · **Status:** fixed in the Step 5 commit
 - **Where:** profile Game Log, `?page=gamefinder`. The right per-game numbers exist in `player_game_onfloor` (98.2% exact against ESPN's box score), and the Workbench already reads them.
 - **Found by:** known gap (README).
+- **Step 5:** the catalogue's `plus_minus` column (player_game) now also has page `game_finder` and the join is `workbench_catalogue.ONFLOOR_JOIN`, so the Game Finder gains the stat (condition, sort, streak average) and every row/log carries `plus_minus` (None in the 12 games whose play-by-play doesn't reconcile, said in `notes.plus_minus`); Game Log averages it over the games that have one. Jokić 2025-26: 65 games, +8.5. Tests: rows equal `player_game_onfloor`; Finder count of `plus_minus >= 40` (131 player-games) equals SQL; one game (DEN at IND, 2022-11-09) against ESPN's live box score (skips offline). `test_workbench.py`'s frozen Game Finder literals now add exactly this stat and join.
 
 ### R8-020 · 3-5 player-seasons a year carry a team the player never played for
-- **Severity:** wrong number · **Step:** 5 · **Status:** open
+- **Severity:** wrong number · **Step:** 5 · **Status:** fixed in the Step 5 commit
 - **Where:** `player_season_stats.team_abbreviation` from 2020-21 (2024-25: Bane ORL, Anthony and Caldwell-Pope MEM, Ingram TOR, Kleber LAL); shown by Player Stats, Role Player Finder, leaderboards. Methodology open issue.
 - **Found by:** known gap (README, Methodology).
+- **Step 5:** measured 22 rows 2020-21 to 2025-26 (4, 3, 3, 3, 5, 4 a season; 2025-26 adds Anthony Davis and D'Angelo Russell under WAS, who played only for DAL). Ten tables copied the same team from the season rows (`defender_dad` 21 of the 22, `defender_dfg`, `player_gravity`, `player_hustle`, `player_shot_making`, `player_shot_tracking`, `shot_value_added` 22, `player_clusters` 15, `player_roles` 14, `contract_value` 5). **The table is left as loaded** (the lineup parser and the paper's data audit read it; changing it moves paper numbers = owner's call): `api/season_team.py` gives the team as shown (the last team he played for in `player_game_lines` where the row's team isn't one of his) as a SQL `CASE` on player_id + season, so it works on every table above, cached per process (restart after rebuilding the lines). Applied in Player Stats, Leaderboard Builder (shown and filtered on, team list), Composite, Regression Explorer, Breakouts, Role Player Finder, Stat Leaders, Player Comparison, the player profile (seasons, DAD, contracts), Trade Analyzer and Trade Impact rosters and contracts, Guess the Player's team clue, Playoff Forecaster, Era Translator, Aging Curves, Heliocentricity, Impact Rankings, Learn, Higher/Lower, DAD Index, Spacing Lab / Gravity, Hustle leaders, Shot-making, Shot value, Contract Value, the awards service (MVP/DPOY/ROY/All-NBA lists), Season Similarity / Stat Line Finder, Archetypes, and the Workbench (`player_season` team field, grouping and filter through `SEASON_TEAM_JOIN`, a subquery Postgres drops when nothing reads the team; the player search's latest team). The team page already used the play-by-play. Methodology open issue removed. Before 2020-21 there are no per-game teams to check.
 
 ### R8-021 · With/Without a Star's point differential comes from stats.nba.com's summed plus-minus
 - **Severity:** wrong number · **Step:** 4 · **Status:** fixed in the Step 4 commit
@@ -623,3 +627,18 @@ floor, Step 7).
 - **Where:** Stat Leaders (`StatLeaders.jsx`), `GET /leaders/fg_pct|fg3_pct|ft_pct` (`api/routers/leaders.py`).
 - **Reproduce:** `/leaders/fg3_pct?season=2025` → Dru Smith 53.3% first (a handful of attempts). The stored path and the old live path both rank every player with a non-null percentage; the Leaderboard Builder applies an attempts floor for the same stats (`ATTEMPT_DEFAULTS`).
 - **Found by:** Step 4, while exercising the route after the fallback change. Fix: reuse the Leaderboard's attempt floors (catalogue) in `_stored_leaders`, and state the floor on the page.
+
+### R8-069 · `/impact/player/{name}/{season}` answers 500 for a season with missing stats
+- **Severity:** broken · **Step:** 5 · **Status:** fixed in the Step 5 commit
+- **Where:** `api/routers/player_impact.py`: `round(float(None))` on usage / net rating / win % (pre-2010 rows have none), e.g. the 1997-98 to 2002-03 Brandon Williams in 2002-03.
+- **Found by:** Step 5's shared-name tests. No page calls the route today. Fix: None for a missing stat.
+
+### R8-070 · Player Comparison's archetype chip is 3.9:1 in Paper
+- **Severity:** looks wrong · **Step:** 5 · **Status:** fixed in the Step 5 commit
+- **Where:** `.hb-compare-bio-archetype` (brand orange on the orange tint), both bios. Step 2a's sweep compared players whose bios hadn't rendered.
+- **Found by:** Step 5's page scan. Fix: `--text` on the tint (Ink unchanged in look, passes).
+
+### R8-071 · Profile charts: Game Log per-game dots and shot-zone tints under 3:1
+- **Severity:** looks wrong · **Step:** 7 (or owner's call, like R8-059) · **Status:** open
+- **Where:** player profile (e.g. `?page=player&id=1630217`): the Game Log rolling chart's per-game dots (`--text-3` at 55% opacity, 2.3:1 Paper / 2.5:1 Ink; they are context for the rolling line), its brand-orange line (2.9:1, = R8-059), and the shot-zone map's tinted cells (1.3-1.5:1 against the court).
+- **Found by:** Step 5's page scan with the `marks` check, which step 2a's sweep of the profile predated. Not caused by Step 5.

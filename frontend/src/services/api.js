@@ -69,9 +69,11 @@ async function getWithCache(key, ttlMs, fetcher) {
 }
 
 // ─── Similarity ────────────────────────────────────────────────
-export async function fetchSeasonSimilarity(player, season) {
+// playerId (optional, here and below): picks the player by NBA id; 19 names belong to two players.
+export async function fetchSeasonSimilarity(player, season, playerId) {
     const response = await axios.get(
-        `${SIMILARITY_BASE}/similarity/season/${encodeURIComponent(player)}/${season}`
+        `${SIMILARITY_BASE}/similarity/season/${encodeURIComponent(player)}/${season}`,
+        { params: { ...(playerId ? { player_id: playerId } : {}) } }
     );
     return response.data;
 }
@@ -98,10 +100,10 @@ export async function fetchStatLineMatches(params) {
     return response.data;
 }
 
-export async function fetchPlayerTrajectory(player, season, topNComps = 5, projectYears = 3) {
+export async function fetchPlayerTrajectory(player, season, topNComps = 5, projectYears = 3, playerId) {
     const response = await axios.get(
         `${SIMILARITY_BASE}/players/trajectory/${encodeURIComponent(player)}`,
-        { params: { season, top_n_comps: topNComps, project_years: projectYears } }
+        { params: { season, top_n_comps: topNComps, project_years: projectYears, ...(playerId ? { player_id: playerId } : {}) } }
     );
     return response.data;
 }
@@ -125,9 +127,10 @@ export async function fetchSeasonClusters(season) {
     return response.data;
 }
 
-export async function fetchPlayerClusterHistory(playerName) {
+export async function fetchPlayerClusterHistory(playerName, playerId) {
     const response = await axios.get(
-        `${SIMILARITY_BASE}/clusters/player/${encodeURIComponent(playerName)}`
+        `${SIMILARITY_BASE}/clusters/player/${encodeURIComponent(playerName)}`,
+        { params: { ...(playerId ? { player_id: playerId } : {}) } }
     );
     return response.data;
 }
@@ -249,9 +252,10 @@ export async function fetchShapBreakdown(award, playerName) {
 }
 
 // ─── Trend Analysis ────────────────────────────────────────────
-export async function fetchPlayerHistory(playerName) {
+export async function fetchPlayerHistory(playerName, playerId) {
     const response = await axios.get(
-        `${IMPACT_BASE}/players/history/${encodeURIComponent(playerName)}`
+        `${IMPACT_BASE}/players/history/${encodeURIComponent(playerName)}`,
+        { params: { ...(playerId ? { player_id: playerId } : {}) } }
     );
     return response.data;
 }
@@ -262,27 +266,28 @@ export async function fetchTeamHistory(teamAbbr) {
 }
 
 // ─── Radar Comparison ──────────────────────────────────────────
-export async function fetchRadarProfile(playerName, season) {
+export async function fetchRadarProfile(playerName, season, playerId) {
     const response = await axios.get(
         `${IMPACT_BASE}/radar/${encodeURIComponent(playerName)}`,
-        { params: { season } }
+        { params: { season, ...(playerId ? { player_id: playerId } : {}) } }
     );
     return response.data;
 }
 
 // ─── Player Comparison ─────────────────────────────────────────
-export async function fetchCompareProfile(playerName, season) {
+export async function fetchCompareProfile(playerName, season, playerId) {
     const response = await axios.get(
         `${IMPACT_BASE}/players/compare-profile/${encodeURIComponent(playerName)}`,
-        { params: { season } }
+        { params: { season, ...(playerId ? { player_id: playerId } : {}) } }
     );
     return response.data;
 }
 
-export async function fetchPairSynergy(playerA, playerB, season) {
+export async function fetchPairSynergy(playerA, playerB, season, idA, idB) {
     const response = await axios.get(
         `${IMPACT_BASE}/players/pair-synergy`,
-        { params: { player_a: playerA, player_b: playerB, ...(season ? { season } : {}) } }
+        { params: { player_a: playerA, player_b: playerB, ...(season ? { season } : {}),
+            ...(idA ? { player_a_id: idA } : {}), ...(idB ? { player_b_id: idB } : {}) } }
     );
     return response.data;
 }
@@ -343,10 +348,10 @@ export async function fetchBlurredReveal(season, puzzleDate) {
 }
 
 // ─── Playoff Drop-off Forecaster ─────────────────────────────────
-export async function fetchPlayoffComparison(player, season) {
+export async function fetchPlayoffComparison(player, season, playerId) {
     const response = await axios.get(
         `${IMPACT_BASE}/players/playoff-comparison/${encodeURIComponent(player)}`,
-        { params: { season } }
+        { params: { season, ...(playerId ? { player_id: playerId } : {}) } }
     );
     return response.data;
 }
@@ -541,10 +546,10 @@ export async function fetchHigherLowerPool() {
 
 // A cache miss triggers the same rate-limited live fetch as Shot Charts —
 // give it the same generous timeout instead of the axios default.
-export async function fetchPlayerShotZones(playerName, season) {
+export async function fetchPlayerShotZones(playerName, season, playerId) {
     const response = await axios.get(
         `${IMPACT_BASE}/shots/player/${encodeURIComponent(playerName)}/zones`,
-        { params: { season }, timeout: 6 * 60 * 1000 }
+        { params: { season, ...(playerId ? { player_id: playerId } : {}) }, timeout: 6 * 60 * 1000 }
     );
     return response.data;
 }
@@ -603,10 +608,10 @@ export async function fetchHustleLeaders(stat = 'deflections', season, topN = 15
     return response.data;
 }
 
-export async function fetchPlaytypeProfile(playerName, season) {
+export async function fetchPlaytypeProfile(playerName, season, playerId) {
     const response = await axios.get(
         `${IMPACT_BASE}/players/playtype-profile/${encodeURIComponent(playerName)}`,
-        { params: season ? { season } : {} }
+        { params: { ...(season ? { season } : {}), ...(playerId ? { player_id: playerId } : {}) } }
     );
     return response.data;
 }
@@ -622,10 +627,10 @@ export async function fetchPlaytypeSeasonClusters(season) {
 }
 
 // ─── Matchup Finder ("Kryptonite" defender/scorer matchups) ─────
-export async function fetchPlayerMatchups(playerName, role = 'scorer', season, topN = 15) {
+export async function fetchPlayerMatchups(playerName, role = 'scorer', season, topN = 15, playerId) {
     const response = await axios.get(
         `${IMPACT_BASE}/matchups/player/${encodeURIComponent(playerName)}`,
-        { params: { role, top_n: topN, ...(season ? { season } : {}) } }
+        { params: { role, top_n: topN, ...(season ? { season } : {}), ...(playerId ? { player_id: playerId } : {}) } }
     );
     return response.data;
 }
@@ -657,10 +662,10 @@ export async function fetchDadIndex(season) {
 }
 
 // ─── Scouting Report ("Exploit Guide") ───────────────────────────
-export async function fetchScoutingReport(playerName, season) {
+export async function fetchScoutingReport(playerName, season, playerId) {
     const response = await axios.get(
         `${IMPACT_BASE}/players/scouting-report/${encodeURIComponent(playerName)}`,
-        { params: season ? { season } : {} }
+        { params: { ...(season ? { season } : {}), ...(playerId ? { player_id: playerId } : {}) } }
     );
     return response.data;
 }
@@ -929,10 +934,10 @@ export async function fetchPlayerImage(playerName) {
     return response.data;
 }
 
-export async function fetchPlayerProfile(playerName, season) {
+export async function fetchPlayerProfile(playerName, season, playerId) {
     const response = await axios.get(
         `${IMPACT_BASE}/players/profile/${encodeURIComponent(playerName)}`,
-        { params: season ? { season } : {} }
+        { params: { ...(season ? { season } : {}), ...(playerId ? { player_id: playerId } : {}) } }
     );
     return response.data;
 }
@@ -999,10 +1004,10 @@ export async function fetchStatLeaders(statKey, season, topN = 10) {
 // A cache miss triggers a rate-limited live fetch on the backend (see
 // api/shots_lib.py) which can take a couple of minutes for a long career —
 // give it a generous timeout instead of the axios default.
-export async function fetchShotSeasons(playerName) {
+export async function fetchShotSeasons(playerName, playerId) {
     const response = await axios.get(
         `${IMPACT_BASE}/shots/player/${encodeURIComponent(playerName)}/seasons`,
-        { timeout: 6 * 60 * 1000 }
+        { params: { ...(playerId ? { player_id: playerId } : {}) }, timeout: 6 * 60 * 1000 }
     );
     return response.data;
 }

@@ -8,24 +8,26 @@ from impact_core import (
     PAIR_SYNERGY_MODEL,
     PAIR_SYNERGY_SCALER,
     _player_synergy_features,
-    find_player,
     get_db,
     get_latest_season,
+    resolve_player,
 )
 
 router = APIRouter()
 
 
 @router.get("/players/pair-synergy")
-def get_pair_synergy(player_a: str, player_b: str, season: Optional[int] = None):
+def get_pair_synergy(player_a: str, player_b: str, season: Optional[int] = None,
+                     player_a_id: Optional[int] = None, player_b_id: Optional[int] = None):
+    # player_a_id / player_b_id pick each player by NBA id (19 names belong to two players).
     if PAIR_SYNERGY_MODEL is None or PAIR_SYNERGY_SCALER is None:
         raise HTTPException(status_code=503, detail="Pair synergy model isn't available — run scripts/train_pair_synergy.py first.")
 
     with get_db() as conn:
         cursor = conn.cursor()
         resolved_season = season or get_latest_season(cursor)
-        pid_a, name_a = find_player(cursor, player_a)
-        pid_b, name_b = find_player(cursor, player_b)
+        pid_a, name_a = resolve_player(cursor, player_a, player_a_id)
+        pid_b, name_b = resolve_player(cursor, player_b, player_b_id)
         if pid_a == pid_b:
             raise HTTPException(status_code=400, detail="Pick two different players.")
 

@@ -11,6 +11,7 @@ import TableExport from '../common/TableExport';
 import TeamLogo from '../common/TeamLogo';
 import TeamLink from '../common/TeamLink';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { signed } from '../../utils/format';
 import '../../styles/gamelog.css';
 
 // Game Finder (?page=gamefinder): every regular-season player-game 2020-21 on
@@ -52,6 +53,8 @@ const GAME_COLS = [
     ['fg3m', '3P', (r) => `${r.fg3m}-${r.fg3a}`],
     ['fta', 'FT', (r) => `${r.ftm}-${r.fta}`],
     ['ts_pct', 'TS%', (r) => pct(r.ts_pct)],
+    // On the floor, from the five-man stints; blank in the 12 games that don't reconcile.
+    ['plus_minus', '+/-', (r) => signed(r.plus_minus, 0)],
 ];
 // Which condition stats light up which game column.
 const COL_OF = { fgm: 'fga', fg_pct: 'fga', fg3a: 'fg3m', fg3_pct: 'fg3m', ftm: 'fta', ft_pct: 'fta', oreb: 'reb', dreb: 'reb' };
@@ -418,7 +421,7 @@ export default function GameFinder() {
                                                 <tr>
                                                     <th>#</th><th>Player</th><th className="lb-num gf-hit">Games</th><th>From</th><th>To</th><th>Team</th>
                                                     <th className="lb-num">PTS</th><th className="lb-num">REB</th><th className="lb-num">AST</th>
-                                                    <th className="lb-num">MIN</th><th className="lb-num">TS%</th>
+                                                    <th className="lb-num">MIN</th><th className="lb-num">TS%</th><th className="lb-num">+/-</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -438,6 +441,7 @@ export default function GameFinder() {
                                                         <td className="lb-num">{r.averages.ast.toFixed(1)}</td>
                                                         <td className="lb-num">{r.averages.min.toFixed(1)}</td>
                                                         <td className="lb-num">{pct(r.averages.ts_pct)}</td>
+                                                        <td className="lb-num">{signed(r.averages.plus_minus, 1)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -458,7 +462,7 @@ export default function GameFinder() {
                             <span>(Export saves the rows on this page.)</span>
                         </div>
                     )}
-                    <p className="page-subtitle pp-foot">{data.notes.accuracy} {data.notes.left_out}</p>
+                    <p className="page-subtitle pp-foot">{data.notes.plus_minus} {data.notes.accuracy} {data.notes.left_out}</p>
                 </div>
             )}
         </section>

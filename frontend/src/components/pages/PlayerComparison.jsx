@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { fetchCompareProfile, fetchLivePlayerSuggestions, fetchPairSynergy } from '../../services/api';
+import { fetchCompareProfile, fetchPairSynergy } from '../../services/api';
 import PlayerHeadshot from '../common/PlayerHeadshot';
 import TeamLogo from '../common/TeamLogo';
 import Icon from '../common/Icon';
 import InfoTooltip from '../common/InfoTooltip';
 import AutocompleteDropdown from '../common/AutocompleteDropdown';
+import NamesakeNote from '../common/NamesakeNote';
+import usePlayerSuggestions from '../../utils/usePlayerSuggestions';
 import ScoutingReportCard from '../common/ScoutingReportCard';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
@@ -131,29 +133,10 @@ function ringPoints(total, fraction) {
     }).join(' ');
 }
 
-function useSlotSuggestions(query, resolvedName, setSuggestions) {
-    useEffect(() => {
-        const q = (query || '').trim();
-        if (q.length < 2 || q.toLowerCase() === (resolvedName || '').toLowerCase()) {
-            setSuggestions([]);
-            return;
-        }
-        let active = true;
-        const timer = setTimeout(async () => {
-            try {
-                const data = await fetchLivePlayerSuggestions(q, 6);
-                if (active) setSuggestions(data?.results ?? []);
-            } catch {
-                if (active) setSuggestions([]);
-            }
-        }, 200);
-        return () => { active = false; clearTimeout(timer); };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [query, resolvedName]);
-}
-
-function SearchBox({ placeholder, value, onChange, suggestions, onPick, color }) {
+// A typed name picks the latest player of that name; a suggestion carries the id (two players can share a name).
+function SearchBox({ placeholder, value, onChange, resolvedName, onPick, color }) {
     const inputRef = useRef(null);
+    const sug = usePlayerSuggestions(value, resolvedName, 6);
     return (
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -163,12 +146,17 @@ function SearchBox({ placeholder, value, onChange, suggestions, onPick, color })
                     type="text"
                     className="input-field"
                     placeholder={placeholder}
+                    aria-label={placeholder.replace('…', '')}
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && value.trim()) { sug.dismiss(); onPick({ name: value.trim(), id: null }); }
+                    }}
                     style={{ width: '100%' }}
                 />
             </div>
-            <AutocompleteDropdown anchorRef={inputRef} items={suggestions} onPick={onPick} />
+            <AutocompleteDropdown anchorRef={inputRef} items={sug.labels}
+                onPick={(label) => { const p = sug.pick(label); sug.dismiss(); if (p) onPick({ name: p.name, id: p.id }); }} />
         </div>
     );
 }
@@ -214,7 +202,8 @@ function BioCard({ profile, color }) {
 
 export default function PlayerComparison() {
     const radarRef = useRef(null);
-    // A shared link carries ?season=&a=&b= (utils/useUrlState.js).
+    // A shared link carries ?season=&a=&aid=&b=&bid= (utils/useUrlState.js): aid/bid (NBA ids) pick
+    // the players, a/b keep the link readable and alone open the latest player of that name.
     const params = useInitialParams();
     const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: LATEST_SEASON }) ?? LATEST_SEASON);
     const { isAdvanced } = useMotionMode();
@@ -222,8 +211,6 @@ export default function PlayerComparison() {
 
     const [searchA, setSearchA] = useState('');
     const [searchB, setSearchB] = useState('');
-    const [suggestA, setSuggestA] = useState([]);
-    const [suggestB, setSuggestB] = useState([]);
     const [profileA, setProfileA] = useState(null);
     const [profileB, setProfileB] = useState(null);
     const [errorA, setErrorA] = useState('');
@@ -232,35 +219,35 @@ export default function PlayerComparison() {
     const [synergyError, setSynergyError] = useState('');
     const [synergyLoading, setSynergyLoading] = useState(false);
 
-    useSlotSuggestions(searchA, profileA?.player_name, setSuggestA);
-    useSlotSuggestions(searchB, profileB?.player_name, setSuggestB);
-
-    async function loadProfile(playerName, setProfile, setError) {
+    async function loadProfile({ name, id }, setProfile, setError, setSearch) {
         setError('');
         try {
-            const data = await fetchCompareProfile(playerName, season);
+            const data = await fetchCompareProfile(name, season, id || undefined);
             setProfile(data);
+            setSearch?.(data.player_name); // the loaded spelling (Jokić for "jokic"), so no stray suggestions
         } catch (e) {
             setProfile(null);
             setError(e?.response?.data?.detail || 'No data for this player/season.');
         }
     }
 
-    function pickA(name) {
-        setSearchA(name); setSuggestA([]);
-        loadProfile(name, setProfileA, setErrorA);
+    function pickA(p) {
+        setSearchA(p.name);
+        loadProfile(p, setProfileA, setErrorA, setSearchA);
     }
-    function pickB(name) {
-        setSearchB(name); setSuggestB([]);
-        loadProfile(name, setProfileB, setErrorB);
+    function pickB(p) {
+        setSearchB(p.name);
+        loadProfile(p, setProfileB, setErrorB, setSearchB);
     }
 
     // Open the players named in the link.
     useEffect(() => {
         const a = parseParam.str(params, 'a');
         const b = parseParam.str(params, 'b');
-        if (a) pickA(a);
-        if (b) pickB(b);
+        const aid = parseParam.int(params, 'aid', { min: 1 });
+        const bid = parseParam.int(params, 'bid', { min: 1 });
+        if (a || aid) pickA({ name: a ?? String(aid), id: aid });
+        if (b || bid) pickB({ name: b ?? String(bid), id: bid });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [params]);
 
@@ -268,13 +255,15 @@ export default function PlayerComparison() {
     useUrlSync({
         season,
         a: profileA?.player_name ?? (errorA ? null : parseParam.str(params, 'a')),
+        aid: profileA?.player_id ?? (errorA ? null : parseParam.int(params, 'aid', { min: 1 })),
         b: profileB?.player_name ?? (errorB ? null : parseParam.str(params, 'b')),
+        bid: profileB?.player_id ?? (errorB ? null : parseParam.int(params, 'bid', { min: 1 })),
     });
 
     // Re-fetch both slots when season changes.
     useEffect(() => {
-        if (profileA?.player_name) loadProfile(profileA.player_name, setProfileA, setErrorA);
-        if (profileB?.player_name) loadProfile(profileB.player_name, setProfileB, setErrorB);
+        if (profileA?.player_name) loadProfile({ name: profileA.player_name, id: profileA.player_id }, setProfileA, setErrorA);
+        if (profileB?.player_name) loadProfile({ name: profileB.player_name, id: profileB.player_id }, setProfileB, setErrorB);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [season]);
 
@@ -285,7 +274,7 @@ export default function PlayerComparison() {
         let active = true;
         setSynergyLoading(true);
         setSynergyError('');
-        fetchPairSynergy(profileA.player_name, profileB.player_name, season)
+        fetchPairSynergy(profileA.player_name, profileB.player_name, season, profileA.player_id, profileB.player_id)
             .then((data) => { if (active) setSynergy(data); })
             .catch((e) => {
                 if (!active) return;
@@ -295,7 +284,7 @@ export default function PlayerComparison() {
             .finally(() => { if (active) setSynergyLoading(false); });
         return () => { active = false; };
          
-    }, [bothLoaded, profileA?.player_name, profileB?.player_name, season]);
+    }, [bothLoaded, profileA?.player_name, profileB?.player_name, profileA?.player_id, profileB?.player_id, season]);
 
     return (
         <div className="page fade-in">
@@ -327,10 +316,12 @@ export default function PlayerComparison() {
                 </div>
 
                 <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-                    <SearchBox placeholder="Player A…" value={searchA} onChange={setSearchA} suggestions={suggestA} onPick={pickA} color={COLOR_A} />
+                    <SearchBox placeholder="Player A…" value={searchA} onChange={setSearchA} resolvedName={profileA?.player_name} onPick={pickA} color={COLOR_A} />
                     <span className="page-subtitle" style={{ alignSelf: 'center' }}>vs</span>
-                    <SearchBox placeholder="Player B…" value={searchB} onChange={setSearchB} suggestions={suggestB} onPick={pickB} color={COLOR_B} />
+                    <SearchBox placeholder="Player B…" value={searchB} onChange={setSearchB} resolvedName={profileB?.player_name} onPick={pickB} color={COLOR_B} />
                 </div>
+                <NamesakeNote name={profileA?.player_name} id={profileA?.player_id} onPick={pickA} />
+                <NamesakeNote name={profileB?.player_name} id={profileB?.player_id} onPick={pickB} />
                 {errorA && <p className="error-message" style={{ marginTop: '0.5rem' }}>{errorA}</p>}
                 {errorB && <p className="error-message" style={{ marginTop: '0.5rem' }}>{errorB}</p>}
             </div>
@@ -574,7 +565,7 @@ export default function PlayerComparison() {
                             {[[profileA, COLOR_A], [profileB, COLOR_B]].map(([p, color]) => (
                                 <div key={p.player_id} style={{ flex: '1 1 320px', minWidth: 0, borderTop: `3px solid ${color}`, paddingTop: '0.75rem' }}>
                                     <div style={{ fontWeight: 700, marginBottom: 4 }}>{p.player_name}</div>
-                                    <ScoutingReportCard playerName={p.player_name} season={season} titleClassName="section-heading" />
+                                    <ScoutingReportCard playerName={p.player_name} playerId={p.player_id} season={season} titleClassName="section-heading" />
                                 </div>
                             ))}
                         </div>

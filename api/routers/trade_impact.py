@@ -17,6 +17,7 @@ from impact_core import get_db
 from routers.contract_value import PLAYER_COLS, PLAYER_KEYS, _season_row
 from routers.spacing_lab import lineup_report
 from routers.trade_analyzer import simulate_trade
+from season_team import season_team_sql, select_list
 from source_badge import make_source
 
 router = APIRouter()
@@ -123,14 +124,14 @@ def _spacing_block(cursor, season, team, roster, outgoing, incoming):
 
 def _team_contracts(cursor, season, team):
     cursor.execute(
-        f"SELECT {PLAYER_COLS} FROM contract_value WHERE season = %s AND team_abbreviation = %s;",
+        f"SELECT {select_list(cursor, PLAYER_COLS)} FROM contract_value WHERE season = %s AND {season_team_sql(cursor)} = %s;",
         (season, team),
     )
     return [dict(zip(PLAYER_KEYS, r)) for r in cursor.fetchall()]
 
 
 def _player_contract(cursor, season, player_id):
-    cursor.execute(f"SELECT {PLAYER_COLS} FROM contract_value WHERE season = %s AND player_id = %s;",
+    cursor.execute(f"SELECT {select_list(cursor, PLAYER_COLS)} FROM contract_value WHERE season = %s AND player_id = %s;",
                    (season, player_id))
     r = cursor.fetchone()
     return dict(zip(PLAYER_KEYS, r)) if r else None
@@ -197,8 +198,10 @@ def trade_impact(season: int, team_a: str, player_a_id: int, team_b: str, player
         has_gravity, has_contracts = cursor.fetchone()
 
         # Rosters with minutes, to pick the lowest-minute starter when needed.
+        # By the play-by-play's team where the season row names one he never played for (season_team.py).
         cursor.execute(
-            "SELECT player_id, player_name, min FROM player_season_stats WHERE season = %s AND team_abbreviation = ANY(%s);",
+            "SELECT player_id, player_name, min FROM player_season_stats "
+            f"WHERE season = %s AND {season_team_sql(cursor)} = ANY(%s);",
             (season, [team_a, team_b]),
         )
         roster = [{"player_id": r[0], "player_name": r[1], "min": r[2]} for r in cursor.fetchall()]

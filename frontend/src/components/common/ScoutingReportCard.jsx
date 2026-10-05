@@ -65,7 +65,8 @@ function FindingList({ title, items, color, emptyText }) {
     );
 }
 
-export default function ScoutingReportCard({ playerName, season, titleClassName = 'player-modal-section-title' }) {
+// playerId (when the caller knows it) picks the player exactly: two players can share a name.
+export default function ScoutingReportCard({ playerName, playerId, season, titleClassName = 'player-modal-section-title' }) {
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -76,7 +77,7 @@ export default function ScoutingReportCard({ playerName, season, titleClassName 
             if (!active) return;
             setLoading(true);
             setError('');
-            fetchScoutingReport(playerName, season)
+            fetchScoutingReport(playerName, season, playerId)
                 .then((d) => { if (active) setData(d); })
                 .catch((e) => {
                     if (!active) return;
@@ -86,7 +87,7 @@ export default function ScoutingReportCard({ playerName, season, titleClassName 
                 .finally(() => { if (active) setLoading(false); });
         });
         return () => { active = false; };
-    }, [playerName, season]);
+    }, [playerName, playerId, season]);
 
     const persistence = data?.validation?.persistence;
 

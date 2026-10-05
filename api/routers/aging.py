@@ -23,6 +23,7 @@ from fastapi import APIRouter, HTTPException
 
 from impact_core import get_db
 from source_badge import make_source
+from season_team import season_team_sql
 
 router = APIRouter()
 
@@ -145,7 +146,7 @@ def aging_player(player_id: int, stat: str = "bpm", era: str = "all"):
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(
-            f"""SELECT p.season, p.player_name, p.team_abbreviation, p.gp, p.min, p.gp * p.min,
+            f"""SELECT p.season, p.player_name, {season_team_sql(cur, 'p.')}, p.gp, p.min, p.gp * p.min,
                        {value_sql},
                        {weight_sql}, b.birth_date, l.league_average
                 FROM player_season_stats p

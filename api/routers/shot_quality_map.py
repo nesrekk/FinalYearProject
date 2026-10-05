@@ -18,7 +18,7 @@ location (stored at (0, 0)) are in no cell and are returned as `off_map`.
 from fastapi import APIRouter, HTTPException, Query
 
 import shot_hex as H
-from impact_core import find_player, get_db, resolve_player
+from impact_core import get_db, resolve_player
 from source_badge import make_source
 
 router = APIRouter()
@@ -54,11 +54,11 @@ def _seasons(cur, player_id):
 
 
 @router.get("/shots/quality-map/options")
-def quality_map_options(player: str = Query(..., min_length=2, max_length=80)):
+def quality_map_options(player: str = Query(..., min_length=2, max_length=80), player_id: int | None = None):
     with get_db() as conn:
         cur = conn.cursor()
         _require(cur)
-        player_id, resolved = find_player(cur, player)
+        player_id, resolved = resolve_player(cur, player, player_id)
         seasons = _seasons(cur, int(player_id))
         min_fga = _min_fga(cur)
     if not seasons:

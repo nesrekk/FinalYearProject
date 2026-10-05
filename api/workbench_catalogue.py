@@ -393,28 +393,42 @@ PLAYER_SEASON_COLUMNS = _cols(
     *SHOT_VALUE_COLUMNS,
 )
 
+# The team shown for a season row (round 8 step 5, R8-020; api/season_team.py): NBA.com's row can name a team the
+# player never played for that season (22 rows 2020-21 to 2025-26: a later team). Where the play-by-play game lines
+# exist and the row's team isn't one he played for, the last team he played for in them. A subquery unique on
+# (player, season), so Postgres drops it when nothing reads the team.
+SEASON_TEAM_JOIN = (
+    "\n    LEFT JOIN (SELECT player_id AS pid, season AS yr, array_agg(DISTINCT team_abbreviation) AS st_teams,"
+    "\n                      (array_agg(team_abbreviation ORDER BY game_date DESC, game_id DESC))[1] AS st_last"
+    "\n               FROM player_game_lines WHERE seconds > 0 AND team_abbreviation <> 'NaN'"
+    "\n               GROUP BY player_id, season) st ON st.pid = s.player_id AND st.yr = s.season")
+PS_TEAM_SQL = ("(CASE WHEN st.pid IS NOT NULL AND NOT (s.team_abbreviation = ANY(st.st_teams)) "
+               "THEN st.st_last ELSE s.team_abbreviation END)")
+
 PLAYER_SEASON = Dataset(
     key="player_season", label="Player seasons", entity="player",
     description="One row per player-season, 1949-50 on: per-game box score, shooting, rates and impact.",
-    from_sql="FROM player_season_stats s LEFT JOIN player_bio b ON b.player_id = s.player_id" + MODEL_JOINS,
+    from_sql="FROM player_season_stats s LEFT JOIN player_bio b ON b.player_id = s.player_id" + MODEL_JOINS + SEASON_TEAM_JOIN,
     where=(),
     season_sql="s.season", entity_sql="s.player_id", games_sql="s.gp", minutes_sql="s.min * s.gp",
     poss_sql="s.poss", per_modes=("game", "total", "per36", "per100"), row_label="seasons",
-    tables=("player_season_stats", "player_bio"),
+    tables=("player_season_stats", "player_bio", "player_game_lines"),
     upstream="nba_api (stats.nba.com) from 2009-10 + Basketball-Reference before and for BPM/VORP",
     optional=(("player_rapm", "player_rating_tracker", "paper_xrapm_players", "shot_value_added"),
               "ESPN play-by-play and NBA.com shot charts (models)"),
     row_fields=(("player_id", "s.player_id"), ("player_name", "s.player_name"), ("season", "s.season"),
-                ("team", "s.team_abbreviation")),
+                ("team", PS_TEAM_SQL)),
     groupings={
         "entity": Grouping(("s.player_id",), ("player_id",),
                            (("player_name", "(array_agg(s.player_name ORDER BY s.season DESC))[1]"),)),
         "season": Grouping(("s.season",), ("season",)),
-        "team": Grouping(("s.team_abbreviation",), ("team",)),
+        "team": Grouping((PS_TEAM_SQL,), ("team",)),
     },
     dims={
-        "team": Dim("team", "Team", "s.team_abbreviation", "team",
-                    note="The team on the season row: a traded player's last team from 2009-10 on, 2TM/3TM before."),
+        "team": Dim("team", "Team", PS_TEAM_SQL, "team",
+                    note=("The team on the season row: a traded player's last team from 2009-10 on, 2TM/3TM before. "
+                          "From 2020-21, where the row names a team he never played for that season, the last team "
+                          "he played for in the play-by-play.")),
     },
     columns=PLAYER_SEASON_COLUMNS,
     notes=("Season totals, per 36 and per 100 are per-game averages × games; the sources round per-game "
@@ -446,6 +460,8 @@ PG_SOURCES = ("player_game_lines",)
 # ESPN score fields (a team's five don't add up to 5x the margin in 1 team-game in 4). Shown only
 # in games that reconcile (game_ok: 7,220 of 7,232).
 ONFLOOR_SOURCES = ("player_game_onfloor", "lineup_stints")
+# The Game Log / Game Finder (since round 8 step 5) and the Workbench read it with this join.
+ONFLOOR_JOIN = "    LEFT JOIN player_game_onfloor o ON o.player_id = l.player_id AND o.game_id = l.game_id\n"
 ONFLOOR_NOTE = ("From the five-man stints (points from made shots and free throws, free throws credited to "
                 "the players on the floor at the foul, as the box score does): equals ESPN's box-score +/- for "
                 "98% of player-games, within 2 for 99.7% (300 random games, 2026-10-03). Left out of the 12 "
@@ -519,6 +535,7 @@ PLAYER_GAME_COLUMNS = _cols(
            note="Age on February 1 of the season, from player_bio's birth date."),
     Column("plus_minus", "On-court plus-minus", "+/-", "On the floor", "signed1", "count", _onfloor("plus_minus"),
            GAME_FIRST, total=_onfloor("plus_minus"), n_unit="games", sources=ONFLOOR_SOURCES, agg_fmt="signed1",
+           pages=("game_finder",),
            note="The team's points minus the opponent's while he was on the floor. " + ONFLOOR_NOTE),
     Column("onfloor_pts_for", "Team points while on the floor", "PTS on", "On the floor", "int", "count",
            _onfloor("pts_for"), GAME_FIRST, total=_onfloor("pts_for"), n_unit="games", sources=ONFLOOR_SOURCES,
@@ -532,14 +549,14 @@ PLAYER_GAME_COLUMNS = _cols(
 GAME_FINDER_LABELS = {
     "fga": "Field goal attempts", "fg3m": "Threes made", "fg3a": "Three-point attempts",
     "ftm": "Free throws made", "fta": "Free throw attempts", "fg_pct": "FG%", "fg3_pct": "3P%", "ft_pct": "FT%",
+    "plus_minus": "Plus-minus (on the floor)",
 }
 
 PLAYER_GAME = Dataset(
     key="player_game", label="Player games", entity="player",
     description=("One row per player-game he played, regular season 2020-21 on, rebuilt from ESPN play-by-play "
                  "(the Game Log's rows)."),
-    from_sql=(PLAYER_GAME_FROM + "    LEFT JOIN player_bio b ON b.player_id = l.player_id\n"
-              "    LEFT JOIN player_game_onfloor o ON o.player_id = l.player_id AND o.game_id = l.game_id\n"),
+    from_sql=PLAYER_GAME_FROM + "    LEFT JOIN player_bio b ON b.player_id = l.player_id\n" + ONFLOOR_JOIN,
     where=PLAYER_GAME_WHERE,
     season_sql="l.season", entity_sql="l.player_id", games_sql="1", minutes_sql="(l.seconds / 60.0)",
     poss_sql=ON_COURT_POSS, per_modes=("game", "total", "per36", "per100"), row_label="games",

@@ -3,10 +3,11 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 
 from source_badge import make_source
+from season_team import select_list, season_team_sql
 
 from impact_core import (
     HUSTLE_STAT_MAP,
-    find_player,
+    resolve_player,
     get_db,
     get_latest_season,
 )
@@ -28,7 +29,7 @@ def get_hustle_leaders(stat: str = "deflections", season: Optional[int] = None, 
             raise HTTPException(status_code=503, detail="No hustle data yet — run scripts/fetch_hustle_stats.py first.")
         resolved_season = season or get_latest_season(cursor)
         cursor.execute(
-            f"""SELECT player_id, player_name, team_abbreviation, gp, {stat}
+            f"""SELECT player_id, player_name, {season_team_sql(cursor)}, gp, {stat}
                 FROM player_hustle WHERE season = %s AND {stat} IS NOT NULL
                 ORDER BY {stat} DESC LIMIT %s;""",
             (resolved_season, top_n),
@@ -52,14 +53,14 @@ def get_hustle_leaders(stat: str = "deflections", season: Optional[int] = None, 
     }
 
 @router.get("/players/playtype-profile/{player_name}")
-def get_playtype_profile(player_name: str, season: Optional[int] = None):
+def get_playtype_profile(player_name: str, season: Optional[int] = None, player_id: Optional[int] = None):
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT to_regclass('public.player_playtypes');")
         if cursor.fetchone()[0] is None:
             raise HTTPException(status_code=503, detail="No play-type data yet — run scripts/fetch_playtypes.py first.")
 
-        player_id, resolved_name = find_player(cursor, player_name)
+        player_id, resolved_name = resolve_player(cursor, player_name, player_id)
         resolved_season = season or get_latest_season(cursor)
 
         cursor.execute(

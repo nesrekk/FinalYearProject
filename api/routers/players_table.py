@@ -2,6 +2,7 @@
 from fastapi import APIRouter
 
 from source_badge import make_source
+from season_team import season_team_sql
 
 from impact_core import (
     _position_label,
@@ -31,9 +32,10 @@ def get_players_table(season: int, min_minutes: float = 0.0):
         cursor = conn.cursor()
         check_season_exists(cursor, season)
 
+        # The team shown: the play-by-play's where the row names one he never played for (season_team.py).
         cursor.execute(
-            """
-            SELECT player_id, player_name, team_abbreviation, age, gp, min,
+            f"""
+            SELECT player_id, player_name, {season_team_sql(cursor)} AS team_abbreviation, age, gp, min,
                    pts, reb, ast, stl, blk, tov, fg_pct, fg3_pct, ft_pct,
                    fgm, fga, fg3m, fg3a, ftm, fta, w_pct, plus_minus,
                    ts_pct, usg_pct, off_rating, def_rating, net_rating,

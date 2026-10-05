@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from impact_core import get_db, resolve_player
 from source_badge import make_source
+from season_team import select_list, season_team_sql
 
 router = APIRouter()
 
@@ -85,7 +86,7 @@ def shot_making_leaderboard(
         if season not in seasons:
             raise HTTPException(status_code=404, detail=f"Shot-making covers {label(seasons[0])} to {label(seasons[-1])}.")
         cur.execute(
-            f"""SELECT player_id, player_name, {', '.join(PLAYER_COLS)} FROM player_shot_making
+            f"""SELECT player_id, player_name, {select_list(cur, PLAYER_COLS)} FROM player_shot_making
                 WHERE season = %s AND qualified ORDER BY {SORTS[sort]} {'DESC' if order == 'desc' else 'ASC'}, fga DESC
                 LIMIT %s""",
             (season, limit),
@@ -115,7 +116,7 @@ def player_shot_making(player_name: str, player_id: int | None = None):
         player_id, resolved = resolve_player(cur, player_name, player_id)
         min_fga = _min_fga(cur)
         league = _league(cur)
-        cur.execute(f"SELECT {', '.join(PLAYER_COLS)} FROM player_shot_making WHERE player_id = %s ORDER BY season",
+        cur.execute(f"SELECT {select_list(cur, PLAYER_COLS)} FROM player_shot_making WHERE player_id = %s ORDER BY season",
                     (int(player_id),))
         rows = [_row(PLAYER_COLS, r) for r in cur.fetchall()]
     if not rows:

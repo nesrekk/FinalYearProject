@@ -84,6 +84,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
 import workbench_catalogue as WC
 from impact_core import get_db
+from season_team import season_team_fixes
 from routers.aging import ERA_ORDER as AGING_ERAS, _tables as aging_tables, aging_player
 from routers.game_log import _names
 from routers.leaderboard import RELIABLE, _sample, stable_samples
@@ -978,7 +979,11 @@ def workbench_entities(kind: Literal["player", "team"], q: str = "", ids: str = 
         GROUP BY s.player_id
         ORDER BY MAX(s.season) DESC, SUM(s.gp * s.min) DESC NULLS LAST, s.player_id
         LIMIT %s""", params + [len(wanted) if ids else limit])
-    return {"kind": kind, "results": [{"id": pid, "name": name, "from": lo, "to": hi, "team": team}
+    # The latest season's team as the pages show it (season_team.py: not a team he never played for).
+    with get_db() as conn:
+        fixes = season_team_fixes(conn.cursor())
+    return {"kind": kind, "results": [{"id": pid, "name": name, "from": lo, "to": hi,
+                                       "team": fixes.get((pid, hi), (None, team))[1]}
                                       for pid, name, lo, hi, team in rows], "_source": source}
 
 

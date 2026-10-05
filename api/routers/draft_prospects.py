@@ -117,9 +117,11 @@ def get_draft_prospect_comp(
         # If this prospect has since been drafted and appears in the NBA
         # data too, grab their real player_id for a real headshot — purely
         # cosmetic, doesn't affect the comparison math at all.
+        # Two NBA players can share a name: take the one whose NBA career starts after this college season.
         cursor.execute(
-            "SELECT DISTINCT player_id FROM player_season_stats WHERE LOWER(player_name) = LOWER(%s) LIMIT 1;",
-            (p_name,),
+            """SELECT player_id FROM player_season_stats WHERE LOWER(player_name) = LOWER(%s)
+               GROUP BY player_id HAVING MIN(season) > %s ORDER BY MIN(season), player_id LIMIT 1;""",
+            (p_name, p_season),
         )
         prospect_nba_row = cursor.fetchone()
         prospect_nba_player_id = prospect_nba_row[0] if prospect_nba_row else None

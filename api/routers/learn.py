@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 import shots_lib
 from source_badge import make_source
+from season_team import season_team_sql
 from impact_core import get_db
 
 router = APIRouter()
@@ -57,7 +58,7 @@ def _basics():
         total_pts, n_players = cur.fetchone()
 
         cur.execute(
-            """SELECT player_name, team_abbreviation, gp, pts, reb, ast, ts_pct, fg3_pct, player_id
+            f"""SELECT player_name, {season_team_sql(cur)}, gp, pts, reb, ast, ts_pct, fg3_pct, player_id
                FROM player_season_stats WHERE season = %s AND gp >= 50
                ORDER BY pts DESC LIMIT 1""",
             (season,),

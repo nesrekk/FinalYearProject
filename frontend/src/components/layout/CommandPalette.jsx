@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../common/Icon';
-import { fetchLivePlayerSuggestions, resolvePlayerId } from '../../services/api';
+import { playerOption, searchPlayers } from '../../utils/playerChoice';
 import { openPlayerProfile, openTeamProfile } from '../../utils/useUrlState';
 import { TEAM_NAME_TO_ABBR } from '../../utils/teamAssets';
 import { NAV_GROUPS } from './navConfig';
@@ -39,8 +39,9 @@ export default function CommandPalette({ open, onClose, onNavigate }) {
         }
         let active = true;
         const timer = setTimeout(() => {
-            fetchLivePlayerSuggestions(q, 5)
-                .then((d) => { if (active) setPlayerResults(d?.results || []); })
+            // With ids and career spans: two players can share a name.
+            searchPlayers(q)
+                .then((list) => { if (active) setPlayerResults(list.slice(0, 5)); })
                 .catch(() => { if (active) setPlayerResults([]); });
         }, 200);
         return () => { active = false; clearTimeout(timer); };
@@ -61,7 +62,7 @@ export default function CommandPalette({ open, onClose, onNavigate }) {
     const results = useMemo(() => [
         ...pageResults.map((p) => ({ ...p })),
         ...teamResults.map((t) => ({ kind: 'team', label: t.name, abbr: t.abbr })),
-        ...playerResults.map((name) => ({ kind: 'player', label: name })),
+        ...playerResults.map((p) => ({ kind: 'player', label: playerOption(p), id: p.id })),
     ], [pageResults, teamResults, playerResults]);
 
     const select = (result) => {
@@ -71,10 +72,7 @@ export default function CommandPalette({ open, onClose, onNavigate }) {
         } else if (result.kind === 'team') {
             openTeamProfile(result.abbr);
         } else if (result.kind === 'player') {
-            // Results are names; the profile page needs the id.
-            resolvePlayerId(result.label)
-                .then((p) => openPlayerProfile(p.player_id))
-                .catch(() => onNavigate('players'));
+            openPlayerProfile(result.id);
         }
         onClose();
     };

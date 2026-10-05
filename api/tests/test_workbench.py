@@ -133,6 +133,10 @@ LEGACY_GAME_FINDER = {
     "ft_pct": ("FT%", "(l.ftm::float / NULLIF(l.fta, 0))", "pct"),
     "ts_pct": ("True shooting %", "(l.pts / NULLIF(2 * (l.fga + 0.44 * l.fta), 0))", "pct"),
 }
+# Round 8 step 5 (R8-019): the Game Finder gained on-floor plus-minus, from player_game_onfloor.
+GAME_FINDER_ADDED = {
+    "plus_minus": ("Plus-minus (on the floor)", "(CASE WHEN o.game_ok THEN o.plus_minus END)", "signed1"),
+}
 LEGACY_BASE_FROM = """
     FROM player_game_lines l
     JOIN team_game_fatigue f ON f.team_abbreviation = l.team_abbreviation AND f.game_date = l.game_date
@@ -145,8 +149,9 @@ def test_existing_page_catalogues_unchanged():
     assert leaderboard.STATS == LEGACY_LEADERBOARD
     assert list(leaderboard.STATS) == list(LEGACY_LEADERBOARD)
     assert leaderboard.ATTEMPT_DEFAULTS == {"fga": 5.0, "fg3a": 2.0, "fta": 2.0}
-    assert game_log.STATS == LEGACY_GAME_FINDER and list(game_log.STATS) == list(LEGACY_GAME_FINDER)
-    assert game_log.BASE_FROM == LEGACY_BASE_FROM
+    finder = {**LEGACY_GAME_FINDER, **GAME_FINDER_ADDED}
+    assert game_log.STATS == finder and list(game_log.STATS) == list(finder)
+    assert game_log.BASE_FROM == LEGACY_BASE_FROM + WC.ONFLOOR_JOIN
     assert game_log.BASE_WHERE == ["l.seconds > 0"]
     assert game_log.MARGIN_SQL == "(gs.pts_for - gs.pts_against)"
     # The Leaderboard's SQL reads the season-table column named by the key; the

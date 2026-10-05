@@ -1,5 +1,6 @@
 from typing import Optional
 
+from season_team import season_team_sql, select_list
 from source_badge import make_source
 
 from fastapi import APIRouter, HTTPException
@@ -78,19 +79,19 @@ def get_contract_value(season: Optional[int] = None, top_n: int = 10):
             )
         summary = _season_row(cursor, season)
         cursor.execute(
-            f"""SELECT {PLAYER_COLS} FROM contract_value WHERE season = %s AND minutes >= %s AND surplus IS NOT NULL
+            f"""SELECT {select_list(cursor, PLAYER_COLS)} FROM contract_value WHERE season = %s AND minutes >= %s AND surplus IS NOT NULL
                 ORDER BY surplus DESC LIMIT %s;""",
             (season, BARGAIN_MIN_MINUTES, top_n),
         )
         bargains = [dict(zip(PLAYER_KEYS, r)) for r in cursor.fetchall()]
         cursor.execute(
-            f"""SELECT {PLAYER_COLS} FROM contract_value WHERE season = %s AND salary >= %s AND surplus IS NOT NULL
+            f"""SELECT {select_list(cursor, PLAYER_COLS)} FROM contract_value WHERE season = %s AND salary >= %s AND surplus IS NOT NULL
                 ORDER BY surplus ASC LIMIT %s;""",
             (season, LIABILITY_MIN_SALARY, top_n),
         )
         liabilities = [dict(zip(PLAYER_KEYS, r)) for r in cursor.fetchall()]
         cursor.execute(
-            """SELECT player_id, player_name, team_abbreviation, salary, war, fair_value, surplus, minutes
+            f"""SELECT player_id, player_name, {season_team_sql(cursor)}, salary, war, fair_value, surplus, minutes
                FROM contract_value WHERE season = %s AND war IS NOT NULL;""",
             (season,),
         )
@@ -128,7 +129,7 @@ def get_player_contract_value(player_id: int, season: int):
             return {"season": season, "player_id": player_id, "available": False,
                     "reason": "No reliable salary data for this season (covered: 2005-06 to 2016-17, 2018-19, 2019-20 "
                               "and 2024-25)."}
-        cursor.execute(f"SELECT {PLAYER_COLS} FROM contract_value WHERE season = %s AND player_id = %s;",
+        cursor.execute(f"SELECT {select_list(cursor, PLAYER_COLS)} FROM contract_value WHERE season = %s AND player_id = %s;",
                        (season, player_id))
         r = cursor.fetchone()
     if r is None:

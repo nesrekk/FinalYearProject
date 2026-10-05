@@ -11,6 +11,7 @@ import TeamLink from './TeamLink';
 import { openPage } from '../../utils/useUrlState';
 import useChartCrosshair from '../../utils/useChartCrosshair';
 import { ProfileEmbedContext } from '../pages/playerProfileShared';
+import { signed } from '../../utils/format';
 import '../../styles/gamelog.css';
 
 // Game log on the player profile: every regular-season game he played in a
@@ -214,6 +215,7 @@ export default function GameLogBlock({ playerId, seasons, nbaGp = {}, initialSea
                     <p className="gl-summary">
                         <strong>{data.games}</strong> games · {data.averages.pts?.toFixed(1)} pts · {data.averages.reb?.toFixed(1)} reb ·{' '}
                         {data.averages.ast?.toFixed(1)} ast · {pct(data.averages.ts_pct)} TS · {data.averages.min?.toFixed(1)} min
+                        {data.averages.plus_minus != null && <> · {signed(data.averages.plus_minus, 1)} +/-</>}
                         {gp != null && gp !== data.games && (
                             <span className="pp-warn gl-gap">
                                 NBA.com lists {gp} games for him this season; the play-by-play has {data.games}
@@ -235,7 +237,9 @@ export default function GameLogBlock({ playerId, seasons, nbaGp = {}, initialSea
                                     <th className="lb-num">PTS</th><th className="lb-num">REB</th><th className="lb-num">AST</th>
                                     <th className="lb-num">STL</th><th className="lb-num">BLK</th><th className="lb-num">TOV</th>
                                     <th className="lb-num">FG</th><th className="lb-num">3P</th><th className="lb-num">FT</th>
-                                    <th className="lb-num">TS%</th><th>Rest</th>
+                                    <th className="lb-num">TS%</th>
+                                    <th className="lb-num"><abbr title="Plus-minus: his team's points minus the opponent's while he was on the floor">+/-</abbr></th>
+                                    <th>Rest</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -259,6 +263,7 @@ export default function GameLogBlock({ playerId, seasons, nbaGp = {}, initialSea
                                         <td className="lb-num">{r.fg3m}-{r.fg3a}</td>
                                         <td className="lb-num">{r.ftm}-{r.fta}</td>
                                         <td className="lb-num">{pct(r.ts_pct)}</td>
+                                        <td className="lb-num">{signed(r.plus_minus, 0)}</td>
                                         <td>{r.b2b ? <span className="pp-tag">B2B</span> : r.rest_days == null ? 'Opener' : `${r.rest_days}d`}</td>
                                     </tr>
                                 ))}
@@ -267,7 +272,8 @@ export default function GameLogBlock({ playerId, seasons, nbaGp = {}, initialSea
                     </div>
                     <p className="page-subtitle pp-foot">
                         Newest first. Result and margin are his team&apos;s. Rest = days off since his team&apos;s previous game
-                        (B2B = second night of a back-to-back, no day off). {data.notes.left_out} Games he sat out have no row.
+                        (B2B = second night of a back-to-back, no day off). {data.notes.plus_minus} {data.notes.left_out} Games he
+                        sat out have no row.
                     </p>
                 </>
             )}

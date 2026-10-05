@@ -2,6 +2,8 @@ from psycopg2 import pool
 
 from fastapi import APIRouter, HTTPException
 
+from season_team import season_team_sql
+
 from impact_core import (
     HIGHER_LOWER_MIN_CAREER_GAMES,
     get_db,
@@ -15,10 +17,10 @@ def get_higher_lower_pool():
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """
+            f"""
             SELECT p.player_id,
                    MAX(p.player_name) AS player_name,
-                   (array_agg(p.team_abbreviation ORDER BY p.season DESC))[1] AS team_abbreviation,
+                   (array_agg({season_team_sql(cursor, 'p.')} ORDER BY p.season DESC))[1] AS team_abbreviation,
                    SUM(p.pts * p.gp) AS career_pts,
                    SUM(p.reb * p.gp) AS career_reb,
                    SUM(p.ast * p.gp) AS career_ast,

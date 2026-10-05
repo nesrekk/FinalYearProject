@@ -397,7 +397,7 @@ function ShotMakingBlock({ block, coverage, onNavigate, name, playerId }) {
     );
 }
 
-function Scouting({ name, seasons }) {
+function Scouting({ name, playerId, seasons }) {
     const [season, setSeason] = useState(seasons[seasons.length - 1]);
     return (
         <Section id="scouting" title="Scouting report"
@@ -405,7 +405,7 @@ function Scouting({ name, seasons }) {
             {seasons.length > 1 && (
                 <div className="pp-row"><SeasonSelect value={season} seasons={seasons} onChange={setSeason} /></div>
             )}
-            <ScoutingReportCard playerName={name} season={season} titleClassName="pp-subhead" />
+            <ScoutingReportCard playerName={name} playerId={playerId} season={season} titleClassName="pp-subhead" />
         </Section>
     );
 }
@@ -991,7 +991,7 @@ export default function PlayerProfile({ onNavigate }) {
                 <ShotMakingBlock block={d.shot_making} coverage={d.coverage.shot_making} onNavigate={onNavigate}
                     name={d.player.player_name} playerId={d.player.player_id} />
             )}
-            {d.scouting.seasons.length > 0 && <Scouting name={d.player.player_name} seasons={d.scouting.seasons} />}
+            {d.scouting.seasons.length > 0 && <Scouting name={d.player.player_name} playerId={d.player.player_id} seasons={d.scouting.seasons} />}
             {d.defense.rows.length > 0 && <Defense block={d.defense} onNavigate={onNavigate} />}
             {d.gravity.rows.length > 0 && <Gravity rows={d.gravity.rows} onNavigate={onNavigate} />}
             {d.contracts.rows.length > 0 && <Contracts rows={d.contracts.rows} coverage={d.coverage.contracts} onNavigate={onNavigate} />}

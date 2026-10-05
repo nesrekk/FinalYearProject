@@ -24,6 +24,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 import shots_lib
 from impact_core import find_player, get_db
+from season_team import season_team_sql, shown_team
 from routers.dad_index import MIN_DFGA_RELIABLE
 from routers.explore import BREAKOUT_DEFAULT, BREAKOUT_DEFAULT_GP, BREAKOUT_DEFAULT_MPG, BREAKOUT_FLAG_TOP, \
     breakout_flags, breakout_persistence
@@ -194,6 +195,8 @@ def get_player_profile(player_id: int):
             for k in SEASON_COLS[2:]:
                 s[k] = _num(s[k])
             s["gp"] = int(s["gp"]) if s["gp"] is not None else None
+            # The play-by-play's team where the row names one he never played for (season_team.py).
+            s["team_abbreviation"] = shown_team(cur, player_id, s["season"], s["team_abbreviation"])
             s["stints"] = stints.get(s["season"], [])
             s["role"] = roles.get(s["season"])
             s["small_sample"] = s["gp"] is None or s["gp"] < SMALL_GP
@@ -238,8 +241,8 @@ def get_player_profile(player_id: int):
         scouting_seasons = [s for (s,) in cur.fetchall()]
 
         # ── Defense: DAD Index ──
-        cur.execute("""SELECT season, team_abbreviation, pos_group, qualified, total_poss, n_assignments, dad, dad_z,
-                              dad_pos_z, d_fga, d_fg_pct, dfg_diff, top3
+        cur.execute(f"""SELECT season, {season_team_sql(cur)}, pos_group, qualified, total_poss, n_assignments, dad,
+                              dad_z, dad_pos_z, d_fga, d_fg_pct, dfg_diff, top3
                        FROM defender_dad WHERE player_id = %s ORDER BY season""", (player_id,))
         defense = []
         for x in cur.fetchall():
@@ -266,7 +269,7 @@ def get_player_profile(player_id: int):
         gravity = [{k: (_num(v) if isinstance(v, float) else v) for k, v in zip(gkeys, x)} for x in cur.fetchall()]
 
         # ── Contract value ──
-        cur.execute("""SELECT season, team_abbreviation, minutes, salary, war, fair_value, surplus
+        cur.execute(f"""SELECT season, {season_team_sql(cur)}, minutes, salary, war, fair_value, surplus
                        FROM contract_value WHERE player_id = %s ORDER BY season""", (player_id,))
         contracts = [{"season": x[0], "team": x[1], "minutes": _num(x[2], 0), "salary": x[3], "war": _num(x[4], 2),
                       "fair_value": _num(x[5], 0), "surplus": _num(x[6], 0)} for x in cur.fetchall()]

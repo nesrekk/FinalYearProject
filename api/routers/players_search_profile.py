@@ -2,9 +2,11 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 
+from season_team import shown_team
+
 from impact_core import (
     _normalize_search_text,
-    find_player,
+    resolve_player,
     get_db,
     get_latest_season,
 )
@@ -52,7 +54,7 @@ def search_players_live(q: str, limit: int = 20):
     return {"query": query, "results": [r[0] for r in rows[:safe_limit]]}
 
 @router.get("/players/profile/{player_name}")
-def get_player_profile(player_name: str, season: Optional[int] = None):
+def get_player_profile(player_name: str, season: Optional[int] = None, player_id: Optional[int] = None):
     """
     Player profile stats from the local DB (no page calls this; round 8 R8-017). If season is
     omitted, the player's latest stored season. It used to ask stats.nba.com first with a 45 s
@@ -60,7 +62,7 @@ def get_player_profile(player_name: str, season: Optional[int] = None):
     """
     with get_db() as conn:
         cursor = conn.cursor()
-        player_id, resolved_name = find_player(cursor, player_name)
+        player_id, resolved_name = resolve_player(cursor, player_name, player_id)
         if season is None:
             season = get_latest_season(cursor)
 
@@ -107,6 +109,7 @@ def get_player_profile(player_name: str, season: Optional[int] = None):
                 status_code=404,
                 detail=f"No profile data for {resolved_name}.",
             )
+        team = shown_team(cursor, player_id, row[2], row[1])
 
     def pct(v):
         if v is None:
@@ -117,7 +120,7 @@ def get_player_profile(player_name: str, season: Optional[int] = None):
     return {
         "player_id": int(player_id),
         "player_name": row[0],
-        "team_abbr": row[1],
+        "team_abbr": team,
         "season": int(row[2]),
         "age": round(float(row[3]), 1) if row[3] is not None else None,
         "min": round(float(row[4]), 1) if row[4] is not None else None,

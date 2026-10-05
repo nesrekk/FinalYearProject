@@ -21,6 +21,12 @@ that don't match are the three NBA Cup finals (Dec 2023, 2024, 2025), which
 don't count in regular-season stats, and one 2021-22 line with no team.
 Games a player sat out have no line, so streaks count games he played.
 
+Plus-minus (since round 8 step 5) is on the floor, from player_game_onfloor
+(scripts/build_player_game_onfloor.py: the five-man stints with free throws
+credited at the foul, 98% exact against ESPN's box score), and None in the 12
+games whose play-by-play doesn't reconcile with the final score (game_ok
+false). Never player_game_lines' tm_pts - op_pts (stale ESPN score fields).
+
 Filters never become SQL text: stat keys, operators, sort keys and teams are
 looked up in the whitelists below, values are bound parameters.
 
@@ -36,7 +42,8 @@ from fastapi import APIRouter, HTTPException, Query
 
 from impact_core import get_db
 from source_badge import make_source
-from workbench_catalogue import PLAYER_GAME_FROM, PLAYER_GAME_WHERE, TEAM_MARGIN_SQL, game_finder_stats
+from workbench_catalogue import (ONFLOOR_JOIN, PLAYER_GAME_FROM, PLAYER_GAME_WHERE, TEAM_MARGIN_SQL,
+                                 game_finder_stats)
 
 router = APIRouter()
 
@@ -45,7 +52,7 @@ MAX_LIMIT = 200
 MIN_STREAK = 2
 # Rows in every query: a line he played, in a game that counts in the standings
 # (the Workbench's player_game dataset is the same rows: api/workbench_catalogue.py).
-BASE_FROM = PLAYER_GAME_FROM
+BASE_FROM = PLAYER_GAME_FROM + ONFLOOR_JOIN
 MARGIN_SQL = TEAM_MARGIN_SQL
 BASE_WHERE = list(PLAYER_GAME_WHERE)
 
@@ -57,10 +64,12 @@ STATS = game_finder_stats()
 OPS = {"gte": ">=", "gt": ">", "lte": "<=", "lt": "<", "eq": "="}
 SORTS = {**{k: v[1] for k, v in STATS.items()}, "date": "l.game_date", "margin": MARGIN_SQL}
 RAW = ["pts", "fgm", "fga", "fg3m", "fg3a", "ftm", "fta", "oreb", "dreb", "ast", "stl", "blk", "tov"]
+PM_SQL = STATS["plus_minus"][1]  # on-floor plus-minus, NULL where the game doesn't reconcile
 ROW_SQL = ("l.player_id, l.season, l.game_date, l.team_abbreviation, f.opponent, f.is_home, f.win, "
-           f"{MARGIN_SQL}, f.rest_days, f.is_b2b, f.game_id, l.seconds, " + ", ".join(f"l.{c}" for c in RAW))
+           f"{MARGIN_SQL}, f.rest_days, f.is_b2b, f.game_id, l.seconds, " + ", ".join(f"l.{c}" for c in RAW)
+           + f", {PM_SQL}")
 ROW_KEYS = ["player_id", "season", "date", "team", "opponent", "home", "win", "margin", "rest_days", "b2b",
-            "nba_game_id", "seconds"] + RAW
+            "nba_game_id", "seconds"] + RAW + ["plus_minus"]
 
 
 def label(season):
@@ -72,7 +81,8 @@ def _fold(s):
 
 
 def _derived(t, games):
-    """Per-game averages and shooting % from summed raw columns."""
+    """Per-game averages and shooting % from summed raw columns; plus-minus over
+    the games that have one (t["pm"], t["pm_games"])."""
     def ratio(a, b):
         return round(a / b, 4) if b else None
     out = {k: round(t[k] / games, 2) if games else None for k in RAW}
@@ -82,6 +92,8 @@ def _derived(t, games):
     out["fg3_pct"] = ratio(t["fg3m"], t["fg3a"])
     out["ft_pct"] = ratio(t["ftm"], t["fta"])
     out["ts_pct"] = ratio(t["pts"], 2 * (t["fga"] + 0.44 * t["fta"]))
+    out["plus_minus"] = round(t["pm"] / t["pm_games"], 2) if t.get("pm_games") else None
+    out["plus_minus_games"] = int(t.get("pm_games") or 0)
     return out
 
 
@@ -92,6 +104,7 @@ def _game_row(r, names):
     g["min"] = round(g.pop("seconds") / 60, 1)
     g["reb"] = g["oreb"] + g["dreb"]
     g["margin"] = None if g["margin"] is None else int(g["margin"])
+    g["plus_minus"] = None if g["plus_minus"] is None else int(g["plus_minus"])
     g["ts_pct"] = round(g["pts"] / (2 * (g["fga"] + 0.44 * g["fta"])), 4) if g["fga"] + g["fta"] else None
     return g
 
@@ -165,6 +178,10 @@ def _notes(meta):
         "coverage": (f"Regular season {label(meta['seasons']['from'])} to {label(meta['seasons']['to'])} only "
                      f"(through {meta['last_date']}): the lines are rebuilt from ESPN play-by-play, which the "
                      "project has for those seasons and no earlier."),
+        "plus_minus": ("+/- is on the floor: the team's points minus the opponent's while he played, from the "
+                       "five-man stints with free throws credited to the players on the floor at the foul, as the "
+                       "box score does (equals ESPN's box-score +/- in 98% of player-games). Blank in the 12 games "
+                       "whose play-by-play doesn't add up to the final score."),
         "accuracy": (f"Rebuilt season totals match NBA.com's within {a['points_mean_abs_error'] * 100:.1f}% "
                      f"on points for the average player-season (95% within {a['points_p95_abs_error'] * 100:.1f}%; "
                      f"{a['player_seasons']:,} player-seasons with 20+ games). Three-point attempts total "
@@ -307,7 +324,7 @@ def game_finder(
         cur.execute(f"""
             WITH seq AS (
                 SELECT l.player_id, l.season, l.game_date, l.team_abbreviation, l.seconds,
-                       {', '.join(f'l.{c}' for c in RAW)}, ({hit}) AS hit,
+                       {', '.join(f'l.{c}' for c in RAW)}, {PM_SQL} AS pm, ({hit}) AS hit,
                        row_number() OVER (PARTITION BY l.player_id ORDER BY l.game_date) AS rn,
                        count(*) OVER (PARTITION BY l.player_id) AS n_games
                 {BASE_FROM} WHERE {' AND '.join(where)}
@@ -319,6 +336,7 @@ def game_finder(
                        min(season) AS season_from, max(season) AS season_to,
                        array_agg(DISTINCT team_abbreviation ORDER BY team_abbreviation) AS teams,
                        max(rn) = max(n_games) AS reaches_last_game, SUM(seconds) AS seconds,
+                       SUM(pm) AS pm, COUNT(pm) AS pm_games,
                        {', '.join(f'SUM({c}) AS {c}' for c in RAW)}
                 FROM runs GROUP BY player_id, grp HAVING count(*) >= %s
             ), ranked AS (
@@ -333,6 +351,7 @@ def game_finder(
         for r in cur.fetchall():
             s = dict(zip(cols, r))
             totals = {k: float(s[k]) for k in RAW + ["seconds"]}
+            totals.update(pm=float(s["pm"] or 0), pm_games=s["pm_games"])
             out.append({
                 "player_id": s["player_id"], "player_name": names.get(s["player_id"]), "games": s["games"],
                 "start_date": s["start_date"].isoformat(), "end_date": s["end_date"].isoformat(),
@@ -373,6 +392,8 @@ def player_game_log(player_id: int, season: int | None = None):
         raw = cur.fetchall()
         rows = [_game_row(r, names) for r in raw]
         totals = {k: float(sum(r[ROW_KEYS.index(k)] for r in raw)) for k in RAW + ["seconds"]}
+        pms = [g["plus_minus"] for g in rows if g["plus_minus"] is not None]
+        totals.update(pm=float(sum(pms)), pm_games=len(pms))
         cur.execute("SELECT gp FROM player_season_stats WHERE player_id = %s AND season = %s", (player_id, season))
         g = cur.fetchone()
         nba_gp = int(g[0]) if g and g[0] is not None else None

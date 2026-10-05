@@ -2684,7 +2684,8 @@ body {
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
   background: var(--accent-dim);
-  color: var(--accent-3);
+  /* --text, not the brand orange: orange on this tint was 3.9:1 in Paper (round 8 step 5). */
+  color: var(--text);
   font-size: 0.7rem;
   font-weight: 700;
 }

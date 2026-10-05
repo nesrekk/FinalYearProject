@@ -6,7 +6,7 @@ from source_badge import make_source
 from fastapi import APIRouter, HTTPException
 
 from impact_core import (
-    find_player,
+    resolve_player,
     get_db,
 )
 
@@ -119,14 +119,14 @@ def _finding(row):
 
 
 @router.get("/players/scouting-report/{player_name}")
-def get_scouting_report(player_name: str, season: Optional[int] = None):
+def get_scouting_report(player_name: str, season: Optional[int] = None, player_id: Optional[int] = None):
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT to_regclass('public.scouting_splits');")
         if cursor.fetchone()[0] is None:
             raise HTTPException(status_code=503, detail="Scouting reports haven't been built yet — run scripts/build_scouting_reports.py.")
 
-        player_id, resolved_name = find_player(cursor, player_name)
+        player_id, resolved_name = resolve_player(cursor, player_name, player_id)
 
         cursor.execute("SELECT DISTINCT season FROM scouting_splits WHERE player_id = %s ORDER BY season;", (player_id,))
         seasons = [r[0] for r in cursor.fetchall()]

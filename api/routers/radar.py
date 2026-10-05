@@ -1,3 +1,4 @@
+from typing import Optional
 from psycopg2 import pool
 from source_badge import make_source
 
@@ -10,7 +11,7 @@ from impact_core import (
     RADAR_STATS,
     _shooting_proficiency,
     _spacing,
-    find_player,
+    resolve_player,
     get_db,
 )
 
@@ -18,7 +19,7 @@ router = APIRouter()
 
 
 @router.get("/radar/{player_name}")
-def get_radar_profile(player_name: str, season: int):
+def get_radar_profile(player_name: str, season: int, player_id: Optional[int] = None):
     """
     Percentile rank (0-100) for each radar axis, among that season's
     qualified pool (min>=15mpg, gp>=20 — same convention as clustering, to
@@ -36,7 +37,7 @@ def get_radar_profile(player_name: str, season: int):
     all_cols = RADAR_STATS + RADAR_HELPER_COLS
     with get_db() as conn:
         cursor = conn.cursor()
-        player_id, resolved_name = find_player(cursor, player_name)
+        player_id, resolved_name = resolve_player(cursor, player_name, player_id)
 
         cursor.execute(
             f"""

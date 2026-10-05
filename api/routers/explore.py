@@ -26,6 +26,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from impact_core import get_db  # also puts scripts/ on sys.path
 from routers.leaderboard import ATTEMPT_DEFAULTS, STATS, sample_reliability
+from season_team import season_team_sql
 from source_badge import make_source
 from stats_lib import wls_cluster
 
@@ -78,7 +79,9 @@ def explore_regression(
                 params.append(ATTEMPT_DEFAULTS[att])
                 floors.append(f"{STATS[key][0]} needs {ATTEMPT_DEFAULTS[att]:g}+ {att.upper()} a game")
         cols = ["player_id", "player_name", "season", "team_abbreviation", x, y]
-        cur.execute(f"SELECT {', '.join(dict.fromkeys(cols))} FROM player_season_stats "
+        team_sql = season_team_sql(cur)
+        select = [team_sql if c == "team_abbreviation" else c for c in dict.fromkeys(cols)]
+        cur.execute(f"SELECT {', '.join(select)} FROM player_season_stats "
                     f"WHERE {' AND '.join(where)};", params)
         rows = cur.fetchall()
 
@@ -186,8 +189,9 @@ def _season_z(stats: tuple, min_gp: int, min_mpg: float):
         [c for c in list(stats) + att_cols if c not in ("gp", "min", "age")]
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute(f"SELECT {', '.join(cols)} FROM player_season_stats "
-                    f"WHERE season >= %s AND gp >= %s AND min >= %s;", (first, min_gp, min_mpg))
+        team_sql = season_team_sql(cur)
+        cur.execute(f"SELECT {', '.join(team_sql if c == 'team_abbreviation' else c for c in cols)} "
+                    f"FROM player_season_stats WHERE season >= %s AND gp >= %s AND min >= %s;", (first, min_gp, min_mpg))
         rows = cur.fetchall()
     idx = {c: i for i, c in enumerate(cols)}
     by_season = {}

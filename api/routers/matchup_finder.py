@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from impact_core import (
     MATCHUP_MIN_POSS,
     MATCHUP_RELIABLE_POSS,
-    find_player,
+    resolve_player,
     get_db,
     get_latest_season,
 )
@@ -15,7 +15,8 @@ router = APIRouter()
 
 
 @router.get("/matchups/player/{player_name}")
-def get_player_matchups(player_name: str, role: str = "scorer", season: Optional[int] = None, top_n: int = 15):
+def get_player_matchups(player_name: str, role: str = "scorer", season: Optional[int] = None, top_n: int = 15,
+                         player_id: Optional[int] = None):
     role = role.lower()
     if role not in ("scorer", "defender"):
         raise HTTPException(status_code=400, detail="role must be 'scorer' or 'defender'.")
@@ -27,7 +28,7 @@ def get_player_matchups(player_name: str, role: str = "scorer", season: Optional
         if cursor.fetchone()[0] is None:
             raise HTTPException(status_code=503, detail="No matchup data yet — run scripts/fetch_matchups.py first.")
 
-        player_id, resolved_name = find_player(cursor, player_name)
+        player_id, resolved_name = resolve_player(cursor, player_name, player_id)
         resolved_season = season or get_latest_season(cursor)
 
         if role == "scorer":

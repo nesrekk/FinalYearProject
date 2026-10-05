@@ -27,6 +27,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from source_badge import make_source
+from season_team import season_team_sql  # the team shown: not one he never played for that season
 
 # ─── App Setup ──────────────────────────────────────────────────────────────
 
@@ -780,7 +781,7 @@ def predict_mvp(season: int, top_n: int = 15):
             )
 
         # Pull season data
-        cols = ", ".join(["player_id", "player_name", "team_abbreviation"] + FEATURES)
+        cols = ", ".join(["player_id", "player_name", f"{season_team_sql(cursor)} AS team_abbreviation"] + FEATURES)
         cursor.execute(
             f"SELECT {cols} FROM player_season_stats WHERE season = %s;",
             (season,),
@@ -849,7 +850,7 @@ def predict_dpoy(season: int, top_n: int = 15):
         cursor.execute("SELECT MIN(season), MAX(season) FROM player_season_stats;")
         season_min, season_max = cursor.fetchone()
 
-        cols = ", ".join(["player_id", "player_name", "team_abbreviation"] + DPOY_FEATURES + ["gp"])
+        cols = ", ".join(["player_id", "player_name", f"{season_team_sql(cursor)} AS team_abbreviation"] + DPOY_FEATURES + ["gp"])
         cursor.execute(
             f"""
             SELECT {cols} FROM player_season_stats
@@ -938,7 +939,8 @@ def predict_roy(season: int, top_n: int = 15):
                        f"already veterans before the data starts, so ROY isn't computed for it.",
             )
 
-        cols = ", ".join(f"p.{c}" for c in ["player_id", "player_name", "team_abbreviation"] + ROY_FEATURES)
+        cols = ", ".join(season_team_sql(cursor, "p.") + " AS team_abbreviation" if c == "team_abbreviation" else f"p.{c}"
+                         for c in ["player_id", "player_name", "team_abbreviation"] + ROY_FEATURES)
         cursor.execute(
             f"""
             SELECT {cols} FROM player_season_stats p
@@ -1014,7 +1016,7 @@ def predict_all_nba(season: int):
         cursor.execute("SELECT MIN(season), MAX(season) FROM player_season_stats;")
         season_min, season_max = cursor.fetchone()
 
-        cols = ", ".join(["player_id", "player_name", "team_abbreviation"] + ALLNBA_FEATURES)
+        cols = ", ".join(["player_id", "player_name", f"{season_team_sql(cursor)} AS team_abbreviation"] + ALLNBA_FEATURES)
         cursor.execute(
             f"""
             SELECT {cols} FROM player_season_stats

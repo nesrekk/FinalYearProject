@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from psycopg2 import pool
 
 from source_badge import make_source
+from season_team import season_team_sql  # the team shown: not one he never played for that season
 
 # ─── App Setup ──────────────────────────────────────────────────────────────
 
@@ -61,15 +62,30 @@ def get_db():
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
 
-def find_player_id(cursor, player_name: str) -> int:
+# Latest career first: 19 names belong to two players (impact_core.find_player, same order).
+_PLAYER_ORDER = "ORDER BY MAX(season) DESC, SUM(COALESCE(min, 0) * COALESCE(gp, 0)) DESC, player_id"
+
+
+def find_player_id(cursor, player_name: str, player_id: int | None = None):
     """
-    Look up a player_id by name (case-insensitive partial match).
-    Raises 404 if not found.
+    (player_id, name) for a typed name (case-insensitive, then partial, then
+    accents ignored; the latest player of a shared name), or for an NBA id
+    when the page knows it. Raises 404 if not found.
     """
+    if player_id is not None:
+        cursor.execute(
+            "SELECT player_name FROM player_season_stats WHERE player_id = %s ORDER BY season DESC LIMIT 1;",
+            (player_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"No player with id {player_id}.")
+        return player_id, row[0]
+
     # Try exact match first
     cursor.execute(
-        "SELECT DISTINCT player_id, player_name FROM player_season_stats "
-        "WHERE LOWER(player_name) = LOWER(%s) LIMIT 1;",
+        "SELECT player_id, (array_agg(player_name ORDER BY season DESC))[1] FROM player_season_stats "
+        f"WHERE LOWER(player_name) = LOWER(%s) GROUP BY player_id {_PLAYER_ORDER} LIMIT 1;",
         (player_name,),
     )
     row = cursor.fetchone()
@@ -78,8 +94,8 @@ def find_player_id(cursor, player_name: str) -> int:
 
     # Try partial match
     cursor.execute(
-        "SELECT DISTINCT player_id, player_name FROM player_season_stats "
-        "WHERE LOWER(player_name) LIKE LOWER(%s) LIMIT 1;",
+        "SELECT player_id, (array_agg(player_name ORDER BY season DESC))[1] FROM player_season_stats "
+        f"WHERE LOWER(player_name) LIKE LOWER(%s) GROUP BY player_id {_PLAYER_ORDER} LIMIT 1;",
         (f"%{player_name}%",),
     )
     row = cursor.fetchone()
@@ -89,7 +105,7 @@ def find_player_id(cursor, player_name: str) -> int:
     # Accent-insensitive fallback (handles cases like jokic -> Jokić)
     normalized_query = normalize_text(player_name)
     cursor.execute(
-        "SELECT DISTINCT player_id, player_name FROM player_season_stats;"
+        f"SELECT player_id, player_name FROM player_season_stats GROUP BY player_id, player_name {_PLAYER_ORDER};"
     )
     candidates = cursor.fetchall()
     for pid, pname in candidates:
@@ -188,8 +204,8 @@ def get_season_clusters(season: int):
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """
-            SELECT player_id, player_name, team_abbreviation, role,
+            f"""
+            SELECT player_id, player_name, {season_team_sql(cursor)}, role,
                    pca_x, pca_y, pts, reb, ast, stl, blk, tov,
                    fg3_pct, ts_pct, usg_pct, ast_pct, reb_pct, family
             FROM player_roles
@@ -217,11 +233,11 @@ def get_season_clusters(season: int):
 
 
 @app.get("/clusters/player/{player_name}")
-def get_player_cluster_history(player_name: str):
+def get_player_cluster_history(player_name: str, player_id: int | None = None):
     """A player's archetype across every season they were clustered in — shows role evolution."""
     with get_db() as conn:
         cursor = conn.cursor()
-        player_id, resolved_name = find_player_id(cursor, player_name)
+        player_id, resolved_name = find_player_id(cursor, player_name, player_id)
 
         cursor.execute(
             """
@@ -401,7 +417,7 @@ def get_league_evolution():
 
 
 @app.get("/similarity/season/{player_name}/{season}")
-def get_season_similarity(player_name: str, season: int, top_n: int = 10):
+def get_season_similarity(player_name: str, season: int, top_n: int = 10, player_id: int | None = None):
     """
     Find the top N most similar player-seasons for a given player + season.
     Uses precomputed league-adjusted cosine similarity from season_similarity table.
@@ -410,7 +426,7 @@ def get_season_similarity(player_name: str, season: int, top_n: int = 10):
         cursor = conn.cursor()
 
         # Resolve player
-        player_id, resolved_name = find_player_id(cursor, player_name)
+        player_id, resolved_name = find_player_id(cursor, player_name, player_id)
 
         # Check the season exists for this player
         cursor.execute(
@@ -485,7 +501,7 @@ def _season_matrix():
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(f"""
-            SELECT player_id, player_name, season, team_abbreviation, gp, {", ".join(SIM_FEATURES)}
+            SELECT player_id, player_name, season, {season_team_sql(cur)}, gp, {", ".join(SIM_FEATURES)}
             FROM player_season_stats
             WHERE {" AND ".join(f"{c} IS NOT NULL" for c in SIM_FEATURES)}
             ORDER BY player_id, season;
@@ -648,7 +664,7 @@ def _line_matrix():
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(f"""
-            SELECT player_id, player_name, season, team_abbreviation, gp, {", ".join(cols)}
+            SELECT player_id, player_name, season, {season_team_sql(cur)}, gp, {", ".join(cols)}
             FROM player_season_stats ORDER BY player_id, season;
         """)
         rows = cur.fetchall()
@@ -822,7 +838,8 @@ def similar_to_stat_line(line: str, season: int | None = None, season_from: int 
 
 
 @app.get("/players/trajectory/{player_name}")
-def get_player_trajectory(player_name: str, season: int, top_n_comps: int = 5, project_years: int = 3):
+def get_player_trajectory(player_name: str, season: int, top_n_comps: int = 5, project_years: int = 3,
+                          player_id: int | None = None):
     """
     CARMELO-style career trajectory: finds this player's closest real
     statistical comps at this same age (the same era-normalized
@@ -841,7 +858,7 @@ def get_player_trajectory(player_name: str, season: int, top_n_comps: int = 5, p
 
     with get_db() as conn:
         cursor = conn.cursor()
-        player_id, resolved_name = find_player_id(cursor, player_name)
+        player_id, resolved_name = find_player_id(cursor, player_name, player_id)
 
         cursor.execute(
             "SELECT age FROM player_season_stats WHERE player_id = %s AND season = %s;",
@@ -941,7 +958,7 @@ def get_player_trajectory(player_name: str, season: int, top_n_comps: int = 5, p
 
 
 @app.get("/similarity/career/{player_name}")
-def get_career_similarity(player_name: str, top_n: int = 10):
+def get_career_similarity(player_name: str, top_n: int = 10, player_id: int | None = None):
     """
     Find the top N most similar careers for a given player.
     Uses precomputed cosine similarity from career_similarity table.
@@ -950,7 +967,7 @@ def get_career_similarity(player_name: str, top_n: int = 10):
         cursor = conn.cursor()
 
         # Resolve player
-        player_id, resolved_name = find_player_id(cursor, player_name)
+        player_id, resolved_name = find_player_id(cursor, player_name, player_id)
 
         # Query precomputed career similarities
         cursor.execute(

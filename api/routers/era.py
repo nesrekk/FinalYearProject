@@ -35,6 +35,7 @@ from fastapi import APIRouter, HTTPException, Query
 from impact_core import get_db
 from routers.leaderboard import ATTEMPT_DEFAULTS, STATS
 from source_badge import make_source
+from season_team import season_team_sql
 
 router = APIRouter()
 
@@ -146,7 +147,8 @@ def era_translate(player_id: int, season: int | None = None, target: int | None 
     league = _league()
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT season, team_abbreviation, gp FROM player_season_stats "
+        team_sql = season_team_sql(cur)  # not a team he never played for that season (season_team.py)
+        cur.execute(f"SELECT season, {team_sql}, gp FROM player_season_stats "
                     "WHERE player_id = %s ORDER BY season;", (player_id,))
         seasons = [{"season": s, "team": t, "gp": g} for s, t, g in cur.fetchall()]
         if not seasons:
@@ -163,7 +165,8 @@ def era_translate(player_id: int, season: int | None = None, target: int | None 
                 f"Target season must be between {_label(first_on_file)} and {_label(last_on_file)}."))
 
         cols = ["player_name", "team_abbreviation", "age", "gp", "min", "fga", "fg3a", *ROWS]
-        cur.execute(f"SELECT {', '.join(cols)} FROM player_season_stats WHERE player_id = %s AND season = %s;",
+        cur.execute(f"SELECT {', '.join(team_sql if c == 'team_abbreviation' else c for c in cols)} "
+                    "FROM player_season_stats WHERE player_id = %s AND season = %s;",
                     (player_id, season))
         p = dict(zip(cols, cur.fetchone()))
 

@@ -2,6 +2,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 
+from season_team import season_team_sql
 from source_badge import make_source
 
 from impact_core import (
@@ -41,7 +42,7 @@ def _stored_leaders(cursor, key: str, season: int, top_n: int):
         raise HTTPException(status_code=400, detail=f"Stat '{key}' is not available in this database.")
     cursor.execute(
         f"""
-        SELECT player_id, player_name, team_abbreviation, {selected_col}
+        SELECT player_id, player_name, {season_team_sql(cursor)} AS team_abbreviation, {selected_col}
         FROM player_season_stats
         WHERE season = %s
           AND {selected_col} IS NOT NULL

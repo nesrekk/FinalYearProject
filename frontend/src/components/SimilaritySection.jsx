@@ -1,11 +1,14 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { fetchPlayerSuggestions, fetchSeasonSimilarityProfile } from '../services/api';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { fetchSeasonSimilarityProfile } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
 import SourceBadge from './common/SourceBadge';
 import PlayerName from './common/PlayerName';
 import TableExport from './common/TableExport';
+import AutocompleteDropdown from './common/AutocompleteDropdown';
+import NamesakeNote from './common/NamesakeNote';
+import usePlayerSuggestions from '../utils/usePlayerSuggestions';
 import { signed as signedNum } from '../utils/format';
 
 // Similarity inputs exist from 2009-10 on (usage, net rating, AST%/REB%).
@@ -59,32 +62,18 @@ export default function SimilaritySection() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [suggestions, setSuggestions] = useState([]);
+    const [picked, setPicked] = useState(null); // { name, id } from a suggestion
 
-    useEffect(() => {
-        const query = player.trim();
-        if (query.length < 2) {
-            setSuggestions([]);
-            return;
-        }
-
-        const timer = setTimeout(async () => {
-            try {
-                const res = await fetchPlayerSuggestions(query, 10);
-                setSuggestions(res?.results ?? []);
-            } catch {
-                setSuggestions([]);
-            }
-        }, 200);
-
-        return () => clearTimeout(timer);
-    }, [player]);
+    // A suggestion carries the NBA id (two players can share a name); typed text opens the latest of that name.
+    const sug = usePlayerSuggestions(player, picked?.name);
+    const inputRef = useRef(null);
 
     const load = useCallback(async (target) => {
         setLoading(true);
         setError('');
         try {
-            const res = await fetchSeasonSimilarityProfile(target.player, target.season, { topN, excludeSelf, minGp, onePerPlayer });
+            const res = await fetchSeasonSimilarityProfile(target.player, target.season,
+                { topN, excludeSelf, minGp, onePerPlayer, playerId: target.id || undefined });
             setData(res);
             if (res?.pool?.to) setLastSeason(res.pool.to);
         } catch (err) {
@@ -103,7 +92,9 @@ export default function SimilaritySection() {
     const handleSearch = (e) => {
         e.preventDefault();
         if (!player.trim() || !season) return;
-        setSearched({ player: player.trim(), season: Number(season) });
+        sug.dismiss();
+        const id = picked && picked.name === player.trim() ? picked.id : null;
+        setSearched({ player: player.trim(), season: Number(season), id });
     };
 
     const seasons = [];
@@ -130,19 +121,22 @@ export default function SimilaritySection() {
 
             <form className="input-row" onSubmit={handleSearch}>
                 <input
+                    ref={inputRef}
                     type="text"
                     placeholder="Player name"
                     aria-label="Player name"
                     value={player}
                     onChange={(e) => setPlayer(e.target.value)}
                     className="input-field"
-                    list="similarity-player-suggestions"
                 />
-                <datalist id="similarity-player-suggestions">
-                    {suggestions.map((name) => (
-                        <option key={name} value={name} />
-                    ))}
-                </datalist>
+                <AutocompleteDropdown anchorRef={inputRef} items={sug.labels}
+                    onPick={(label) => {
+                        const p = sug.pick(label);
+                        if (!p) return;
+                        setPlayer(p.name);
+                        setPicked({ name: p.name, id: p.id });
+                        sug.dismiss();
+                    }} />
                 <select
                     className="input-field"
                     aria-label="Season"
@@ -155,6 +149,9 @@ export default function SimilaritySection() {
                     {loading ? 'Searching…' : 'Find Similar Seasons'}
                 </button>
             </form>
+
+            <NamesakeNote name={q?.player_name} id={q?.player_id}
+                onPick={(p) => { setPlayer(p.name); setPicked(p); setSearched({ player: p.name, season: Number(season), id: p.id }); }} />
 
             <div className="sim-filters">
                 <label>

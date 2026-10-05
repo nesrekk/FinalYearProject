@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { fetchPlayerTrajectory, fetchPlayerSuggestions } from '../services/api';
+import { fetchPlayerTrajectory } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import AutocompleteDropdown from './common/AutocompleteDropdown';
+import NamesakeNote from './common/NamesakeNote';
+import usePlayerSuggestions from '../utils/usePlayerSuggestions';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
 import ChartTooltip from './common/ChartTooltip';
@@ -176,38 +178,21 @@ function TrajectoryChart({ data }) {
 export default function TrajectoryForecasterSection() {
     const searchInputRef = useRef(null);
     const [searchInput, setSearchInput] = useState('Anthony Edwards');
-    const [suggestions, setSuggestions] = useState([]);
-    const [playerName, setPlayerName] = useState('Anthony Edwards');
+    // { name, id }: the id (from a suggestion) picks the player exactly; a typed name opens the latest of that name.
+    const [player, setPlayer] = useState({ name: 'Anthony Edwards', id: null });
     const [season, setSeason] = useState(2022);
     const [projectYears, setProjectYears] = useState(3);
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    useEffect(() => {
-        const query = searchInput.trim();
-        if (query.length < 2 || query.toLowerCase() === playerName.toLowerCase()) {
-            setSuggestions([]);
-            return;
-        }
-        let active = true;
-        const timer = setTimeout(async () => {
-            try {
-                const res = await fetchPlayerSuggestions(query, 8);
-                if (active) setSuggestions(res?.results ?? []);
-            } catch {
-                if (active) setSuggestions([]);
-            }
-        }, 200);
-        return () => { active = false; clearTimeout(timer); };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchInput]);
+    const sug = usePlayerSuggestions(searchInput, player.name);
 
-    async function load(name, szn, years) {
+    async function load({ name, id }, szn, years) {
         setLoading(true);
         setError('');
         try {
-            const res = await fetchPlayerTrajectory(name, szn, 5, years);
+            const res = await fetchPlayerTrajectory(name, szn, 5, years, id || undefined);
             setData(res);
         } catch (e) {
             setData(null);
@@ -218,14 +203,13 @@ export default function TrajectoryForecasterSection() {
     }
 
     useEffect(() => {
-        load(playerName, season, projectYears);
-         
-    }, [playerName, season, projectYears]);
+        load(player, season, projectYears);
+    }, [player, season, projectYears]);
 
-    function pick(name) {
-        setSearchInput(name);
-        setSuggestions([]);
-        setPlayerName(name);
+    function pick(next) {
+        sug.dismiss();
+        setSearchInput(next.name);
+        setPlayer(next);
     }
 
     return (
@@ -252,11 +236,14 @@ export default function TrajectoryForecasterSection() {
                             type="text"
                             className="input-field"
                             placeholder="Player name…"
+                            aria-label="Player"
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && searchInput.trim()) pick({ name: searchInput.trim(), id: null }); }}
                             style={{ width: '100%' }}
                         />
-                        <AutocompleteDropdown anchorRef={searchInputRef} items={suggestions} onPick={pick} />
+                        <AutocompleteDropdown anchorRef={searchInputRef} items={sug.labels}
+                            onPick={(label) => { const p = sug.pick(label); if (p) pick({ name: p.name, id: p.id }); }} />
                     </div>
                     <SeasonSelect value={season} onChange={setSeason} from={2010} />
                     <select
@@ -271,6 +258,7 @@ export default function TrajectoryForecasterSection() {
                         <option value={5}>Project 5 years</option>
                     </select>
                 </div>
+                <NamesakeNote name={data?.player_name} id={data?.player_id} onPick={pick} />
                 {error && <p className="error-message" style={{ marginTop: '0.5rem' }}>{error}</p>}
             </div>
 

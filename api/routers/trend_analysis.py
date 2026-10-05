@@ -1,3 +1,4 @@
+from typing import Optional
 from psycopg2 import pool
 from source_badge import make_source
 
@@ -5,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from impact_core import (
     TREND_PLAYER_STATS,
-    find_player,
+    resolve_player,
     get_db,
 )
 
@@ -13,13 +14,13 @@ router = APIRouter()
 
 
 @router.get("/players/history/{player_name}")
-def get_player_history(player_name: str):
+def get_player_history(player_name: str, player_id: Optional[int] = None):
     """Every season a player appears in player_season_stats, unfiltered (no
     qualified-pool minimum) — trend analysis should show the real trajectory,
     injury-shortened or rookie seasons included, not just the "clean" ones."""
     with get_db() as conn:
         cursor = conn.cursor()
-        player_id, resolved_name = find_player(cursor, player_name)
+        player_id, resolved_name = resolve_player(cursor, player_name, player_id)
         cursor.execute(
             f"""
             SELECT season, age, gp, {', '.join(TREND_PLAYER_STATS)}

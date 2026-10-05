@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchPlayerHistory, fetchTeamHistory, fetchTradeTeams, fetchLivePlayerSuggestions } from '../services/api';
+import { fetchPlayerHistory, fetchTeamHistory, fetchTradeTeams } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
@@ -7,6 +7,9 @@ import Icon from './common/Icon';
 import ChartExport from './common/ChartExport';
 import ChartTooltip from './common/ChartTooltip';
 import useChartCrosshair from '../utils/useChartCrosshair';
+import AutocompleteDropdown from './common/AutocompleteDropdown';
+import NamesakeNote from './common/NamesakeNote';
+import usePlayerSuggestions from '../utils/usePlayerSuggestions';
 
 const PLAYER_STATS = [
     { key: 'pts', label: 'Points', digits: 1 },
@@ -122,8 +125,8 @@ export default function TrendAnalysisSection() {
     const [mode, setMode] = useState('player'); // 'player' | 'team'
 
     const [searchInput, setSearchInput] = useState('LeBron James');
-    const [suggestions, setSuggestions] = useState([]);
     const [playerName, setPlayerName] = useState('LeBron James');
+    const searchRef = useRef(null);
     const [playerStat, setPlayerStat] = useState('pts');
     const [playerHistory, setPlayerHistory] = useState(null);
     const [playerError, setPlayerError] = useState('');
@@ -136,36 +139,20 @@ export default function TrendAnalysisSection() {
 
     const [loading, setLoading] = useState(false);
 
-    useEffect(() => {
-        const query = searchInput.trim();
-        if (query.length < 2 || query.toLowerCase() === playerName.toLowerCase()) {
-            setSuggestions([]);
-            return;
-        }
-        let active = true;
-        const timer = setTimeout(async () => {
-            try {
-                const data = await fetchLivePlayerSuggestions(query, 8);
-                if (active) setSuggestions(data?.results ?? []);
-            } catch {
-                if (active) setSuggestions([]);
-            }
-        }, 200);
-        return () => {
-            active = false;
-            clearTimeout(timer);
-        };
-    }, [searchInput, playerName]);
+    // Suggestions carry the NBA id (two players can share a name); a typed name opens the latest one.
+    const sug = usePlayerSuggestions(searchInput, playerName);
 
-    async function loadPlayer(name) {
+    async function loadPlayer(name, id) {
         setSearchInput(name);
         setPlayerName(name);
-        setSuggestions([]);
+        sug.dismiss();
         setLoading(true);
         setPlayerError('');
         try {
-            const data = await fetchPlayerHistory(name);
+            const data = await fetchPlayerHistory(name, id || undefined);
             setPlayerHistory(data);
+            setSearchInput(data.player_name);
+            setPlayerName(data.player_name);
         } catch (e) {
             setPlayerHistory(null);
             setPlayerError(e?.response?.data?.detail || 'No history for this player.');
@@ -174,6 +161,8 @@ export default function TrendAnalysisSection() {
         }
     }
 
+    // Mount only: the default player.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { loadPlayer('LeBron James'); }, []);
 
     useEffect(() => {
@@ -237,38 +226,25 @@ export default function TrendAnalysisSection() {
                     <div className="input-row">
                         <div style={{ position: 'relative', flex: 1 }}>
                             <input
+                                ref={searchRef}
                                 type="text"
                                 className="input-field"
                                 placeholder="Search a player…"
+                                aria-label="Player"
                                 value={searchInput}
                                 onChange={(e) => setSearchInput(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === 'Enter') loadPlayer(searchInput); }}
                             />
-                            {suggestions.length > 0 && (
-                                <ul className="autocomplete-list" style={{
-                                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                                    background: 'var(--surface)', border: '2px solid var(--line)', borderRadius: 0, boxShadow: 'var(--shadow-card)',
-                                    marginTop: 4, maxHeight: 220, overflowY: 'auto', listStyle: 'none', padding: 0,
-                                }}>
-                                    {suggestions.map((name) => (
-                                        <li key={name}>
-                                            <button
-                                                type="button"
-                                                onClick={() => loadPlayer(name)}
-                                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer' }}
-                                            >
-                                                {name}
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
+                            <AutocompleteDropdown anchorRef={searchRef} items={sug.labels}
+                                onPick={(label) => { const p = sug.pick(label); if (p) loadPlayer(p.name, p.id); }} />
                         </div>
                         <select className="input-field" value={playerStat} onChange={(e) => setPlayerStat(e.target.value)}>
                             {PLAYER_STATS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                         </select>
                     </div>
 
+                    <NamesakeNote name={playerHistory?.player_name} id={playerHistory?.player_id}
+                        onPick={(p) => loadPlayer(p.name, p.id)} />
                     {loading && <Loader />}
                     {playerError && <p className="error-message" style={{ marginTop: '0.75rem' }}>{playerError}</p>}
                     {!loading && playerHistory && (

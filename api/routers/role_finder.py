@@ -42,6 +42,7 @@ import numpy as np
 from fastapi import APIRouter, HTTPException, Query
 
 from impact_core import get_db
+from season_team import season_team_sql
 from source_badge import make_source
 
 router = APIRouter()
@@ -242,7 +243,8 @@ def role_finder_options():
 
 def _load_pool(cur, season):
     cur.execute(
-        """SELECT p.player_id, p.player_name, p.team_abbreviation, p.gp, p.min, p.pts, p.usg_pct, p.ts_pct,
+        f"""SELECT p.player_id, p.player_name, {season_team_sql(cur, 'p.')} AS team_abbreviation, p.gp, p.min,
+                  p.pts, p.usg_pct, p.ts_pct,
                   p.ast_pct, p.tov_pct, p.reb_pct, p.oreb_pct, p.obpm, p.dbpm, p.stl, p.blk, p.fta, p.fga,
                   p.fg3_pct, p.fg3a,
                   d.position, d.qualified, d.dad_z, d.dad_pos_z, d.dfg_diff, d.n_assignments, d.total_poss, d.d_fga,

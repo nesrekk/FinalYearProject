@@ -7,7 +7,6 @@ from fastapi import APIRouter, HTTPException
 from source_badge import make_source
 
 from impact_core import (
-    find_player,
     get_db,
     resolve_player,
 )
@@ -22,7 +21,7 @@ def _shots_source(how: str):
 
 
 @router.get("/shots/player/{player_name}/seasons")
-def get_shot_seasons(player_name: str):
+def get_shot_seasons(player_name: str, player_id: Optional[int] = None):
     """
     Resolve a player and make sure their career shots are cached (fetching
     live once, on a cache miss, if ENABLE_LIVE_SHOT_FETCH != "false").
@@ -32,7 +31,7 @@ def get_shot_seasons(player_name: str):
     """
     with get_db() as conn:
         cursor = conn.cursor()
-        player_id, resolved_name = find_player(cursor, player_name)
+        player_id, resolved_name = resolve_player(cursor, player_name, player_id)
 
     try:
         result = shots_lib.ensure_player_shots_cached(int(player_id), resolved_name)
@@ -86,7 +85,7 @@ def get_player_shots(player_name: str, season: Optional[str] = None, player_id: 
     }
 
 @router.get("/shots/player/{player_name}/zones")
-def get_player_shot_zones(player_name: str, season: int):
+def get_player_shot_zones(player_name: str, season: int, player_id: Optional[int] = None):
     """A player's own regular-season FG% by the 5 real NBA shot zones (Restricted
     Area, Paint, Mid-Range, Corner 3, Above the Break 3), for the comparison
     page's shot-chart section. Fetches (and caches forever) just the ONE
@@ -97,7 +96,7 @@ def get_player_shot_zones(player_name: str, season: int):
     season is already cached and returns instantly either way."""
     with get_db() as conn:
         cursor = conn.cursor()
-        player_id, resolved_name = find_player(cursor, player_name)
+        player_id, resolved_name = resolve_player(cursor, player_name, player_id)
 
     season_label = f"{season - 1}-{str(season)[-2:]}"
     try:

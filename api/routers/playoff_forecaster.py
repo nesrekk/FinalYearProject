@@ -1,11 +1,13 @@
+from typing import Optional
 from source_badge import make_source
+from season_team import shown_team
 
 from fastapi import APIRouter, HTTPException
 
 from impact_core import (
     PLAYOFF_COMPARISON_STATS,
     _fetch_playoff_stats_season,
-    find_player,
+    resolve_player,
     get_db,
 )
 
@@ -13,14 +15,14 @@ router = APIRouter()
 
 
 @router.get("/players/playoff-comparison/{player_name}")
-def get_playoff_comparison(player_name: str, season: int):
+def get_playoff_comparison(player_name: str, season: int, player_id: Optional[int] = None):
     """Real regular-season vs. real playoff advanced stats for one player-
     season, side by side. 404s honestly if the player's team didn't make
     the playoffs that season, or the player didn't appear — that's real
     information too, not something to paper over."""
     with get_db() as conn:
         cursor = conn.cursor()
-        player_id, resolved_name = find_player(cursor, player_name)
+        player_id, resolved_name = resolve_player(cursor, player_name, player_id)
 
         cursor.execute(
             """
@@ -31,12 +33,13 @@ def get_playoff_comparison(player_name: str, season: int):
             (player_id, season),
         )
         row = cursor.fetchone()
+        team = shown_team(cursor, player_id, season, row[0]) if row else None
 
     if not row:
         raise HTTPException(status_code=404, detail=f"No regular-season data for {resolved_name} in season {season}.")
 
     regular = {
-        "team_abbreviation": row[0], "gp": row[1], "min": round(row[2], 1) if row[2] is not None else None,
+        "team_abbreviation": team, "gp": row[1], "min": round(row[2], 1) if row[2] is not None else None,
         "pts": round(row[3], 1) if row[3] is not None else None,
         "ts_pct": row[4], "usg_pct": row[5], "net_rating": row[6], "ast_pct": row[7], "reb_pct": row[8],
     }

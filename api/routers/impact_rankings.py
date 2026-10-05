@@ -1,4 +1,5 @@
 from source_badge import make_source
+from season_team import season_team_sql
 
 from fastapi import APIRouter, HTTPException
 
@@ -26,8 +27,8 @@ def get_bpm_leaderboard(season: int, top_n: int = 20, min_minutes: float = 20.0,
         check_season_exists(cursor, season)
 
         cursor.execute(
-            """
-            SELECT player_name, team_abbreviation, pts, min, bpm, obpm, dbpm, vorp, player_id
+            f"""
+            SELECT player_name, {season_team_sql(cursor)}, pts, min, bpm, obpm, dbpm, vorp, player_id
             FROM player_season_stats
             WHERE season = %s AND bpm IS NOT NULL AND min >= %s AND gp >= %s
             ORDER BY bpm DESC

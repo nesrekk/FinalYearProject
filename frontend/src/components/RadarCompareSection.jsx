@@ -1,44 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchRadarProfile, fetchLivePlayerSuggestions } from '../services/api';
+import { fetchRadarProfile } from '../services/api';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
 import SeasonSelect from './common/SeasonSelect';
-
-// Debounced suggestion fetch for one search slot, with a cancellation guard
-// so an earlier keystroke's response can't resolve after a later one and
-// clobber it (out-of-order async race — caught live: typing "Nikola Jokic"
-// showed no dropdown because an earlier partial query's response sometimes
-// resolved last and overwrote the correct one).
-function useSlotSuggestions(query, resolvedName, setSuggestions) {
-    useEffect(() => {
-        const q = (query || '').trim();
-        // Skip re-searching for a name that's already been picked for this
-        // slot — otherwise selecting a suggestion re-triggers this effect
-        // (searchValues[index] changes to the full name) and reopens a
-        // stray one-item dropdown right after picking.
-        if (q.length < 2 || q.toLowerCase() === (resolvedName || '').toLowerCase()) {
-            setSuggestions([]);
-            return;
-        }
-        let active = true;
-        const timer = setTimeout(async () => {
-            try {
-                const data = await fetchLivePlayerSuggestions(q, 6);
-                if (active) setSuggestions(data?.results ?? []);
-            } catch {
-                if (active) setSuggestions([]);
-            }
-        }, 200);
-        return () => {
-            active = false;
-            clearTimeout(timer);
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [query, resolvedName]);
-}
+import AutocompleteDropdown from './common/AutocompleteDropdown';
+import NamesakeNote from './common/NamesakeNote';
+import usePlayerSuggestions from '../utils/usePlayerSuggestions';
 
 // Also the colour of each player's name in the table: text tokens (>= 4.5:1 on Paper and Ink).
 const PALETTE = ['var(--compare-b)', 'var(--compare-a)', 'var(--series-3)'];
@@ -75,44 +45,38 @@ function ringPolygonPoints(total, fraction) {
     }).join(' ');
 }
 
-function PlayerSlot({ index, color, entry, onSearch, onPick, onRemove, suggestions, searchValue }) {
+// One search slot. Suggestions carry the NBA id (two players can share a name);
+// a typed name (Enter) opens the latest player of that name.
+function PlayerSlot({ index, color, entry, onSearch, onPick, onRemove, searchValue }) {
+    const inputRef = useRef(null);
+    const sug = usePlayerSuggestions(searchValue, entry?.playerName, 6);
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 180 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
                 <div style={{ position: 'relative', flex: 1 }}>
                     <input
+                        ref={inputRef}
                         type="text"
                         className="input-field"
                         placeholder={`Player ${index + 1}…`}
+                        aria-label={`Player ${index + 1}`}
                         value={searchValue}
                         onChange={(e) => onSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && searchValue.trim()) { sug.dismiss(); onPick({ name: searchValue.trim(), id: null }); }
+                        }}
                     />
-                    {suggestions?.length > 0 && (
-                        <ul className="autocomplete-list" style={{
-                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                            background: 'var(--surface)', border: '2px solid var(--line)', borderRadius: 0, boxShadow: 'var(--shadow-card)',
-                            marginTop: 4, maxHeight: 200, overflowY: 'auto', listStyle: 'none', padding: 0,
-                        }}>
-                            {suggestions.map((name) => (
-                                <li key={name}>
-                                    <button
-                                        type="button"
-                                        onClick={() => onPick(name)}
-                                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.7rem', background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer' }}
-                                    >
-                                        {name}
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                    <AutocompleteDropdown anchorRef={inputRef} items={sug.labels}
+                        onPick={(label) => { const p = sug.pick(label); sug.dismiss(); if (p) onPick({ name: p.name, id: p.id }); }} />
                 </div>
                 {entry && (
-                    <button type="button" onClick={onRemove} className="page-subtitle" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
+                    <button type="button" onClick={onRemove} aria-label={`Remove player ${index + 1}`} className="page-subtitle" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
                 )}
             </div>
             {entry?.error && <p className="error-message" style={{ fontSize: '0.75rem', margin: 0 }}>{entry.error}</p>}
+            <NamesakeNote name={entry?.data?.player_name} id={entry?.data?.player_id} onPick={onPick}
+                style={{ marginTop: 0, fontSize: '0.75rem' }} />
         </div>
     );
 }
@@ -120,29 +84,19 @@ function PlayerSlot({ index, color, entry, onSearch, onPick, onRemove, suggestio
 export default function RadarCompareSection() {
     const svgRef = useRef(null);
     const [season, setSeason] = useState(2026);
-    const [slots, setSlots] = useState([null, null, null]); // {playerName, data, error}
+    const [slots, setSlots] = useState([null, null, null]); // {playerName, playerId, data, error}
     const [searchValues, setSearchValues] = useState(['', '', '']);
-    const [suggestionsBySlot, setSuggestionsBySlot] = useState([[], [], []]);
 
     function handleSearch(index, value) {
         setSearchValues((prev) => { const next = [...prev]; next[index] = value; return next; });
     }
 
-    function setSlotSuggestions(index, results) {
-        setSuggestionsBySlot((prev) => { const next = [...prev]; next[index] = results; return next; });
-    }
-    // Three fixed slots -> three hook calls (unconditional, same order every
-    // render, satisfies the Rules of Hooks).
-    useSlotSuggestions(searchValues[0], slots[0]?.playerName, (results) => setSlotSuggestions(0, results));
-    useSlotSuggestions(searchValues[1], slots[1]?.playerName, (results) => setSlotSuggestions(1, results));
-    useSlotSuggestions(searchValues[2], slots[2]?.playerName, (results) => setSlotSuggestions(2, results));
-
-    async function handlePick(index, playerName) {
+    async function handlePick(index, { name: playerName, id }) {
         setSearchValues((prev) => { const next = [...prev]; next[index] = playerName; return next; });
-        setSuggestionsBySlot((prev) => { const next = [...prev]; next[index] = []; return next; });
         try {
-            const data = await fetchRadarProfile(playerName, season);
-            setSlots((prev) => { const next = [...prev]; next[index] = { playerName: data.player_name, data }; return next; });
+            const data = await fetchRadarProfile(playerName, season, id || undefined);
+            setSlots((prev) => { const next = [...prev]; next[index] = { playerName: data.player_name, playerId: data.player_id, data }; return next; });
+            setSearchValues((prev) => { const next = [...prev]; next[index] = data.player_name; return next; });
         } catch (e) {
             setSlots((prev) => {
                 const next = [...prev];
@@ -165,14 +119,14 @@ export default function RadarCompareSection() {
     useEffect(() => {
         slots.forEach((slot, index) => {
             if (!slot?.playerName) return;
-            fetchRadarProfile(slot.playerName, season)
+            fetchRadarProfile(slot.playerName, season, slot.playerId || undefined)
                 .then((data) => {
-                    setSlots((prev) => { const next = [...prev]; next[index] = { playerName: data.player_name, data }; return next; });
+                    setSlots((prev) => { const next = [...prev]; next[index] = { playerName: data.player_name, playerId: data.player_id, data }; return next; });
                 })
                 .catch((e) => {
                     setSlots((prev) => {
                         const next = [...prev];
-                        next[index] = { playerName: slot.playerName, error: e?.response?.data?.detail || 'No data for this player/season.' };
+                        next[index] = { playerName: slot.playerName, playerId: slot.playerId, error: e?.response?.data?.detail || 'No data for this player/season.' };
                         return next;
                     });
                 });
@@ -225,9 +179,8 @@ export default function RadarCompareSection() {
                         color={PALETTE[i]}
                         entry={slots[i]}
                         searchValue={searchValues[i]}
-                        suggestions={suggestionsBySlot[i]}
                         onSearch={(v) => handleSearch(i, v)}
-                        onPick={(name) => handlePick(i, name)}
+                        onPick={(picked) => handlePick(i, picked)}
                         onRemove={() => handleRemove(i)}
                     />
                 ))}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchArchetypes, fetchSeasonClusters, fetchPlayerClusterHistory, fetchLivePlayerSuggestions, fetchLeagueEvolution } from '../services/api';
+import { fetchArchetypes, fetchSeasonClusters, fetchPlayerClusterHistory, fetchLeagueEvolution } from '../services/api';
 import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
@@ -8,6 +8,9 @@ import OffensiveStyleSection from './OffensiveStyleSection';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
 import SeasonSelect from './common/SeasonSelect';
+import AutocompleteDropdown from './common/AutocompleteDropdown';
+import NamesakeNote from './common/NamesakeNote';
+import usePlayerSuggestions from '../utils/usePlayerSuggestions';
 
 // Ten distinct hues for the ten roles; fills only (never text), readable on Paper and Ink.
 // Ten roles, ten theme series colours (tokens.css --series-N, >= 3:1 on Paper and Ink).
@@ -105,7 +108,6 @@ export default function PlayerArchetypesSection() {
     const [hoveredArchetype, setHoveredArchetype] = useState(null);
 
     const [searchInput, setSearchInput] = useState('');
-    const [suggestions, setSuggestions] = useState([]);
     const [history, setHistory] = useState(null);
     const [historyError, setHistoryError] = useState('');
 
@@ -156,34 +158,16 @@ export default function PlayerArchetypesSection() {
         return map;
     }, [archetypes]);
 
-    // Debounced player search for the career-evolution lookup.
-    useEffect(() => {
-        const query = searchInput.trim();
-        if (query.length < 2 || query.toLowerCase() === (history?.player_name || '').toLowerCase()) {
-            setSuggestions([]);
-            return;
-        }
-        let active = true;
-        const timer = setTimeout(async () => {
-            try {
-                const data = await fetchLivePlayerSuggestions(query, 8);
-                if (active) setSuggestions(data?.results ?? []);
-            } catch {
-                if (active) setSuggestions([]);
-            }
-        }, 200);
-        return () => {
-            active = false;
-            clearTimeout(timer);
-        };
-    }, [searchInput, history]);
+    // Player search for the career-evolution lookup: suggestions carry the NBA id (two players can share a name).
+    const sug = usePlayerSuggestions(searchInput, history?.player_name);
+    const searchRef = useRef(null);
 
-    async function loadHistory(name) {
+    async function loadHistory(name, id) {
         setSearchInput(name);
-        setSuggestions([]);
+        sug.dismiss();
         setHistoryError('');
         try {
-            const data = await fetchPlayerClusterHistory(name);
+            const data = await fetchPlayerClusterHistory(name, id || undefined);
             setHistory(data);
         } catch (e) {
             setHistory(null);
@@ -311,7 +295,7 @@ export default function PlayerArchetypesSection() {
                                         <td>
                                             <button
                                                 type="button"
-                                                onClick={() => loadHistory(p.player_name)}
+                                                onClick={() => loadHistory(p.player_name, p.player_id)}
                                                 style={{ background: 'none', border: 'none', color: 'var(--brand-text)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}
                                             >
                                                 {p.player_name}
@@ -343,34 +327,20 @@ export default function PlayerArchetypesSection() {
             <div className="input-row" style={{ marginBottom: 0 }}>
                 <div style={{ position: 'relative', flex: 1 }}>
                     <input
+                        ref={searchRef}
                         type="text"
                         className="input-field"
                         placeholder="Search a player to see how their role changed over their career…"
+                        aria-label="Player"
                         value={searchInput}
                         onChange={(e) => setSearchInput(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') loadHistory(searchInput); }}
                     />
-                    {suggestions.length > 0 && (
-                        <ul className="autocomplete-list" style={{
-                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                            background: 'var(--surface)', border: '2px solid var(--line)', borderRadius: 0, boxShadow: 'var(--shadow-card)',
-                            marginTop: 4, maxHeight: 220, overflowY: 'auto', listStyle: 'none', padding: 0,
-                        }}>
-                            {suggestions.map((name) => (
-                                <li key={name}>
-                                    <button
-                                        type="button"
-                                        onClick={() => loadHistory(name)}
-                                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer' }}
-                                    >
-                                        {name}
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                    <AutocompleteDropdown anchorRef={searchRef} items={sug.labels}
+                        onPick={(label) => { const p = sug.pick(label); if (p) loadHistory(p.name, p.id); }} />
                 </div>
             </div>
+            <NamesakeNote name={history?.player_name} id={history?.player_id} onPick={(p) => loadHistory(p.name, p.id)} />
 
             {historyError && <p className="error-message" style={{ marginTop: '0.75rem' }}>{historyError}</p>}
             {history && (

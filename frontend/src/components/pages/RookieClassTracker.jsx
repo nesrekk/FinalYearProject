@@ -44,14 +44,14 @@ export default function RookieClassTracker() {
 
     useEffect(() => { loadClass(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    async function loadComps(playerName) {
+    async function loadComps(playerName, playerId) {
         setSelected(playerName);
         setCompsLoading(true);
         setCompsError('');
         setComps(null);
         try {
             // The loaded class's season, not the picker's (it may have changed without a reload).
-            const data = await fetchSeasonSimilarity(playerName, rookies?.season ?? season);
+            const data = await fetchSeasonSimilarity(playerName, rookies?.season ?? season, playerId);
             setComps(data);
         } catch (e) {
             setCompsError(e?.response?.data?.detail || 'No comps available.');
@@ -108,7 +108,7 @@ export default function RookieClassTracker() {
                                     {rookies.results.map((r) => (
                                         <tr
                                             key={r.player_id}
-                                            onClick={() => loadComps(r.player_name)}
+                                            onClick={() => loadComps(r.player_name, r.player_id)}
                                             style={{ cursor: 'pointer' }}
                                             className={r.player_name === selected ? 'text-accent' : ''}
                                         >
