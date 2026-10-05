@@ -1515,10 +1515,10 @@ def test_pair_chemistry_grid_known_team():
     bkn = client.get("/lineups/pair-grid", params={"season": 2023, "team": "BKN", "max_players": 15}).json()
     phx = client.get("/lineups/pair-grid", params={"season": 2023, "team": "PHX", "max_players": 15}).json()
     mb = [next(p for p in g["players"] if p["player_name"] == "Mikal Bridges") for g in (bkn, phx)]
-    # Since round 8 step 6a every one of his stints is tracked, so the sum reaches his season total; the grid adds
-    # lineup minutes each rounded to 0.1 with ties up (about +0.008 a lineup, ~3 of his 2,963 minutes: R8-073).
-    # Counting the other team's lineups would double it.
-    assert sum(p["minutes"] for p in mb) <= mb[0]["season_minutes_all_teams"] * 1.002 + 1
+    # Since round 8 step 6a every one of his stints is tracked, so the sum reaches his season total; since step 7
+    # the grid adds exact seconds (it added lineup minutes each rounded to 0.1, ~3 minutes high: R8-073, pinned to
+    # the tenth in test_round8_step7.py). Counting the other team's lineups would double it.
+    assert sum(p["minutes"] for p in mb) <= mb[0]["season_minutes_all_teams"] + 1
 
     assert client.get("/lineups/pair-grid", params={"season": 1990}).status_code == 404
     assert client.get("/lineups/pair-grid", params={"team": "XXX"}).status_code == 404

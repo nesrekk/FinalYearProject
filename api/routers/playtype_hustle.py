@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 
 from source_badge import make_source
+from routers.leaders import qualifying
 from season_team import select_list, season_team_sql
 
 from impact_core import (
@@ -28,11 +29,14 @@ def get_hustle_leaders(stat: str = "deflections", season: Optional[int] = None, 
         if cursor.fetchone()[0] is None:
             raise HTTPException(status_code=503, detail="No hustle data yet — run scripts/fetch_hustle_stats.py first.")
         resolved_season = season or get_latest_season(cursor)
+        # Stat Leaders' floor (R8-068): 30+ games and 20+ minutes a game; without it 2025-26's charges drawn
+        # opened on a 2-game player.
+        floor = qualifying(stat)
         cursor.execute(
             f"""SELECT player_id, player_name, {season_team_sql(cursor)}, gp, {stat}
-                FROM player_hustle WHERE season = %s AND {stat} IS NOT NULL
-                ORDER BY {stat} DESC LIMIT %s;""",
-            (resolved_season, top_n),
+                FROM player_hustle WHERE season = %s AND {stat} IS NOT NULL AND gp >= %s AND min >= %s
+                ORDER BY {stat} DESC, gp DESC, player_name LIMIT %s;""",
+            (resolved_season, floor["min_gp"], floor["min_mpg"], top_n),
         )
         rows = cursor.fetchall()
 
@@ -40,6 +44,7 @@ def get_hustle_leaders(stat: str = "deflections", season: Optional[int] = None, 
         "season": resolved_season,
         "stat": stat,
         "stat_label": HUSTLE_STAT_MAP[stat],
+        "qualifying": floor,
         "results": [
             {"rank": i + 1, "player_id": r[0], "player_name": r[1], "team_abbreviation": r[2], "gp": r[3], "value": round(r[4], 2)}
             for i, r in enumerate(rows)

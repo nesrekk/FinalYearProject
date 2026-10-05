@@ -188,7 +188,7 @@ export default function PredictionLedgerSection() {
                             <div className="table-wrapper">
                                 <table className="data-table">
                                     <thead>
-                                        <tr><th>Season</th><th>Candidates</th><th>Mean Brier Score</th><th>Resolved</th></tr>
+                                        <tr><th>Season</th><th>Candidates</th><th>Mean Brier Score</th><th>Logged</th><th>Resolved</th></tr>
                                     </thead>
                                     <tbody>
                                         {resolvedByModel[model].map((r) => (
@@ -196,6 +196,10 @@ export default function PredictionLedgerSection() {
                                                 <td>{r.season - 1}-{String(r.season).slice(-2)}</td>
                                                 <td>{r.n_candidates}</td>
                                                 <td>{r.mean_brier_score?.toFixed(4) ?? '—'}</td>
+                                                <td>
+                                                    {r.first_logged === r.last_logged ? r.first_logged : `${r.first_logged} to ${r.last_logged}`}
+                                                    {r.logged_after_season ? ` (after the season ended ${r.season_ended}: not a forecast)` : ''}
+                                                </td>
                                                 <td>{r.resolved_at ? new Date(r.resolved_at).toLocaleDateString() : '—'}</td>
                                             </tr>
                                         ))}

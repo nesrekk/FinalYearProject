@@ -12,7 +12,10 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
-Counts (2026-10-06, after Step 6c): **79 entries**, 16 open, 63 fixed: 8 broken, 27 wrong number,
+Counts (2026-10-06, after Step 7): **82 entries**, 12 open, 70 fixed: 8 broken, 27 wrong number,
+5 slow, 42 looks wrong. Step 7 fixed R8-009 (its outside facts; the profile part is R8-082, open), R8-029, R8-030,
+R8-068, R8-073 and two it found (R8-080, R8-081), fixed part of R8-071, and left R8-010, R8-028 and R8-032 open with
+the reason. After Step 6c: 79 entries, 16 open, 63 fixed: 8 broken, 27 wrong number,
 5 slow, 39 looks wrong. Step 6c fixed R8-074 and R8-076 and two it found (R8-078, R8-079). After Step 6b: 77 entries, 18 open, 59 fixed: 8 broken, 26 wrong number,
 5 slow, 38 looks wrong. Step 6b fixed R8-026 (the models fitted on the stints) and two it found (R8-075, R8-077), logged R8-076 (6c) and did R8-074's rerun (its rewrite is 6c's). After Step 6a: 74 entries, 18 open, 56 fixed: 7 broken, 24 wrong number,
 5 slow, 38 looks wrong. Step 6a fixed R8-022 to R8-025 and R8-027, the stints' part of R8-026 (open for 6b's
@@ -434,6 +437,63 @@ Availability now says the site stopped answering "for part of the time" (R8-006)
 
 Tests: full suite **513 passed, 1 skipped** (ledger), exit 0, 126 s; eslint 0. The 2 failed + 5 errors Step 6b left pass.
 
+## Step 7: the smaller open issues (2026-10-06)
+
+Taken: every open entry owned by Step 7 and every open **wrong number** not owned by Steps 8-10.
+
+- **Hot Streak null centre (R8-029):** the shuffle machinery of `paper_beliefs.py`'s hot-streak family moved verbatim into
+  `api/hot_streaks.py` (`SeasonMatrix`, `row_perms`, `null_rng`); the paper imports it (its `streak()` output with 50 + 300
+  shuffles is byte-identical old vs new, checked by pickling both `Out` objects) and `build_hot_streak_persistence.py` (~5 min
+  now) stores per stat and window `null_slope` (+ 2.5/97.5%), `net_share` = slope − null (+ range) and the same for the
+  season-only baseline, from the same 2,000 shuffles as the paper: **equal to `paper_beliefs_summary` exactly** (test). Every
+  earlier column byte-identical. The card, the league list and the verdict show the share, the shuffled share and the run's
+  own part (e.g. 2024-25 3P% over 10 games: "12% ... but 13% with games shuffled, so the run itself carries on 0% (−3% to
+  +2%)"). Methodology OPEN_ISSUES entry removed; the card's sniff test re-read (stale since 6a: 11/10/9 significant against
+  9.6/10.6/10.8 → 10/10/8 against 9.7/10.7/10.7; hottest shooters kept 10-19% → 10-18%).
+- **Deflator clock (R8-030):** measured first (`build_leverage_splits.py --clock espn --dry-run` reproduces the stored tables
+  exactly; `--dry-run` compares): on the corrected clock filtered PPG moves in 501 of 2,111 qualified player-seasons at one
+  decimal (max 0.31: Brandon Ingram 2022-23 20.58 → 20.89, Curry 2023-24 23.80 → 24.11), garbage share by up to 4.9 points,
+  4 padding badges, clutch plays already decided 17% → 16% (e.g. 2025-26 4,085 of 24,528 → 3,883 of 24,249). Switched;
+  `build_scouting_reports.py` rerun (only its leverage rows changed: 34,282 → 34,276 splits; leverage still fails its
+  persistence check, 0.60 same direction). README / Data Coverage / Methodology say which clock.
+- **Stat Leaders (R8-068):** one rule, `routers/leaders.qualifying()` = the Leaderboard Builder's defaults (30+ games,
+  20+ minutes, 5 FGA / 2 3PA / 2 FTA a game for percentages; `DEFAULT_MIN_GP/MPG` named in `leaderboard.py`), on the stored
+  path, the live path (games floor 70% of the most games played while a season is young), the hustle leaders and the
+  Dashboard's top scorer; the page states it. 2025-26 3P% top: Mark Williams 100% (1-for-1) → Luke Kennard 47.8%; FT%
+  Hayden Gray 100% (1 game) → Stephen Curry 92.3%; FG% Harrison Ingram 83.3% (7 games) → Jakob Poeltl 70.0%; steals Kadary
+  Richmond 2.7 (3 games) → Kevin Porter Jr. 2.2; +/- Colby Jones +12 (1 game) → Shai Gilgeous-Alexander +11.6; charges drawn
+  Brandon Clarke 0.5 (2 games) → Jalen Brunson 0.39. Equal to the Leaderboard Builder's default top 10 (test).
+- **Lineup minutes (R8-073):** `lineup_seasons` / `pair_seasons` gained `seconds` (the exact sum); their seconds and
+  possessions are summed as numeric, so a rebuild gives the same digits (`build_lineup_stints.py --aggregates-only` rebuilds
+  the two from the stored stints, two runs content-hash identical). Against the snapshot: 5 lineup rows' minutes and 42
+  rows' ratings, 58 / 56 / 173 pair rows' minutes / possessions / ratings moved by one last digit (0.1 min, 0.1 poss, 0.01
+  rating): the float sums' order flips CLAUDE.md mentioned, now gone. Pair Chemistry and the Workbench's lineup/pair minutes
+  add `seconds`: Mikal Bridges 2022-23 2,965.8 → 2,962.9 (on the floor 2,962.85).
+- **2025-26 awards (R8-009):** read 2026-10-06 from Wikipedia (the 2025-26 NBA season page's Awards, and the MVP, DPOY and
+  ROY award pages, which agree): MVP Shai Gilgeous-Alexander, DPOY Victor Wembanyama (unanimous), ROY Cooper Flagg, All-NBA
+  three teams. In the label lists (`build_dpoy_roy_models.py`, `fetch_all_nba_teams.py`, `build_award_winners_table.py`'s
+  `MVP_AFTER_LEGACY`, since `mvp_winners` is a legacy table with no loader); every model trains on explicit seasons ending
+  2024-25, so no model, backtest or calibration changes. `resolve_predictions.py` graded the 60 2025-26 Prediction Ledger
+  rows (mean Brier on the raw output: MVP 0.495, DPOY 0.342, ROY 0.284, All-NBA 0.175), and the ledger now says they were
+  logged 2026-09-23, after the season (R8-080).
+- **Also:** Game Log per-game dots 0.55 → 0.8 opacity (R8-071's part); Stat Leaders' active chip 4.0:1 in Paper (R8-081).
+- **Left open, with the reason:** R8-010 (the 2026 draft: `draft_history` comes from the Basketball-Reference export, which
+  ends at 2025; the NBA's endpoint would make a second writer of the table: with the round-9 live-season work or a refreshed
+  export), R8-028 (re-fetching the 2025-26 shot chart rewrites `player_shots` and the shot chain: owner's OK), R8-032 (Pair
+  Synergy retrain: owner's call), R8-071's remaining marks (owner's call with R8-059), R8-082 (profile award lists).
+
+Checks: browser sweep of Stat Leaders, Hot Streaks (default and 2024-25 3P% as of 2025-01-15), SGA's profile (Game Log + hot
+streak card), Methodology, Analytics Prediction Ledger / Garbage-Time / Pair Chemistry, and the three other pages with rail
+chips (Player Stats, Hall of Fame, News), 1280/375 × Paper/Ink: clean except the known profile marks (R8-059/R8-071) and
+News' slow feed (R8-011). `scripts/rebuild_all.sh paper-inputs` exit 0 (manifest digest `0ccd328c11140933`; numbers.tex 1,359
+macros, every macro the long, 8p and 6p papers use defined; no paper number moved; figures unchanged). Tests: full suite
+**522 passed, 1 skipped**, exit 0, 110 s (new `api/tests/test_round8_step7.py`, 9); eslint 0; vite build passes.
+
+**Changed tables for the Layerbase sync** (~43 MB, all small except the two aggregates): `lineup_seasons` 27 MB (new column
+`seconds`), `pair_seasons` 6.3 MB (same), `scouting_splits` 6.8 MB, `player_leverage_splits` 1.6 MB, `player_leverage_summary`,
+`leverage_index_grid`, `leverage_validation`, `hot_streak_persistence` (13 new columns), `scouting_validation`, `award_winners`,
+`all_nba_seasons`, `prediction_ledger` (60 rows resolved).
+
 ## Constraints (not defects)
 
 - **Layerbase:** 4,202 of 5,000 MB used (2026-10-04). A Step 6 rebuild rewrites tables of about the same size; any sync needs the owner's OK (Step 10 decides whether the biggest tables stay local).
@@ -503,17 +563,19 @@ Tests: full suite **513 passed, 1 skipped** (ledger), exit 0, 126 s; eslint 0. T
 
 - **Step 4:** With/Without reads stored data from 2020-21 (36 ms for DEN 2025-26 / Jokić in the browser; 21 s before); Pair Synergy's observed pair comes from `pair_seasons` (no live call); Playoff Forecaster and Heliocentricity keep their live call (no stored equivalent) with `_LIVE_REQUEST_TIMEOUT_SECONDS` = 3 and answer 503 "stats.nba.com didn't answer within 3 s" instead of hanging (a failed playoff fetch used to read as "didn't make the playoffs"); With/Without before 2020-21 the same (GSW 2015-16 answered 503 in 3.0 s on 2026-10-05: LeagueGameFinder for old seasons times out). `/players/profile/{name}`'s 45 s live path is gone. Tests `test_every_live_call_fails_within_three_seconds`, `test_with_without_before_2020_21_says_when_the_source_is_unreachable`, `test_playoff_comparison_distinguishes_unreachable_from_missed_playoffs`, `test_heliocentricity_unreachable_is_a_503_with_the_reason`.
 ### R8-009 · The 2025-26 awards were never loaded
-- **Severity:** wrong number (stale) · **Step:** 7 · **Status:** open
+- **Severity:** wrong number (stale) · **Step:** 7 · **Status:** fixed in the Step 7 commit (the profile award lists: R8-082, open)
 - **Where:** `award_winners` and `mvp_winners` (max season 2025 = 2024-25), `player_awards` (2026: All-Star only). Affects: Analytics › Prediction Ledger (60 logged 2025-26 prediction rows in `prediction_ledger` can't resolve: "no seasons resolved yet"), award backtests and history, profile award lists (no 2025-26 MVP, DPOY, ROY, All-NBA).
 - **Reproduce:** `SELECT award, MAX(season) FROM award_winners GROUP BY 1` → MVP/DPOY/ROY 2025. `scripts/resolve_predictions.py` reads `award_winners`.
 - **Found by:** following the empty `/ledger/summary`. Fixing it needs the 2025-26 winners read from an outside page (NBA.com, ESPN or Wikipedia, URL and date in the commit). The 2026-27 award ledger stays empty unless `scripts/snapshot_predictions.py` is run during the season (nothing schedules it).
 
+- **Step 7:** 2025-26's MVP (Shai Gilgeous-Alexander), DPOY (Victor Wembanyama), ROY (Cooper Flagg) and All-NBA teams read 2026-10-06 from Wikipedia (season page + award pages) into the label lists; `award_winners` 2025 → 2026, `all_nba_seasons` +15; no model changes (explicit training seasons). The 60 Prediction Ledger rows resolved (R8-080 for how the page says it). Test `test_2025_26_award_winners`.
 ### R8-010 · The 2026 draft isn't loaded
-- **Severity:** looks wrong (stale) · **Step:** 7 · **Status:** open
+- **Severity:** looks wrong (stale) · **Step:** 7 → round 9 · **Status:** open
 - **Where:** `draft_history` (max `draft_year` 2025); Draft pages, profile bios of 2026 rookies.
 - **Reproduce:** `SELECT MAX(draft_year) FROM draft_history` → 2025.
 - **Found by:** checking each core table's latest season. Draft Value's outcome classes stop at 2021 by design; this only concerns the draft list itself.
 
+- **Step 7 (left open):** `draft_history` is built from the Basketball-Reference export (Kaggle, ends at the 2025 draft); `fetch_draft_history.py` (the NBA's endpoint, answering again) replaces the whole table. Adding 2026 needs either a refreshed export or a one-year append path with its own producer entry: with the round-9 live 2026-27 season. No page shows a wrong number meanwhile (Draft Value's outcome classes stop at 2021 by design).
 ### R8-011 · `/news/current` is the slowest route (5.8 s) and runs on every app load
 - **Severity:** slow · **Step:** 8 · **Status:** open
 - **Where:** News, Dashboard; `prefetchCoreData()` calls it on load.
@@ -626,15 +688,17 @@ Tests: full suite **513 passed, 1 skipped** (ledger), exit 0, 126 s; eslint 0. T
 - **Step 3 (re-measured 2026-10-05):** per game, the chart is short of the lines' FGA in 776 of 1,225 games of 2025-26 (1,079 attempts in all, at most 6 a game, spread one or two a game) against 18 games in 2024-25; 805 games have at least one player-game where the two disagree (2024-25: 98 player-games). Per player-season the chart still lands within the per-game rounding of NBA.com's FGA × GP once the four games with no rows are added back (`test_shot_chart_fga_matches_the_season_table` pins both). So the whole 2025-26 chart is thin, not just four games: the re-fetch should be the full season.
 
 ### R8-029 · Hot Streak Checker's "carries on" share includes the shuffled-null centre
-- **Severity:** wrong number · **Step:** 7 · **Status:** open
+- **Severity:** wrong number · **Step:** 7 · **Status:** fixed in the Step 7 commit
 - **Where:** `hot_streak_persistence.slope` (7-86% even with games shuffled). Methodology open issue. `paper_beliefs_summary` holds the null centre.
 - **Found by:** known gap (README, Methodology).
 
+- **Step 7:** `hot_streak_persistence` stores `null_slope` and `net_share` (+ ranges, both baselines) from the paper's own 2,000 shuffles (`api/hot_streaks.SeasonMatrix`, shared, equal to `paper_beliefs_summary` exactly); the card, list and verdict show both; the Methodology open issue is gone. Shooting runs: share 8/12/28% (3P%, 5/10/20 games) → beyond the null 1/0/4%; points 34/48/66% → 19/19/7%. Tests in `test_round8_step7.py`.
 ### R8-030 · Garbage-Time Deflator still reads ESPN's raw clock
-- **Severity:** wrong number (not measured) · **Step:** 7 · **Status:** open
+- **Severity:** wrong number (not measured) · **Step:** 7 · **Status:** fixed in the Step 7 commit
 - **Where:** `build_leverage_splits.py` (win probability and clutch labels). Measure how much it moves on `pbp_event_clock` first.
 - **Found by:** known gap (README).
 
+- **Step 7:** measured, then switched (Step 7 section above): filtered PPG moved in 501 of 2,111 qualified player-seasons (max 0.31), garbage share up to 4.9 points, 4 badges. Test `test_deflator_reads_the_corrected_clock` (the stored clutch count = the corrected clock's, ≠ ESPN's).
 ### R8-031 · `/games/by-date` has no stored fallback for past dates
 - **Severity:** broken · **Step:** 7 · **Status:** fixed in the Step 4 commit (taken with R8-002)
 - **Where:** Live Scores date browsing. README: "returns an empty list for an older historical date".
@@ -647,6 +711,7 @@ Tests: full suite **513 passed, 1 skipped** (ledger), exit 0, 126 s; eslint 0. T
 - **Where:** Pair Synergy reads `dbpm_repro` until retrained. Methodology open issue "Some models can't be retrained right now" says stats.nba.com is unreachable, which is no longer true (R8-006).
 - **Found by:** known gap (CLAUDE.md Open items, Methodology).
 
+- **Step 7 (left open):** the retrain changes Pair Synergy's model and needs the owner's OK; the Methodology wording about stats.nba.com was already corrected in Step 4.
 ### R8-033 · Muted text on the page rails was just under 4.5:1 in Paper
 - **Severity:** looks wrong · **Step:** 2a · **Status:** fixed in the Step 2a commit
 - **Where:** `--text-3` (#6b6458) on `--surface-2` (#e8e1d3): the rail items of Player Stats, Stat Leaders and Hall of Fame (and anything else muted on a `--surface-2` panel).
@@ -835,11 +900,12 @@ Tests: full suite **513 passed, 1 skipped** (ledger), exit 0, 126 s; eslint 0. T
 - **Fix:** the script converts to US Eastern (`local_date()`, like every other date in the database) and skips ESPN's placeholder events; re-fetched 2026-10-05 and diffed against a snapshot: 909 dates moved one day earlier, no other column changed, 1,458 rows (one 2010-11 first-round game ESPN's scoreboard dropped on the first pass was fetched again). **Not on Layerbase** (for the Step 10 sync).
 
 ### R8-068 · Stat Leaders ranks shooting percentages with no attempts floor
-- **Severity:** wrong number · **Step:** 7 · **Status:** open
+- **Severity:** wrong number · **Step:** 7 · **Status:** fixed in the Step 7 commit
 - **Where:** Stat Leaders (`StatLeaders.jsx`), `GET /leaders/fg_pct|fg3_pct|ft_pct` (`api/routers/leaders.py`).
 - **Reproduce:** `/leaders/fg3_pct?season=2025` → Dru Smith 53.3% first (a handful of attempts). The stored path and the old live path both rank every player with a non-null percentage; the Leaderboard Builder applies an attempts floor for the same stats (`ATTEMPT_DEFAULTS`).
 - **Found by:** Step 4, while exercising the route after the fallback change. Fix: reuse the Leaderboard's attempt floors (catalogue) in `_stored_leaders`, and state the floor on the page.
 
+- **Step 7:** `routers/leaders.qualifying()` (Leaderboard Builder defaults) on the stored and live paths, the hustle leaders and the Dashboard's top scorer; stated on the page. 2025-26 3P% leader 100% (Mark Williams, 1-for-1) → 47.8% (Luke Kennard); the other moves are in the Step 7 section. Tests `test_stat_leaders_rank_only_qualified_players`, `test_live_leaders_apply_a_season_in_progress_floor`.
 ### R8-069 · `/impact/player/{name}/{season}` answers 500 for a season with missing stats
 - **Severity:** broken · **Step:** 5 · **Status:** fixed in the Step 5 commit
 - **Where:** `api/routers/player_impact.py`: `round(float(None))` on usage / net rating / win % (pre-2010 rows have none), e.g. the 1997-98 to 2002-03 Brandon Williams in 2002-03.
@@ -851,20 +917,22 @@ Tests: full suite **513 passed, 1 skipped** (ledger), exit 0, 126 s; eslint 0. T
 - **Found by:** Step 5's page scan. Fix: `--text` on the tint (Ink unchanged in look, passes).
 
 ### R8-071 · Profile charts: Game Log per-game dots and shot-zone tints under 3:1
-- **Severity:** looks wrong · **Step:** 7 (or owner's call, like R8-059) · **Status:** open
+- **Severity:** looks wrong · **Step:** 7 (or owner's call, like R8-059) · **Status:** open (the dots fixed in the Step 7 commit)
 - **Where:** player profile (e.g. `?page=player&id=1630217`): the Game Log rolling chart's per-game dots (`--text-3` at 55% opacity, 2.3:1 Paper / 2.5:1 Ink; they are context for the rolling line), its brand-orange line (2.9:1, = R8-059), and the shot-zone map's tinted cells (1.3-1.5:1 against the court).
 - **Found by:** Step 5's page scan with the `marks` check, which step 2a's sweep of the profile predated. Not caused by Step 5.
 
+- **Step 7:** the per-game dots now 0.8 opacity (3.3:1 or more on every Paper/Ink surface; was 2.2-2.6:1). Left for the owner with R8-059: the orange rolling line (2.9:1), the shot-zone tints (1.3-1.5:1 against the court; area fills whose numbers are printed), and, found in the same scan, the profile's shot-mix bars (`.sm-chart`, green/amber/pink 2.0-2.7:1 in Paper; stacked segments).
 ### R8-072 · ESPN's text spells some players differently from its own player_name field, so their substitutions out weren't applied
 - **Severity:** wrong number · **Step:** 6a · **Status:** fixed in the Step 6a commit
 - **Where:** `player_game_lines` minutes and the stints' lineups in the games concerned: e.g. DET-IND 2024-10-23, where the rows carry player_name "Ronald Holland II" (with his id) and the text "Ron Holland II", so "Tim Hardaway Jr. enters the game for Ron Holland II" removed nobody (Holland 31.9 minutes instead of 14.9; his two steals credited to no one); POR's last five games of 2022-23, where ESPN writes "Jeenathan Williams" for Nate Williams (48 minutes on 2023-04-09).
 - **Found by:** Step 6a's diff (every changed seconds value was traced to its cause). Fix: the `player_bio` fallback answers "Ron Holland" (one player of that name active in 2024-25); five spellings ESPN's own rows pair with the official name in the same event went into `ALIASES`.
 
 ### R8-073 · Pair Chemistry adds up lineup minutes rounded to 0.1 with ties going up
-- **Severity:** wrong number · **Step:** 7 (or 8) · **Status:** open
+- **Severity:** wrong number · **Step:** 7 (or 8) · **Status:** fixed in the Step 7 commit
 - **Where:** `/lineups/pair-grid` (`api/routers/pair_chemistry.py`) sums `lineup_seasons.minutes`, each `ROUND(…, 1)` of integer-second totals, which land on a .05 tie about one time in six and round up: about +0.008 minutes a lineup. Mikal Bridges 2022-23 (BKN + PHX): 2,965.8 grid minutes for 2,962.8 on the floor (NBA.com 2,963.1).
 - **Found by:** `test_pair_chemistry_grid_known_team` after Step 6a's rebuild tracked all of his minutes (the gap hid it before; the test's bound now allows 0.2%). Fix: sum seconds (or unrounded minutes) and round once.
 
+- **Step 7:** `seconds` (exact) in `lineup_seasons` / `pair_seasons`, summed as numeric with the possessions (reproducible digits); Pair Chemistry and the Workbench add seconds. Bridges 2,965.8 → 2,962.9. Test `test_lineup_and_pair_minutes_add_up_to_the_seconds`.
 ### R8-074 · The paper's audit classes on the lines and stints measure what Step 6a fixed
 - **Severity:** wrong number (paper) · **Step:** 6b (rerun) + 6c (rewrite) · **Status:** fixed in the Step 6c commit (the rerun in the Step 6b commit)
 - **Where:** `paper_data_audit.py`: `oncourt_off_share` (the paper's "on-court margin isn't 5 × the final in 25% of full-minute team-games") reads `player_game_lines.tm_pts - op_pts`, now 0.1%; `unidentified` (untracked minutes, 2-6% a season) is now 0.02-0.4%; `teamless_sub` and the NaN team are no longer in the lines. The feed's own errors are still there (`score_steps_miss` measures the stale score fields directly; ESPN still sends the no-id names and the team-less substitutions).
@@ -896,3 +964,18 @@ Tests: full suite **513 passed, 1 skipped** (ledger), exit 0, 126 s; eslint 0. T
 - **Severity:** looks wrong (paper) · **Step:** 6c · **Status:** fixed in the Step 6c commit
 - **Where:** `paper/nba_hub_paper_8p.tex` (9 pages), `_6p.tex` (7 pages) with the regenerated numbers and tables, before any sentence changed; the long version's ablation table overran a column by 26 pt.
 - **Found by:** `scripts/paper_build.sh`. Fix: trimmed sentences that carry no result in the short versions (list in the Step 6c section); moved the long version's ablation table and shortened its caption. Now 18 / 8 / 6 pages, no overfull box.
+
+### R8-080 · The Prediction Ledger graded 2025-26 rows logged after the season without saying so
+- **Severity:** looks wrong · **Step:** 7 · **Status:** fixed in the Step 7 commit
+- **Where:** Analytics › Prediction Ledger, `GET /ledger/summary` (mvp_api). Every 2025-26 row was logged on 2026-09-23 (one snapshot, after the awards), so its Brier score is not a forecast's; and the scores grade the raw model output, which runs near 1.0 for several players (MVP 0.495).
+- **Found by:** Step 7, resolving the rows (R8-009). **Fix:** each resolved season carries `first_logged`, `last_logged`, `season_ended` and `logged_after_season`; the table's new Logged column says "after the season ended …: not a forecast"; the methodology text says the raw output is graded (the tooltip already did). Grading the calibrated chance instead is the owner's call (snapshots since 2026-09-27 store it). Test `test_prediction_ledger_says_when_rows_were_logged`.
+
+### R8-081 · Stat Leaders' active stat chip was 4.0:1 in Paper
+- **Severity:** looks wrong · **Step:** 7 · **Status:** fixed in the Step 7 commit
+- **Where:** `.hb-rail-chips .hb-rail-item--active` (Stat Leaders, Player Stats, Hall of Fame, News): `--brand-text` on the orange tint.
+- **Found by:** Step 7's sweep. **Fix:** `--text` on the tint (the accent border marks the active chip), the R8-070 pattern; all four pages clean in both themes.
+
+### R8-082 · Profile award lists have no 2025-26 awards
+- **Severity:** looks wrong (stale) · **Step:** 10 or round 9 · **Status:** open
+- **Where:** `player_awards` (profiles' award lists), built by `build_player_profile_data.py` from the Basketball-Reference export (Kaggle, gitignored), which ends at 2024-25 except All-Star.
+- **Found by:** Step 7 (R8-009's remainder). Fix: refresh the export (owner) and rerun the script; adding hand rows would break the table's one-source rebuild.

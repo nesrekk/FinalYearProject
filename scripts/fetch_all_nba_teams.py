@@ -2,7 +2,7 @@
 fetch_all_nba_teams.py
 ========================
 Build the All-NBA team label dataset (First/Second/Third Team, 5 players
-each, 16 seasons) from a static historical roster list — same pattern as
+each, 17 seasons) from a static historical roster list — same pattern as
 fetch_dpoy_roy_stats.py's DPOY_WINNERS/ROY_WINNERS, just 15 labels per
 season instead of 1.
 
@@ -29,7 +29,7 @@ DATA_DIR = os.path.join(BASE_DIR, "nba_data")
 
 from db_config import DB_CONFIG
 
-# ─── All-NBA Teams, 2009-10 through 2024-25 ─────────────────────────────────
+# ─── All-NBA Teams, 2009-10 through 2025-26 ─────────────────────────────────
 # (season_int, team_tier, player) — team_tier 1/2/3 = First/Second/Third Team.
 ALL_NBA_TEAMS = [
     # 2009-10
@@ -144,6 +144,13 @@ ALL_NBA_TEAMS = [
     (2025, 2, "Evan Mobley"), (2025, 2, "Jalen Brunson"),
     (2025, 3, "Cade Cunningham"), (2025, 3, "Karl-Anthony Towns"), (2025, 3, "Tyrese Haliburton"),
     (2025, 3, "Jalen Williams"), (2025, 3, "James Harden"),
+    # 2025-26 (round 8 step 7): read 2026-10-06 from https://en.wikipedia.org/wiki/2025%E2%80%9326_NBA_season (Awards).
+    (2026, 1, "Cade Cunningham"), (2026, 1, "Luka Dončić"), (2026, 1, "Shai Gilgeous-Alexander"),
+    (2026, 1, "Nikola Jokić"), (2026, 1, "Victor Wembanyama"),
+    (2026, 2, "Jaylen Brown"), (2026, 2, "Jalen Brunson"), (2026, 2, "Kevin Durant"),
+    (2026, 2, "Kawhi Leonard"), (2026, 2, "Donovan Mitchell"),
+    (2026, 3, "Tyrese Maxey"), (2026, 3, "Jamal Murray"), (2026, 3, "Jalen Johnson"),
+    (2026, 3, "Chet Holmgren"), (2026, 3, "Jalen Duren"),
 ]
 
 
@@ -227,7 +234,7 @@ def save(df):
 
 
 if __name__ == "__main__":
-    print(f"Building All-NBA label dataset ({len(ALL_NBA_TEAMS)} selections, 16 seasons)...")
+    print(f"Building All-NBA label dataset ({len(ALL_NBA_TEAMS)} selections, 17 seasons)...")
     base_df = load_base_stats()
     df, misses = build_dataset(base_df)
     save(df)

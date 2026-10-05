@@ -18,6 +18,8 @@ import '../../styles/gamelog.css';
 // dir, n.
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
+// A share as a whole percent; no sign on one that reads 0%.
+const pctShare = (v) => (v == null ? '—' : withSign(v * 100, `${Math.abs(Math.round(v * 100))}%`));
 const LIMITS = [25, 50, 100];
 
 export default function HotStreaks() {
@@ -94,7 +96,8 @@ export default function HotStreaks() {
                     How unusual: for each player, {rules.draws.toLocaleString()} random sets of N games from his own season
                     so far; the share at least as {word} is the p-value (it says the run is more than chance clumping, not
                     that it will last). How much carries on: across every player-season 2020-21 to 2025-26, the share of a
-                    run&apos;s gap from baseline that showed up again in his next N games. Baseline = his games this
+                    run&apos;s gap from baseline that showed up again in his next N games, and how much of that is more
+                    than the same seasons give with their games shuffled (no streaks). Baseline = his games this
                     season before the run, plus part of his previous season (a whole season for shooting %, much less for
                     minutes and usage, chosen on held-out seasons). Full details on the Methodology page.
                 </InfoTooltip>
@@ -161,7 +164,9 @@ export default function HotStreaks() {
                             ? `, so for ${statWords} over ${data.window} games, this list is essentially noise.`
                             : ', so some of these are real changes (often a new role: check the minutes).'}{' '}
                         Historically about {Math.round(s.share_carries_on * 100)}% of a {data.window}-game {statWords} gap
-                        carried on into the next {data.window} games (range {Math.round(s.share_lo * 100)}-{Math.round(s.share_hi * 100)}%).
+                        showed up again in the next {data.window} games, but {Math.round(s.null_share * 100)}% would with every
+                        season&apos;s games shuffled (no streaks: {data.window} games also say something about a player&apos;s
+                        level), so the run itself carries on {pctShare(s.net_share)} (range {pctShare(s.net_share_lo)} to {pctShare(s.net_share_hi)}).
                     </p>
                     {nx && (
                         <p className="page-subtitle gf-note">
@@ -212,8 +217,9 @@ export default function HotStreaks() {
                                 </table>
                             </div>
                             <p className="page-subtitle pp-foot">
-                                Expected next = baseline + the historical share of the gap (plus a small league-wide drift).
-                                It&apos;s an average across players, not a forecast for this one. A player with no previous season
+                                Expected next = baseline + the historical share of the gap (plus a small league-wide drift),
+                                the shuffled-season part included: it is the best guess for the next {data.window} games, not a
+                                measure of the run lasting. It&apos;s an average across players, not a forecast for this one. A player with no previous season
                                 on file gets a season-only baseline and its own share.
                             </p>
                         </>

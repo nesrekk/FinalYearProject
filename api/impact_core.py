@@ -238,12 +238,14 @@ def clean_html_text(value: str) -> str:
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
-def fetch_nba_api_player_leaders(stat_key: str, season: int, top_n: int = 10):
+def fetch_nba_api_player_leaders(stat_key: str, season: int, top_n: int | None = 10):
     """
     Live leaders from nba_api leaguedashplayerstats (per-game regular
     season). Cached per (stat_key, season) — independent of top_n, since the
     underlying live call always fetches the full league and we just slice —
     with a short TTL and request timeout (see the comment above _CACHE).
+    top_n=None returns every player (with gp, min, fga, fg3a, fta per row), so
+    routers/leaders.py can apply its qualifying floors before taking the top.
     """
     now = time.time()
     cache_key = (stat_key, season)
@@ -251,15 +253,16 @@ def fetch_nba_api_player_leaders(stat_key: str, season: int, top_n: int = 10):
     if cached and (now - cached["ts"] < _LIVE_CACHE_TTL_SECONDS):
         full = cached["data"]
     else:
-        full = _fetch_nba_api_player_leaders_uncached(stat_key, season, top_n=500)
+        full = _fetch_nba_api_player_leaders_uncached(stat_key, season, top_n=1000)
         if full is not None:
             _CACHE["player_leaders_nba_api"][cache_key] = {"ts": now, "data": full}
 
     if full is None:
         return None
 
-    safe_top_n = max(1, min(int(top_n), 50))
-    results = full.get("results", [])[:safe_top_n]
+    results = full.get("results", [])
+    if top_n is not None:
+        results = results[:max(1, min(int(top_n), 50))]
     return {**full, "results": [{**r, "rank": i + 1} for i, r in enumerate(results)]}
 def _fetch_nba_api_player_leaders_uncached(stat_key: str, season: int, top_n: int = 10):
     stat_map = {
@@ -320,10 +323,12 @@ def _fetch_nba_api_player_leaders_uncached(stat_key: str, season: int, top_n: in
             value = float(stat_val)
             if is_pct and value <= 1:
                 value *= 100
-            cleaned.append((player_id, player_name, team_abbr, round(value, 2)))
+            extra = {k.lower(): (float(get_val(row, k)) if get_val(row, k) is not None else None)
+                     for k in ("GP", "MIN", "FGA", "FG3A", "FTA")}
+            cleaned.append((player_id, player_name, team_abbr, round(value, 2), extra))
 
         cleaned.sort(key=lambda x: x[3], reverse=True)
-        top_rows = cleaned[:max(1, min(int(top_n), 50))]
+        top_rows = cleaned[:max(1, int(top_n))]
         return {
             "season": int(season),
             "stat_key": stat_key,
@@ -335,6 +340,7 @@ def _fetch_nba_api_player_leaders_uncached(stat_key: str, season: int, top_n: in
                     "player_name": r[1],
                     "team_abbr": r[2],
                     "value": r[3],
+                    **r[4],
                 }
                 for i, r in enumerate(top_rows)
             ],

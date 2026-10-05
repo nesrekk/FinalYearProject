@@ -17,6 +17,13 @@ NBA_CUP_FINALS). No new data is fetched.
 Method (all thresholds documented in the API response too):
   * Game state for each real play = (seconds remaining at the play, score
     margin BEFORE the play). Win probability = the deployed WPA model.
+    Seconds remaining come from the corrected clock (pbp_event_clock,
+    build_event_clock.py; rerun this after it) since 2026-10-06 (round 8
+    step 7), like Clutch WPA: ESPN stamps made shots a median 14 s late.
+    Measured before switching (--clock espn --dry-run reproduces the old
+    tables exactly; --dry-run compares): filtered PPG moved in 501 of 2,111
+    qualified player-seasons at one decimal (max 0.31), garbage share by up
+    to 4.9 points, 4 padding badges; clutch plays already decided 17% -> 16%.
   * Leverage Index (LI), Tango-style: the EXPECTED absolute
     win-probability swing of the next event at a game state,
         E|dWP| = sum_k P(k) * |WP(t, margin_before + k) - WP(t, margin_before)|
@@ -55,7 +62,7 @@ official per-game PPG in player_season_stats (Pearson r, mean absolute
 error) for players with >= 40 real games.
 
 Usage:
-    cd scripts && python3 build_leverage_splits.py
+    cd scripts && python3 build_leverage_splits.py [--clock espn] [--dry-run]
 """
 
 import numpy as np
@@ -90,13 +97,19 @@ NBA_CUP_FINALS = {
 }
 
 
-def load_events(conn):
-    query = """
-        SELECT e.game_id, e.action_number, e.id, e.period, e.seconds_remaining,
+def load_events(conn, clock="corrected"):
+    """clock='corrected' (default since 2026-10-06): seconds remaining from pbp_event_clock
+    (build_event_clock.py), like Clutch WPA; 'espn' = ESPN's own stamps (made shots a median
+    14 s late), kept for the comparison in --dry-run. Every ESPN event has a pbp_event_clock row;
+    one without (none today) keeps its own time."""
+    secs = "COALESCE(k.seconds_remaining, e.seconds_remaining)" if clock == "corrected" else "e.seconds_remaining"
+    query = f"""
+        SELECT e.game_id, e.action_number, e.id, e.period, {secs} AS seconds_remaining,
                e.score_home, e.score_away, e.team_tricode, e.person_id, e.player_name,
                e.action_type, e.description, g.home_team, g.season, g.game_date
         FROM pbp_events e
         JOIN pbp_games g ON g.game_id = e.game_id
+        LEFT JOIN pbp_event_clock k ON k.event_id = e.id
         WHERE g.source = 'espn' AND g.game_id <> ALL(%s)
         ORDER BY g.game_date, e.game_id, e.action_number, e.id;
     """
@@ -166,13 +179,13 @@ def expected_swing(model, scaler, secs, margin_before, outcome_probs):
     return base, total
 
 
-def main():
+def compute(conn, clock="corrected"):
+    """Everything the build writes, computed without writing: (df, grid, splits, summary, validation, accuracy)."""
     model, scaler = load_model()
-    conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
 
-    print("Loading real ESPN play-by-play (one bulk query)...")
-    df = load_events(conn)
+    print(f"Loading real ESPN play-by-play (one bulk query; clock = {clock})...")
+    df = load_events(conn, clock)
     print(f"  {len(df):,} real events, {df['game_id'].nunique():,} real games, "
           f"seasons {df['season'].min()}-{df['season'].max()}")
 
@@ -294,6 +307,53 @@ def main():
         validation[season]["n_qualified"] = int((summary["qualified"] & (summary["season"] == season)).sum())
         validation[season]["ppg_r"] = float(np.corrcoef(q["ppg_raw"], q["pss_ppg"])[0, 1]) if len(q) > 2 else None
         validation[season]["ppg_mae"] = float((q["ppg_raw"] - q["pss_ppg"]).abs().mean()) if len(q) else None
+
+    return df, grid, splits, summary, validation, three_rule_accuracy
+
+
+def compare(conn, new):
+    """--dry-run: how the per-player numbers move against the stored tables (built on whichever clock they were)."""
+    _df, _grid, splits, summary, validation, _acc = new
+    old = pd.read_sql("SELECT * FROM player_leverage_summary", conn)
+    m = old.merge(summary.rename(columns={"person_id": "player_id"}), on=["season", "player_id"], suffixes=("_old", ""))
+    q = m[m["qualified"]]
+    print(f"\nPlayer-seasons: stored {len(old):,}, new {len(summary):,}, both {len(m):,} ({len(q):,} qualified)")
+    for col, scale, unit in (("ppg_filtered", 1, "ppg"), ("ppg_ex_garbage", 1, "ppg"), ("lw_ppg", 1, "ppg"),
+                             ("garbage_share", 100, "pts of share"), ("high_share", 100, "pts of share"),
+                             ("true_production_ratio", 100, "pts of ratio")):
+        d = (q[col] - q[f"{col}_old"]) * scale
+        print(f"  {col:<22} qualified: mean |change| {d.abs().mean():.3f} {unit}, max {d.abs().max():.3f}, "
+              f"changed at shown precision (1 dp) {int((d.abs() >= 0.05).sum()):,} of {len(q):,}")
+    flips = int((q["padding_risk"] != q["padding_risk_old"]).sum())
+    print(f"  padding badge changes: {flips}")
+    oldv = pd.read_sql("SELECT * FROM leverage_validation ORDER BY season", conn).set_index("season")
+    for s, v in sorted(validation.items()):
+        o = oldv.loc[s]
+        sh = v["bucket_event_share"]
+        print(f"  {s}: clutch events {o.clutch_events} -> {v['clutch_events']}, overridden {o.clutch_overridden} -> "
+              f"{v['clutch_overridden']}, garbage share {o.share_garbage:.4f} -> {sh.get('garbage', 0):.4f}, "
+              f"high {o.share_high:.4f} -> {sh.get('high', 0):.4f}")
+    big = q.assign(d=(q["ppg_filtered"] - q["ppg_filtered_old"]).abs()).nlargest(10, "d")
+    print("\nBiggest filtered-PPG moves (qualified):")
+    print(big[["season", "player_name", "ppg_raw", "ppg_filtered_old", "ppg_filtered", "garbage_share_old",
+               "garbage_share"]].to_string(index=False))
+    return m
+
+
+def main():
+    import argparse
+    ap = argparse.ArgumentParser(description="Garbage-Time Deflator")
+    ap.add_argument("--clock", choices=("corrected", "espn"), default="corrected")
+    ap.add_argument("--dry-run", action="store_true", help="compute and compare with the stored tables; write nothing")
+    args = ap.parse_args()
+    conn = psycopg2.connect(**DB_CONFIG)
+    res = compute(conn, args.clock)
+    if args.dry_run:
+        compare(conn, res)
+        conn.close()
+        return
+    df, grid, splits, summary, validation, three_rule_accuracy = res
+    cur = conn.cursor()
 
     # ---- write tables ----
     cur.execute("""

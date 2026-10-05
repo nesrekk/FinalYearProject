@@ -105,6 +105,8 @@ Usage:
     cd scripts && python3 build_lineup_stints.py --dry-run  # one season into
                                                             # schema zz_phase1_dry,
                                                             # sizes scaled up
+    cd scripts && python3 build_lineup_stints.py --aggregates-only  # lineup_seasons and
+                                                            # pair_seasons from the stored stints
 Rerun after build_player_game_lines.py (new play-by-play) or
 fetch_game_scores.py.
 """
@@ -278,7 +280,12 @@ SEASONS_DDL = """CREATE TABLE {schema}lineup_stint_seasons (
     minutes DOUBLE PRECISION, tracked_minutes DOUBLE PRECISION, tracked_minutes_share DOUBLE PRECISION,
     bad_lineup_minutes DOUBLE PRECISION, actors_off_floor INTEGER, fts_at_foul INTEGER)"""
 
-# Per team-season lineup and pair aggregates, from tracked_ok games only.
+# Per team-season lineup and pair aggregates, from tracked_ok games only. `minutes` is rounded to 0.1 for display;
+# `seconds` is the exact sum: anything that adds lineups or pairs up sums
+# seconds and rounds once (round 8 R8-073: summing the rounded minutes added ~0.008 minutes a lineup, because a
+# whole number of seconds lands on a .x5 minute tie about one time in six and rounds up). Seconds and possessions
+# are summed as numeric, so every run gives the same digits (summed as floats, ~40 rows' last digit depended on
+# the order Postgres added them in).
 SIDES_SQL = """
     WITH sides AS (
         SELECT season, home_team AS team, home_ids AS ids, game_id, seconds, home_pts AS pts_for, away_pts AS pts_against,
@@ -293,31 +300,33 @@ SIDES_SQL = """
 
 LINEUPS_SQL = SIDES_SQL + """
     SELECT season, team AS team_abbreviation, ids AS player_ids, COUNT(DISTINCT game_id) AS games, COUNT(*) AS stints,
-           ROUND((SUM(seconds) / 60)::numeric, 1)::double precision AS minutes,
-           ROUND(SUM(poss_for)::numeric, 1)::double precision AS poss_for,
-           ROUND(SUM(poss_against)::numeric, 1)::double precision AS poss_against,
-           ROUND(((SUM(poss_for) + SUM(poss_against)) / 2)::numeric, 1)::double precision AS poss,
+           ROUND((SUM(seconds::numeric) / 60)::numeric, 1)::double precision AS minutes,
+           ROUND(SUM(poss_for::numeric)::numeric, 1)::double precision AS poss_for,
+           ROUND(SUM(poss_against::numeric)::numeric, 1)::double precision AS poss_against,
+           ROUND(((SUM(poss_for::numeric) + SUM(poss_against::numeric)) / 2)::numeric, 1)::double precision AS poss,
            SUM(pts_for)::integer AS pts_for, SUM(pts_against)::integer AS pts_against,
            SUM(fga)::integer AS fga, SUM(fgm)::integer AS fgm, SUM(fg3a)::integer AS fg3a, SUM(fg3m)::integer AS fg3m,
            SUM(fta)::integer AS fta, SUM(ftm)::integer AS ftm, SUM(oreb)::integer AS oreb, SUM(dreb)::integer AS dreb,
            SUM(tov)::integer AS tov,
-           ROUND((100.0 * SUM(pts_for) / NULLIF((SUM(poss_for) + SUM(poss_against)) / 2, 0))::numeric, 2)::double precision AS off_rating,
-           ROUND((100.0 * SUM(pts_against) / NULLIF((SUM(poss_for) + SUM(poss_against)) / 2, 0))::numeric, 2)::double precision AS def_rating,
-           ROUND((100.0 * (SUM(pts_for) - SUM(pts_against)) / NULLIF((SUM(poss_for) + SUM(poss_against)) / 2, 0))::numeric, 2)::double precision AS net_rating
+           ROUND((100.0 * SUM(pts_for) / NULLIF((SUM(poss_for::numeric) + SUM(poss_against::numeric)) / 2, 0))::numeric, 2)::double precision AS off_rating,
+           ROUND((100.0 * SUM(pts_against) / NULLIF((SUM(poss_for::numeric) + SUM(poss_against::numeric)) / 2, 0))::numeric, 2)::double precision AS def_rating,
+           ROUND((100.0 * (SUM(pts_for) - SUM(pts_against)) / NULLIF((SUM(poss_for::numeric) + SUM(poss_against::numeric)) / 2, 0))::numeric, 2)::double precision AS net_rating,
+           SUM(seconds::numeric)::double precision AS seconds
     FROM sides GROUP BY 1, 2, 3
 """
 
 PAIRS_SQL = SIDES_SQL + """
     SELECT s.season, s.team AS team_abbreviation, a.pid AS player_a, b.pid AS player_b,
            COUNT(DISTINCT s.game_id) AS games, COUNT(*) AS stints, COUNT(DISTINCT s.ids) AS lineups,
-           ROUND((SUM(s.seconds) / 60)::numeric, 1)::double precision AS minutes,
-           ROUND(SUM(s.poss_for)::numeric, 1)::double precision AS poss_for,
-           ROUND(SUM(s.poss_against)::numeric, 1)::double precision AS poss_against,
-           ROUND(((SUM(s.poss_for) + SUM(s.poss_against)) / 2)::numeric, 1)::double precision AS poss,
+           ROUND((SUM(s.seconds::numeric) / 60)::numeric, 1)::double precision AS minutes,
+           ROUND(SUM(s.poss_for::numeric)::numeric, 1)::double precision AS poss_for,
+           ROUND(SUM(s.poss_against::numeric)::numeric, 1)::double precision AS poss_against,
+           ROUND(((SUM(s.poss_for::numeric) + SUM(s.poss_against::numeric)) / 2)::numeric, 1)::double precision AS poss,
            SUM(s.pts_for)::integer AS pts_for, SUM(s.pts_against)::integer AS pts_against,
-           ROUND((100.0 * SUM(s.pts_for) / NULLIF((SUM(s.poss_for) + SUM(s.poss_against)) / 2, 0))::numeric, 2)::double precision AS off_rating,
-           ROUND((100.0 * SUM(s.pts_against) / NULLIF((SUM(s.poss_for) + SUM(s.poss_against)) / 2, 0))::numeric, 2)::double precision AS def_rating,
-           ROUND((100.0 * (SUM(s.pts_for) - SUM(s.pts_against)) / NULLIF((SUM(s.poss_for) + SUM(s.poss_against)) / 2, 0))::numeric, 2)::double precision AS net_rating
+           ROUND((100.0 * SUM(s.pts_for) / NULLIF((SUM(s.poss_for::numeric) + SUM(s.poss_against::numeric)) / 2, 0))::numeric, 2)::double precision AS off_rating,
+           ROUND((100.0 * SUM(s.pts_against) / NULLIF((SUM(s.poss_for::numeric) + SUM(s.poss_against::numeric)) / 2, 0))::numeric, 2)::double precision AS def_rating,
+           ROUND((100.0 * (SUM(s.pts_for) - SUM(s.pts_against)) / NULLIF((SUM(s.poss_for::numeric) + SUM(s.poss_against::numeric)) / 2, 0))::numeric, 2)::double precision AS net_rating,
+           SUM(s.seconds::numeric)::double precision AS seconds
     FROM sides s, unnest(s.ids) AS a(pid), unnest(s.ids) AS b(pid)
     WHERE a.pid < b.pid
     GROUP BY 1, 2, 3, 4
@@ -364,6 +373,13 @@ def write_tables(cur, schema, stint_rows, game_rows, season_rows):
         cur, f"INSERT INTO {schema}lineup_stint_seasons ({', '.join(ccols)}) VALUES %s",
         [tuple(clean(r[c]) for c in ccols) for r in season_rows])
 
+    write_aggregates(cur, schema)
+
+
+def write_aggregates(cur, schema):
+    """lineup_seasons and pair_seasons from the stints in {schema}lineup_stints (also --aggregates-only)."""
+    for t in ("pair_seasons", "lineup_seasons"):
+        cur.execute(f"DROP TABLE IF EXISTS {schema}{t};")
     cur.execute(f"CREATE TABLE {schema}lineup_seasons AS " + LINEUPS_SQL.format(schema=schema))
     cur.execute(f"CREATE INDEX ON {schema}lineup_seasons (season, team_abbreviation);")
     cur.execute(f"CREATE INDEX ON {schema}lineup_seasons USING GIN (player_ids);")
@@ -456,6 +472,15 @@ def main():
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
+    if "--aggregates-only" in sys.argv:
+        # Rebuild lineup_seasons / pair_seasons from the stored stints (nothing else is read or written).
+        write_aggregates(cur, "")
+        conn.commit()
+        for t in ("lineup_seasons", "pair_seasons"):
+            cur.execute(f"SELECT COUNT(*), pg_size_pretty(pg_total_relation_size('{t}')) FROM {t}")
+            print(f"  {t}: {cur.fetchone()}")
+        conn.close()
+        return
     season_names, all_names = load_season_names(cur)
     final_pts, nba_ids, periods, team_tot = load_reference(conn)
     games, grouped = load_espn(conn)

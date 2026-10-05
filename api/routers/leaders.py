@@ -1,7 +1,9 @@
+import math
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 
+from routers.leaderboard import ATTEMPT_DEFAULTS, DEFAULT_MIN_GP, DEFAULT_MIN_MPG, STATS as LB_STATS
 from season_team import season_team_sql
 from source_badge import make_source
 
@@ -32,6 +34,50 @@ STAT_MAP = {
 }
 
 
+# In a season in progress nobody has 30 games for the first two months: the games floor is then this share of
+# the most games anyone has played so far (capped at the full floor).
+LIVE_GAMES_SHARE = 0.7
+
+
+def qualifying(key: str, max_gp: Optional[float] = None) -> dict:
+    """The floors a leader must clear (round 8 R8-068: shooting percentages were ranked with no attempts floor,
+    3P% 2025-26 opened on 1-for-1 shooters, and per-game leaders on 1-3 game players). They are the Leaderboard
+    Builder's defaults, so Stat Leaders' top 10 is that page's: 30+ games, 20+ minutes a game, and for a shooting
+    percentage the catalogue's attempts a game (5 FGA, 2 3PA, 2 FTA). max_gp = the most games anyone has played,
+    for a season in progress."""
+    attempts = LB_STATS[key][5] if key in LB_STATS else None
+    min_gp = DEFAULT_MIN_GP if max_gp is None else min(DEFAULT_MIN_GP, math.ceil(LIVE_GAMES_SHARE * max_gp))
+    f = {"min_gp": int(min_gp), "min_mpg": DEFAULT_MIN_MPG, "attempts": attempts,
+         "min_attempts": ATTEMPT_DEFAULTS.get(attempts) if attempts else None}
+    words = {"fga": "FGA", "fg3a": "3PA", "fta": "FTA"}
+    f["text"] = (f"Qualified: {f['min_gp']}+ games, {f['min_mpg']:g}+ minutes a game"
+                 + (f", {f['min_attempts']:g}+ {words[attempts]} a game" if attempts else "")
+                 + " (the Leaderboard Builder's default floor).")
+    return f
+
+
+def live_leaders(key: str, season: int, top_n: int):
+    """The season in progress from stats.nba.com, with the qualifying floors applied; None if it doesn't answer
+    or nobody qualifies yet."""
+    full = fetch_nba_api_player_leaders(key, season, None)
+    if not full or not full.get("results"):
+        return None
+    rows = full["results"]
+    max_gp = max((r.get("gp") or 0) for r in rows)
+    f = qualifying(key, max_gp)
+
+    def ok(r):
+        att = r.get(f["attempts"]) if f["attempts"] else None
+        return ((r.get("gp") or 0) >= f["min_gp"] and (r.get("min") or 0) >= f["min_mpg"]
+                and (not f["attempts"] or (att or 0) >= f["min_attempts"]))
+    kept = [r for r in rows if ok(r)][:top_n]
+    if not kept:
+        return None
+    keys = ("player_id", "player_name", "team_abbr", "value")
+    return {**full, "results": [{"rank": i + 1, **{k: r[k] for k in keys}} for i, r in enumerate(kept)],
+            "qualifying": f}
+
+
 def _stored_leaders(cursor, key: str, season: int, top_n: int):
     selected_col = None
     for candidate_col in STAT_MAP[key]["columns"]:
@@ -40,18 +86,21 @@ def _stored_leaders(cursor, key: str, season: int, top_n: int):
             break
     if selected_col is None:
         raise HTTPException(status_code=400, detail=f"Stat '{key}' is not available in this database.")
+    f = qualifying(key)
+    att_sql = f"AND {f['attempts']} >= %(att)s" if f["attempts"] else ""
     cursor.execute(
         f"""
         SELECT player_id, player_name, {season_team_sql(cursor)} AS team_abbreviation, {selected_col}
         FROM player_season_stats
-        WHERE season = %s
+        WHERE season = %(season)s
           AND {selected_col} IS NOT NULL
           AND team_abbreviation IS NOT NULL
           AND team_abbreviation <> 'TOT'
-        ORDER BY {selected_col} DESC
-        LIMIT %s;
+          AND gp >= %(gp)s AND min >= %(mpg)s {att_sql}
+        ORDER BY {selected_col} DESC, gp DESC, player_name
+        LIMIT %(n)s;
         """,
-        (season, top_n),
+        {"season": season, "gp": f["min_gp"], "mpg": f["min_mpg"], "att": f["min_attempts"], "n": top_n},
     )
     rows = cursor.fetchall()
 
@@ -91,7 +140,7 @@ def get_stat_leaders(stat_key: str, season: Optional[int] = None, top_n: int = 1
 
         live = None
         if requested > latest_stored:
-            live = fetch_nba_api_player_leaders(key, requested, safe_top_n)
+            live = live_leaders(key, requested, safe_top_n)
         if live and live.get("results"):
             return {
                 **live, "requested_season": requested, "fallback": False, "note": None,
@@ -121,6 +170,7 @@ def get_stat_leaders(stat_key: str, season: Optional[int] = None, top_n: int = 1
         "note": note,
         "stat_key": key,
         "stat_label": STAT_MAP[key]["label"],
+        "qualifying": qualifying(key),
         "results": results,
         "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) season tables, stored"),
     }

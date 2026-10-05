@@ -43,6 +43,7 @@ export default function StatLeaders() {
   const [leaders, setLeaders] = useState([]);
   const [season, setSeason] = useState(null);
   const [note, setNote] = useState('');
+  const [floorText, setFloorText] = useState('');
   const [source, setSource] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -74,11 +75,13 @@ export default function StatLeaders() {
         setLeaders(normalized);
         setSeason(data?.season || null);
         setNote(data?.note || '');
+        setFloorText(data?.qualifying?.text || '');
         setSource(data?._source || null);
       } catch (err) {
         if (!mounted) return;
         setLeaders([]);
         setNote('');
+        setFloorText('');
         setSource(null);
         setError(err?.response?.data?.detail || 'Failed to load stat leaders.');
       } finally {
@@ -106,6 +109,7 @@ export default function StatLeaders() {
             <SourceBadge source={source} />
           </p>
           {note && <p className="page-subtitle" style={{ marginTop: '-0.5rem' }}>{note}</p>}
+          {floorText && <p className="page-subtitle" style={{ marginTop: '-0.5rem' }}>{floorText}</p>}
 
           <div className="hb-rail-group">
             <span className="hb-rail-label">Stat</span>

@@ -58,15 +58,17 @@ def _load_stored(cur, season, team):
 
 
 def _load_stints(cur, season, team):
-    """lineup_seasons / pair_seasons (tracked games only)."""
+    """lineup_seasons / pair_seasons (tracked games only). Minutes come from the exact `seconds` sums: a player's
+    and the team's minutes add up lineups, and adding the minutes each rounded to 0.1 ran ~0.008 a lineup high
+    (ties at .x5 round up; Mikal Bridges 2022-23: 2,965.8 for 2,962.8, R8-073)."""
     cur.execute("SELECT DISTINCT team_abbreviation FROM lineup_seasons WHERE season = %s ORDER BY 1;", (season,))
     teams = [r[0] for r in cur.fetchall()]
     if team not in teams:
         return None, None, teams
-    cur.execute("""SELECT player_ids, minutes, poss, pts_for, pts_against
+    cur.execute("""SELECT player_ids, seconds / 60.0, poss, pts_for, pts_against
                    FROM lineup_seasons WHERE season = %s AND team_abbreviation = %s;""", (season, team))
     lineups = [(list(ids), float(minutes), float(poss), float(pf), float(pa)) for ids, minutes, poss, pf, pa in cur.fetchall()]
-    cur.execute("""SELECT player_a, player_b, minutes, poss, pts_for, pts_against, lineups
+    cur.execute("""SELECT player_a, player_b, seconds / 60.0, poss, pts_for, pts_against, lineups
                    FROM pair_seasons WHERE season = %s AND team_abbreviation = %s;""", (season, team))
     pairs = {(a, b): [float(m), float(p), float(pf), float(pa), int(n)] for a, b, m, p, pf, pa, n in cur.fetchall()}
     return lineups, pairs, teams

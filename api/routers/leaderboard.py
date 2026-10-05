@@ -36,6 +36,11 @@ STATS = leaderboard_stats()
 # including to 0): without one, 2025-26's top 3P% was 100% on 0.0 3PA a game.
 ATTEMPT_DEFAULTS = MIN_ATTEMPTS_PER_GAME
 
+# Default floors of a ranked season (overridable on the page). Stat Leaders
+# (routers/leaders.py) applies the same ones, so its top 10 is this page's.
+DEFAULT_MIN_GP = 30
+DEFAULT_MIN_MPG = 20.0
+
 # Shown on every row for context, alongside the ranked stat.
 CONTEXT = ["gp", "min", "pts", "reb", "ast", "ts_pct"]
 
@@ -76,8 +81,8 @@ def custom_leaderboard(
     stat: str = "pts",
     season_from: int | None = None,
     season_to: int | None = None,
-    min_gp: int = Query(30, ge=0),
-    min_mpg: float = Query(20.0, ge=0),
+    min_gp: int = Query(DEFAULT_MIN_GP, ge=0),
+    min_mpg: float = Query(DEFAULT_MIN_MPG, ge=0),
     min_attempts: float | None = Query(None, ge=0),
     team: str | None = None,
     order: str | None = None,
@@ -331,8 +336,8 @@ def composite_leaderboard(
     weights: str,
     season_from: int | None = None,
     season_to: int | None = None,
-    min_gp: int = Query(30, ge=0),
-    min_mpg: float = Query(20.0, ge=0),
+    min_gp: int = Query(DEFAULT_MIN_GP, ge=0),
+    min_mpg: float = Query(DEFAULT_MIN_MPG, ge=0),
     team: str | None = None,
     top_n: int = Query(25, ge=1, le=100),
 ):

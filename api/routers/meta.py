@@ -3,12 +3,12 @@ from functools import lru_cache
 
 from fastapi import APIRouter
 
+from routers.leaders import live_leaders, qualifying
 from source_badge import make_source
 
 from impact_core import (
     TEAM_META,
     current_standings,
-    fetch_nba_api_player_leaders,
     fetch_nba_api_team_stats,
     get_current_nba_season,
     get_db,
@@ -123,20 +123,21 @@ def get_current_meta():
         with ThreadPoolExecutor(max_workers=3) as pool:
             standings_future = pool.submit(current_standings, season)
             team_stats_future = pool.submit(fetch_nba_api_team_stats, season)
-            leaders_future = pool.submit(fetch_nba_api_player_leaders, "pts", season, 1)
+            leaders_future = pool.submit(live_leaders, "pts", season, 1)
             standings_block = standings_future.result()
             live_team_stats = team_stats_future.result()
             live_pts_leaders = leaders_future.result()
 
+        floor = qualifying("pts")  # Stat Leaders' floor (R8-068), so the tile names the same player
         cursor.execute(
             """
             SELECT player_name, pts
             FROM player_season_stats
-            WHERE season = %s AND pts IS NOT NULL
-            ORDER BY pts DESC
+            WHERE season = %s AND pts IS NOT NULL AND team_abbreviation <> 'TOT' AND gp >= %s AND min >= %s
+            ORDER BY pts DESC, gp DESC, player_name
             LIMIT 1;
             """,
-            (db_latest_season,),
+            (db_latest_season, floor["min_gp"], floor["min_mpg"]),
         )
         top_scorer_row = cursor.fetchone()
 
@@ -501,7 +502,7 @@ COVERAGE_MAP = [
         "table": "pbp_event_clock", "label": "Corrected game clock (every ESPN play-by-play event)", "group": "Games",
         "range_sql": "SELECT MIN(g.season), MAX(g.season) FROM pbp_games g WHERE g.source = 'espn'", "range_fmt": "season_int",
         "source": "scripts/build_event_clock.py: ESPN's clock is late by event type (made shots a median 14 s, rebounds 6 s, turnovers 5-10 s, misses 2 s, against NBA.com's own play-by-play of 418 games), so every field goal matched to the NBA shot chart takes the chart's time, free throws their trip's, a rebound 2 s after its miss, turnovers and unmatched shots ESPN's time less the median lag, everything else ESPN's own; pbp_event_clock_meta stores the checks.",
-        "gap": "About 94% of events land within 2 s of NBA.com's log (ESPN's own times: 32%). The moment a turnover happened can't be recovered from ESPN, which stamps it at about the time of the next play. Read by Game Replay, the Play Finder, Rotations' closing stretch, Best Games, the possessions, Coaching Decisions and Clutch WPA (since 2026-10-02); player minutes, stints, Situational Splits and the Garbage-Time Deflator still use ESPN's times.",
+        "gap": "About 94% of events land within 2 s of NBA.com's log (ESPN's own times: 32%). The moment a turnover happened can't be recovered from ESPN, which stamps it at about the time of the next play. Read by Game Replay, the Play Finder, Rotations' closing stretch, Best Games, the possessions, Coaching Decisions, Clutch WPA (since 2026-10-02) and the Garbage-Time Deflator (since 2026-10-06); player minutes, stints and Situational Splits still use ESPN's times (substitutions happen at dead balls, where ESPN is on time).",
         "used_by": ["analytics#replay", "plays", "rotations", "bestgames", "possessions", "coaching"],
     },
     {

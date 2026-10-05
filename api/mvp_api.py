@@ -507,13 +507,21 @@ def get_ledger_summary(season: int = None):
         live_rows = cursor.fetchall()
 
         cursor.execute(
-            """SELECT model, season, COUNT(*) AS n, AVG(score) AS mean_brier, MAX(resolved_at) AS resolved_at
+            """SELECT model, season, COUNT(*) AS n, AVG(score) AS mean_brier, MAX(resolved_at) AS resolved_at,
+                      MIN(predicted_at) AS first_logged, MAX(predicted_at) AS last_logged
                FROM prediction_ledger
                WHERE resolved_at IS NOT NULL
                GROUP BY model, season
                ORDER BY season DESC, model;"""
         )
         resolved_rows = cursor.fetchall()
+        # When each resolved season's regular season ended (round 8 step 7): the 2025-26 rows were logged on
+        # 2026-09-23, months after the awards, so the page must say they aren't a forecast.
+        cursor.execute("SELECT to_regclass('public.game_scores');")
+        season_end = {}
+        if cursor.fetchone()[0] is not None:
+            cursor.execute("SELECT season, MAX(game_date) FROM game_scores GROUP BY season;")
+            season_end = dict(cursor.fetchall())
 
     live = {model: {} for model in LEDGER_MODELS}
     for model, subject, subject_id, predicted, predicted_at in live_rows:
@@ -544,6 +552,10 @@ def get_ledger_summary(season: int = None):
             "n_candidates": r[2],
             "mean_brier_score": round(r[3], 4) if r[3] is not None else None,
             "resolved_at": r[4].isoformat() if r[4] else None,
+            "first_logged": r[5].date().isoformat() if r[5] else None,
+            "last_logged": r[6].date().isoformat() if r[6] else None,
+            "season_ended": season_end[r[1]].isoformat() if r[1] in season_end else None,
+            "logged_after_season": bool(r[1] in season_end and r[5] and r[5].date() > season_end[r[1]]),
         }
         for r in resolved_rows
     ]
@@ -557,7 +569,10 @@ def get_ledger_summary(season: int = None):
             "their real probability has moved over real logged snapshots so far this season — not a projection, "
             "just the real history of what the live model actually said, at the real times it said it. resolved "
             "holds real Brier scores (lower is better, 0 is perfect) for seasons that have actually finished and "
-            "gotten a real recorded winner/selection — an in-progress season simply won't appear here yet. This "
+            "gotten a real recorded winner/selection — an in-progress season simply won't appear here yet. Scores "
+            "grade the model's raw output (probability), not the calibrated chance the award pages show, so a field "
+            "of near-1.0 raw outputs scores badly by construction; first_logged / season_ended say whether a row "
+            "was logged during the season (a forecast) or after it (logged_after_season: not a forecast). This "
             "is distinct from the /backtest endpoints, which are honest leave-one-season-out historical re-runs, "
             "not live predictions; the two are never combined."
         ),

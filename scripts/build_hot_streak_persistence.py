@@ -31,6 +31,21 @@ counting stats it's far too high as a persistence estimate.
 Windows are counted once per game they end on, so they overlap: the
 counts are windows, not independent samples.
 
+The shuffled-null centre (round 8 step 7, 2026-10-06): the slope is not
+zero when nothing carries on. Shuffling each player's games within his
+season (no streaks by construction) still gives 7-86% depending on the
+stat and window, because both gaps are measured against the same noisy
+baseline from earlier games of the season. So every row also stores the
+mean slope over 2,000 such shuffles (null_slope, with its 2.5-97.5%
+range; the same for the season-only baseline) and net_share = slope -
+null_slope: the share of a run that carries on beyond that. The shuffles
+are api/hot_streaks.py's SeasonMatrix, drawn from the same stream as
+scripts/paper_beliefs.py's hot-streak family, so the stored null centre
+equals the paper's (test_round8_step7.py checks it). The slope itself is
+still the right coefficient for the expected-next-N prediction (it is
+validated on held-out seasons); net_share is the "how much was real"
+number. ~5 min of the build's ~6.
+
 Usage:
     cd scripts && python3 build_hot_streak_persistence.py
 """
@@ -47,8 +62,8 @@ import psycopg2.extras
 from db_config import DB_CONFIG
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
-from hot_streaks import (LINES_SQL, MIN_BASE_GAMES, MIN_BASE_MPG, MIN_PRIOR_GAMES, PRIOR_SQL,  # noqa: E402
-                         PRIOR_WEIGHTS, STABILITY, STATS, WINDOWS, add_columns, prior_share)
+from hot_streaks import (LINES_SQL, MIN_BASE_GAMES, MIN_BASE_MPG, MIN_PRIOR_GAMES, NULL_PERMS, PRIOR_SQL,  # noqa: E402
+                         PRIOR_WEIGHTS, STABILITY, STATS, WINDOWS, SeasonMatrix, add_columns, prior_share)
 
 TRAIN_TO, VALID, TEST_FROM = 2023, 2024, 2025
 BOOT = 300
@@ -177,6 +192,23 @@ def main():
               f"test rmse model {ev['model']:.4f} baseline {ev['baseline']:.4f} window {ev['window']:.4f} "
               f"season-only model {ev0['model']:.4f} | stability predicts {rel if rel is None else round(rel, 3)}")
 
+    # The shuffled-null centre of each slope (same windows, same weights, games shuffled within each season).
+    weights = {(r[0], r[1]): r[2] for r in rows}
+    mat = SeasonMatrix(add_columns(lines), prior, weights)
+    print(f"null centre: {NULL_PERMS} within-season shuffles of {mat.P:,} player-seasons")
+    nulls = mat.null_slopes(NULL_PERMS, log=print)
+    out = []
+    for r in rows:
+        dr, dr0 = nulls[(r[0], r[1])]
+        m, m0 = float(dr.mean()), float(dr0.mean())
+        slope, lo, hi, s0, lo0, hi0 = r[3], r[4], r[5], r[7], r[8], r[9]
+        out.append(r + (m, float(np.percentile(dr, 2.5)), float(np.percentile(dr, 97.5)), slope - m, lo - m, hi - m,
+                        m0, float(np.percentile(dr0, 2.5)), float(np.percentile(dr0, 97.5)), s0 - m0, lo0 - m0, hi0 - m0,
+                        NULL_PERMS))
+        print(f"{r[0]:>8} N={r[1]:<2} slope {slope:.3f} null {m:.3f} net {slope - m:+.3f} | "
+              f"season-only {s0:.3f} null {m0:.3f} net {s0 - m0:+.3f}")
+    rows = out
+
     cur.execute("DROP TABLE IF EXISTS hot_streak_persistence;")
     cur.execute("""CREATE TABLE hot_streak_persistence (
         stat TEXT NOT NULL, window_games INTEGER NOT NULL, prior_games INTEGER NOT NULL,
@@ -187,6 +219,12 @@ def main():
         rmse_model DOUBLE PRECISION, rmse_baseline DOUBLE PRECISION, rmse_window DOUBLE PRECISION,
         rmse_season_only_model DOUBLE PRECISION, typical_window_sample DOUBLE PRECISION,
         stability_predicted DOUBLE PRECISION, built_on DATE,
+        null_slope DOUBLE PRECISION, null_slope_lo DOUBLE PRECISION, null_slope_hi DOUBLE PRECISION,
+        net_share DOUBLE PRECISION, net_share_lo DOUBLE PRECISION, net_share_hi DOUBLE PRECISION,
+        null_slope_season_only DOUBLE PRECISION, null_slope_season_only_lo DOUBLE PRECISION,
+        null_slope_season_only_hi DOUBLE PRECISION, net_share_season_only DOUBLE PRECISION,
+        net_share_season_only_lo DOUBLE PRECISION, net_share_season_only_hi DOUBLE PRECISION,
+        null_shuffles INTEGER,
         PRIMARY KEY (stat, window_games));""")
     psycopg2.extras.execute_values(cur, "INSERT INTO hot_streak_persistence VALUES %s", rows)
     conn.commit()

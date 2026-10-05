@@ -17,7 +17,14 @@ Two separate questions, answered separately:
      (scripts/build_hot_streak_persistence.py): across every player-season
      2020-21 to 2025-26, the share of a window's gap from baseline that
      showed up again in the next N games. Expected next N = baseline +
-     intercept + slope x gap.
+     intercept + slope x gap. That share is not zero when nothing carries
+     on: with each season's games shuffled (no streaks) it is still 7-86%,
+     because both gaps are measured against the same noisy baseline (N games
+     also say something about his level). So the answer also gives the
+     shuffled-null centre (`null_share`) and the share beyond it
+     (`net_share` = share - null_share): how much of the run itself lasts
+     (since round 8 step 7, R8-029; before, only the share was shown and
+     read as "how much carries on").
 
 Definitions (baseline, floors, stats) come from api/hot_streaks.py, the
 same module the build script uses. Games come from player_game_lines joined
@@ -51,6 +58,7 @@ router = APIRouter()
 DRAWS = 4000
 RECENT_DAYS = 14   # league list: must have played within this many days of the as-of date
 ALPHA = 0.05       # p below this = unusual for him, on the card and the league list alike
+MINUS = "\u2212"   # the minus sign the pages print (utils/format.js)
 
 
 def label(season):
@@ -146,9 +154,10 @@ def _assess(g, prior_row, stat, window, rng):
     baseline = (bn + share * pn) / (bd + share * pdn) if share else bn / bd
     rate = wn / wd
     gap = rate - baseline
-    slope, lo, hi, icpt = ((per["slope"], per["slope_lo"], per["slope_hi"], per["intercept"]) if has_prior else
-                           (per["slope_season_only"], per["slope_season_only_lo"], per["slope_season_only_hi"],
-                            per["intercept_season_only"]))
+    sfx = "" if has_prior else "_season_only"
+    slope, lo, hi, icpt = per[f"slope{sfx}"], per[f"slope{sfx}_lo"], per[f"slope{sfx}_hi"], per[f"intercept{sfx}"]
+    null, net, net_lo, net_hi = (per[f"null_slope{sfx}"], per[f"net_share{sfx}"], per[f"net_share{sfx}_lo"],
+                                 per[f"net_share{sfx}_hi"])
     season_rate = num.sum() / den.sum()
 
     # How unusual: random sets of `window` games from his season so far.
@@ -181,6 +190,8 @@ def _assess(g, prior_row, stat, window, rng):
         "unusual": {"p": _r(p, 4), "z": _r(z, 2), "draws": int(len(rand)), "random_mean": _r(float(rand.mean())),
                     "percentile_own_windows": _r(pct_rank, 3), "own_windows": int(len(rolling))},
         "persistence": {"share": _r(slope, 3), "share_lo": _r(lo, 3), "share_hi": _r(hi, 3), "intercept": _r(icpt, 4),
+                        "null_share": _r(null, 3), "net_share": _r(net, 3), "net_share_lo": _r(net_lo, 3),
+                        "net_share_hi": _r(net_hi, 3), "null_shuffles": int(per["null_shuffles"]),
                         "carry_on": _r(slope * gap), "carry_on_lo": _r(min(lo * gap, hi * gap)),
                         "carry_on_hi": _r(max(lo * gap, hi * gap)), "expected_next": _r(baseline + icpt + slope * gap),
                         "fitted_on": "every player-season window 2020-21 to 2025-26 "
@@ -197,9 +208,17 @@ def _verdict(res, stat, window):
     head = (f"Within normal noise: {u['p'] * 100:.0f}% of random {window}-game sets from his season are this {word}."
             if u["p"] >= ALPHA else
             f"Unusual for him: only {u['p'] * 100:.1f}% of random {window}-game sets from his season are this {word}.")
-    tail = (f" Historically about {per['share'] * 100:.0f}% of a gap like this carried on: expect about "
-            f"{show(per['expected_next'])} over his next {window} games (baseline {show(res['baseline']['value'])}).")
+    tail = (f" Expect about {show(per['expected_next'])} over his next {window} games (baseline "
+            f"{show(res['baseline']['value'])}): about {per['share'] * 100:.0f}% of a gap like this shows up again, "
+            f"but {per['null_share'] * 100:.0f}% would with his games shuffled (no streaks; {window} games also say "
+            f"something about his level), so the run itself carries on {_pct(per['net_share'])}.")
     return head + tail
+
+
+def _pct(v):
+    """A share as a whole percent, with no sign on one that reads 0%."""
+    p = round(v * 100)
+    return f"{MINUS if p < 0 else ''}{abs(p)}%"
 
 
 def _next_games(g_after, stat, window):
@@ -314,6 +333,9 @@ def hot_streaks(season: int | None = None, stat: str = "pts", window: int = 10, 
             "tested": tested, "skipped": skipped, "same_direction": len(same_way),
             "significant": significant, "expected_by_chance": _r(ALPHA * tested, 1),
             "alpha": ALPHA, "share_carries_on": per["slope"], "share_lo": per["slope_lo"], "share_hi": per["slope_hi"],
+            # With a previous season (most of the list); the shuffled-null centre and the share beyond it.
+            "null_share": per["null_slope"], "net_share": per["net_share"], "net_share_lo": per["net_share_lo"],
+            "net_share_hi": per["net_share_hi"],
         },
         "next_games": next_summary,
         "results": ranked, "_source": _source(),

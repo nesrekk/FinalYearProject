@@ -260,13 +260,7 @@ def bh(p, q=FDR_Q):
     return reject, qv
 
 
-def row_perms(rng, lengths, L, B):
-    """B within-row permutations of a (P, L) padded matrix: entry (b, i, :) is a
-    permutation of 0..L-1 whose first lengths[i] positions are a random order of
-    the row's real entries (the padding stays at the end)."""
-    keys = rng.random((B, len(lengths), L))
-    keys[:, np.arange(L)[None, :] >= np.asarray(lengths)[:, None]] = 2.0
-    return np.argsort(keys, axis=2)
+row_perms = HSDEF.row_perms  # B within-row permutations of a padded matrix (api/hot_streaks.py)
 
 
 class Out:
@@ -415,92 +409,17 @@ def streak(conn, out, perms, perms2):
     log("streak: loading player game lines and previous seasons")
     lines, prior = HS.load(conn)
     lines = HSDEF.add_columns(lines)
-    key = lines["player_id"].astype(str) + "_" + lines["season"].astype(str)
-    codes, uniq = pd.factorize(key)              # rows in LINES_SQL order (player, season, date, game)
-    pos = lines.groupby(codes).cumcount().to_numpy()
-    P, L = len(uniq), int(pos.max()) + 1
-    lengths = np.bincount(codes, minlength=P)
-    row_pid = lines.groupby(codes)["player_id"].first().to_numpy().astype(int)
-    row_season = lines.groupby(codes)["season"].first().to_numpy().astype(int)
-    cols = sorted({c for _l, a, b, _f, _lo in HSDEF.STATS.values() for c in (a, b)} | {"min"})
-    M = {}
-    for c in cols:
-        m = np.zeros((P, L))
-        m[codes, pos] = lines[c].to_numpy(float)
-        M[c] = m
-    # Prior season per row and stat: (has_prior, numerator, denominator, gp).
-    prior_n = {s: np.full(P, np.nan) for s in HSDEF.STATS}
-    prior_d = {s: np.full(P, np.nan) for s in HSDEF.STATS}
-    gp = np.zeros(P)
-    for i in range(P):
-        p = prior.get((int(row_pid[i]), int(row_season[i])))
-        if p is None:
-            continue
-        gp[i] = p.gp
-        for s in HSDEF.STATS:
-            pn, pdn = getattr(p, f"{s}_n"), getattr(p, f"{s}_d")
-            if pn is not None and pdn is not None and not np.isnan(pdn) and pdn > 0:
-                prior_n[s][i], prior_d[s][i] = pn, pdn
     cur = conn.cursor()
     cur.execute("SELECT stat, window_games, prior_games, slope, slope_season_only FROM hot_streak_persistence")
     stored = {(s, n): (w, sl, sl0) for s, n, w, sl, sl0 in cur.fetchall()}
     check(set(stored) == {(s, n) for s in HSDEF.STATS for n in HSDEF.WINDOWS}, "hot_streak_persistence covers the catalogue")
-    pcodes, puniq = pd.factorize(row_pid)        # row -> player
-    NP = len(puniq)
-    ident = np.tile(np.arange(L), (P, 1))
-    has_prior = {s: ~np.isnan(prior_d[s]) for s in HSDEF.STATS}
-    prior_n = {s: np.where(has_prior[s], prior_n[s], 0.0) for s in HSDEF.STATS}
-    prior_d = {s: np.where(has_prior[s], prior_d[s], 0.0) for s in HSDEF.STATS}
-    share = {}
-    for stat, N in [(s, n) for s in HSDEF.STATS for n in HSDEF.WINDOWS]:
-        w = stored[(stat, N)][0]
-        share[(stat, N)] = np.where(has_prior[stat] & (gp >= HSDEF.MIN_PRIOR_GAMES),
-                                    np.minimum(1.0, w / np.where(gp > 0, gp, 1)), 0.0)
-
-    def cums(perm, rows, which=None):
-        """Cumulative sums (with a leading zero) of the columns (all, or `which`) for the given rows in the order perm gives."""
-        idx = rows[:, None]
-        return {c: np.concatenate([np.zeros((len(rows), 1)), np.cumsum(M[c][idx, perm], axis=1)], axis=1)
-                for c in (cols if which is None else which)}
-
-    def windows(C, rows, stat, N):
-        """Per (row, t) pair: D and F against the prior-weighted baseline (and the season-only one), with masks."""
-        _label, a, b, _fmt, lo = HSDEF.STATS[stat]
-        t = np.arange(HSDEF.MIN_BASE_GAMES + N, L - N + 1)
-        s0 = t - N
-        cn, cd, cm = C[a], C[b], C["min"]
-        bn, bd = cn[:, s0], cd[:, s0]
-        wn, wd = cn[:, t] - cn[:, s0], cd[:, t] - cd[:, s0]
-        fn, fd = cn[:, t + N] - cn[:, t], cd[:, t + N] - cd[:, t]
-        ok = (t + N <= lengths[rows][:, None]) & (cm[:, s0] / s0 >= HSDEF.MIN_BASE_MPG) & (bd > 0) & (wd > 0) & (fd > 0)
-        if lo is not None:
-            ok &= (bd >= lo * s0) & (wd >= lo * N)
-        sh = share[(stat, N)][rows][:, None]
-        with np.errstate(divide="ignore", invalid="ignore"):
-            base = (bn + sh * prior_n[stat][rows][:, None]) / (bd + sh * prior_d[stat][rows][:, None])
-            base0 = bn / bd
-            D, F = wn / wd - base, fn / fd - base
-            D0, F0 = wn / wd - base0, fn / fd - base0
-        return ok & has_prior[stat][rows][:, None], D, F, ok, D0, F0
-
-    def slope(D, F, ok):
-        d, f = D[ok], F[ok]
-        dm = d - d.mean()
-        return float((dm * (f - f.mean())).sum() / (dm ** 2).sum())
-
-    def player_sums(D, F, ok, rows):
-        """Per player: n, sum D, sum F, sum D^2, sum DF over his windows (rows = the row subset D/F cover)."""
-        r = np.nonzero(ok)[0]
-        d, f = D[ok], F[ok]
-        pc = pcodes[rows[r]]
-        return np.stack([np.bincount(pc, minlength=NP), np.bincount(pc, weights=d, minlength=NP),
-                         np.bincount(pc, weights=f, minlength=NP), np.bincount(pc, weights=d * d, minlength=NP),
-                         np.bincount(pc, weights=d * f, minlength=NP)])
-
-    def player_slopes(S):
-        n, sd, sf, sdd, sdf = S
-        with np.errstate(divide="ignore", invalid="ignore"):
-            return (sdf - sd * sf / n) / (sdd - sd * sd / n)
+    # The matrix form of the windows lives in api/hot_streaks.py (SeasonMatrix, moved there verbatim in round 8
+    # step 7, when build_hot_streak_persistence.py started storing the null centre with it).
+    mat = HSDEF.SeasonMatrix(lines, prior, {k: v[0] for k, v in stored.items()})
+    P, L, lengths = mat.P, mat.L, mat.lengths
+    pcodes, puniq, NP, ident = mat.pcodes, mat.puniq, mat.NP, mat.ident
+    cums, windows, slope = mat.cums, mat.windows, mat.slope
+    player_sums, player_slopes = mat.player_sums, mat.player_slopes
 
     all_rows = np.arange(P)
     combos = [(s, n) for s in HSDEF.STATS for n in HSDEF.WINDOWS]

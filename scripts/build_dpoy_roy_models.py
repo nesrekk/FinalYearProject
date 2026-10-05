@@ -60,7 +60,11 @@ ROY_FEATURES = ["pts", "ts_pct", "usg_pct", "net_rating", "min", "age"]
 DPOY_MIN_MINUTES = 24
 DPOY_MIN_GAMES = 40
 
-# ─── Award Winners (2009-10 to 2023-24) ─────────────────────────────────────
+# ─── Award Winners (2009-10 to 2025-26) ─────────────────────────────────────
+# 2025-26 (round 8 step 7): read 2026-10-06 from Wikipedia's 2025-26 NBA season page and the award pages
+# (en.wikipedia.org/wiki/NBA_Defensive_Player_of_the_Year_Award, .../NBA_Rookie_of_the_Year_Award). Training
+# uses only the seasons in TRAIN_SEASONS / ROY_TRAIN_SEASONS, so these labels change no model; award_winners
+# and the Prediction Ledger read them.
 
 DPOY_WINNERS = {
     2010: "Dwight Howard",
@@ -79,6 +83,7 @@ DPOY_WINNERS = {
     2023: "Jaren Jackson Jr.",
     2024: "Rudy Gobert",
     2025: "Evan Mobley",
+    2026: "Victor Wembanyama",  # unanimous
 }
 
 ROY_WINNERS = {
@@ -99,6 +104,7 @@ ROY_WINNERS = {
     2024: "Victor Wembanyama",  # unanimous winner (99/99 first-place votes); was
                                 # incorrectly Chet Holmgren (a finalist, not the winner)
     2025: "Stephon Castle",
+    2026: "Cooper Flagg",
 }
 
 

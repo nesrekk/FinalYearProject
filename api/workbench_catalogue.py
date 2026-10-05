@@ -966,7 +966,8 @@ def _unit_cols(a, sources):
 
     return (
         tot("games", "Games together", "G", f"{a}.games"),
-        tot("minutes", "Minutes together", "MIN", f"{a}.minutes", "num1"),
+        # The exact seconds, not the stored minutes rounded to 0.1, so grouped rows add up (R8-073).
+        tot("minutes", "Minutes together", "MIN", f"({a}.seconds / 60.0)", "num1"),
         tot("poss", "Possessions together", "POSS", f"{a}.poss", "num1"),
         tot("pts_for", "Points scored", "PTS", f"{a}.pts_for"),
         tot("pts_against", "Points allowed", "OPP", f"{a}.pts_against", "int", False),

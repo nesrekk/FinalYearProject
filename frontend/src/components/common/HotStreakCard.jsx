@@ -9,6 +9,9 @@ import { bySign, withSign } from '../../utils/format';
 // for him (random N-game sets of his own season), and how much of a gap like
 // it has carried on historically (hot_streak_persistence).
 
+// A share as a whole percent; no sign on one that reads 0%.
+const pctShare = (v) => (v == null ? '—' : withSign(v * 100, `${Math.abs(Math.round(v * 100))}%`));
+
 const day = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
 export default function HotStreakCard({ playerId, season, stat, win, dates }) {
@@ -42,7 +45,9 @@ export default function HotStreakCard({ playerId, season, stat, win, dates }) {
                         How unusual: 4,000 random sets of {win} games from his own season so far; the share at least this
                         hot (or cold) is shown. It says whether the run is more than chance clumping, not whether it lasts.
                         How much carries on: across every player-season 2020-21 to 2025-26, the share of a run&apos;s gap
-                        from baseline that showed up again in the next {win} games (Methodology page). Baseline = his games
+                        from baseline that showed up again in the next {win} games. Part of that share appears even with
+                        each season&apos;s games shuffled (no streaks), because {win} games also say something about his
+                        level; only the part above that is the run itself lasting (Methodology page). Baseline = his games
                         this season before the run, plus part of his previous season.
                     </InfoTooltip>
                 </h3>
@@ -82,7 +87,10 @@ export default function HotStreakCard({ playerId, season, stat, win, dates }) {
                         <div>
                             <dt>Expected next {d.window.games}</dt>
                             <dd>{show(d.persistence.expected_next)}</dd>
-                            <span>{Math.round(d.persistence.share * 100)}% of the gap (range {Math.round(d.persistence.share_lo * 100)}-{Math.round(d.persistence.share_hi * 100)}%)</span>
+                            <span>
+                                {Math.round(d.persistence.share * 100)}% of the gap; {Math.round(d.persistence.null_share * 100)}% with
+                                games shuffled, so the run itself: {pctShare(d.persistence.net_share)} ({pctShare(d.persistence.net_share_lo)} to {pctShare(d.persistence.net_share_hi)})
+                            </span>
                         </div>
                         {d.what_happened_next && (
                             <div>

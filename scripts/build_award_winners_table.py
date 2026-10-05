@@ -19,6 +19,13 @@ import build_dpoy_roy_models as dpoy_roy_mod
 from db_config import DB_CONFIG
 
 
+# MVPs after mvp_winners' last season. 2025-26: read 2026-10-06 from
+# https://en.wikipedia.org/wiki/NBA_Most_Valuable_Player_Award and the 2025-26 NBA season page.
+MVP_AFTER_LEGACY = {
+    2026: "Shai Gilgeous-Alexander",
+}
+
+
 def resolve_player_id(cursor, player_name: str, season: int):
     cursor.execute(
         "SELECT player_id FROM player_season_stats WHERE player_name = %s AND season = %s;",
@@ -46,9 +53,19 @@ def main():
 
     rows = []
 
-    # MVP: mvp_winners already has real player_id values.
+    # MVP: mvp_winners already has real player_id values. It is a legacy table with no loader in the repo
+    # (stops at 2024-25), so later winners are listed here and resolved like DPOY/ROY.
     cursor.execute("SELECT season, player_id, player_name FROM mvp_winners ORDER BY season;")
     for season, player_id, player_name in cursor.fetchall():
+        rows.append((season, "MVP", player_id, player_name))
+    legacy_seasons = {r[0] for r in rows}
+    for season, player_name in MVP_AFTER_LEGACY.items():
+        if season in legacy_seasons:
+            continue
+        player_id = resolve_player_id(cursor, player_name, season)
+        if player_id is None:
+            print(f"  ⚠️  Could not resolve MVP {season}: {player_name} — skipped")
+            continue
         rows.append((season, "MVP", player_id, player_name))
 
     # DPOY / ROY: winners are only recorded as names in

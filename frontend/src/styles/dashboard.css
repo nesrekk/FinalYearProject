@@ -967,6 +967,8 @@ body {
 .hb-rail-chips .hb-rail-item.hb-rail-item--active {
   background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
   border-color: var(--accent);
+  /* --text on the tint: --brand-text there was 4.0:1 in Paper (round 8 step 7; the border marks the active chip) */
+  color: var(--text);
 }
 
 /* The rail itself is a narrow fixed-width sidebar (200px) — full chip

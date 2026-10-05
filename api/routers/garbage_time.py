@@ -26,7 +26,8 @@ THRESHOLDS = {
 
 METHODOLOGY = (
     "Every real play in ESPN's full-season play-by-play (via sportsdataverse) is placed in a game state: seconds "
-    "remaining and the score margin before the play. The project's own win-probability model (the same one behind "
+    "remaining (on the corrected clock, pbp_event_clock: ESPN stamps made shots a median 14 s late) and the score "
+    "margin before the play. The project's own win-probability model (the same one behind "
     "Clutch WPA and Game Replay) turns that state into a win probability. The Leverage Index (LI) of a state is the "
     "expected absolute win-probability swing of the next play there, averaged over the real league-wide mix of scoring "
     "outcomes (no score, +1/+2/+3 either way), divided by the real league average so the average real play has LI = 1.0. "
@@ -156,8 +157,8 @@ def get_garbage_time(season: Optional[int] = None, min_ppg: float = 0.0, top_n: 
         "clutch_heavy": clutch_heavy,
         "players": players,
         "_source": make_source(
-            ["player_leverage_summary", "leverage_validation", "pbp_events", "pbp_games"],
-            "ESPN play-by-play via sportsdataverse + this project's WPA model",
+            ["player_leverage_summary", "leverage_validation", "pbp_events", "pbp_games", "pbp_event_clock"],
+            "ESPN play-by-play via sportsdataverse (corrected clock) + this project's WPA model",
         ),
     }
 
@@ -205,6 +206,6 @@ def get_garbage_time_player(player_id: int, season: Optional[int] = None):
         "thresholds": THRESHOLDS,
         "_source": make_source(
             ["player_leverage_summary", "player_leverage_splits"],
-            "ESPN play-by-play via sportsdataverse + this project's WPA model",
+            "ESPN play-by-play via sportsdataverse (corrected clock) + this project's WPA model",
         ),
     }
