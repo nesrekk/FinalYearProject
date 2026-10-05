@@ -50,7 +50,12 @@ Check printed at the end: gluing the cut stints back together must give
 (`matches_stints`; an event-less stint of 2 s or less with no counterpart
 is skipped, `empty_stints_skipped`: two substitutions a moment apart by
 ESPN's clock can land on the same corrected second, and a stint with no
-time and no event isn't kept); `stint_shift` is the largest move of a stint boundary
+time and no event isn't kept); three games don't glue back, each an event-less
+stint the corrected clock gives no time (espn_401468511: a lone "free throw 2 of 2";
+espn_401468743, espn_401704644: substitutions between two free throws, which ESPN's
+clock puts 12-15 s apart and the corrected clock at the trip's first free throw;
+with free throws credited at the foul, round 8 step 6a, the lineup between them is
+credited nothing); `stint_shift` is the largest move of a stint boundary
 against lineup_stints' ESPN times (the corrected clock's doing); the score
 at 5:00 plus the closing stretch must equal the final.
 
@@ -68,7 +73,7 @@ import psycopg2
 import psycopg2.extras
 
 from db_config import DB_CONFIG
-from pbp_lineups import Game, STINT_STATS, elapsed, game_clock, load_espn, load_season_names
+from pbp_lineups import Game, STINT_STATS, elapsed, game_clock, load_espn, load_season_names, miss_three_calls
 from wpa_lib import CLUTCH_MARGIN, CLUTCH_SECONDS
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
@@ -167,9 +172,9 @@ def same_as_stored(glued, stored, pts_key):
     return True, round(shift, 1), skipped
 
 
-def build_game(g, ev, season_names, all_names, stored):
+def build_game(g, ev, season_names, all_names, stored, calls):
     game = Game(g.game_id, int(g.season), g.game_date, ev, season_names[int(g.season)], all_names,
-                clock=game_clock(ev)[0])
+                miss_threes=calls.get(g.game_id), clock=game_clock(ev)[0])
     pieces, _ = game.stints(g.home_team, split_at=[CUT])
     pts_key = "pts_shots" if g.points_method == "shots" else "pts_score"
     matches, shift, dropped = same_as_stored(glue(pieces), stored, pts_key)
@@ -237,15 +242,18 @@ def main():
     season_names, all_names = load_season_names(cur)
     games = load_games(conn)
     stored = load_stints(conn)
-    _, grouped = load_espn(conn, clock=True)
+    espn_games, grouped = load_espn(conn, clock=True)
     print(f"{len(games)} games ({time.time() - t0:.0f}s)")
+    # the stints' two-or-three call on missed shots (the shot chart's, since round 8 step 6a), so the glued pieces
+    # equal lineup_stints' 3PA too; nothing written here counts threes
+    calls, _ = miss_three_calls(conn, espn_games, grouped, season_names, all_names)
 
     closing, rows = [], []
     for i, g in enumerate(games.itertuples(index=False)):
         ev = grouped.get(g.game_id)
         if ev is None:
             continue
-        c, r = build_game(g, ev, season_names, all_names, stored.get(g.game_id))
+        c, r = build_game(g, ev, season_names, all_names, stored.get(g.game_id), calls)
         closing.extend(c)
         rows.append(r)
         if i % 1500 == 0:

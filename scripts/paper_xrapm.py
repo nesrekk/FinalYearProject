@@ -63,6 +63,10 @@ Judgment calls (also stored in paper_xrapm_meta):
     is a possession component and stays as it was).
   * Regular-season games with ESPN play-by-play only (2020-21 on); the three NBA
     Cup finals have no game_scores row and no tracked stint.
+  * A free throw belongs to the stint lineup_stints credits it to: the five on the
+    floor at the foul (round 8 step 6a; the stint lists it in foul_ft_actions),
+    otherwise the stint whose action range holds it. So every tracked stint's
+    attempts equal its stored FGA and FTA, and its residual is unchanged in meaning.
 
 Round 6 step 8 adds two targets on the same stints (every round-5 column and row above is computed exactly as
 before; the two new ones are extra columns and extra versions):
@@ -170,13 +174,18 @@ def collect_events(conn, cur):
 def load_stints(conn):
     return pd.read_sql_query(
         """SELECT stint_id, game_id, season, home_team, away_team, action_from, action_to, tracked_ok,
-                  home_pts, away_pts, home_fga, away_fga, home_fta, away_fta, home_poss, away_poss
+                  home_pts, away_pts, home_fga, away_fga, home_fta, away_fta, home_poss, away_poss, foul_ft_actions
            FROM lineup_stints ORDER BY stint_id""", conn)
 
 
 def map_to_stints(ev, st):
     """The stint of each attempt: action_number inside the stint's inclusive
-    [action_from, action_to] within its game (action_number is unique per game)."""
+    [action_from, action_to] within its game (action_number is unique per game),
+    except a free throw lineup_stints credits to the five on the floor at the foul
+    (round 8 step 6a): it goes to the stint whose foul_ft_actions lists it, which may
+    be an earlier one, or hold it although no stored range does (logged during a
+    zero-second stint that was credited nothing). Returns (mapped attempts, unmapped
+    count, free throws moved)."""
     right = st[st.action_from.notna()][["game_id", "action_from", "action_to", "stint_id"]].copy()
     right["action_from"] = right.action_from.astype(int)
     right["action_to"] = right.action_to.astype(int)
@@ -185,10 +194,20 @@ def map_to_stints(ev, st):
     right = right.sort_values("action_from")
     m = pd.merge_asof(left, right, left_on="action_number", right_on="action_from", by="game_id", direction="backward")
     inside = m.stint_id.notna() & (m.action_number <= m.action_to)
+    moved = st[["game_id", "stint_id", "foul_ft_actions"]].explode("foul_ft_actions").dropna(subset=["foul_ft_actions"])
+    moved = moved.rename(columns={"stint_id": "foul_stint", "foul_ft_actions": "action_number"})
+    moved["action_number"] = moved.action_number.astype(int)
+    m = m.merge(moved, on=["game_id", "action_number"], how="left", validate="many_to_one")
+    at_foul = m.foul_stint.notna()
+    assert (m.kind[at_foul] == "ft").all(), "foul_ft_actions lists an action that isn't a free throw"
+    assert int(at_foul.sum()) == len(moved), \
+        f"{len(moved) - int(at_foul.sum())} of lineup_stints' foul_ft_actions match no parsed free throw"
+    m["stint_id"] = np.where(at_foul, m.foul_stint, m.stint_id)
+    inside = inside.to_numpy() | at_foul.to_numpy()
     unmapped = int((~inside).sum())
     m = m[inside].copy()
     m["stint_id"] = m.stint_id.astype(int)
-    return m.drop(columns=["action_from", "action_to"]), unmapped
+    return m.drop(columns=["action_from", "action_to", "foul_stint"]), unmapped, int(at_foul.sum())
 
 
 # ── 2. Pricing the attempts ──────────────────────────────────────────────────
@@ -713,7 +732,8 @@ def main():
     ev = collect_events(conn, cur)
     log(f"{len(ev):,} attempts parsed ({int((ev.kind == 'fg').sum()):,} field goals, {int((ev.kind == 'ft').sum()):,} free throws)")
     st = load_stints(conn)
-    ev, unmapped = map_to_stints(ev, st)
+    ev, unmapped, n_moved = map_to_stints(ev, st)
+    log(f"{n_moved:,} free throws credited to the stint on the floor at the foul (lineup_stints.foul_ft_actions)")
     fg, matched_no_p = price_field_goals(conn, ev[ev.kind == "fg"].copy())
     log(f"field goals priced: {(fg.source == 'chart').mean():.4%} from the chart, "
         f"{int((fg.source == 'shooter').sum()):,} at the shooter's mean, {int((fg.source == 'league').sum()):,} at the league mean")

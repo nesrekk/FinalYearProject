@@ -733,7 +733,7 @@ def main():
     log(f"wrote {TEX_OUT}")
     for (k, s), (v, n, m, f) in sorted(A.rows.items()):
         if m:
-            print(f"  {m:28s} {v:>14,.4f}  {n}")
+            print(f"  {m:28s} {'(none)' if v is None else f'{v:>14,.4f}':>14}  {n}")
     conn.close()
 
 

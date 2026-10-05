@@ -187,6 +187,11 @@ def _pct(v, d=1):
     return f"{float(_half_up(v * 100, d)):.{d}f}%"
 
 
+def _pct_auto(v):
+    """A share with no decimals, or two when it is under 1% (so 0.02% doesn't print as 0%)."""
+    return _pct(v, 0 if v >= 0.01 else 2)
+
+
 # ── The plain-text size of each class, from the audit's stored values ─────────
 # A(key, season=0) -> value; S(key) -> {season: value} for the per-season rows.
 
@@ -206,9 +211,13 @@ def size_text(key, A, S):
         sh = S("unid_minutes_share")
         last = max(sh)
         early = [v for s, v in sh.items() if s < last]
-        return (f"{_n(A('unid_events'))} events ({_pct(A('unid_events_share'))}); {_pct(min(early), 0)} to {_pct(max(early), 0)} "
+        return (f"{_n(A('unid_events'))} events ({_pct(A('unid_events_share'))}); {_pct_auto(min(early))} to {_pct_auto(max(early))} "
                 f"of minutes a season before {season_label(last)} ({_pct(sh[last], 1)} in {season_label(last)})")
     if key == "teamless_sub":
+        if not A('teamless_player_games'):
+            # since round 8 step 6a the parser ignores the ones naming nobody leaving, so no game line gains seconds
+            return (f"{_n(A('teamless_subs'))} events in {_n(A('teamless_games'))} games; no player-game credited extra "
+                    f"seconds in the game lines; {_n(A('nan_team_rows'))} lines with no team")
         return (f"{_n(A('teamless_subs'))} events in {_n(A('teamless_games'))} games; {_n(A('teamless_player_games'))} player-games "
                 f"credited +{_n(A('teamless_extra_min'))} to +{_n(A('teamless_extra_max'))} s in the game lines; "
                 f"{_n(A('nan_team_rows'))} line with no team")
@@ -218,7 +227,7 @@ def size_text(key, A, S):
         share = sum(m[s] for s in bad) / sum(g[s] for s in bad)
         return (f"summed score steps miss the final in {_pct(share, 0)} of games {season_label(bad[0])} to {season_label(bad[-1])}; "
                 f"backward steps in {_n(A('score_backwards_games'))} of {_n(A('espn_games'))} games; on-court margin "
-                f"≠ 5 × final in {_pct(A('oncourt_off_share'), 0)} of full-minute team-games")
+                f"≠ 5 × final in {_pct_auto(A('oncourt_off_share'))} of full-minute team-games")
     if key == "last_score":
         return f"{_n(A('last_score_bad'))} of {_n(A('last_score_games'))} games"
     if key == "missed_threes":

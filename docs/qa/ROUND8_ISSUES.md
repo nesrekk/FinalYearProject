@@ -12,7 +12,8 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
-Counts (2026-10-05, after Step 6a): **74 entries**, 18 open, 56 fixed: 7 broken, 24 wrong number,
+Counts (2026-10-05, after Step 6b): **77 entries**, 18 open, 59 fixed: 8 broken, 26 wrong number,
+5 slow, 38 looks wrong. Step 6b fixed R8-026 (the models fitted on the stints) and two it found (R8-075, R8-077), logged R8-076 (6c) and did R8-074's rerun (its rewrite is 6c's). After Step 6a: 74 entries, 18 open, 56 fixed: 7 broken, 24 wrong number,
 5 slow, 38 looks wrong. Step 6a fixed R8-022 to R8-025 and R8-027, the stints' part of R8-026 (open for 6b's
 refits) and one it found (R8-072); it logged R8-073 (Step 7) and R8-074 (6b/6c). After Step 5 it was 71 entries,
 21 open, 50 fixed (recounted from the entries; the Step 4 line said 22 open / 46 fixed, one off).
@@ -295,6 +296,83 @@ the paper audit ×2, the manifest and the paper generators (Step 6c). Methodolog
 the rebuilt models (RAPM's "93.7 to 99.8% of minutes", rim, assists, On/Off, Play Finder, xRAPM) are 6b's to
 re-read. **For Step 6c:** R8-074.
 
+## Step 6b: everything downstream of the lines and stints rebuilt (2026-10-05)
+
+28 scripts rerun in `rebuild_all.sh` order, one at a time: `build_event_clock.py` (its chart matching uses the
+parser's names), `build_player_on_off.py`, `build_possessions.py`, `build_stat_stability.py`,
+`build_hot_streak_persistence.py`, `build_situational_splits.py`, `build_projections.py`, `build_rapm.py`,
+`build_shot_value.py`, `build_rating_tracker.py`, `build_rotations.py`, `build_rim_deterrence.py`,
+`build_assist_network.py`, `build_play_finder.py`, `build_best_games.py`, `build_team_zone_mix.py`, `compute_wpa.py`
+(the event clock moved), `build_coaching_decisions.py`, then the paper stage (`paper_xrapm.py`, `paper_eval.py`,
+`paper_tests.py`, `build_pregame_availability.py`, `build_lineup_predictor.py`, `build_report_card.py`,
+`paper_data_audit.py`, `build_data_quality.py`, `paper_beliefs.py`, `paper_ablations.py`). The ledger was not touched.
+89 tables were snapshotted (`zz_r86b_*`), every one diffed by content hash, the snapshots dropped. 82 changed;
+identical: `stat_year_to_year`, `shot_value_shots` (every price: the location fits don't read the rebuilt tables),
+`play_finder_games`, `team_zone_mix`, `coaching_decision_summary`, `paper_data_audit_classes`,
+`paper_ablation_shot_games`. Every build's own checks passed (paper_eval reproduces the tracker; the report card
+reproduces paper_eval; Data Quality reproduces all 267 audit rows and the stored tests; ablations reproduce
+paper_eval).
+
+**Code changed (each needed by 6a's free-throw rule or the emptied audit class):**
+- `scripts/paper_xrapm.py`: `map_to_stints()` moves each free throw to the stint whose `foul_ft_actions` lists it
+  (asserts every listed action is a parsed free throw and every one is found: 76,444). Tracked stints whose attempts
+  differ from the stored FGA/FTA: 0 and 0, as before 6a; unmapped attempts 0; residual 309 → 338 points (192 → 214
+  stints) over 1.24M attempts.
+- `scripts/build_rotations.py`: passes `miss_threes` (R8-075).
+- `scripts/paper_data_audit.py`: the final print handled a None value (the team-less class's min/max excess, now
+  empty) by crashing after writing; `api/data_quality_lib.py` words that class and sub-1% shares (`_pct_auto`).
+
+**What moved** (old → new; every card/README number re-read, the rest unchanged at the precision shown):
+
+| Result | Before | After |
+|---|---|---|
+| Tracked minutes / attempts on the stints | 93.7-99.8% | 99.6-99.98% (on/off 99.98-100%) |
+| On/off rows; Jokić 2023-24 / 2024-25 on−off | 3,665; +23.7 / +24.2 | 3,920; +23.8 / +24.1 |
+| RAPM next-season RMSE 2025-26 (BPM / 3-season / prior / one-season) | 15.33 / 15.46 / 15.53 / 15.91 | 15.31 / 15.44 / 15.52 / 15.87 |
+| Jokić one-season RAPM 2020-21 | 69th (+1.8 ± 1.0) | 38th (+2.5 ± 1.1) |
+| Rating Tracker settings (λ₀, λq, λb, k, φ) | 4,918, 3,424, 11,050, 0.76, 0.89 | 421, 576, 10,443, 0.58, 0.80 (R8-076) |
+| Tracker vs BPM, protocol test season | −0.01 [−0.13, +0.10] | **+0.22 [+0.05, +0.40]** (BPM ahead; tune −0.29, validate −0.26 still tracker) |
+| RAPM + prior vs BPM (tune / validate / test) | −0.10 / −0.26 / +0.30 | −0.16 / −0.21 / +0.29 (reversal holds) |
+| Shot-aware xRAPM vs actual-points one-season | +0.11 / +0.66 / −0.12 | +0.14 / +0.58 / −0.08 |
+| Report Card: tracker vs BPM per possession | 4 of 4 seasons (p 0.02) | 3 of 4 (p 0.47) |
+| Lineup Predictor: season so far adds (test) | +4.3 [0.7, 9.8] | +4.4 [0.6, 10.2]; units 78,205 → 81,816 |
+| Availability odds (test log loss) | −0.0173 [−0.0276, −0.0068] | −0.0173 [−0.0276, −0.0069] |
+| Data Quality: flagged games | 1,569 (1,327 unidentified player) | 315 (56); no conclusion flips in 430 cells |
+| Ablations: possession weights, one-season RAPM, test | +0.18 [0.03, 0.33] | +0.08 [−0.07, 0.23] |
+| Rim: rim-attempts gap clear of zero | 15-20% a season | 17-22%; Gobert 2nd, 1st, 1st, 3rd, 1st, 20th |
+| Assists with an unidentified passer | 1,149 (0.31%) | 18 |
+| Coaching: 2-for-1 | +0.42 [0.32, 0.50] | +0.43 [0.34, 0.52] (others identical) |
+| Possessions | 1,442,608; clock_ok 72.5% | 1,442,590; 73.0% (steal 1.306 → 1.305 per possession) |
+| Beliefs: split tests at p < 0.05; per-player streak FDR | 3,929 of 73,319; 406 | 3,924 of 73,330; 412 (clutch, luck, referees identical) |
+
+Unchanged at the precision shown: stability M values on the card, hot-streak shares and their null centres, split
+league effects, projection backtest (501 current projections moved ≤ 0.0015; the locked ledger's minutes and BPM
+projections not at all), Shot Value prices (free-throw log loss 0.5262 → 0.5266), Best Games sniff tests (178
+games' excitement moved slightly), Clutch WPA (12 of 184), simulator and pre-game numbers, the Report Card's
+pre-game/simulator/shot rows.
+
+Tests: full suite 505 passed, 1 skipped (ledger), 2 failed + 5 errors, all Step 6c's: the manifest
+(`test_manifest_is_current_and_tampering_is_caught`) and `paper_numbers.py` / the figures
+(`test_printed_rows_have_known_formats_and_defined_macros`, test_paper_numbers ×3, test_paper_figures ×2), which
+now stop on the audit's None value for the emptied team-less class before reaching their claims (R8-074). The 13 + 5
+of Step 6a's list pass except those. Restated tests (the results changed, not the checks): the audit's re-derived
+counts (`miss_threes_as_twos` 8,688 → 8,708: more names now line up with the chart; the team-less class adds 0
+player-games), the tracker's next-season scale bound (0.9-1.1 → 0.8-1.1, 2025-26 at 0.85), and Rotations'
+glue-back exceptions pinned by game id (R8-075).
+
+**Changed tables for the Layerbase sync** (82 tables, ~1.57 GB, on top of 6a's 207 MB): `paper_eval_predictions`
+391 MB, `possessions` 295 MB, `pbp_event_clock` 287 MB, `play_finder_events` 211 MB, `paper_xrapm_stints` 80 MB,
+`paper_ablation_predictions` 57 MB, `projection_backtest_rows` 37 MB, `pregame_availability_players` 36 MB,
+`player_situational_splits` 30 MB, `lineup_predictor_units` 28 MB, `report_card_units` 27 MB, `paper_beliefs` 20 MB,
+`report_card_game_sums` 14 MB, `rotation_closing_stints` 8 MB, `coaching_decisions` 7 MB, `assist_pairs` 6 MB,
+`data_quality_game_flags` 5 MB, and 65 smaller ones (every other table the 28 scripts write except the 7 identical
+ones above).
+
+**For Step 6c:** `scripts/rebuild_all.sh paper-inputs`; `paper_numbers.py` must first decide how the paper words the
+team-less class now that no game line carries its error (it crashes on the None excess); the claims that break are
+the paper's sentences on the stints (R8-074), the Rating Tracker (R8-076: "never behind BPM out of sample" no longer
+holds on the test season) and the ablation on possession weights.
+
 ## Constraints (not defects)
 
 - **Layerbase:** 4,202 of 5,000 MB used (2026-10-04). A Step 6 rebuild rewrites tables of about the same size; any sync needs the owner's OK (Step 10 decides whether the biggest tables stay local).
@@ -469,10 +547,12 @@ re-read. **For Step 6c:** R8-074.
 - **Found by:** known gap (README).
 - **Step 6a:** kept (Stat Stability's plus-minus and rating rows and the paper audit read them) and recomputed with the stints' rules: made shots and free throws, or the running maximum of the score fields in the 170 games where only that adds up (`points_method()`, the stints' own pick), free throws at the foul. `tm_pts - op_pts` = `player_game_onfloor.plus_minus` in all 154,073 reconciled player-games; full-minute team-games adding up to 5 × the margin 75% → 99.9% (14,389 of 14,401); 98.2% exact against ESPN's box-score +/- (36.6% before). The paper's audit class that measured this (R8-074) needs Step 6b/6c.
 ### R8-026 · `lineup_stints` credits a free throw at the shot, not at the foul
-- **Severity:** wrong number · **Step:** 6a + 6b · **Status:** the stints fixed in the Step 6a commit; open for 6b (the models fitted on them)
+- **Severity:** wrong number · **Step:** 6a + 6b · **Status:** fixed (the stints in the Step 6a commit, everything fitted on them in the Step 6b commit)
 - **Where:** the stints and everything on them (RAPM, Rating Tracker, lineups, pairs, xRAPM, rim deterrence, rotations, lineup predictor, report card, the paper). The box-score rule (`build_player_game_onfloor.py`) is 98.2% exact vs ESPN's +/-; at the shot, 42.5%.
 - **Found by:** known gap (README, round 7 step 2).
 - **Step 6a:** `Game.stints()` credits a free throw (attempt, make, points, a score step at it) to the stint on the floor at the foul (`is_foul_anchor()`, moved into `pbp_lineups.py` from the on-floor build), keeps a zero-second stint that receives one, and lists the moved ones in `lineup_stints.foul_ft_actions` (76,444; the action range is unchanged in meaning). Stints' plus-minus vs ESPN's box score 42.5% → 98.2% exact; `player_game_onfloor`'s independent replay now checks the stints directly (0 of 154,334 differ). `lineup_seasons` / `pair_seasons` are rebuilt on them; RAPM and everything else fitted on the stints is Step 6b's.
+- **Step 6b:** every table on the stints refitted (RAPM, the Rating Tracker, xRAPM, rim, rotations, possessions, the lineup predictor, the report card, the paper's evaluation, tests, audit, Data Quality, beliefs, ablations); `paper_xrapm.py` now moves the listed free throws to the stint at the foul (all 76,444; tracked stints' attempts still equal their stored FGA/FTA). What moved is in the Step 6b section.
+
 ### R8-027 · `lineup_stints` takes ESPN's text two-or-three call on misses
 - **Severity:** wrong number (not shown anywhere yet) · **Step:** 6a · **Status:** fixed in the Step 6a commit
 - **Where:** `home_fg3a`/`away_fg3a` in the stints. `player_game_lines` and the Play Finder use the shot chart's call (`miss_three_calls()`).
@@ -725,6 +805,21 @@ re-read. **For Step 6c:** R8-074.
 - **Found by:** `test_pair_chemistry_grid_known_team` after Step 6a's rebuild tracked all of his minutes (the gap hid it before; the test's bound now allows 0.2%). Fix: sum seconds (or unrounded minutes) and round once.
 
 ### R8-074 · The paper's audit classes on the lines and stints measure what Step 6a fixed
-- **Severity:** wrong number (paper) · **Step:** 6b (rerun) + 6c (rewrite) · **Status:** open
+- **Severity:** wrong number (paper) · **Step:** 6b (rerun) + 6c (rewrite) · **Status:** open for 6c (the rerun done in the Step 6b commit)
 - **Where:** `paper_data_audit.py`: `oncourt_off_share` (the paper's "on-court margin isn't 5 × the final in 25% of full-minute team-games") reads `player_game_lines.tm_pts - op_pts`, now 0.1%; `unidentified` (untracked minutes, 2-6% a season) is now 0.02-0.4%; `teamless_sub` and the NaN team are no longer in the lines. The feed's own errors are still there (`score_steps_miss` measures the stale score fields directly; ESPN still sends the no-id names and the team-less substitutions).
 - **Found by:** Step 6a (`test_audit_matches_the_database_now`, `test_paper_data_audit.py`). Fix: Step 6b reruns the audit and `build_data_quality.py`; Step 6c rewrites the sentences (what the feed gets wrong vs what the platform now corrects), e.g. measure the on-court class from the score steps if the paper keeps it.
+- **Step 6b:** the audit and Data Quality reran. The audit now measures `oncourt_off_share` 0.08% (was 25%), unidentified minutes 0.02-0.16% a season (2-6%), the team-less class 12 substitutions in 9 games adding 0 player-game seconds (`teamless_extra_min/max` are None), 0 'NaN' lines, missed threes worded as twos 8,708 (8,688). The script crashed after writing on that None (fixed: the print), and `api/data_quality_lib.py` words the empty class and sub-1% shares; `paper_numbers.py` still stops on it (`float(None)`), so Step 6c decides the paper's wording for the class before regenerating.
+
+### R8-075 · Rotations' glue-back check failed in 5,189 games after Step 6a
+- **Severity:** broken (a build check) · **Step:** 6b · **Status:** fixed in the Step 6b commit
+- **Where:** `scripts/build_rotations.py` replays every game with the shared parser to cut it at 5:00 left in the fourth, then checks the glued pieces equal `lineup_stints`. Since Step 6a the stints take the NBA shot chart's two-or-three call on misses (`miss_threes`); the rotations replay didn't, so its 3PA differed and only 2,043 of 7,232 games "glued back" (`rotation_closing_games.matches_stints`). No stored output counts threes, so no page number was wrong.
+- **Found by:** Step 6b's rebuild (the build's own printed check; the smoke test reads the stored flag and would have failed). Fix: pass `miss_three_calls()` like `build_lineup_stints.py`. Now 7,229 of 7,232: the known espn_401468511 and two new ones the 6a free-throw rule exposed (espn_401468743, espn_401704644: substitutions between two free throws that ESPN's clock puts 12-15 s apart and the corrected clock at the trip's first free throw; with the second free throw credited at the foul the lineup in between has neither time nor anything credited on the corrected clock, while the stints, on ESPN's clock, keep its 12-15 s). The smoke test now pins the three game ids; README Known real gaps and the build's docstring say why.
+
+### R8-076 · The Rating Tracker re-chose its settings on the rebuilt stints and now trails BPM on the test season
+- **Severity:** wrong number (paper) · **Step:** 6c (rewrite) · **Status:** open
+- **Where:** `rating_tracker_fit` / `paper_eval` model `rapm_tracker`. The same rule (pooled next-season RMSE over the three tune pairs, Powell from two starts, both agreeing) picks λ₀ 421, λq 576, λb 10,443, k 0.58, φ 0.80 (was 4,918, 3,424, 11,050, 0.76, 0.89): much weaker carry-over. On the rebuilt stints the earlier settings score 14.416 on the tune pairs against 14.384, so the rule's choice is right by its own criterion; on 2025-26 they would have scored 15.30 against the new 15.53. Under the protocol the tracker − BPM difference is −0.29 (tune), −0.26 (validate) and **+0.22 [+0.05, +0.40] on the test season** (was −0.01 [−0.13, +0.10]); year-to-year r 0.80 → 0.71 (BPM 0.74); the platform's next-season scale for 2025-26 is 0.85.
+- **Found by:** Step 6b. Not changed (re-picking after seeing the test season would be peeking). The app's cards and README say it; the paper's "the first RAPM version never behind BPM out of sample" (README Round 6 step 7 and the paper's tracker paragraph) is Step 6c's to rewrite. `test_rating_tracker.py`'s scale bound restated (0.9-1.1 → 0.8-1.1).
+
+### R8-077 · Card and README numbers that were already stale before the rebuild
+- **Severity:** wrong number · **Step:** 6b · **Status:** fixed in the Step 6b commit
+- **Where / what:** found while re-reading every number on the rebuilt tables. Assist Network card: "0 of 3,172 player-seasons differ" from the Game Log (4 differ by one assist, the known-facts suite pins them; now "all but 4 of 3,761 player-team-seasons"). Rim Deterrence card: year-to-year "948 player pairs, 0.34 / 0.17 / 0.36" could not be reproduced by any pairing tried; restated with its definition (913 pairs, one row per player-season, 0.34 / 0.19 / 0.37). RAPM card and README: "the Nuggets were +0.5 without him" in 2020-21 (on/off before the 2026-10-03 rebuild; −1.4 since). Pair Chemistry card and README: the 2023-24 Nuggets' 97% tracked and Jokić–Murray 1,410 minutes at +14.6 (Step 6a's rebuild: 100%, 1,424 at +15.8). README Possessions: "after a defensive rebound 1.16" (1.155 rounded; now 1.15). README Situational Splits: "73,306 qualified" (73,319 before, 73,330 now). Data Coverage: the Rating Tracker's settings "estimated by marginal likelihood" (they are chosen by next-season RMSE; the likelihood estimate is stored, not used).

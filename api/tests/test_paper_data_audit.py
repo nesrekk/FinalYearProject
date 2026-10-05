@@ -13,7 +13,7 @@ paper_data_audit, paper_data_audit_classes, paper/tables/data_audit.tex):
     the tables it measured (so a rebuild without a rerun of the audit fails
     here), the wrong-player repair has nothing left to fix, and the counts the
     README recorded before the audit re-derive exactly (66 events in 9 games,
-    8,688 missed threes at a median 26 ft);
+    8,688 missed threes at a median 26 ft; 8,708 since round 8 step 6a);
   * the table file in paper/ (untracked on purpose; skipped when absent) is the
     one the class list generates.
 
@@ -128,10 +128,14 @@ def test_recorded_counts_re_derive(audit):
     # Before the audit these were copied from the README (paper_numbers.RECORDED, 2026-09-29); the audit re-derives them.
     assert audit[("wrong_player_left", 0)] == 0                       # repair_espn_player_ids.find() finds nothing
     assert (audit[("wrong_player_events", 0)], audit[("wrong_player_games", 0)]) == (66, 9)
-    assert audit[("miss_threes_as_twos", 0)] == 8688 and round(audit[("miss_threes_median_ft", 0)]) == 26
-    # the lines' extra minutes: one player-game in each game with a team-less substitution, all of them the lines' excess
+    # 8,688 when first counted; 8,708 since round 8 step 6a matched the feed's no-id players by name, so more of their
+    # missed shots line up with the chart (step 6b reran the audit)
+    assert audit[("miss_threes_as_twos", 0)] == 8708 and round(audit[("miss_threes_median_ft", 0)]) == 26
+    # The feed still holds 12 team-less substitutions in 9 games, but since round 8 step 6a the parser ignores the ones
+    # naming nobody leaving, so no game line gains seconds from them (until then: one player-game in each of the 9 games)
+    assert (audit[("teamless_subs", 0)], audit[("teamless_games", 0)]) == (12, 9)
     assert (audit[("teamless_player_games", 0)] == audit[("teamless_lines_higher", 0)]
-            == audit[("teamless_pg_in_sub_games", 0)] == audit[("teamless_games", 0)] <= 9)
+            == audit[("teamless_pg_in_sub_games", 0)] == 0)
 
 
 def test_table_file_is_generated_from_the_class_list():

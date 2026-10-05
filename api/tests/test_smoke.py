@@ -2421,16 +2421,21 @@ def test_rotations_minutes_closing_and_team_block():
     try:
         cur = conn.cursor()
         # The cut stints (on the corrected clock since round 6 step 3b) glue back into lineup_stints' stints (same
-        # fives, counts, points) in every game but one: espn_401468511, where ESPN logs a "free throw 2 of 2" with no
-        # 1 of 2, the clock gives it the previous trip's time and an 11 s event-less stint collapses (README Known
-        # real gaps). Stint boundaries move by 2 s or less except in a handful of games. Score at 5:00 + closing
-        # stretch = real final.
-        cur.execute("""SELECT COUNT(*), COUNT(*) FILTER (WHERE matches_stints),
-                              COUNT(*) FILTER (WHERE game_ok), COUNT(*) FILTER (WHERE game_ok AND final_matches),
+        # fives, counts, points) in every game but three, each an event-less stint the corrected clock gives no time:
+        # espn_401468511, where ESPN logs a "free throw 2 of 2" with no 1 of 2, the clock gives it the previous trip's
+        # time and an 11 s stint collapses (README Known real gaps); espn_401468743 and espn_401704644 (since round 8
+        # step 6b), free-throw trips with substitutions between the shots: ESPN's clock gives the lineup between the
+        # substitutions 12-15 s, the corrected clock puts the whole trip at its first free throw, and with free throws
+        # credited at the foul (step 6a) that lineup has nothing credited either, so the cut replay keeps no stint for
+        # it. Stint boundaries move by 2 s or less except in a handful of games. Score at 5:00 + closing stretch =
+        # real final.
+        cur.execute("""SELECT COUNT(*), COUNT(*) FILTER (WHERE game_ok), COUNT(*) FILTER (WHERE game_ok AND final_matches),
                               COUNT(*) FILTER (WHERE stint_shift > 2)
                        FROM rotation_closing_games""")
-        n, glued, ok, final_ok, moved = cur.fetchone()
-        assert n - glued <= 1 and n > 7000 and ok == final_ok and moved <= 20
+        n, ok, final_ok, moved = cur.fetchone()
+        assert n > 7000 and ok == final_ok and moved <= 20
+        cur.execute("SELECT game_id FROM rotation_closing_games WHERE NOT matches_stints ORDER BY 1")
+        assert [g for (g,) in cur.fetchall()] == ["espn_401468511", "espn_401468743", "espn_401704644"]
         cur.execute("""SELECT COUNT(*) FROM rotation_closing_games g JOIN (
                            SELECT game_id, SUM(home_pts) hp, SUM(away_pts) ap FROM rotation_closing_stints GROUP BY 1) c
                        USING (game_id)
