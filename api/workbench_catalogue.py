@@ -456,8 +456,9 @@ ON_COURT_POSS = ("((l.tm_fga + 0.44 * l.tm_fta - l.tm_oreb + l.tm_tov) + "
 PG_SOURCES = ("player_game_lines",)
 # On-floor points and plus-minus (round 7 step 2): from player_game_onfloor (scripts/
 # build_player_game_onfloor.py), the stints' lineups and points with free throws credited to the
-# lineup at the foul, as the box score does. Not player_game_lines' tm_pts / op_pts, which credit stale
-# ESPN score fields (a team's five don't add up to 5x the margin in 1 team-game in 4). Shown only
+# lineup at the foul, as the box score does. player_game_lines' tm_pts / op_pts used to credit stale
+# ESPN score fields (a team's five didn't add up to 5x the margin in 1 team-game in 4); since round 8
+# step 6a they follow the same rules and equal these in every reconciled player-game. Shown only
 # in games that reconcile (game_ok: 7,220 of 7,232).
 ONFLOOR_SOURCES = ("player_game_onfloor", "lineup_stints")
 # The Game Log / Game Finder (since round 8 step 5) and the Workbench read it with this join.
@@ -941,15 +942,16 @@ PLAYER_ONOFF = Dataset(
 # Five-man units and pairs from the play-by-play stints (lineup_seasons /
 # pair_seasons, scripts/build_lineup_stints.py): tracked stints only (five
 # identified players a side), possessions averaged over both sides like
-# On/Off, points from made shots and free throws credited at the shot (README
-# Known real gaps). A team is its franchise; a player set picks the units its
-# players are in (spec `players`).
+# On/Off, points from made shots and free throws, a free throw credited to the
+# players on the floor at the foul (since round 8 step 6a, as the box score
+# does). A team is its franchise; a player set picks the units its players are
+# in (spec `players`).
 UNIT_FIRST = 2021
 LS_SOURCES = ("lineup_seasons", "lineup_stints")
 PR_SOURCES = ("pair_seasons", "lineup_stints")
 STINT_NOTE = ("From the five-man stints of the play-by-play (stints with all ten players identified), "
-              "possessions averaged over both sides; free throws are credited to the players on the floor at the "
-              "shot, not at the foul (README Known real gaps).")
+              "possessions averaged over both sides; a free throw is credited to the players on the floor at the "
+              "foul, as the official box score does.")
 
 
 def _unit_cols(a, sources):

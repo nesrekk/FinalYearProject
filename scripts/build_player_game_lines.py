@@ -13,7 +13,19 @@ What each row holds:
   - seconds played, reconstructed from substitutions;
   - what happened while he was on the floor, for rate stats: his team's and
     the opponent's FGM/FGA/FTA/offensive and defensive rebounds/turnovers
-    and points.
+    and points, with lineup_stints' credit rules (round 8 step 6a): free
+    throws (attempts and points) go to the players on the floor at the
+    foul, an event ESPN tagged to no team to nobody on the floor, and
+    points come from the made shots and free throws, or, in a game where
+    those don't add up to the real final score (game_scores) and the
+    running maximum of ESPN's score fields does, from that
+    (pbp_lineups.points_method(), the stints' own pick). So each
+    player-game's on-court totals equal the sums over his stints
+    (build_lineup_stints.py stops otherwise) and tm_pts - op_pts equals
+    player_game_onfloor's plus-minus. Until then tm_pts/op_pts credited
+    every positive step of the score fields, which double-counted wherever
+    they were stale (summed on-court margin = 5 x the final margin in only
+    75% of full-minute team-games).
 
 How the play-by-play is read (ESPN text):
   - shots are events whose text says "makes"/"misses", or "X blocks Y's
@@ -37,12 +49,16 @@ How the play-by-play is read (ESPN text):
     ejections don't count, bench players get those. A player who played a
     whole period without appearing in the play-by-play is found from the
     previous period's closing lineup. Then every "A enters the game for B"
-    swaps them.
+    swaps them (a substitution tagged to no team: pbp_lineups).
 
-Checked against player_season_stats (NBA.com season totals) after the
-build; the script prints the comparison. Names in descriptions are
-matched to ids within the game first, then against player_season_stats
-for that season and team.
+Names in descriptions are matched to ids within the game first, then
+against player_season_stats, then against player_bio (exact name, one
+player active that season: pbp_lineups.load_season_names()). The script
+prints every name the player_bio fallback answered and every one left
+unmatched, by season and team.
+
+Checked against player_season_stats (NBA.com season totals, players with
+20+ games) after the build; the script prints the comparison.
 
 Usage:
     cd scripts && python3 build_player_game_lines.py
@@ -54,17 +70,24 @@ import psycopg2
 import psycopg2.extras
 
 from db_config import DB_CONFIG
-from pbp_lineups import Game, load_espn, load_season_names, miss_three_calls
+from pbp_lineups import Game, load_espn, load_season_names, miss_three_calls, points_method
 
 OWN = ["pts", "fgm", "fga", "fg3m", "fg3a", "ftm", "fta", "oreb", "dreb", "ast", "stl", "blk", "tov"]
 ON = ["tm_fgm", "tm_fga", "tm_fta", "tm_oreb", "tm_dreb", "tm_tov", "tm_pts",
       "op_fgm", "op_fga", "op_fta", "op_oreb", "op_dreb", "op_tov", "op_pts"]
 
 
+def final_scores(cur):
+    """{(espn game id, team): final points} from game_scores (the stints' reference, build_lineup_stints.py)."""
+    cur.execute("SELECT 'espn_' || espn_id, team_abbreviation, pts_for FROM game_scores WHERE espn_id IS NOT NULL")
+    return {(gid, team): int(pts) for gid, team, pts in cur.fetchall()}
+
+
 def main():
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
     season_names, all_names = load_season_names(cur)
+    finals = final_scores(cur)
     games, grouped = load_espn(conn)
     print(f"{len(games)} games, {sum(len(v) for v in grouped.values())} events")
     calls, misses = miss_three_calls(conn, games, grouped, season_names, all_names)
@@ -72,39 +95,58 @@ def main():
     print(f"NBA shot chart's call on {len(misses):,} missed shots; differs from the text's on {len(flipped):,} "
           f"({int((flipped.nba_three).sum()):,} threes the text calls twos, {int((~flipped.nba_three).sum()):,} the other way)")
 
-    out, unmatched, fixes, periods = [], Counter(), 0, 0
+    out, unmatched, from_bio, teamless, methods, fixes, periods = [], Counter(), Counter(), Counter(), Counter(), 0, 0
     for i, g in enumerate(games.itertuples(index=False)):
         ev = grouped.get(g.game_id)
         if ev is None:
             continue
         game = Game(g.game_id, int(g.season), g.game_date, ev, season_names[int(g.season)], all_names,
                     miss_threes=calls.get(g.game_id))
-        rows, played = game.run(g.home_team)
-        unmatched.update(game.unmatched)
+        rows, played, totals = game.run(g.home_team)
+        final = (finals.get((g.game_id, g.home_team)), finals.get((g.game_id, g.away_team)))
+        method, ok = points_method(totals["shots"], totals["score"], final)
+        methods[(method, ok)] += 1
+        for (team, name), n in game.unmatched_at.items():
+            unmatched[(int(g.season), team, name)] += n
+        for (team, name, pid), n in game.from_bio.items():
+            from_bio[(int(g.season), team, name, pid)] += n
+        teamless.update(game.teamless_subs)
         fixes += game.lineup_fixes
         periods += ev["period"].nunique()
         for pid, r in rows.items():
             if pid not in played and r.get("seconds", 0) < 1:
                 continue
             team = game.team_of.get(pid)
+            r["tm_pts"], r["op_pts"] = r.get(f"tm_pts_{method}", 0), r.get(f"op_pts_{method}", 0)
             out.append([pid, g.game_id, int(g.season), g.game_date, team,
                         round(r.get("seconds", 0.0), 1)] + [int(r.get(k, 0)) for k in OWN] +
                        [int(r.get(k, 0)) for k in ON])
         if i % 1000 == 0:
             print(f"  {i} games")
 
+    bad_team = [r for r in out if not isinstance(r[4], str)]
+    if bad_team:
+        raise SystemExit(f"{len(bad_team)} rows with no team, e.g. {bad_team[:3]}")
     cols = ["player_id", "game_id", "season", "game_date", "team_abbreviation", "seconds"] + OWN + ON
     cur.execute("DROP TABLE IF EXISTS player_game_lines;")
     cur.execute(f"""CREATE TABLE player_game_lines (
         player_id BIGINT NOT NULL, game_id TEXT NOT NULL, season INTEGER NOT NULL, game_date DATE,
-        team_abbreviation TEXT, seconds DOUBLE PRECISION,
+        team_abbreviation TEXT NOT NULL, seconds DOUBLE PRECISION,
         {', '.join(f'{c} INTEGER' for c in OWN + ON)},
         PRIMARY KEY (player_id, game_id));""")
     psycopg2.extras.execute_values(cur, f"INSERT INTO player_game_lines ({', '.join(cols)}) VALUES %s", out, page_size=5000)
     cur.execute("CREATE INDEX ON player_game_lines (season, player_id);")
     conn.commit()
     print(f"{len(out)} player-game rows; lineup periods needing a fill/trim: {fixes} of ~{periods * 2} team-periods")
-    print("most common unmatched names:", unmatched.most_common(10))
+    print(f"on-court points per game (points_method): {dict(methods)}")
+    print(f"substitutions tagged to no team: {dict(teamless)}")
+    print(f"\nNames the player_bio fallback answered: {len({k[:3] for k in from_bio})} name-team-seasons, "
+          f"{sum(from_bio.values())} lookups (season, team hint, ESPN name, id: lookups)")
+    for k, n in sorted(from_bio.items(), key=lambda x: (x[0][0], x[0][1] or "", x[0][2])):
+        print(f"  {k}: {n}")
+    print(f"\nNames left unmatched: {len(unmatched)} name-team-seasons, {sum(unmatched.values())} lookups")
+    for k, n in sorted(unmatched.items(), key=lambda x: (-x[1], x[0][0], x[0][1] or "", x[0][2])):
+        print(f"  {k}: {n}")
 
     # Check against NBA.com season totals (players with 20+ games).
     cur.execute("""

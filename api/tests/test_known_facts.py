@@ -285,7 +285,9 @@ def test_srs_matches_basketball_reference(cur):
 # (the "+/-" column; read 2026-10-03 from the box score data behind the pages
 # above, https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=<id>,
 # whose numbers the www.espn.com/nba/boxscore/_/gameId/<id> pages show).
-# player_id -> ESPN +/-.
+# player_id -> ESPN +/-. Terquavion Smith (1631173, 1 minute, -5 in Embiid's 70-point game) was added on
+# 2026-10-05 from the same box score: ESPN's play-by-play gives him no id, and until round 8 step 6a the
+# lineup parser couldn't place him on the floor (it matches him through player_bio now).
 BOX_PLUS_MINUS = {
     "espn_401810793": {1628389: 20, 1642857: 10, 1631170: 15, 1642066: 15, 1641796: 13, 1630558: 16, 1630696: 7,
                        1631323: 6, 1642352: 7, 1631211: -2, 1642884: -2, 1642860: -10, 1642267: -20, 1641731: -19,
@@ -295,7 +297,7 @@ BOX_PLUS_MINUS = {
                        1627884: -2, 1626158: -3, 1630702: -10},
     "espn_401585236": {1630178: 12, 203954: 11, 202699: 21, 201587: 3, 1626162: -5, 1627863: 2, 1630231: 9,
                        1630194: -6, 1627788: 13, 1641741: -5, 1630170: -17, 1630200: -13, 1631110: -6, 1641705: 0,
-                       203926: -7, 1629640: 4, 1628380: -10, 1631104: 3, 1630577: 0, 1626224: -4},
+                       203926: -7, 1629640: 4, 1628380: -10, 1631104: 3, 1630577: 0, 1626224: -4, 1631173: -5},
     "espn_401469072": {1631095: -27, 1630231: -7, 1631102: -4, 1630227: -9, 1631106: -11, 1630578: -14, 1630256: -7,
                        1630528: -10, 1630586: 5, 1626246: -1, 203081: 21, 1629680: 29, 203924: 14, 1629629: 30,
                        1630570: 9, 1629234: 14, 1629642: -7, 1631101: -14, 1631133: -7, 1630553: -4, 1628995: 0},

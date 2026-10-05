@@ -235,7 +235,7 @@ COVERAGE_MAP = [
         "table": "player_game_lines", "label": "Per player-game lines", "group": "Games",
         "range_sql": "SELECT MIN(season), MAX(season) FROM player_game_lines", "range_fmt": "season_int",
         "source": "Rebuilt from ESPN play-by-play (scripts/build_player_game_lines.py); minutes rebuilt from substitutions; a missed shot is a two or a three as the NBA shot chart (player_shots) calls the same shot where it can be matched (~99%).",
-        "gap": "Regular season only, 2020-21 on (no earlier seasons, no playoffs). game_id is ESPN's (espn_...), not the NBA 002... ids used elsewhere.",
+        "gap": "Regular season only, 2020-21 on (no earlier seasons, no playoffs). game_id is ESPN's (espn_...), not the NBA 002... ids used elsewhere. Players ESPN gives no id are matched by exact name through player_bio (since round 8 step 6a); 9 name-team-seasons stay unmatched (typos and spellings no source pairs with an NBA id, about 260 events), so those players have no line in those games.",
         "used_by": ["stability", "analytics#withwithout"],
     },
     {
@@ -382,14 +382,14 @@ COVERAGE_MAP = [
         "table": "lineup_stints", "label": "Five-man stints from play-by-play", "group": "Teams",
         "range_sql": "SELECT MIN(season), MAX(season) FROM lineup_stints", "range_fmt": "season_int",
         "source": "ESPN play-by-play (pbp_events) rebuilt by scripts/build_lineup_stints.py with the same lineup parser as player_game_lines; aggregated into lineup_seasons and pair_seasons.",
-        "gap": "Every stint of every regular-season game 2020-21 on, reconciled per game against the real final score, game length and team totals (lineup_stint_games says which games fail). Stints where a player had no id in the play-by-play (two-way and 10-day players missing from player_season_stats) are left out and counted: 2-6% of minutes in 2020-21 to 2024-25, almost none in 2025-26.",
+        "gap": "Every stint of every regular-season game 2020-21 on, reconciled per game against the real final score, game length and team totals (lineup_stint_games says which games fail). A free throw is credited to the five on the floor at the foul (the box score's rule; since round 8 step 6a). Untracked stints (a player the parser can't identify, or a game that doesn't reconcile) are left out and counted: 0.02-0.4% of minutes a season since round 8 step 6a matched ESPN's no-id players (two-way and 10-day players) through player_bio (2-6% in 2020-21 to 2024-25 before).",
         "used_by": ["rotations"],
     },
     {
         "table": "player_game_onfloor", "label": "On-floor plus-minus per player-game", "group": "Games",
         "range_sql": "SELECT MIN(season), MAX(season) FROM player_game_onfloor", "range_fmt": "season_int",
-        "source": "scripts/build_player_game_onfloor.py: the lineup_stints lineups and points per player-game, with free throws credited to the players on the floor at the foul (the box score's convention). Matches ESPN's box-score +/- for 98% of player-games and within 2 points for 99.7% (300 random games, checked 2026-10-03).",
-        "gap": "Regular season 2020-21 on. The Workbench shows it only in the 7,220 of 7,232 games whose play-by-play reconciles with the final score. Replaces player_game_lines' on-court points (tm_pts/op_pts), which credit stale ESPN score fields and don't add up in about 1 team-game in 4; On/Off's on-court points come from it since 2026-10-03.",
+        "source": "scripts/build_player_game_onfloor.py: the lineup_stints lineups and points per player-game, with free throws credited to the players on the floor at the foul (the box score's convention). Matches ESPN's box-score +/- for 98% of player-games and within 2 points for 99.7% (300 random games, checked 2026-10-03 and again 2026-10-05).",
+        "gap": "Regular season 2020-21 on. The Workbench shows it only in the 7,220 of 7,232 games whose play-by-play reconciles with the final score. player_game_lines' on-court points (tm_pts/op_pts) follow the same rules since round 8 step 6a (before, they credited stale ESPN score fields and didn't add up in about 1 team-game in 4); On/Off's on-court points come from it since 2026-10-03.",
         "used_by": ["analytics#onoff", "player", "team"],
     },
     {

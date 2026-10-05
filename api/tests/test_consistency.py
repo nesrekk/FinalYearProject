@@ -27,8 +27,8 @@ Stated differences (the size pinned in the test that owns it):
   * the Workbench's on/off interval is closed-form (game-clustered), the On/Off
     page's a 2,000-resample game bootstrap: same centre, half-width within 25%;
   * the Game Log's games vs NBA.com's GP differ by at most 2 (the page shows both);
-  * a player's minutes on the Game Log equal his stints' minutes except in the
-    9 phantom-minute games (R8-023, Step 6a);
+  * a player's minutes on the Game Log equal his stints' minutes in every
+    player-game (the 9 phantom-minute games of R8-023 were fixed in Step 6a);
   * the shot chart's regular-season FGA equals the season row's FGA x GP to the
     per-game rounding (0.05 x GP + 2) in every season but 2025-26, where the four
     games with no chart rows explain every gap (R8-028, Step 6);
@@ -398,12 +398,12 @@ def test_game_lines_everywhere(cur, client, players):
 
 def test_game_log_minutes_equal_the_stints(cur):
     """Minutes on the Game Log (player_game_lines) and in the Rotations' stints (player_game_onfloor,
-    the stints' seconds) are the same in every player-game but the 9 phantom-minute games of a
-    team-less substitution (R8-023, Step 6a)."""
+    the stints' seconds) are the same in every player-game. Until round 8 step 6a a substitution ESPN
+    tagged to no team made the lines count 9 player-games' seconds twice (R8-023)."""
     n, bad = one(cur, """SELECT COUNT(*), COUNT(*) FILTER (WHERE ABS(o.seconds - l.seconds) > 1)
                          FROM player_game_lines l JOIN player_game_onfloor o USING (player_id, game_id)
                          WHERE l.seconds > 0""")
-    assert n >= 150000 and bad == 9
+    assert n >= 150000 and bad == 0
 
 
 def test_game_log_games_match_nba_gp(cur):

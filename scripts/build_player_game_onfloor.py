@@ -14,8 +14,9 @@ throws, exactly as `lineup_stints` credits them (or, in the ~2% of games
 where those don't add up to the final score, the running maximum of the
 score fields, the game's `lineup_stint_games.points_method`).
 
-One rule differs from `lineup_stints`, on purpose: **a free throw is
-credited to the players on the floor at the foul, not at the shot.**
+**A free throw is credited to the players on the floor at the foul, not
+at the shot** (since round 8 step 6a `lineup_stints` does the same; until
+then this was the one rule where the two differed).
 That is the official box score's convention: substitutions are made
 between free throws (after the first of two, or after a foul and before
 the trip), and the stints, which follow the log, give those points to the
@@ -31,20 +32,25 @@ matched by name, read 2026-10-03 (`--espn-check 300`):
     stints' credit (free throws at the shot)   42.5% exact, 95.1% within 2
     player_game_lines' tm_pts - op_pts         36.6% exact
 
+Read again 2026-10-05 after round 8 step 6a (same 300 games and seed; 6,453
+player-games matched now that ESPN's no-id players have ids): the stints'
+sums and the lines' tm_pts - op_pts now use this rule, and all three are
+98.2% exact, 99.7% within 2.
+
 (Placing made shots by the corrected clock, pbp_event_clock, instead of the
 log order moved 76 of 35,487 scoring events and matched slightly worse, so
 ESPN's late-logged made shots are not the cause; the anchor rule without
 skipping team rebounds and timeouts was 94.9% exact.)
 
-The stints themselves, and everything built on them (RAPM, lineups, pairs,
-the rating tracker), keep crediting free throws at the shot; README Known
-real gaps says so. This table also stores nothing that changes them.
+This table's replay is its own (only the anchor rule, `is_foul_anchor()`,
+comes from pbp_lineups), so it is an independent check of the stints'
+crediting: the build stops unless the two agree (below). The old
+at-the-shot numbers are still computed, for `player_games_moved_by_ft_rule`.
 
-Columns (one row per player-game he was on the floor in: the rows of
-`player_game_lines` except its 9 with 0 seconds, plus anyone on the floor
-only for a foul, i.e. in and out at the same clock):
-  seconds          his seconds on the floor (the stints' clock; the lines
-                   count 9 player-games twice, README);
+Columns (one row per player-game he was on the floor in, or credited with a
+free throw while on the floor for a foul only, i.e. in and out at the same
+clock):
+  seconds          his seconds on the floor (the stints' clock);
   tracked_seconds  of those, seconds in stints with five identified players
                    a side in a game_ok game (`lineup_stints.tracked_ok`);
   pts_for / pts_against / plus_minus
@@ -58,10 +64,10 @@ only for a foul, i.e. in and out at the same clock):
 
 Checks (the build stops on the first two; all are stored in
 `player_game_onfloor_meta` and printed):
-  * with free throws credited at the shot instead, every player-game's
-    points for and against equal the sums over his `lineup_stints` rows,
-    and his seconds equal theirs (to their 0.1 s rounding): the same
-    lineups, the same points;
+  * every player-game's points for and against equal the sums over his
+    `lineup_stints` rows, and his seconds equal theirs (to their 0.1 s
+    rounding): the same lineups, the same points (until round 8 step 6a
+    this compared the at-the-shot numbers, the stints' rule then);
   * every team-game of a game_ok game whose side had exactly five players
     on the floor all game: its players' plus-minus adds up to 5 x the real
     final margin;
@@ -71,6 +77,7 @@ Checks (the build stops on the first two; all are stored in
 
 Usage:
     cd scripts && python3 build_player_game_onfloor.py        # ~35 s
+    cd scripts && python3 build_player_game_onfloor.py --dry-run   # build and check, write nothing
     cd scripts && python3 build_player_game_onfloor.py --espn-check 300 [--cache DIR]
         # after the build: compares N random games (fixed seed) with ESPN's
         # box score +/- (site.api.espn.com summary; network); prints only,
@@ -91,7 +98,7 @@ import psycopg2
 import psycopg2.extras
 
 from db_config import DB_CONFIG
-from pbp_lineups import Game, load_espn, load_season_names, norm
+from pbp_lineups import Game, is_foul_anchor, load_espn, load_season_names, norm
 
 ESPN_SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={}"
 ESPN_SEED = 7
@@ -106,13 +113,6 @@ CREATE TABLE player_game_onfloor (
 CREATE INDEX ON player_game_onfloor (season, player_id);
 CREATE TABLE player_game_onfloor_meta (key TEXT PRIMARY KEY, value JSONB NOT NULL);
 """
-
-
-def is_anchor(e):
-    """An event whose lineups a later free throw is credited to (the foul)."""
-    if e["kind"] in ("sub", "ft"):
-        return False
-    return bool(e["pid"]) or "Foul" in e["action"] or "Technical" in e["action"]
 
 
 def snapshot(lineups):
@@ -184,7 +184,7 @@ def replay(g, ev, season_names, all_names, method, game_ok):
         if e["kind"] == "sub":
             game.apply_sub(e, lineups)
             return
-        if is_anchor(e):
+        if is_foul_anchor(e):
             anchor[0] = snapshot(lineups)
         team = e["team"]
         if team not in (home, away[0]) or method != "shots":
@@ -235,7 +235,7 @@ def build(conn):
         rows, five = replay(g, ev, season_names, all_names, method, game_ok)
         five_by_game[g.game_id] = five
         for pid, (team, sec, tsec, pf, pa, pf_shot, pa_shot) in rows.items():
-            if sec <= 0 and not any((pf, pa, pf_shot, pa_shot)):
+            if sec <= 0 and not (pf or pa):   # no seconds and nothing credited under the foul rule: not on the floor
                 continue
             out.append((int(pid), g.game_id, int(g.season), team, sec, tsec, pf, pa, pf - pa, game_ok, pf_shot, pa_shot))
         if i % 1000 == 0:
@@ -246,15 +246,15 @@ def build(conn):
 
 def checks(cur, out, five_by_game, meta_games):
     res = {}
-    # 1. Same lineups and points as lineup_stints, with free throws credited at the shot.
+    # 1. Same lineups and points as lineup_stints (both credit free throws at the foul since round 8 step 6a).
     stints = stint_sums(cur)
     ours = {(r[1], r[0]): r for r in out}
     missing = {k for k in set(stints) - set(ours) if stints[k][0] > 0 or stints[k][2] or stints[k][3]}
-    # A player on the floor only for a foul (in and out at the same clock, e.g. a take foul) has no stint of
-    # his own but is credited the free throws under the foul rule.
-    only_at_foul = {k for k in set(ours) - set(stints) if ours[k][4] == 0 and ours[k][10] == ours[k][11] == 0}
-    extra = set(ours) - set(stints) - only_at_foul
-    bad_pts = [k for k in set(ours) & set(stints) if (ours[k][10], ours[k][11]) != (stints[k][2], stints[k][3])]
+    # A player on the floor only for a foul (in and out at the same clock, e.g. a take foul) is credited the free
+    # throws; the stints keep that zero-second stint, so he is in both.
+    only_at_foul = {k for k in ours if ours[k][4] == 0}
+    extra = set(ours) - set(stints)
+    bad_pts = [k for k in set(ours) & set(stints) if (ours[k][6], ours[k][7]) != (stints[k][2], stints[k][3])]
     bad_sec = [k for k in set(ours) & set(stints) if abs(ours[k][4] - stints[k][0]) > 0.05 * stints[k][1] + 0.01]
     res["stints_reproduced"] = {"player_games": len(ours), "missing_from_ours": len(missing), "extra_in_ours": len(extra),
                                 "points_differ": len(bad_pts), "seconds_differ": len(bad_sec),
@@ -322,6 +322,10 @@ def write(cur, out, res):
                                   "exact": 0.982, "within_2": 0.997,
                                   "stints_ft_at_shot_exact": 0.425, "stints_ft_at_shot_within_2": 0.951,
                                   "lines_exact": 0.366},
+        "espn_check_2026_10_05": {"games": 300, "player_games": 6453, "seed": ESPN_SEED,
+                                  "exact": 0.982, "within_2": 0.997, "stints_exact": 0.982, "stints_within_2": 0.997,
+                                  "lines_exact": 0.982,
+                                  "note": "after round 8 step 6a: the stints and the lines credit free throws at the foul"},
     }
     for k, v in list(res.items()) + [("rules", rules)]:
         cur.execute("INSERT INTO player_game_onfloor_meta (key, value) VALUES (%s, %s)", (k, json.dumps(v)))
@@ -398,7 +402,7 @@ def espn_check(conn, n, cache):
     n_ = tally["n"]
     print(f"ESPN box-score check, {len(ids)} games, {n_} player-games matched by name ({tally['unmatched']} not):")
     print(f"  this table exact {tally['exact'] / n_:.3f}, within 2 {tally['within2'] / n_:.3f}; "
-          f"lineup_stints' credit (free throws at the shot) exact {tally['stints_exact'] / n_:.3f}, within 2 "
+          f"lineup_stints' sums exact {tally['stints_exact'] / n_:.3f}, within 2 "
           f"{tally['stints_within2'] / n_:.3f}; player_game_lines' tm_pts - op_pts exact {tally['lines_exact'] / n_:.3f}")
 
 
@@ -414,9 +418,12 @@ def main():
     out, five_by_game, meta_games = build(conn)
     cur = conn.cursor()
     res = checks(cur, out, five_by_game, meta_games)
+    print(json.dumps(res, indent=1))
+    if "--dry-run" in sys.argv:
+        print(f"dry run: nothing written ({time.time() - t0:.0f}s)")
+        return
     write(cur, out, res)
     conn.commit()
-    print(json.dumps(res, indent=1))
     cur.execute("SELECT pg_total_relation_size('player_game_onfloor')")
     print(f"player_game_onfloor {cur.fetchone()[0] / 1e6:.1f} MB; done in {time.time() - t0:.0f}s")
     conn.close()

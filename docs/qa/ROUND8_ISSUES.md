@@ -12,8 +12,10 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
-Counts (2026-10-05, after Step 5): **71 entries**, 21 open, 50 fixed: 7 broken, 21 wrong number,
-5 slow, 38 looks wrong (recounted from the entries; the Step 4 line said 22 open / 46 fixed, one off).
+Counts (2026-10-05, after Step 6a): **74 entries**, 18 open, 56 fixed: 7 broken, 24 wrong number,
+5 slow, 38 looks wrong. Step 6a fixed R8-022 to R8-025 and R8-027, the stints' part of R8-026 (open for 6b's
+refits) and one it found (R8-072); it logged R8-073 (Step 7) and R8-074 (6b/6c). After Step 5 it was 71 entries,
+21 open, 50 fixed (recounted from the entries; the Step 4 line said 22 open / 46 fixed, one off).
 Step 5 fixed R8-018, R8-019, R8-020 and two it found (R8-069, R8-070), and logged R8-071 (open). Step 4 fixed 12: R8-001 to R8-008, R8-021,
 R8-031 (Step 7's, taken with R8-002), R8-049, plus the Step 4 parts of R8-014 and R8-017; it found R8-068 (open). Before that: 6 from Step 3's
 cross-page checks (R8-062 to R8-067, all fixed in its commit); 17 new from Step 1 (R8-001 to R8-017); 15 known
@@ -224,6 +226,75 @@ error on any of them. Full suite 483 passed + 1 skipped (101 s), eslint 0, vite 
 written to any table; nothing to sync. Found on the way: R8-068 (percentage leaders without an attempts
 floor, Step 7).
 
+## Step 6a: the play-by-play lines and stints rebuilt (2026-10-05, the owner's OK)
+
+One pass of the shared parser (`scripts/pbp_lineups.py`, no second parser) with five changes, then
+`player_game_lines` → `team_game_totals` → `lineup_stints` (+ `lineup_stint_games`, `lineup_stint_seasons`,
+`lineup_seasons`, `pair_seasons`) → `player_game_onfloor` (+ `_meta`) rebuilt in `rebuild_all.sh` order. All nine
+tables were snapshotted (`zz_r86a_*`), diffed, and the snapshots dropped.
+
+- **Names (R8-022):** after the in-game names, `player_season_stats` and the unique-since-2010 names (unchanged:
+  every name they matched before still resolves the same way; all 433 name-only matches are active that season),
+  `load_season_names()` adds a `player_bio` index: an exact normalised name that one player active that season has,
+  only for one of his teams where he changed teams (`player_team_stints`). Plus five aliases ESPN's own feed states
+  (the row's `player_name` field and its text name the same player): Jeenathan/Nate Williams, Kenny/Kenneth
+  Lofton Jr., Charles/Charlie Brown Jr., Anthony/Cat Barber, Marcos Louzada Silva/Didi Louzada. 262
+  name-team-seasons matched; 9 left (Matt Hurt, Rondae Hollis Jefferson, RJ Nembhard Jr., Yongxi Cui and five
+  one-off typos; 262 occurrences), printed by `build_player_game_lines.py`.
+- **Team-less substitutions (R8-023):** 12 in six seasons; the 11 naming nobody leaving duplicate the next, tagged
+  substitution and are ignored; the one naming both players (Clarke for Allen, MEM 2023-24) goes to their team.
+- **No team (R8-024):** a NaN team hint no longer becomes a player's team; the lines stop on a row without one.
+- **On-court points (R8-025, R8-026):** free throws (attempt, make, points) are credited to the five on the floor
+  at the foul in the stints and the lines (`is_foul_anchor()`, the rule `build_player_game_onfloor.py` validated);
+  the lines' points use the stints' per-game pick (`points_method()`); 76,444 free throws move to an earlier stint,
+  listed in the new `lineup_stints.foul_ft_actions` (and counted in `lineup_stint_games.fts_at_foul`).
+- **3PA (R8-027):** the stints take the shot chart's two-or-three call on misses (`miss_three_calls()`), +7,152 3PA.
+
+| Check | Result |
+|---|---|
+| Lines vs NBA.com season totals (players with 20+ games) | unchanged: GP 1.0001, minutes 1.0003, points 1.0001 of NBA.com's; mean minute error 0.30%; player-seasons off by > 5 min 430 → 427 |
+| Lines vs Basketball-Reference (the 234 player-seasons that gained rows) | teams 234 of 234 on BRef's list; GP exact 228, within 1 for 233 (the other: Matt Hurt, still unmatched) |
+| Stints reconcile per game | 7,220 of 7,232 games, as before (same 12 reasons) |
+| Lines = stint sums (the build stops otherwise) | seconds and all 14 on-court columns, 154,345 of 154,345 player-games |
+| Stints = `player_game_onfloor`'s own replay (the build stops otherwise) | 154,334 player-games, 0 differ; every full-five team-game sums to 5 × the margin (14,383 of 14,383) |
+| ESPN box-score +/- (300 random games, seed 7, 6,453 player-games) | on-floor 98.2% exact (unchanged); stints 42.5% → 98.2%; lines' `tm_pts - op_pts` 36.6% → 98.2% |
+| Full-minute team-games whose summed lines margin is 5 × the final | 9,698 of 12,882 (75%) → 14,389 of 14,401 |
+| Tracked minutes (five identified a side, reconciled game) | 2020-21 93.7% → 99.98%, 93.9 → 99.81, 97.2 → 99.68, 96.0 → 99.60, 97.8 → 99.82, 99.84 → 99.84; fully tracked games 5,891 → 7,164 |
+
+Diff: `player_game_lines` 152,469 → 154,345 rows (+1,878 for players matched by the fallback, 234 player-seasons;
+−2 zero-second rows with no stats that existed only because a free throw at the shot credited them); 15 kept rows'
+seconds changed (8 of the 9 phantom-minute player-games, e.g. Dončić 2022-01-30 45.4 → 37.1 min, the ninth being Kevin Pangos, who had no id and so no row before; Nate Williams' five
+2022-23 Portland games and a teammate's, where ESPN's text called him "Jeenathan"; Ron Holland 2024-10-23
+31.9 → 14.9 min, R8-072); own stats changed in 4 rows (3 assists, 2 steals, 1 block now credited to the right
+player); one team ('NaN' → UTA). On-court FTA changed in 107,150 rows and points in 104,998 (the foul rule).
+`team_game_totals`: OREB +776 in 840 team-games (rebounds by newly identified players), tracked seconds in 1,530;
+FGA/FTA/TOV/points unchanged. `lineup_stints` 294,772 → 294,027; `lineup_seasons` 114,497 → 120,628 (minutes
+674,387 → 697,609); `pair_seasons` 29,112 → 32,220; `player_game_onfloor` 152,461 → 154,334 rows, plus-minus
+changed in 8. Tests: **`api/tests/test_round8_rebuild.py`** (11: the parser rules on made-up games, then the
+tables), Embiid's 70-point box score gains Terquavion Smith (read from ESPN 2026-10-05), the 9-phantom-minute
+pins in `test_consistency.py` / `test_smoke.py` now 0, coverage floors 0.93 → 0.995.
+
+**Changed tables for the Layerbase sync** (207 MB): `lineup_stints` 102 MB, `player_game_lines` 38 MB,
+`lineup_seasons` 26 MB, `player_game_onfloor` 21 MB, `pair_seasons` 5.9 MB, `team_game_totals` 2.8 MB,
+`lineup_stint_games` 1.5 MB, `player_game_onfloor_meta`, `lineup_stint_seasons`.
+
+**For Step 6b (stale until rebuilt; the tests that fail now say so):** rerun in `rebuild_all.sh` order
+`build_event_clock.py` (its chart matching uses the parser's names), `build_player_on_off.py`,
+`build_possessions.py`, `build_stat_stability.py` (its plus-minus/rating rows read `tm_pts`/`op_pts`),
+`build_hot_streak_persistence.py`, `build_situational_splits.py`, `build_projections.py`, `build_rapm.py`,
+`build_shot_value.py`, `build_rating_tracker.py`, `build_rotations.py`, `build_rim_deterrence.py`,
+`build_assist_network.py`, `build_play_finder.py`, `build_best_games.py`, `build_team_zone_mix.py`,
+`build_coaching_decisions.py`, then the paper stage (`paper_xrapm.py`, `paper_eval.py`, `paper_tests.py`,
+`build_pregame_availability.py`, `build_lineup_predictor.py`, `build_report_card.py`, `paper_data_audit.py`,
+`build_data_quality.py`, `paper_beliefs.py`, `paper_ablations.py`); restart impact_api. **`paper_xrapm.py` maps
+free throws to stints by action range:** it must move the ones in `foul_ft_actions` (some lie in no stored
+range: logged during a zero-second stint that was credited nothing). Failing now, all stale downstream (13 + 5
+errors): on/off ×3 (`test_on_off_everywhere`, `test_on_plus_off_equals_team_total_over_games_played`,
+`test_on_off_table_equals_the_workbench`), assist network ×2, possessions, shot value, xRAPM, data quality ×2,
+the paper audit ×2, the manifest and the paper generators (Step 6c). Methodology cards and README numbers on
+the rebuilt models (RAPM's "93.7 to 99.8% of minutes", rim, assists, On/Off, Play Finder, xRAPM) are 6b's to
+re-read. **For Step 6c:** R8-074.
+
 ## Constraints (not defects)
 
 - **Layerbase:** 4,202 of 5,000 MB used (2026-10-04). A Step 6 rebuild rewrites tables of about the same size; any sync needs the owner's OK (Step 10 decides whether the biggest tables stay local).
@@ -378,35 +449,35 @@ floor, Step 7).
 
 - **Step 4:** `/teams/with-without/{team}/{season}` reads `game_scores` (result and the real final margin) and `player_game_lines` (who had minutes, joined on team + date like the Game Log) for every season with lines; takes an optional `player_id`, which the page passes from the roster. PHI 2023-24 / Embiid: 31-8 and 16-27 as before, +10.36 / −3.58 average margin (the live version's summed-plus-minus margins are gone for these seasons). Methodology card and README updated. Tests `test_with_without_reads_stored_data_from_2020_21`, the With/Without smoke test.
 ### R8-022 · ESPN's no-id players get no line and break their stints
-- **Severity:** wrong number · **Step:** 6a (owner's OK) · **Status:** open
+- **Severity:** wrong number · **Step:** 6a (owner's OK) · **Status:** fixed in the Step 6a commit
 - **Where:** `scripts/pbp_lineups.py` resolves names only through `player_season_stats`. 100-155 names a season get no `player_game_lines` row, and their stints aren't `tracked_ok` (2-6% of minutes before 2025-26).
 - **Found by:** known gap (README). Fix: an exact name + team + season fallback through `player_bio` / `player_id_map`.
-
+- **Step 6a:** measured first: 274 name-team-seasons failed every lookup (34-97 a season, 1 in 2025-26). `load_season_names()` now carries a `player_bio` index (an exact normalised name one player active that season has; for a player who changed teams, only his teams per `player_team_stints`), tried after every existing step, so no name that matched before matches differently. The team can't be checked inside the build for single-team seasons (no stored source has a team for the players `player_season_stats` leaves out), so it was checked outside it: all 258 matches then had the team Basketball-Reference lists (Kaggle export), and the 234 player-seasons that gained lines all sit on BRef's teams, GP exact for 228. Five more spellings ESPN's own rows pair with the official name went into `ALIASES` (Jeenathan/Nate Williams and four others; not guesses: the same event carries both). 9 left on purpose (listed in the Step 6a section). Tracked minutes 93.7-99.8% → 99.6-99.98% a season. Test `test_round8_rebuild.py`.
 ### R8-023 · Phantom minutes in 9 player-games (team-less substitution)
-- **Severity:** wrong number · **Step:** 6a · **Status:** open
+- **Severity:** wrong number · **Step:** 6a · **Status:** fixed in the Step 6a commit
 - **Where:** `Game.run()`, `player_game_lines` (e.g. Dončić 45.4 min on 2022-01-30 instead of 37.1). Methodology open issue. The smoke test pins the 9.
 - **Found by:** known gap (README, Methodology).
-
+- **Step 6a:** 12 team-less substitutions in six seasons: the 11 that name nobody leaving each duplicate the next, tagged substitution and are ignored; the one naming both players (Brandon Clarke for Timmy Allen, MEM 2023-24) goes to the team both play for. `run()` counts only the two teams' floors (like the stints). Dončić 37.05 min; lines = stints in every player-game; the Methodology open issue is removed; smoke and consistency pins now 0.
 ### R8-024 · One `player_game_lines` row has team 'NaN'
-- **Severity:** looks wrong · **Step:** 6a · **Status:** open
+- **Severity:** looks wrong · **Step:** 6a · **Status:** fixed in the Step 6a commit
 - **Where:** Miye Oni, 2021-11-20 (`espn_401360071`), 195 s, no stats.
 - **Found by:** known gap (README).
-
+- **Step 6a:** the cause was a team-less substitution: its NaN team field was taken as his team (`if team_hint:` is true for NaN). Now only a real team of the game is a team hint, and the team-less duplicate is ignored: UTA, 89 s. The column is `NOT NULL` and the build stops on a row without a team.
 ### R8-025 · `player_game_lines.tm_pts/op_pts` double-count where ESPN's score field is stale
-- **Severity:** wrong number · **Step:** 6a · **Status:** open
+- **Severity:** wrong number · **Step:** 6a · **Status:** fixed in the Step 6a commit
 - **Where:** on-court points in the lines (25% of full-minute team-games don't sum to 5× the margin). Nothing shown reads them since round 7. Fix: points from the made shots like the stints, or drop the columns.
 - **Found by:** known gap (README).
-
+- **Step 6a:** kept (Stat Stability's plus-minus and rating rows and the paper audit read them) and recomputed with the stints' rules: made shots and free throws, or the running maximum of the score fields in the 170 games where only that adds up (`points_method()`, the stints' own pick), free throws at the foul. `tm_pts - op_pts` = `player_game_onfloor.plus_minus` in all 154,073 reconciled player-games; full-minute team-games adding up to 5 × the margin 75% → 99.9% (14,389 of 14,401); 98.2% exact against ESPN's box-score +/- (36.6% before). The paper's audit class that measured this (R8-074) needs Step 6b/6c.
 ### R8-026 · `lineup_stints` credits a free throw at the shot, not at the foul
-- **Severity:** wrong number · **Step:** 6a + 6b · **Status:** open
+- **Severity:** wrong number · **Step:** 6a + 6b · **Status:** the stints fixed in the Step 6a commit; open for 6b (the models fitted on them)
 - **Where:** the stints and everything on them (RAPM, Rating Tracker, lineups, pairs, xRAPM, rim deterrence, rotations, lineup predictor, report card, the paper). The box-score rule (`build_player_game_onfloor.py`) is 98.2% exact vs ESPN's +/-; at the shot, 42.5%.
 - **Found by:** known gap (README, round 7 step 2).
-
+- **Step 6a:** `Game.stints()` credits a free throw (attempt, make, points, a score step at it) to the stint on the floor at the foul (`is_foul_anchor()`, moved into `pbp_lineups.py` from the on-floor build), keeps a zero-second stint that receives one, and lists the moved ones in `lineup_stints.foul_ft_actions` (76,444; the action range is unchanged in meaning). Stints' plus-minus vs ESPN's box score 42.5% → 98.2% exact; `player_game_onfloor`'s independent replay now checks the stints directly (0 of 154,334 differ). `lineup_seasons` / `pair_seasons` are rebuilt on them; RAPM and everything else fitted on the stints is Step 6b's.
 ### R8-027 · `lineup_stints` takes ESPN's text two-or-three call on misses
-- **Severity:** wrong number (not shown anywhere yet) · **Step:** 6a · **Status:** open
+- **Severity:** wrong number (not shown anywhere yet) · **Step:** 6a · **Status:** fixed in the Step 6a commit
 - **Where:** `home_fg3a`/`away_fg3a` in the stints. `player_game_lines` and the Play Finder use the shot chart's call (`miss_three_calls()`).
 - **Found by:** known gap (README).
-
+- **Step 6a:** `build_lineup_stints.py` passes `miss_three_calls()` like the lines: stint 3PA 508,206 → 515,358; per team-game equal to the lines' wherever both count the same attempts (test).
 ### R8-028 · Four 2025-26 games are missing from the shot chart; 2025-26 match rate 97.5%
 - **Severity:** wrong number · **Step:** 6 (owner's OK: changes `player_shots` and the shot chain) · **Status:** open
 - **Where:** `player_shots` has no rows for 0022500259-0022500261 and 0022500265 (2025-11-19/20). 2025-26's ESPN-to-chart match rate is 97.5% vs ≥ 99.8% elsewhere. Affects shot-making, quality map, shot value and xRAPM.
@@ -642,3 +713,18 @@ floor, Step 7).
 - **Severity:** looks wrong · **Step:** 7 (or owner's call, like R8-059) · **Status:** open
 - **Where:** player profile (e.g. `?page=player&id=1630217`): the Game Log rolling chart's per-game dots (`--text-3` at 55% opacity, 2.3:1 Paper / 2.5:1 Ink; they are context for the rolling line), its brand-orange line (2.9:1, = R8-059), and the shot-zone map's tinted cells (1.3-1.5:1 against the court).
 - **Found by:** Step 5's page scan with the `marks` check, which step 2a's sweep of the profile predated. Not caused by Step 5.
+
+### R8-072 · ESPN's text spells some players differently from its own player_name field, so their substitutions out weren't applied
+- **Severity:** wrong number · **Step:** 6a · **Status:** fixed in the Step 6a commit
+- **Where:** `player_game_lines` minutes and the stints' lineups in the games concerned: e.g. DET-IND 2024-10-23, where the rows carry player_name "Ronald Holland II" (with his id) and the text "Ron Holland II", so "Tim Hardaway Jr. enters the game for Ron Holland II" removed nobody (Holland 31.9 minutes instead of 14.9; his two steals credited to no one); POR's last five games of 2022-23, where ESPN writes "Jeenathan Williams" for Nate Williams (48 minutes on 2023-04-09).
+- **Found by:** Step 6a's diff (every changed seconds value was traced to its cause). Fix: the `player_bio` fallback answers "Ron Holland" (one player of that name active in 2024-25); five spellings ESPN's own rows pair with the official name in the same event went into `ALIASES`.
+
+### R8-073 · Pair Chemistry adds up lineup minutes rounded to 0.1 with ties going up
+- **Severity:** wrong number · **Step:** 7 (or 8) · **Status:** open
+- **Where:** `/lineups/pair-grid` (`api/routers/pair_chemistry.py`) sums `lineup_seasons.minutes`, each `ROUND(…, 1)` of integer-second totals, which land on a .05 tie about one time in six and round up: about +0.008 minutes a lineup. Mikal Bridges 2022-23 (BKN + PHX): 2,965.8 grid minutes for 2,962.8 on the floor (NBA.com 2,963.1).
+- **Found by:** `test_pair_chemistry_grid_known_team` after Step 6a's rebuild tracked all of his minutes (the gap hid it before; the test's bound now allows 0.2%). Fix: sum seconds (or unrounded minutes) and round once.
+
+### R8-074 · The paper's audit classes on the lines and stints measure what Step 6a fixed
+- **Severity:** wrong number (paper) · **Step:** 6b (rerun) + 6c (rewrite) · **Status:** open
+- **Where:** `paper_data_audit.py`: `oncourt_off_share` (the paper's "on-court margin isn't 5 × the final in 25% of full-minute team-games") reads `player_game_lines.tm_pts - op_pts`, now 0.1%; `unidentified` (untracked minutes, 2-6% a season) is now 0.02-0.4%; `teamless_sub` and the NaN team are no longer in the lines. The feed's own errors are still there (`score_steps_miss` measures the stale score fields directly; ESPN still sends the no-id names and the team-less substitutions).
+- **Found by:** Step 6a (`test_audit_matches_the_database_now`, `test_paper_data_audit.py`). Fix: Step 6b reruns the audit and `build_data_quality.py`; Step 6c rewrites the sentences (what the feed gets wrong vs what the platform now corrects), e.g. measure the on-court class from the score steps if the paper keeps it.

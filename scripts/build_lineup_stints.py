@@ -18,6 +18,25 @@ turnovers including team turnovers) with the same credit rules as
 `team_game_totals`, so stint sums equal the team-game totals, and an
 inclusive `action_number` range so any event can be mapped to its stint.
 
+Free throws (round 8 step 6a): credited to the stint on the floor at the
+foul, as the official box score credits them (pbp_lineups module
+docstring): substitutions are made between free throws, so a free throw
+logged after a substitution can belong to the stint before it, even to a
+stint with no seconds (a player sent in to foul and taken out at the same
+clock: kept, with its free throws). The action range still holds what was
+logged during the stint; `foul_ft_actions` lists the free throws logged
+after a stint ended that it is credited with, so a reader mapping free
+throws to stints by range moves those (`lineup_stint_games.fts_at_foul`
+counts them per game; some were logged during a zero-second stint that was
+credited nothing and so isn't stored, and fall in no stored range). Until then free throws went to the stint on the
+floor at the shot, which matched ESPN's box-score plus-minus exactly in
+42.5% of player-games against 98.2% for the foul rule
+(build_player_game_onfloor.py, 300 games). Since the same step the 3PA of a
+missed shot is the NBA shot chart's call where the shot is matched
+(pbp_lineups.miss_three_calls(), like the player lines; ESPN's text missed
+~8,700 missed threes), and players ESPN gives no id are matched through
+player_bio (pbp_lineups.load_season_names()).
+
 Points: ESPN's score fields are stale in a few hundred games of 2020-21 to
 2022-23 (the score drops, or jumps by two baskets at once), so crediting
 points by positive score changes double-counts there (that is why the
@@ -38,20 +57,25 @@ Separately, a stint is complete when it has exactly five a side
 `bad_lineup_seconds` count the rest). A stint is `tracked_ok` when its
 game is game_ok and it has five a side, and the aggregate tables use
 only tracked_ok stints; a game is `tracked_ok` when all of its stints are.
-Incomplete stints are almost always a player ESPN gives no id to (two-way
-and 10-day players, 100-155 names a season) whose name isn't in
-player_season_stats, the parser's only id source: 2020-21 to 2024-25 lose
-2-6% of their minutes that way, 2025-26 almost none. The per-game rows say
-which games are excluded or partial and why; nothing is hidden.
+Incomplete stints were almost always a player ESPN gives no id to (two-way
+and 10-day players) whose name isn't in player_season_stats: 2020-21 to
+2024-25 lost 2-6% of their minutes that way until round 8 step 6a, when
+the parser began matching those names through player_bio; the 9
+name-team-seasons it still can't match (build_player_game_lines.py lists
+them) and stale lineups account for the rest (0.02-0.4% of minutes a
+season). The per-game rows say which
+games are excluded or partial and why; nothing is hidden.
 `actors_off_floor` also counts events whose actor wasn't on his team's
 tracked floor (a stale or wrong lineup that still had five players), for
 anyone who wants a stricter cut.
 
 Tables written (all dropped and rebuilt):
-  lineup_stints         one row per stint (~490,000): game, period, start/end
-                        seconds since tip-off, both fives (sorted NBA ids),
-                        per-side points, possession components and
-                        possessions, event range, and the game's tracked_ok;
+  lineup_stints         one row per stint (294,027 on 2026-10-05): game,
+                        period, start/end seconds since tip-off, both fives
+                        (sorted NBA ids), per-side points, possession
+                        components and possessions, event range, the free
+                        throws credited at the foul (foul_ft_actions), and
+                        the game's tracked_ok;
   lineup_stint_games    one row per game: reconciliation checks, which
                         point-crediting method was used, and the reason a
                         game isn't fully tracked;
@@ -66,9 +90,13 @@ Ratings use possessions averaged over the two sides (the on/off
 convention: FGA + 0.44 FTA - OREB + TOV), so they sit ~3 points under
 NBA.com's scale like player_on_off; differences don't depend on that.
 
+Before writing, the build stops unless every player-game's seconds and
+on-court totals in player_game_lines (tm_/op_ FGA, FGM, FTA, OREB, DREB,
+TOV, points) equal the sums over his stints (the same parser and credit
+rules) and every player-game with seconds has a stint.
+
 Checks printed at the end (the README quotes them): reconciliation shares
-per season; every player-game's stint seconds against player_game_lines
-(the same parser, so they must agree); each team-season's stint minutes
+per season; each team-season's stint minutes
 against 48 x games + overtime; the most-used lineups' minutes against
 lineup_stats for the same lineups; table sizes.
 
@@ -91,7 +119,8 @@ import psycopg2
 import psycopg2.extras
 
 from db_config import DB_CONFIG
-from pbp_lineups import Game, STINT_STATS, elapsed, game_seconds, load_espn, load_season_names
+from pbp_lineups import (Game, STINT_STATS, elapsed, game_seconds, load_espn, load_season_names, miss_three_calls,
+                         points_method)
 
 FT_POSS = 0.44
 STAT_COLS = ["pts"] + STINT_STATS   # per side, prefixed home_/away_
@@ -100,6 +129,44 @@ DRY_SCHEMA = "zz_phase1_dry"
 
 def poss(fga, fta, oreb, tov):
     return fga + FT_POSS * fta - oreb + tov
+
+
+# player_game_lines' on-court columns, in the order player_sums() fills them (tm_ then op_).
+ON_STATS = ["fgm", "fga", "fta", "oreb", "dreb", "tov", "pts"]
+ON_COLS = [f"{p}_{k}" for p in ("tm", "op") for k in ON_STATS]
+
+
+def player_sums(rows, stints, sums):
+    """Add one game's stints to sums[(game_id, pid)] = [seconds, tm_..., op_...] (ON_COLS order)."""
+    for r, st in zip(rows, stints):
+        secs = st["t1"] - st["t0"]
+        for side, other in (("home", "away"), ("away", "home")):
+            vals = [secs] + [r[f"{side}_{k}"] for k in ON_STATS] + [r[f"{other}_{k}"] for k in ON_STATS]
+            for pid in r[f"{side}_ids"]:
+                acc = sums.setdefault((r["game_id"], int(pid)), [0.0] * (1 + len(ON_COLS)))
+                for i, v in enumerate(vals):
+                    acc[i] += v
+
+
+def check_against_lines(conn, sums, game_ids):
+    """Stop unless every player-game's seconds and on-court totals in player_game_lines equal the sums over his
+    stints (to the lines' 0.1 s rounding), both ways."""
+    lines = pd.read_sql_query(f"SELECT game_id, player_id, seconds, {', '.join(ON_COLS)} FROM player_game_lines "
+                              "WHERE game_id = ANY(%(g)s)", conn, params={"g": list(game_ids)})
+    seen, bad = set(), []
+    for r in lines.itertuples(index=False):
+        k = (r.game_id, int(r.player_id))
+        seen.add(k)
+        got = sums.get(k, [0.0] * (1 + len(ON_COLS)))
+        want = [r.seconds] + [getattr(r, c) for c in ON_COLS]
+        if abs(got[0] - want[0]) > 0.051 or any(int(a) != int(b) for a, b in zip(got[1:], want[1:])):
+            bad.append((k, [round(got[0], 1)] + [int(x) for x in got[1:]], want))
+    extra = [k for k, v in sums.items() if k not in seen and (v[0] > 0 or any(v[1:]))]
+    print(f"player-games checked against player_game_lines: {len(lines):,}; differ {len(bad)}; "
+          f"in the stints but not the lines {len(extra)}")
+    if bad or extra:
+        raise SystemExit(f"stints don't add up to player_game_lines (columns seconds, {', '.join(ON_COLS)}): "
+                         f"{bad[:3]} {extra[:3]}")
 
 
 def load_reference(conn):
@@ -115,9 +182,10 @@ def load_reference(conn):
     return final_pts, nba_ids, periods, team_tot
 
 
-def build_game(g, ev, season_names, all_names, final_pts, nba_ids, periods, team_tot):
+def build_game(g, ev, season_names, all_names, final_pts, nba_ids, periods, team_tot, miss_threes=None):
     """Stint rows and the reconciliation row for one game."""
-    game = Game(g.game_id, int(g.season), g.game_date, ev, season_names[int(g.season)], all_names)
+    game = Game(g.game_id, int(g.season), g.game_date, ev, season_names[int(g.season)], all_names,
+                miss_threes=miss_threes)
     stints, diag = game.stints(g.home_team)
     home, away = g.home_team, g.away_team
     fh, fa = final_pts.get((g.game_id, home)), final_pts.get((g.game_id, away))
@@ -125,15 +193,10 @@ def build_game(g, ev, season_names, all_names, final_pts, nba_ids, periods, team
     sum_shots = (sum(s["h_pts_shots"] for s in stints), sum(s["a_pts_shots"] for s in stints))
     sum_score = (sum(s["h_pts_score"] for s in stints), sum(s["a_pts_score"] for s in stints))
     reasons = []
+    method, points_ok = points_method(sum_shots, sum_score, (fh, fa))
     if fh is None or fa is None:
-        method, points_ok = "shots", False
         reasons.append("not in game_scores")
-    elif sum_shots == (fh, fa):
-        method, points_ok = "shots", True
-    elif sum_score == (fh, fa):
-        method, points_ok = "score", True
-    else:
-        method, points_ok = "shots", False
+    elif not points_ok:
         reasons.append(f"points {sum_shots[0]}-{sum_shots[1]} by shots, {sum_score[0]}-{sum_score[1]} by score, "
                        f"final {fh}-{fa}")
     seconds = sum(s["t1"] - s["t0"] for s in stints)
@@ -164,7 +227,7 @@ def build_game(g, ev, season_names, all_names, final_pts, nba_ids, periods, team
              "start_elapsed": round(elapsed(s["period"], s["t0"]), 1), "end_elapsed": round(elapsed(s["period"], s["t1"]), 1),
              "seconds": round(s["t1"] - s["t0"], 1),
              "home_ids": s["home"], "away_ids": s["away"], "n_home": len(s["home"]), "n_away": len(s["away"]),
-             "action_from": s["action_from"], "action_to": s["action_to"],
+             "action_from": s["action_from"], "action_to": s["action_to"], "foul_ft_actions": s["foul_fts"],
              "home_score": score[0], "away_score": score[1],
              "tracked_ok": game_ok and len(s["home"]) == 5 and len(s["away"]) == 5}
         for side, p in (("home", "h_"), ("away", "a_")):
@@ -183,10 +246,11 @@ def build_game(g, ev, season_names, all_names, final_pts, nba_ids, periods, team
         "points_ok": points_ok, "seconds_ok": seconds_ok, "poss_ok": poss_ok, "game_ok": game_ok, "lineup_ok": lineup_ok,
         "bad_lineup_stints": bad_lineups, "bad_lineup_seconds": round(bad_seconds, 1),
         "actors_off_floor": int(diag.get("actor_off_floor", 0)),
-        "events_no_team": int(diag.get("no_team", 0)), "tracked_ok": tracked_ok,
+        "events_no_team": int(diag.get("no_team", 0)), "fts_at_foul": sum(len(s["foul_fts"]) for s in stints),
+        "tracked_ok": tracked_ok,
         "reason": "; ".join(reasons) if reasons else None,
     }
-    return rows, game_row, game.unmatched
+    return rows, game_row, game.unmatched, stints
 
 
 STINT_DDL = """CREATE TABLE {schema}lineup_stints (
@@ -194,7 +258,8 @@ STINT_DDL = """CREATE TABLE {schema}lineup_stints (
     home_team TEXT NOT NULL, away_team TEXT NOT NULL, period SMALLINT NOT NULL, stint_no SMALLINT NOT NULL,
     start_elapsed REAL NOT NULL, end_elapsed REAL NOT NULL, seconds REAL NOT NULL,
     home_ids INTEGER[] NOT NULL, away_ids INTEGER[] NOT NULL, n_home SMALLINT NOT NULL, n_away SMALLINT NOT NULL,
-    action_from INTEGER, action_to INTEGER, home_score SMALLINT NOT NULL, away_score SMALLINT NOT NULL,
+    action_from INTEGER, action_to INTEGER, foul_ft_actions INTEGER[] NOT NULL,
+    home_score SMALLINT NOT NULL, away_score SMALLINT NOT NULL,
     {stats},
     home_poss REAL NOT NULL, away_poss REAL NOT NULL, tracked_ok BOOLEAN NOT NULL)"""
 
@@ -204,14 +269,14 @@ GAMES_DDL = """CREATE TABLE {schema}lineup_stint_games (
     home_pts SMALLINT, away_pts SMALLINT, final_home SMALLINT, final_away SMALLINT,
     points_ok BOOLEAN, seconds_ok BOOLEAN, poss_ok BOOLEAN, game_ok BOOLEAN NOT NULL, lineup_ok BOOLEAN,
     bad_lineup_stints INTEGER, bad_lineup_seconds REAL, actors_off_floor INTEGER, events_no_team INTEGER,
-    tracked_ok BOOLEAN NOT NULL, reason TEXT)"""
+    fts_at_foul INTEGER, tracked_ok BOOLEAN NOT NULL, reason TEXT)"""
 
 SEASONS_DDL = """CREATE TABLE {schema}lineup_stint_seasons (
     season INTEGER PRIMARY KEY, games INTEGER, games_ok INTEGER, tracked_games INTEGER,
     tracked_share DOUBLE PRECISION, points_by_shots INTEGER, points_by_score INTEGER, points_failed INTEGER,
     seconds_failed INTEGER, poss_failed INTEGER, lineup_failed INTEGER, stints INTEGER, tracked_stints INTEGER,
     minutes DOUBLE PRECISION, tracked_minutes DOUBLE PRECISION, tracked_minutes_share DOUBLE PRECISION,
-    bad_lineup_minutes DOUBLE PRECISION, actors_off_floor INTEGER)"""
+    bad_lineup_minutes DOUBLE PRECISION, actors_off_floor INTEGER, fts_at_foul INTEGER)"""
 
 # Per team-season lineup and pair aggregates, from tracked_ok games only.
 SIDES_SQL = """
@@ -274,7 +339,7 @@ def write_tables(cur, schema, stint_rows, game_rows, season_rows):
     cur.execute(STINT_DDL.format(schema=schema, stats=stats))
     scols = ["stint_id", "game_id", "nba_game_id", "season", "home_team", "away_team", "period", "stint_no",
              "start_elapsed", "end_elapsed", "seconds", "home_ids", "away_ids", "n_home", "n_away",
-             "action_from", "action_to", "home_score", "away_score"] + \
+             "action_from", "action_to", "foul_ft_actions", "home_score", "away_score"] + \
             [f"{side}_{k}" for side in ("home", "away") for k in STAT_COLS] + ["home_poss", "away_poss", "tracked_ok"]
     psycopg2.extras.execute_values(
         cur, f"INSERT INTO {schema}lineup_stints ({', '.join(scols)}) VALUES %s",
@@ -339,6 +404,7 @@ def season_summary(game_rows, stint_rows):
             "tracked_minutes_share": round(st[season][3] / st[season][2], 4) if st[season][2] else None,
             "bad_lineup_minutes": round(sum(r["bad_lineup_seconds"] for r in g) / 60, 1),
             "actors_off_floor": sum(r["actors_off_floor"] for r in g),
+            "fts_at_foul": sum(r["fts_at_foul"] for r in g),
         })
     return out
 
@@ -346,22 +412,6 @@ def season_summary(game_rows, stint_rows):
 def print_checks(cur, schema, conn):
     print("\nPer season (lineup_stint_seasons):")
     print(pd.read_sql_query(f"SELECT * FROM {schema}lineup_stint_seasons ORDER BY season", conn).to_string(index=False))
-
-    # Stint seconds per player-game must equal the player lines (same parser).
-    cur.execute(f"""
-        WITH s AS (
-            SELECT game_id, pid, SUM(seconds) secs FROM (
-                SELECT game_id, unnest(home_ids) pid, seconds FROM {schema}lineup_stints
-                UNION ALL SELECT game_id, unnest(away_ids), seconds FROM {schema}lineup_stints) x GROUP BY 1, 2)
-        SELECT COUNT(*), COUNT(*) FILTER (WHERE ABS(s.secs - l.seconds) > 0.2), MAX(ABS(s.secs - l.seconds))
-        FROM s JOIN player_game_lines l ON l.game_id = s.game_id AND l.player_id = s.pid""")
-    n, off, mx = cur.fetchone()
-    print(f"\nPlayer-games whose stint seconds differ from player_game_lines by > 0.2 s: {off} of {n} (max {mx:.1f} s)")
-    cur.execute(f"""
-        SELECT COUNT(*) FROM player_game_lines l WHERE l.seconds > 0 AND NOT EXISTS (
-            SELECT 1 FROM {schema}lineup_stints s WHERE s.game_id = l.game_id
-            AND (s.home_ids @> ARRAY[l.player_id::integer] OR s.away_ids @> ARRAY[l.player_id::integer]))""")
-    print(f"player_game_lines rows with minutes but no stint: {cur.fetchone()[0]}")
 
     # Team-season minutes vs 48 x games + overtime (all games, then tracked only).
     cur.execute(f"""
@@ -413,13 +463,18 @@ def main():
         games = games[games.season == games.season.max()]
     print(f"{len(games)} games, {sum(len(grouped[g]) for g in games.game_id if g in grouped)} events "
           f"({time.time() - t0:.0f}s)")
+    calls, _ = miss_three_calls(conn, games, grouped, season_names, all_names)
+    print(f"NBA shot chart's two-or-three call on {sum(len(v) for v in calls.values()):,} missed shots "
+          f"({time.time() - t0:.0f}s)")
 
-    stint_rows, game_rows, unmatched = [], [], Counter()
+    stint_rows, game_rows, unmatched, sums = [], [], Counter(), {}
     for i, g in enumerate(games.itertuples(index=False)):
         ev = grouped.get(g.game_id)
         if ev is None:
             continue
-        rows, game_row, um = build_game(g, ev, season_names, all_names, final_pts, nba_ids, periods, team_tot)
+        rows, game_row, um, stints = build_game(g, ev, season_names, all_names, final_pts, nba_ids, periods, team_tot,
+                                                calls.get(g.game_id))
+        player_sums(rows, stints, sums)
         for r in rows:
             r["stint_id"] = len(stint_rows) + 1
             stint_rows.append(r)
@@ -429,6 +484,8 @@ def main():
             print(f"  {i} games, {len(stint_rows)} stints ({time.time() - t0:.0f}s)")
     season_rows = season_summary(game_rows, stint_rows)
     print(f"{len(game_rows)} games, {len(stint_rows)} stints; most common unmatched names: {unmatched.most_common(8)}")
+    print(f"free throws credited at the foul to an earlier stint: {sum(r['fts_at_foul'] for r in game_rows):,}")
+    check_against_lines(conn, sums, [r["game_id"] for r in game_rows])
 
     schema = f"{DRY_SCHEMA}." if dry else ""
     if dry:

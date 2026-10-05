@@ -1515,7 +1515,10 @@ def test_pair_chemistry_grid_known_team():
     bkn = client.get("/lineups/pair-grid", params={"season": 2023, "team": "BKN", "max_players": 15}).json()
     phx = client.get("/lineups/pair-grid", params={"season": 2023, "team": "PHX", "max_players": 15}).json()
     mb = [next(p for p in g["players"] if p["player_name"] == "Mikal Bridges") for g in (bkn, phx)]
-    assert sum(p["minutes"] for p in mb) <= mb[0]["season_minutes_all_teams"] + 1
+    # Since round 8 step 6a every one of his stints is tracked, so the sum reaches his season total; the grid adds
+    # lineup minutes each rounded to 0.1 with ties up (about +0.008 a lineup, ~3 of his 2,963 minutes: R8-073).
+    # Counting the other team's lineups would double it.
+    assert sum(p["minutes"] for p in mb) <= mb[0]["season_minutes_all_teams"] * 1.002 + 1
 
     assert client.get("/lineups/pair-grid", params={"season": 1990}).status_code == 404
     assert client.get("/lineups/pair-grid", params={"team": "XXX"}).status_code == 404
@@ -2032,9 +2035,10 @@ def test_lineup_stints_reconcile_and_feed_lineup_tools():
         cur.execute("SELECT season, games, games_ok, tracked_minutes_share FROM lineup_stint_seasons ORDER BY season")
         rows = cur.fetchall()
         assert [r[0] for r in rows] == [2021, 2022, 2023, 2024, 2025, 2026]
-        # 7,220 of 7,232 games reconcile on points, seconds and possessions; 93.7-99.8% of minutes are tracked.
+        # 7,220 of 7,232 games reconcile on points, seconds and possessions; 99.6-99.98% of minutes are tracked (93.7-99.8%
+        # before round 8 step 6a matched ESPN's no-id players through player_bio).
         assert sum(r[2] for r in rows) / sum(r[1] for r in rows) > 0.995
-        assert all(r[3] > 0.93 for r in rows) and rows[-1][3] > 0.99
+        assert all(r[3] > 0.995 for r in rows)
         # Stint points add up to the real final score, and stint seconds to the game length, in every reconciled game.
         cur.execute("""SELECT COUNT(*) FROM (SELECT game_id, SUM(home_pts) hp, SUM(away_pts) ap, SUM(seconds) secs
                                              FROM lineup_stints GROUP BY 1) x
@@ -2052,15 +2056,15 @@ def test_lineup_stints_reconcile_and_feed_lineup_tools():
                        JOIN team_game_totals t ON t.game_id = s.game_id AND t.team_abbreviation = s.team
                        WHERE g.game_ok AND (s.fga, s.fta, s.oreb, s.tov) <> (t.fga, t.fta, t.oreb, t.tov)""")
         assert cur.fetchone()[0] == 0
-        # Every player's stint seconds equal his player_game_lines seconds (one parser), bar the 9 player-games with a
-        # substitution ESPN tagged to no team (the lines credit those twice).
+        # Every player's stint seconds equal his player_game_lines seconds (one parser; until round 8 step 6a the
+        # lines counted 9 player-games twice after a substitution ESPN tagged to no team).
         cur.execute("""WITH s AS (SELECT game_id, pid, SUM(seconds) secs FROM (
                                     SELECT game_id, unnest(home_ids) pid, seconds FROM lineup_stints
                                     UNION ALL SELECT game_id, unnest(away_ids), seconds FROM lineup_stints) x GROUP BY 1, 2)
                        SELECT COUNT(*) FILTER (WHERE ABS(s.secs - l.seconds) > 0.2), COUNT(*)
                        FROM s JOIN player_game_lines l ON l.game_id = s.game_id AND l.player_id = s.pid""")
         off, n = cur.fetchone()
-        assert n > 150000 and off <= 9
+        assert n > 150000 and off == 0
         # Tracked stints have five a side; the 2025-26 Thunder's most-used lineup agrees with lineup_stats within 15 minutes.
         cur.execute("SELECT COUNT(*) FROM lineup_stints WHERE tracked_ok AND (n_home <> 5 OR n_away <> 5)")
         assert cur.fetchone()[0] == 0
@@ -2432,19 +2436,14 @@ def test_rotations_minutes_closing_and_team_block():
                        USING (game_id)
                        WHERE g.game_ok AND (g.home_at_cut + c.hp <> g.home_final OR g.away_at_cut + c.ap <> g.away_final)""")
         assert cur.fetchone()[0] == 0
-        # Stint seconds per player-game equal player_game_lines everywhere except 9 player-games, one in each of the
-        # 9 ESPN games with a substitution logged with no team: the lines count that player twice (README Known
-        # real gaps). The stints are right there.
+        # Stint seconds per player-game equal player_game_lines everywhere (until round 8 step 6a the lines counted
+        # 9 player-games twice, one in each ESPN game with a substitution logged with no team; R8-023).
         cur.execute("""WITH s AS (SELECT game_id, pid, SUM(seconds) secs FROM (
                            SELECT game_id, unnest(home_ids) pid, seconds FROM lineup_stints
                            UNION ALL SELECT game_id, unnest(away_ids), seconds FROM lineup_stints) x GROUP BY 1, 2)
-                       SELECT COUNT(*), COUNT(*) FILTER (WHERE l.seconds > s.secs + 0.2), COUNT(DISTINCT s.game_id),
-                              COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM pbp_events e WHERE e.game_id = s.game_id
-                                                             AND e.action_type = 'Substitution' AND e.team_tricode IS NULL))
-                       FROM s JOIN player_game_lines l ON l.game_id = s.game_id AND l.player_id = s.pid
+                       SELECT COUNT(*) FROM s JOIN player_game_lines l ON l.game_id = s.game_id AND l.player_id = s.pid
                        WHERE ABS(s.secs - l.seconds) > 0.2""")
-        diff, lines_higher, games, teamless = cur.fetchone()
-        assert diff == lines_higher == games == teamless and diff <= 9
+        assert cur.fetchone()[0] == 0
     finally:
         conn.close()
 
