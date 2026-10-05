@@ -54,7 +54,7 @@ Live-only sources the platform calls at request time (the Odds API, RSS news, NB
   - Later scripts in the load and derived stages add columns to these rows: shooting counts, personal fouls, the BPM reproduction, Basketball-Reference's published BPM/VORP, and impact scores.
   - Pre-2010 rows come from `load_kaggle_historical_seasons.py`; 2025-26 rows come from `load_2025_26_into_db.py`, all rows, no minutes floor.
 - **`mvp_seasons` (15 rows) and `mvp_winners` (16 rows).** These are the MVP label tables, also loaded before the first commit. `nba_data/mvp_seasons.csv` holds the first.
-- **Anything stats.nba.com served** can't be re-fetched while the site is unreachable (see Sources).
+- **Anything stats.nba.com served** can't be re-fetched while the site is unreachable (it was from this machine 2026-09-26 to 2026-10-04 and answers `nba_api` again since 2026-10-05; see Sources).
 
 ## Collection and processing
 
@@ -95,7 +95,7 @@ The owner should decide whether the NBA files stay in a public or review artifac
 
 **What a reader can re-fetch or re-download:**
 - Re-fetch with the provided scripts: the ESPN play-by-play and scoreboards.
-- Re-fetch while stats.nba.com is reachable: the stats.nba.com tables.
+- Re-fetch while stats.nba.com is reachable (it answers `nba_api` again since 2026-10-05): the stats.nba.com tables.
 - Download themselves into the gitignored folders: the Kaggle, salary and college files. The README's "Data sources" section names them.
 - Can't re-create exactly (see Legacy): the legacy rows.
 

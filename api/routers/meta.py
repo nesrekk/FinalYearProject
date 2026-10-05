@@ -7,15 +7,13 @@ from source_badge import make_source
 
 from impact_core import (
     TEAM_META,
-    fetch_balldontlie_standings,
+    current_standings,
     fetch_nba_api_player_leaders,
-    fetch_nba_api_standings,
     fetch_nba_api_team_stats,
-    fetch_nba_cdn_standings,
     get_current_nba_season,
     get_db,
     get_latest_season,
-    get_team_badges,
+    stored_standings_rows,
 )
 
 router = APIRouter()
@@ -23,12 +21,9 @@ router = APIRouter()
 
 def db_standings(cursor, season):
     """[(abbr, wins, losses)] for a stored season: the real record (team_seasons, Basketball-Reference;
-    equal to the final scores in game_scores for every team-season 2009-10 on, test_known_facts)."""
-    cursor.execute(
-        "SELECT abbreviation, w, l FROM team_seasons WHERE season = %s AND NOT is_league_avg AND w IS NOT NULL",
-        (season,),
-    )
-    return cursor.fetchall()
+    equal to the final scores in game_scores for every team-season 2009-10 on, test_known_facts).
+    The same rows impact_core.stored_standings() turns into the standings table."""
+    return stored_standings_rows(cursor, season)
 
 
 def db_team_stats(cursor, season):
@@ -108,35 +103,28 @@ def get_site_stats():
 @router.get("/meta/current")
 def get_current_meta():
     """
-    Current-season standings + team comparison stats from local DB, layered
-    with live data from stats.nba.com when it's available and fast.
+    The current season's standings, team per-game stats and scoring leader for the Dashboard,
+    Standings and Team Comparison pages.
 
-    The four live lookups below (standings x2, external standings, team
-    stats) are each independently cached with a short TTL and a short
-    request timeout (see the comment above `_CACHE` in impact_core.py) and
-    are fired concurrently rather than one after another — previously they
-    ran in series and a cold cache could take 100+ real seconds (each of the
-    four live calls paying its own worst-case timeout back to back). Every
-    one of them still falls back to real local-DB data below if it fails or
-    times out; nothing here is ever invented.
+    Round 8 step 4: standings come from ESPN's public API (regular season only; every team 0-0
+    before opening night), with the latest stored season's record (team_seasons) when ESPN doesn't
+    answer within 3 s. The team block and the scoring leader still come from stats.nba.com when it
+    answers within 3 s (the stored tables don't have the season in progress until the play-by-play
+    is fetched) and otherwise from the stored tables. Every block says which season it is
+    (`*_season`) and where it came from (`*_source`), so a page never shows last season's numbers
+    under this season's label (R8-004). The two live calls run concurrently.
     """
     with get_db() as conn:
         cursor = conn.cursor()
         db_latest_season = get_latest_season(cursor)
         current_live_season = get_current_nba_season()
         season = max(db_latest_season, current_live_season)
-        badges = get_team_badges()
 
-        with ThreadPoolExecutor(max_workers=5) as pool:
-            standings_future = pool.submit(fetch_nba_api_standings, season)
-            cdn_future = pool.submit(fetch_nba_cdn_standings)
-            external_future = pool.submit(fetch_balldontlie_standings, season)
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            standings_future = pool.submit(current_standings, season)
             team_stats_future = pool.submit(fetch_nba_api_team_stats, season)
             leaders_future = pool.submit(fetch_nba_api_player_leaders, "pts", season, 1)
-
-            nba_api_standings = standings_future.result()
-            cdn_standings = cdn_future.result()
-            external_standings = external_future.result()
+            standings_block = standings_future.result()
             live_team_stats = team_stats_future.result()
             live_pts_leaders = leaders_future.result()
 
@@ -152,109 +140,49 @@ def get_current_meta():
         )
         top_scorer_row = cursor.fetchone()
 
-        # Stored fallbacks (round 8 R8-062). Before, the standings took each team's
-        # record as its best player's w_pct x 82 (CLE 82-0 for a real 52-30) and the
-        # per-game stats summed every player's season row under his last team and
-        # divided by the roster's most games played (CLE 147.5 points a game for a real
-        # 119.5). Now: the record from team_seasons, points from the real final scores,
-        # the rest from the play-by-play game lines (team rebounds aren't anybody's, so
-        # rebounds run a little under NBA.com's team total).
-        standing_rows = db_standings(cursor, db_latest_season)
+        # Stored fallbacks (round 8 R8-062). Before, the standings took each team's record as its
+        # best player's w_pct x 82 (CLE 82-0 for a real 52-30) and the per-game stats summed every
+        # player's season row under his last team and divided by the roster's most games played
+        # (CLE 147.5 points a game for a real 119.5). Now: the record from team_seasons, points
+        # from the real final scores, the rest from the play-by-play game lines (team rebounds
+        # aren't anybody's, so rebounds run a little under NBA.com's team total).
         team_rows = db_team_stats(cursor, db_latest_season)
-
-    standings = []
-    for abbr, wins, losses in standing_rows:
-        if abbr not in TEAM_META or wins is None:
-            continue
-        standings.append(
-            {
-                "abbr": abbr,
-                "team": TEAM_META[abbr]["name"],
-                "conference": TEAM_META[abbr]["conference"],
-                "w": int(wins),
-                "l": int(losses),
-                "w_pct": wins / (wins + losses) if wins + losses else 0.0,
-            }
-        )
-
-    east = sorted([s for s in standings if s["conference"] == "eastern"], key=lambda x: x["w_pct"], reverse=True)
-    west = sorted([s for s in standings if s["conference"] == "western"], key=lambda x: x["w_pct"], reverse=True)
-
-    def decorate_with_rank_and_gb(rows):
-        if not rows:
-            return []
-        leader_w, leader_l = rows[0]["w"], rows[0]["l"]
-        out = []
-        for i, row in enumerate(rows, start=1):
-            gb = ((leader_w - row["w"]) + (row["l"] - leader_l)) / 2
-            out.append(
-                {
-                    "rank": i,
-                    "abbr": row["abbr"],
-                    "team": row["team"],
-                    "w": row["w"],
-                    "l": row["l"],
-                    "pct": f".{int(round(row['w_pct'] * 1000)):03d}",
-                    "gb": "-" if i == 1 else f"{gb:.1f}".rstrip("0").rstrip("."),
-                    "last10": "-",
-                    "streak": "-",
-                    "logo": badges.get(row["abbr"]),
-                }
-            )
-        return out
 
     stored_team_stats = {}
     for abbr, stats in team_rows.items():
         if abbr not in TEAM_META:
             continue
-        stored_team_stats[abbr] = {"name": TEAM_META[abbr]["name"], "abbr": abbr, **stats, "logo": badges.get(abbr)}
-
-    if live_team_stats:
-        for abbr, item in live_team_stats.items():
-            item["logo"] = badges.get(abbr)
-
-    if nba_api_standings:
-        for conf in ("eastern", "western"):
-            for item in nba_api_standings.get(conf, []):
-                item["logo"] = badges.get(item["abbr"])
-    elif cdn_standings:
-        for conf in ("eastern", "western"):
-            for item in cdn_standings.get(conf, []):
-                item["logo"] = badges.get(item["abbr"])
-    elif external_standings:
-        for conf in ("eastern", "western"):
-            for item in external_standings.get(conf, []):
-                item["logo"] = badges.get(item["abbr"])
+        stored_team_stats[abbr] = {"name": TEAM_META[abbr]["name"], "abbr": abbr, **stats}
 
     live_top_scorer = None
     if live_pts_leaders and live_pts_leaders.get("results"):
         p0 = live_pts_leaders["results"][0]
-        live_top_scorer = {
-            "player_name": p0["player_name"],
-            "ppg": p0["value"],
-        }
+        live_top_scorer = {"player_name": p0["player_name"], "ppg": p0["value"]}
 
     return {
         "season": season,
-        "standings_source": (
-            "nba_api" if nba_api_standings
-            else ("nba_cdn" if cdn_standings else ("balldontlie" if external_standings else "local_db"))
-        ),
-        "standings": nba_api_standings or cdn_standings or external_standings or {
-            "eastern": decorate_with_rank_and_gb(east),
-            "western": decorate_with_rank_and_gb(west),
-        },
+        "stored_season": db_latest_season,
+        "standings_source": standings_block["source"],
+        "standings_season": standings_block["season"],
+        "standings_played": standings_block["played"],
+        "standings": standings_block["standings"],
         "team_stats_source": "nba_api" if live_team_stats else "local_db",
         # The stored fallback's season (the live block is the current season's).
         "team_stats_season": season if live_team_stats else db_latest_season,
         "team_stats": live_team_stats or stored_team_stats,
+        "top_scorer_source": "nba_api" if live_top_scorer else "local_db",
+        "top_scorer_season": season if live_top_scorer else db_latest_season,
         "top_scorer": live_top_scorer or (
-            {
-                "player_name": top_scorer_row[0],
-                "ppg": round(float(top_scorer_row[1]), 1),
-            }
+            {"player_name": top_scorer_row[0], "ppg": round(float(top_scorer_row[1]), 1)}
             if top_scorer_row
             else None
+        ),
+        "_source": make_source(
+            ["team_seasons", "game_scores", "player_game_lines", "player_season_stats"],
+            "ESPN standings (live)" + (" + nba_api (stats.nba.com, live)" if live_team_stats or live_top_scorer else "")
+            if standings_block["source"] == "espn" else
+            ("stored tables" + (" + nba_api (stats.nba.com, live)" if live_team_stats or live_top_scorer else "")),
+            live=standings_block["source"] == "espn" or bool(live_team_stats or live_top_scorer),
         ),
     }
 
@@ -308,7 +236,7 @@ COVERAGE_MAP = [
         "range_sql": "SELECT MIN(season), MAX(season) FROM player_game_lines", "range_fmt": "season_int",
         "source": "Rebuilt from ESPN play-by-play (scripts/build_player_game_lines.py); minutes rebuilt from substitutions; a missed shot is a two or a three as the NBA shot chart (player_shots) calls the same shot where it can be matched (~99%).",
         "gap": "Regular season only, 2020-21 on (no earlier seasons, no playoffs). game_id is ESPN's (espn_...), not the NBA 002... ids used elsewhere.",
-        "used_by": ["stability"],
+        "used_by": ["stability", "analytics#withwithout"],
     },
     {
         "table": "team_game_fatigue", "label": "Team game log (rest/travel)", "group": "Teams",
@@ -322,7 +250,7 @@ COVERAGE_MAP = [
         "range_sql": "SELECT MIN(season), MAX(season) FROM team_seasons", "range_fmt": "season_int",
         "source": "Basketball-Reference team summaries via the local Kaggle export (scripts/build_team_seasons.py), with franchise and per-season codes from api/teams_lib.py.",
         "gap": "Ratings, pace and four factors are Basketball-Reference's; the earliest BAA seasons lack some of them. Two 1946-48 team-seasons have no player rows.",
-        "used_by": [],
+        "used_by": ["standings", "teams"],
     },
     {
         "table": "player_shot_hex", "label": "Shot quality map (per player-season hexagon cells)", "group": "Shooting",
@@ -350,7 +278,7 @@ COVERAGE_MAP = [
         "range_sql": "SELECT MIN(season), MAX(season) FROM game_scores", "range_fmt": "season_int",
         "source": "ESPN's scoreboard, matched to NBA game ids by date and teams (scripts/fetch_game_scores.py).",
         "gap": "Regular season only (the NBA Cup final, which doesn't count in the standings, is left out). Season points for/against equal Basketball-Reference's for all 510 team-seasons.",
-        "used_by": [],
+        "used_by": ["scores", "analytics#withwithout"],
     },
     {
         "table": "team_luck_schedule", "label": "Luck & schedule strength", "group": "Teams",
@@ -434,7 +362,7 @@ COVERAGE_MAP = [
         "range_sql": "SELECT MIN(season), MAX(season) FROM postseason_games", "range_fmt": "season_int",
         "source": "ESPN's scoreboard (scripts/fetch_postseason_games.py): every play-in and playoff game 2009-10 on with scores, round and conference; playoff fields cross-checked with player_shots' postseason games and Basketball-Reference.",
         "gap": "Postseason only (regular-season scores are in game_scores); no box scores or play-by-play, just results.",
-        "used_by": ["simulator"],
+        "used_by": ["simulator", "scores"],
     },
     {
         "table": "game_team_box", "label": "Team box scores", "group": "Teams",

@@ -3,11 +3,10 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 
 from impact_core import (
-    fetch_nba_api_player_profile,
-    fetch_nba_api_player_search,
+    _normalize_search_text,
     find_player,
-    get_current_nba_season,
     get_db,
+    get_latest_season,
 )
 
 router = APIRouter()
@@ -16,49 +15,54 @@ router = APIRouter()
 @router.get("/players/search")
 def search_players_live(q: str, limit: int = 20):
     """
-    Live-first player autocomplete (nba_api), DB fallback.
+    Player-name autocomplete from the stored seasons (player_season_stats), most recent players
+    first. Until round 8 step 4 it asked stats.nba.com for the current season's player list first
+    (up to 6 s on every keystroke, and names the rest of the app couldn't resolve anyway: every
+    tool that takes a name looks it up in the same table).
     """
     query = (q or "").strip()
     if len(query) < 2:
         return {"query": query, "results": []}
 
     safe_limit = max(1, min(int(limit), 50))
-    live = fetch_nba_api_player_search(query, safe_limit)
-    if live:
-        return {"query": query, "results": live}
-
+    needle = _normalize_search_text(query)
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT DISTINCT player_name
+            SELECT player_name, MAX(season) AS last_season
             FROM player_season_stats
             WHERE LOWER(player_name) LIKE LOWER(%s)
-            ORDER BY player_name ASC
+            GROUP BY player_name
+            ORDER BY last_season DESC, player_name ASC
             LIMIT %s;
             """,
-            (f"%{query}%", safe_limit),
+            (f"%{query}%", safe_limit * 3),
         )
         rows = cursor.fetchall()
-
-    return {"query": query, "results": [r[0] for r in rows]}
+        if len(rows) < safe_limit:
+            # Accent-insensitive pass (the DB is on the C locale, so LOWER() only folds ASCII and
+            # "jokic" doesn't match "Jokić" above): scan the distinct names once.
+            cursor.execute(
+                "SELECT player_name, MAX(season) FROM player_season_stats GROUP BY player_name;"
+            )
+            seen = {r[0] for r in rows}
+            extra = [r for r in cursor.fetchall() if r[0] not in seen and needle in _normalize_search_text(r[0])]
+            rows = rows + sorted(extra, key=lambda r: (-r[1], r[0]))
+    return {"query": query, "results": [r[0] for r in rows[:safe_limit]]}
 
 @router.get("/players/profile/{player_name}")
 def get_player_profile(player_name: str, season: Optional[int] = None):
     """
-    Player profile stats from local DB.
-    If season is omitted, returns latest available season for the player.
+    Player profile stats from the local DB (no page calls this; round 8 R8-017). If season is
+    omitted, the player's latest stored season. It used to ask stats.nba.com first with a 45 s
+    timeout (round 8 step 4).
     """
-    if season is None:
-        season = get_current_nba_season()
-
-    live_profile = fetch_nba_api_player_profile(player_name, season)
-    if live_profile:
-        return live_profile
-
     with get_db() as conn:
         cursor = conn.cursor()
         player_id, resolved_name = find_player(cursor, player_name)
+        if season is None:
+            season = get_latest_season(cursor)
 
         cursor.execute(
             """
@@ -104,6 +108,12 @@ def get_player_profile(player_name: str, season: Optional[int] = None):
                 detail=f"No profile data for {resolved_name}.",
             )
 
+    def pct(v):
+        if v is None:
+            return None
+        v = float(v)
+        return round(v * 100, 1) if v <= 1 else round(v, 1)
+
     return {
         "player_id": int(player_id),
         "player_name": row[0],
@@ -117,8 +127,8 @@ def get_player_profile(player_name: str, season: Optional[int] = None):
             "apg": round(float(row[7]), 1) if row[7] is not None else None,
             "spg": round(float(row[8]), 1) if row[8] is not None else None,
             "bpg": round(float(row[9]), 1) if row[9] is not None else None,
-            "fgPct": round(float(row[10]) * 100, 1) if row[10] is not None and float(row[10]) <= 1 else (round(float(row[10]), 1) if row[10] is not None else None),
-            "threePct": round(float(row[11]) * 100, 1) if row[11] is not None and float(row[11]) <= 1 else (round(float(row[11]), 1) if row[11] is not None else None),
-            "ftPct": round(float(row[12]) * 100, 1) if row[12] is not None and float(row[12]) <= 1 else (round(float(row[12]), 1) if row[12] is not None else None),
+            "fgPct": pct(row[10]),
+            "threePct": pct(row[11]),
+            "ftPct": pct(row[12]),
         },
     }

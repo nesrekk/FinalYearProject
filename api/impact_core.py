@@ -50,6 +50,7 @@ from psycopg2 import pool
 from scipy.optimize import brentq
 from scipy.stats import pearsonr
 import shots_lib
+import espn_live
 from source_badge import make_source
 load_dotenv()
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
@@ -94,35 +95,27 @@ try:
 except Exception:
     TEAM_ABBR_TO_ID = {}
 _CACHE = {
-    "team_badges": {"ts": 0, "data": {}},
-    "standings_bdl": {},  # key: season -> {"ts": ..., "data": ...}
     "player_images": {},  # key: normalized_name -> {"ts": ..., "url": ...}
     "championship_odds": {"ts": 0, "data": None},
     "playoff_stats": {},  # key: season -> {"ts": ..., "data": {name_lower: row_dict}}
     "helio_pt_stats": {},  # key: season -> {"ts": ..., "data": {name_lower: row_dict}}
-    "lineup_chemistry": {},  # key: season -> {"ts": ..., "data": [lineup_dict, ...]}
     "team_game_log": {},  # key: (team_id, season) -> {"ts": ..., "data": [game_dict, ...]}
     "player_game_log": {},  # key: (player_id, season) -> {"ts": ..., "data": set(game_id)}
     "news": {},  # key: (date_str, limit, team) -> {"ts": ..., "data": [item_dict, ...]}
-    "standings_nba_api": {},  # key: season -> {"ts": ..., "data": ...}
-    "standings_cdn": {"ts": 0, "data": None},
     "team_stats_nba_api": {},  # key: season -> {"ts": ..., "data": ...}
     "player_leaders_nba_api": {},  # key: (stat_key, season) -> {"ts": ..., "data": ...}
-    "games_by_date": {},  # key: date_str -> {"ts": ..., "data": [game_dict, ...]}
 }
 _CACHE_TTL_SECONDS = 6 * 60 * 60
 _NEWS_CACHE_TTL_SECONDS = 5 * 60  # news moves fast — much shorter TTL than the general cache
-# Live stats.nba.com endpoints (standings/leaders/team-stats/scoreboard) are
-# the slowest, flakiest calls in the app — during the offseason a single one
-# of these has been observed taking 45-136 real seconds to time out, and
-# since browsers cap concurrent connections per host, that stalls every other
-# request the frontend fires. Two mitigations, both real (no fabricated
-# data — a failed live call still falls back to the DB or returns nothing,
-# never an invented value): (1) a short request timeout so a stalled call
-# fails fast instead of hanging for tens of seconds, (2) a short cache TTL so
-# repeat page loads/components don't re-pay that cost — scores/standings
-# still refresh often enough to feel live once the game season is active.
-_LIVE_REQUEST_TIMEOUT_SECONDS = 6
+# Live stats.nba.com calls (team stats, leaders, playoff and tracking stats, the pre-2020-21
+# With/Without game logs) are the slowest, flakiest calls in the app: a single one has been seen
+# taking 45-136 s to time out during the offseason, and since browsers cap concurrent connections
+# per host that stalled every other request the frontend fired. Since round 8 step 4 every live
+# call fails within _LIVE_REQUEST_TIMEOUT_SECONDS and the route then reads stored data or says the
+# source didn't answer (nothing is ever invented), and answers are cached briefly so repeat page
+# loads don't pay the cost again. Live scores, box scores and standings come from ESPN
+# (espn_live.py) and no longer call stats.nba.com at all.
+_LIVE_REQUEST_TIMEOUT_SECONDS = 3
 _LIVE_CACHE_TTL_SECONDS = 5 * 60
 TEAM_NAME_TO_ABBR = {info["name"]: abbr for abbr, info in TEAM_META.items()}
 # stats.nba.com names the Clippers "LA Clippers" (TeamCity "LA"); without this the live
@@ -245,227 +238,6 @@ def clean_html_text(value: str) -> str:
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
-def get_team_badges():
-    now = time.time()
-    cached = _CACHE["team_badges"]
-    if cached["data"] and (now - cached["ts"] < _CACHE_TTL_SECONDS):
-        return cached["data"]
-
-    badges = {}
-    try:
-        data = fetch_json(
-            "https://www.thesportsdb.com/api/v1/json/123/search_all_teams.php?l=NBA"
-        )
-        for team in data.get("teams", []) or []:
-            badge = team.get("strBadge")
-            short = (team.get("strTeamShort") or "").upper().strip()
-            full_name = (team.get("strTeam") or "").strip()
-            if badge:
-                if short in TEAM_META:
-                    badges[short] = badge
-                for abbr, meta in TEAM_META.items():
-                    if meta["name"].lower() == full_name.lower():
-                        badges[abbr] = badge
-    except Exception:
-        # No hard fail; UI can continue without badges.
-        pass
-
-    _CACHE["team_badges"] = {"ts": now, "data": badges}
-    return badges
-def fetch_balldontlie_standings(season: int):
-    cache_key = str(season)
-    now = time.time()
-    cache_item = _CACHE["standings_bdl"].get(cache_key)
-    if cache_item and (now - cache_item["ts"] < _CACHE_TTL_SECONDS):
-        return cache_item["data"]
-
-    api_key = os.getenv("BALLDONTLIE_API_KEY")
-    if not api_key:
-        return None
-
-    try:
-        # Endpoint availability depends on BallDontLie plan/version.
-        payload = fetch_json(
-            f"https://api.balldontlie.io/v1/standings?season={season}",
-            headers={"Authorization": api_key},
-        )
-        rows = payload.get("data", [])
-        east = []
-        west = []
-        for row in rows:
-            team = row.get("team", {})
-            abbr = (team.get("abbreviation") or "").upper()
-            conference = (row.get("conference") or "").lower()
-            entry = {
-                "rank": int(row.get("conference_rank") or 0),
-                "abbr": abbr,
-                "team": TEAM_META.get(abbr, {}).get("name") or team.get("full_name") or abbr,
-                "w": int(row.get("wins") or 0),
-                "l": int(row.get("losses") or 0),
-                "pct": f".{int(round(float(row.get('win_pct') or 0) * 1000)):03d}",
-                "gb": str(row.get("games_behind") or "-"),
-                "last10": row.get("last_ten") or "-",
-                "streak": row.get("streak") or "-",
-            }
-            if conference.startswith("east"):
-                east.append(entry)
-            elif conference.startswith("west"):
-                west.append(entry)
-
-        east = sorted(east, key=lambda x: x["rank"] or 99)
-        west = sorted(west, key=lambda x: x["rank"] or 99)
-        parsed = {"eastern": east, "western": west}
-        _CACHE["standings_bdl"][cache_key] = {"ts": now, "data": parsed}
-        return parsed
-    except Exception:
-        return None
-def fetch_nba_api_standings(season: int):
-    """
-    Fetch accurate conference standings using nba_api endpoint.
-    Returns {'eastern': [...], 'western': [...]} or None on failure.
-
-    Cached (short TTL) and given a short request timeout — see the
-    _LIVE_REQUEST_TIMEOUT_SECONDS / _LIVE_CACHE_TTL_SECONDS comment above
-    _CACHE's definition.
-    """
-    now = time.time()
-    cached = _CACHE["standings_nba_api"].get(season)
-    if cached and (now - cached["ts"] < _LIVE_CACHE_TTL_SECONDS):
-        return cached["data"]
-
-    result = _fetch_nba_api_standings_uncached(season)
-    if result is not None:
-        _CACHE["standings_nba_api"][season] = {"ts": now, "data": result}
-    return result
-def _fetch_nba_api_standings_uncached(season: int):
-    try:
-        from nba_api.stats.endpoints import leaguestandingsv3
-
-        season_label = f"{season - 1}-{str(season)[-2:]}"
-        endpoint = leaguestandingsv3.LeagueStandingsV3(
-            league_id="00",
-            season=season_label,
-            season_type="Regular Season",
-            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
-        )
-        data = endpoint.get_dict()
-        result_sets = data.get("resultSets", []) or []
-        if not result_sets:
-            return None
-
-        rows = result_sets[0].get("rowSet", []) or []
-        headers = result_sets[0].get("headers", []) or []
-        idx = {name: i for i, name in enumerate(headers)}
-
-        def val(row, key, default=None):
-            i = idx.get(key)
-            if i is None or i >= len(row):
-                return default
-            return row[i]
-
-        east = []
-        west = []
-        for row in rows:
-            conf_raw = str(val(row, "Conference", "")).lower()
-            team_name = f"{val(row, 'TeamCity', '')} {val(row, 'TeamName', '')}".strip()
-            # LeagueStandingsV3's real response has no abbreviation/tricode
-            # column at all (only TeamID/TeamCity/TeamName/TeamSlug) — derive
-            # it from the full team name instead of a column that doesn't exist.
-            abbr = TEAM_NAME_TO_ABBR.get(team_name, "")
-            wins = int(val(row, "WINS", 0) or 0)
-            losses = int(val(row, "LOSSES", 0) or 0)
-            pct_val = float(val(row, "WinPCT", 0) or 0)
-            rank = int(val(row, "PlayoffRank", 0) or 0)
-            gb_val = val(row, "ConferenceGamesBack", "-")
-            last10 = val(row, "L10", "-") or "-"
-            streak = val(row, "strCurrentStreak", "-") or "-"
-
-            item = {
-                "rank": rank,
-                "abbr": abbr,
-                "team": TEAM_META.get(abbr, {}).get("name") or team_name or abbr,
-                "w": wins,
-                "l": losses,
-                "pct": f".{int(round(pct_val * 1000)):03d}",
-                "gb": str(gb_val),
-                "last10": str(last10),
-                "streak": str(streak),
-            }
-
-            if conf_raw.startswith("east"):
-                east.append(item)
-            elif conf_raw.startswith("west"):
-                west.append(item)
-
-        east = sorted(east, key=lambda x: x["rank"] or 99)
-        west = sorted(west, key=lambda x: x["rank"] or 99)
-        if not east and not west:
-            return None
-        return {"eastern": east, "western": west}
-    except Exception:
-        return None
-def fetch_nba_cdn_standings():
-    """
-    Fallback live standings source from NBA CDN. Cached (short TTL) and
-    given a short request timeout — see the comment above _CACHE.
-    """
-    now = time.time()
-    cached = _CACHE["standings_cdn"]
-    if cached["data"] and (now - cached["ts"] < _LIVE_CACHE_TTL_SECONDS):
-        return cached["data"]
-
-    result = _fetch_nba_cdn_standings_uncached()
-    if result is not None:
-        _CACHE["standings_cdn"] = {"ts": now, "data": result}
-    return result
-def _fetch_nba_cdn_standings_uncached():
-    try:
-        data = fetch_json(
-            "https://cdn.nba.com/static/json/liveData/standings/leagueStandings.json",
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
-        )
-        rows = (((data or {}).get("leagueStandings") or {}).get("teams") or [])
-        if not rows:
-            return None
-
-        east = []
-        west = []
-        for row in rows:
-            abbr = str(row.get("teamTricode") or "").upper()
-            conf = str(row.get("conferenceName") or "").lower()
-            wins = int(row.get("wins", 0) or 0)
-            losses = int(row.get("losses", 0) or 0)
-            pct_val = float(row.get("winPct", 0) or 0)
-            rank = int(row.get("confRank", 0) or 0)
-            gb_val = row.get("gamesBehind", "-")
-            streak_w = int(row.get("streak", 0) or 0)
-            streak_type = str(row.get("streakCode") or "").upper()
-            streak = f"{streak_type}{streak_w}" if streak_type in ("W", "L") else "-"
-
-            item = {
-                "rank": rank,
-                "abbr": abbr,
-                "team": TEAM_META.get(abbr, {}).get("name") or abbr,
-                "w": wins,
-                "l": losses,
-                "pct": f".{int(round(pct_val * 1000)):03d}",
-                "gb": str(gb_val),
-                "last10": "-",
-                "streak": streak,
-            }
-            if conf.startswith("east"):
-                east.append(item)
-            elif conf.startswith("west"):
-                west.append(item)
-
-        east = sorted(east, key=lambda x: x["rank"] or 99)
-        west = sorted(west, key=lambda x: x["rank"] or 99)
-        if not east and not west:
-            return None
-        return {"eastern": east, "western": west}
-    except Exception:
-        return None
 def fetch_nba_api_player_leaders(stat_key: str, season: int, top_n: int = 10):
     """
     Live leaders from nba_api leaguedashplayerstats (per-game regular
@@ -657,118 +429,16 @@ def _normalize_search_text(text: str) -> str:
     decomposed = unicodedata.normalize("NFKD", text or "")
     ascii_only = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
     return ascii_only.lower().strip()
-def fetch_nba_api_player_search(query: str, limit: int = 25):
-    """
-    Live player-name autocomplete from current season player stats endpoint.
-    """
-    q = _normalize_search_text(query)
-    if len(q) < 2:
-        return []
-    try:
-        season = get_current_nba_season()
-        leaders_payload = fetch_nba_api_player_leaders("pts", season, top_n=500)
-        if not leaders_payload:
-            return []
-        names = []
-        seen = set()
-        for row in leaders_payload.get("results", []):
-            name = (row.get("player_name") or "").strip()
-            if not name:
-                continue
-            key = name.lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            names.append(name)
-        filtered = [n for n in names if q in _normalize_search_text(n)]
-        return filtered[: max(1, min(int(limit), 50))]
-    except Exception:
-        return []
-def fetch_nba_api_player_profile(player_name: str, season: int):
-    """
-    Live player profile from nba_api.
-    """
-    try:
-        from nba_api.stats.endpoints import leaguedashplayerstats
-
-        season_label = f"{season - 1}-{str(season)[-2:]}"
-        endpoint = leaguedashplayerstats.LeagueDashPlayerStats(
-            season=season_label,
-            season_type_all_star="Regular Season",
-            per_mode_detailed="PerGame",
-            timeout=45,
-        )
-        data = endpoint.get_dict()
-        result_sets = data.get("resultSets", []) or []
-        if not result_sets:
-            return None
-        rs = result_sets[0]
-        headers = rs.get("headers", []) or []
-        rows = rs.get("rowSet", []) or []
-        idx = {name: i for i, name in enumerate(headers)}
-
-        target = (player_name or "").strip().lower()
-        if not target:
-            return None
-
-        def get_val(row, key, default=None):
-            i = idx.get(key)
-            if i is None or i >= len(row):
-                return default
-            return row[i]
-
-        matched = None
-        for row in rows:
-            name = str(get_val(row, "PLAYER_NAME", "") or "").strip()
-            if name.lower() == target:
-                matched = row
-                break
-        if matched is None:
-            for row in rows:
-                name = str(get_val(row, "PLAYER_NAME", "") or "").strip().lower()
-                if target in name:
-                    matched = row
-                    break
-        if matched is None:
-            return None
-
-        fg = float(get_val(matched, "FG_PCT", 0) or 0)
-        fg3 = float(get_val(matched, "FG3_PCT", 0) or 0)
-        ft = float(get_val(matched, "FT_PCT", 0) or 0)
-        if fg <= 1:
-            fg *= 100
-        if fg3 <= 1:
-            fg3 *= 100
-        if ft <= 1:
-            ft *= 100
-
-        return {
-            "player_id": int(get_val(matched, "PLAYER_ID", 0) or 0),
-            "player_name": str(get_val(matched, "PLAYER_NAME", "") or ""),
-            "team_abbr": str(get_val(matched, "TEAM_ABBREVIATION", "") or ""),
-            "season": int(season),
-            "age": float(get_val(matched, "AGE", 0) or 0),
-            "min": float(get_val(matched, "MIN", 0) or 0),
-            "stats": {
-                "ppg": round(float(get_val(matched, "PTS", 0) or 0), 1),
-                "rpg": round(float(get_val(matched, "REB", 0) or 0), 1),
-                "apg": round(float(get_val(matched, "AST", 0) or 0), 1),
-                "spg": round(float(get_val(matched, "STL", 0) or 0), 1),
-                "bpg": round(float(get_val(matched, "BLK", 0) or 0), 1),
-                "fgPct": round(fg, 1),
-                "threePct": round(fg3, 1),
-                "ftPct": round(ft, 1),
-            },
-        }
-    except Exception:
-        return None
 PLAYOFF_COMPARISON_STATS = [
     ("ts_pct", "TS%"), ("usg_pct", "USG%"), ("net_rating", "Net Rtg"),
     ("ast_pct", "AST%"), ("reb_pct", "REB%"),
 ]
 def _fetch_playoff_stats_season(season: int):
-    """Live-fetch ALL players' real playoff advanced stats for one season in
-    a single request (fast, ~0.5s for the whole league), cached by season."""
+    """Live-fetch ALL players' real playoff advanced stats for one season in a single request
+    (0.2-0.6 s for the whole league on 2026-10-05), cached by season. Returns {name_lower: row};
+    {} when stats.nba.com answered with no rows (no playoffs for that season yet) and **None when it
+    didn't answer within _LIVE_REQUEST_TIMEOUT_SECONDS** (not cached), so the caller can tell
+    "didn't make the playoffs" from "the source is unreachable" (round 8 step 4)."""
     cached = _CACHE["playoff_stats"].get(season)
     if cached and time.time() - cached["ts"] < _CACHE_TTL_SECONDS:
         return cached["data"]
@@ -782,7 +452,7 @@ def _fetch_playoff_stats_season(season: int):
             season_type_all_star="Playoffs",
             per_mode_detailed="PerGame",
             measure_type_detailed_defense="Advanced",
-            timeout=45,
+            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
         )
         data = endpoint.get_dict()
         result_sets = data.get("resultSets", []) or []
@@ -812,7 +482,7 @@ def _fetch_playoff_stats_season(season: int):
                 "reb_pct": float(val(row, "REB_PCT", 0) or 0),
             }
     except Exception:
-        by_name = {}
+        return None
 
     _CACHE["playoff_stats"][season] = {"ts": time.time(), "data": by_name}
     return by_name
@@ -840,9 +510,9 @@ def _combine_measurement_features(row):
     return {"wingspan_minus_height": wingspan - height, "standing_reach": reach}
 LENGTH_STUDY_MIN_TOTAL_MINUTES = 500
 def _fetch_pt_possession_stats(season: int):
-    """Real per-player touch/possession tracking data for a whole season, one
-    request for the whole league (~1.5s), cached like the other league-wide
-    live fetches in this file."""
+    """Real per-player touch/possession tracking data for a whole season, one request for the whole
+    league (0.1-0.6 s on 2026-10-05), cached like the other league-wide live fetches in this file.
+    None when stats.nba.com didn't answer within _LIVE_REQUEST_TIMEOUT_SECONDS."""
     cached = _CACHE["helio_pt_stats"].get(season)
     if cached and time.time() - cached["ts"] < _CACHE_TTL_SECONDS:
         return cached["data"]
@@ -857,7 +527,7 @@ def _fetch_pt_possession_stats(season: int):
             per_mode_simple="PerGame",
             player_or_team="Player",
             pt_measure_type="Possessions",
-            timeout=30,
+            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
         )
         data = endpoint.get_dict()
         rs = data.get("resultSets", [{}])[0]
@@ -891,7 +561,7 @@ def _fetch_pt_possession_stats(season: int):
             team_top = team_totals.get(row["team_abbreviation"]) or 1.0
             row["time_of_poss_share"] = round(100 * row["time_of_poss"] / team_top, 1)
     except Exception:
-        by_name = {}
+        return None  # didn't answer within _LIVE_REQUEST_TIMEOUT_SECONDS; not cached (round 8 step 4)
 
     _CACHE["helio_pt_stats"][season] = {"ts": time.time(), "data": by_name}
     return by_name
@@ -982,51 +652,6 @@ def _downsample_points(points, target: int = 100):
     if indices[-1] != len(points) - 1:
         indices.append(len(points) - 1)
     return [points[i] for i in indices]
-def _fetch_lineup_stats_season(season: int, group_quantity: int = 5):
-    """Live-fetch every real lineup combination of the given size (5 for
-    full lineups, 2 for pairs) for a season in one request (~1.5-4s for
-    the whole league), cached like the other live fetches in this file."""
-    cache_key = (group_quantity, season)
-    cached = _CACHE["lineup_chemistry"].get(cache_key)
-    if cached and time.time() - cached["ts"] < _CACHE_TTL_SECONDS:
-        return cached["data"]
-
-    try:
-        from nba_api.stats.endpoints import leaguedashlineups
-
-        season_label = f"{season - 1}-{str(season)[-2:]}"
-        endpoint = leaguedashlineups.LeagueDashLineups(
-            group_quantity=group_quantity,
-            measure_type_detailed_defense="Advanced",
-            per_mode_detailed="Totals",
-            season=season_label,
-            season_type_all_star="Regular Season",
-            timeout=45,
-        )
-        df = endpoint.get_data_frames()[0]
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Live lineup data fetch failed: {exc}")
-
-    lineups = []
-    for _, row in df.iterrows():
-        player_ids = [int(pid) for pid in str(row["GROUP_ID"]).split("-") if pid]
-        abbr_names = [n.strip() for n in str(row["GROUP_NAME"]).split(" - ") if n.strip()]
-        lineups.append({
-            "player_ids": player_ids,
-            "abbr_names": abbr_names,
-            "team_abbreviation": row["TEAM_ABBREVIATION"],
-            "gp": int(row["GP"]),
-            "min": float(row["MIN"]),
-            "off_rating": float(row["OFF_RATING"]),
-            "def_rating": float(row["DEF_RATING"]),
-            "net_rating": float(row["NET_RATING"]),
-            "ast_pct": float(row["AST_PCT"]),
-            "ts_pct": float(row["TS_PCT"]),
-            "pace": float(row["PACE"]),
-        })
-
-    _CACHE["lineup_chemistry"][cache_key] = {"ts": time.time(), "data": lineups}
-    return lineups
 def _player_synergy_features(cursor, player_id: int, season: int):
     # dbpm_repro, not dbpm: the trained Pair Synergy model was fitted on this
     # project's own BPM reproduction (build_bpm_vorp.py); the main dbpm column
@@ -1069,332 +694,6 @@ def _player_synergy_features(cursor, player_id: int, season: int):
     return {
         "vec": z + onehot, "net_rating": net, "min": mn * gp, "archetype": archetype,
     }
-def fetch_nba_games_by_date(date_str: str):
-    """
-    Fetch NBA games for a specific date (YYYY-MM-DD) using nba_api scoreboard.
-    Cached per date (short TTL) and given a short request timeout — see the
-    comment above _CACHE. A cache hit on today's date can occasionally hand
-    back a live score that's a few minutes stale; a short TTL keeps that
-    real and bounded rather than serving something invented.
-    """
-    now = time.time()
-    cached = _CACHE["games_by_date"].get(date_str)
-    if cached and (now - cached["ts"] < _LIVE_CACHE_TTL_SECONDS):
-        return cached["data"]
-
-    result = _fetch_nba_games_by_date_uncached(date_str)
-    _CACHE["games_by_date"][date_str] = {"ts": now, "data": result}
-    return result
-def _fetch_nba_games_by_date_uncached(date_str: str):
-    try:
-        from nba_api.stats.endpoints import scoreboardv2
-
-        badges = get_team_badges()
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
-        game_date = dt.strftime("%m/%d/%Y")
-        endpoint = scoreboardv2.ScoreboardV2(
-            game_date=game_date,
-            league_id="00",
-            day_offset=0,
-            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
-        )
-        data = endpoint.get_dict()
-        result_sets = data.get("resultSets", []) or []
-
-        game_header = None
-        line_score = None
-        for rs in result_sets:
-            name = rs.get("name")
-            if name == "GameHeader":
-                game_header = rs
-            elif name == "LineScore":
-                line_score = rs
-
-        if not game_header or not line_score:
-            return []
-
-        gh_headers = game_header.get("headers", [])
-        gh_rows = game_header.get("rowSet", [])
-        ls_headers = line_score.get("headers", [])
-        ls_rows = line_score.get("rowSet", [])
-
-        gh_idx = {k: i for i, k in enumerate(gh_headers)}
-        ls_idx = {k: i for i, k in enumerate(ls_headers)}
-
-        def safe_value(row, index_map, key, default=None):
-            i = index_map.get(key)
-            if i is None or i >= len(row):
-                return default
-            return row[i]
-
-        lines_by_game = {}
-        for row in ls_rows:
-            game_id = str(row[ls_idx["GAME_ID"]])
-            lines_by_game.setdefault(game_id, []).append(row)
-
-        games = []
-        for row in gh_rows:
-            game_id = str(safe_value(row, gh_idx, "GAME_ID", ""))
-            status_text = str(row[gh_idx.get("GAME_STATUS_TEXT", 0)])
-            status_num = int(row[gh_idx.get("GAME_STATUS_ID", 0)] or 0)
-            game_code = str(row[gh_idx.get("GAMECODE", 0)] or "")
-
-            line_rows = lines_by_game.get(game_id, [])
-            if len(line_rows) < 2:
-                continue
-
-            # line score rows contain one row per team.
-            away_row = None
-            home_row = None
-            for lr in line_rows:
-                if int(safe_value(lr, ls_idx, "TEAM_ID", -1)) == int(safe_value(row, gh_idx, "VISITOR_TEAM_ID", -2)):
-                    away_row = lr
-                if int(safe_value(lr, ls_idx, "TEAM_ID", -1)) == int(safe_value(row, gh_idx, "HOME_TEAM_ID", -3)):
-                    home_row = lr
-            if away_row is None or home_row is None:
-                continue
-
-            def team_obj(lr):
-                abbr = str(safe_value(lr, ls_idx, "TEAM_ABBREVIATION", "") or "")
-                city = str(safe_value(lr, ls_idx, "TEAM_CITY_NAME", "") or "")
-                nickname = str(safe_value(lr, ls_idx, "TEAM_NICKNAME", "") or "")
-                wl = str(safe_value(lr, ls_idx, "TEAM_WINS_LOSSES", "") or "")
-                wins = int(wl.split("-")[0]) if "-" in wl else 0
-                losses = int(wl.split("-")[1]) if "-" in wl else 0
-                pts = safe_value(lr, ls_idx, "PTS", None)
-                return {
-                    "abbr": abbr,
-                    "city": city,
-                    "name": nickname,
-                    "score": int(pts) if pts is not None else None,
-                    "wins": wins,
-                    "losses": losses,
-                    "logo": badges.get(abbr),
-                }
-
-            if status_num == 3:
-                status = "FINAL"
-            elif status_num == 2:
-                status = "LIVE"
-            else:
-                status = "SCHEDULED"
-
-            games.append(
-                {
-                    "id": game_id,
-                    "game_code": game_code,
-                    "status": status,
-                    "status_text": status_text,
-                    "date": date_str,
-                    "away": team_obj(away_row),
-                    "home": team_obj(home_row),
-                }
-            )
-
-        # Fill missing scores from NBA CDN scoreboard fallback.
-        cdn_games = fetch_nba_cdn_games_by_date(date_str)
-        if cdn_games:
-            by_matchup = {
-                (
-                    (g.get("away", {}) or {}).get("abbr"),
-                    (g.get("home", {}) or {}).get("abbr"),
-                ): g
-                for g in cdn_games
-            }
-            for g in games:
-                if (g.get("away", {}) or {}).get("score") is not None and (g.get("home", {}) or {}).get("score") is not None:
-                    continue
-                key = (
-                    (g.get("away", {}) or {}).get("abbr"),
-                    (g.get("home", {}) or {}).get("abbr"),
-                )
-                cg = by_matchup.get(key)
-                if not cg:
-                    continue
-                if g["away"]["score"] is None:
-                    g["away"]["score"] = (cg.get("away", {}) or {}).get("score")
-                if g["home"]["score"] is None:
-                    g["home"]["score"] = (cg.get("home", {}) or {}).get("score")
-
-        return games
-    except Exception:
-        # If nba_api is unavailable, fallback fully to CDN.
-        return fetch_nba_cdn_games_by_date(date_str)
-def fetch_nba_cdn_games_by_date(date_str: str):
-    """
-    Fallback game schedule/scores from NBA CDN for a given date.
-    """
-    try:
-        badges = get_team_badges()
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
-        ymd = dt.strftime("%Y%m%d")
-        data = fetch_json(
-            f"https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_{ymd}.json",
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
-        )
-        games = (((data or {}).get("scoreboard") or {}).get("games") or [])
-        out = []
-
-        def to_int(v):
-            try:
-                if v is None or v == "":
-                    return None
-                return int(float(v))
-            except Exception:
-                return None
-
-        for g in games:
-            away = g.get("awayTeam", {}) or {}
-            home = g.get("homeTeam", {}) or {}
-            away_abbr = (away.get("teamTricode") or "").upper()
-            home_abbr = (home.get("teamTricode") or "").upper()
-            game_status = int(g.get("gameStatus", 1) or 1)
-            if game_status == 3:
-                status = "FINAL"
-            elif game_status == 2:
-                status = "LIVE"
-            else:
-                status = "SCHEDULED"
-
-            away_score = to_int(away.get("score"))
-            home_score = to_int(home.get("score"))
-
-            out.append(
-                {
-                    "id": str(g.get("gameId") or ""),
-                    "game_code": str(g.get("gameCode") or ""),
-                    "status": status,
-                    "status_text": str(g.get("gameStatusText") or ""),
-                    "date": date_str,
-                    "away": {
-                        "abbr": away_abbr,
-                        "city": str(away.get("teamCity") or ""),
-                        "name": str(away.get("teamName") or away_abbr),
-                        "score": away_score,
-                        "wins": to_int(away.get("wins")) or 0,
-                        "losses": to_int(away.get("losses")) or 0,
-                        "logo": badges.get(away_abbr),
-                    },
-                    "home": {
-                        "abbr": home_abbr,
-                        "city": str(home.get("teamCity") or ""),
-                        "name": str(home.get("teamName") or home_abbr),
-                        "score": home_score,
-                        "wins": to_int(home.get("wins")) or 0,
-                        "losses": to_int(home.get("losses")) or 0,
-                        "logo": badges.get(home_abbr),
-                    },
-                }
-            )
-        return out
-    except Exception:
-        return []
-def fetch_boxscore(game_id: str):
-    """
-    Fetch traditional boxscore for a game_id.
-    """
-    try:
-        from nba_api.stats.endpoints import boxscoretraditionalv2
-
-        endpoint = boxscoretraditionalv2.BoxScoreTraditionalV2(
-            game_id=game_id,
-            start_period=0,
-            end_period=10,
-            start_range=0,
-            end_range=0,
-            range_type=0,
-            timeout=45,
-        )
-        frames = endpoint.get_data_frames()
-        if not frames:
-            return fetch_boxscore_from_cdn(game_id)
-
-        # Frame 0 is PlayerStats in this endpoint.
-        df = frames[0].copy()
-        if df.empty:
-            return fetch_boxscore_from_cdn(game_id)
-
-        for col in ("TEAM_ID", "PTS", "REB", "AST", "STL", "BLK", "FGM", "FGA", "FG3M", "FG3A", "FTM", "FTA"):
-            if col in df.columns:
-                df[col] = df[col].fillna(0)
-
-        df["MIN"] = df["MIN"].fillna("0")
-        df["PLAYER_NAME"] = df["PLAYER_NAME"].fillna("")
-
-        team_ids = [tid for tid in df["TEAM_ID"].drop_duplicates().tolist() if tid is not None]
-        if len(team_ids) < 2:
-            return fetch_boxscore_from_cdn(game_id)
-
-        away_team_id = team_ids[0]
-        home_team_id = team_ids[1]
-
-        def to_player_dict(row):
-            return {
-                "name": str(row.get("PLAYER_NAME", "")),
-                "min": str(row.get("MIN", "0")),
-                "pts": int(row.get("PTS", 0) or 0),
-                "reb": int(row.get("REB", 0) or 0),
-                "ast": int(row.get("AST", 0) or 0),
-                "stl": int(row.get("STL", 0) or 0),
-                "blk": int(row.get("BLK", 0) or 0),
-                "fg": f"{int(row.get('FGM', 0) or 0)}-{int(row.get('FGA', 0) or 0)}",
-                "three": f"{int(row.get('FG3M', 0) or 0)}-{int(row.get('FG3A', 0) or 0)}",
-                "ft": f"{int(row.get('FTM', 0) or 0)}-{int(row.get('FTA', 0) or 0)}",
-                "pm": str(row.get("PLUS_MINUS", 0) or 0),
-            }
-
-        away_df = df[df["TEAM_ID"] == away_team_id]
-        home_df = df[df["TEAM_ID"] == home_team_id]
-
-        away = [to_player_dict(row) for _, row in away_df.iterrows()]
-        home = [to_player_dict(row) for _, row in home_df.iterrows()]
-        if not away and not home:
-            return fetch_boxscore_from_cdn(game_id)
-        return {"away": away, "home": home}
-    except Exception:
-        return fetch_boxscore_from_cdn(game_id)
-def fetch_boxscore_from_cdn(game_id: str):
-    """
-    Fallback boxscore parser from NBA live CDN JSON.
-    """
-    try:
-        data = fetch_json(
-            f"https://cdn.nba.com/static/json/liveData/boxscore/boxscore_{game_id}.json",
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=30,
-        )
-        game = data.get("game", {}) or {}
-        away_team = game.get("awayTeam", {}) or {}
-        home_team = game.get("homeTeam", {}) or {}
-
-        def parse_players(team_obj):
-            out = []
-            for p in team_obj.get("players", []) or []:
-                stats = p.get("statistics", {}) or {}
-                out.append(
-                    {
-                        "name": p.get("name") or p.get("familyName") or "Unknown",
-                        "min": str(stats.get("minutes", "0")),
-                        "pts": int(stats.get("points", 0) or 0),
-                        "reb": int((stats.get("reboundsTotal", 0) or 0)),
-                        "ast": int((stats.get("assists", 0) or 0)),
-                        "stl": int((stats.get("steals", 0) or 0)),
-                        "blk": int((stats.get("blocks", 0) or 0)),
-                        "fg": f"{int(stats.get('fieldGoalsMade', 0) or 0)}-{int(stats.get('fieldGoalsAttempted', 0) or 0)}",
-                        "three": f"{int(stats.get('threePointersMade', 0) or 0)}-{int(stats.get('threePointersAttempted', 0) or 0)}",
-                        "ft": f"{int(stats.get('freeThrowsMade', 0) or 0)}-{int(stats.get('freeThrowsAttempted', 0) or 0)}",
-                        "pm": str(stats.get("plusMinusPoints", 0) or 0),
-                    }
-                )
-            return out
-
-        return {
-            "away": parse_players(away_team),
-            "home": parse_players(home_team),
-        }
-    except Exception:
-        return {"away": [], "home": []}
 def _pub_time_matches_target(
     date_obj: Optional[datetime], target_date: date, should_filter: bool
 ) -> bool:
@@ -1680,7 +979,16 @@ def resolve_player(cursor, player_name: str, player_id: Optional[int] = None):
     if not row:
         raise HTTPException(status_code=404, detail=f"No player with id {player_id}.")
     return player_id, row[0]
+LIVE_GAME_LOG_UNAVAILABLE = (
+    f"stats.nba.com didn't answer within {_LIVE_REQUEST_TIMEOUT_SECONDS} s. Seasons from 2020-21 on are "
+    "read from stored data (game_scores and the play-by-play game lines); earlier seasons need the live "
+    "game logs. Try again in a moment."
+)
 def _fetch_team_game_log(team_id: int, season: int):
+    """Live regular-season game log of a team (LeagueGameFinder): [{game_id, wl, plus_minus}]. Only
+    for seasons before the stored game lines (2020-21 on); 503 with LIVE_GAME_LOG_UNAVAILABLE when
+    stats.nba.com doesn't answer within _LIVE_REQUEST_TIMEOUT_SECONDS. Its plus_minus is the summed
+    player plus-minus / 5, not the final margin (README Known real gaps)."""
     cached = _CACHE["team_game_log"].get((team_id, season))
     if cached and time.time() - cached["ts"] < _CACHE_TTL_SECONDS:
         return cached["data"]
@@ -1693,11 +1001,11 @@ def _fetch_team_game_log(team_id: int, season: int):
             team_id_nullable=str(team_id),
             season_nullable=season_label,
             season_type_nullable="Regular Season",
-            timeout=30,
+            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
         )
         df = endpoint.get_data_frames()[0]
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Live team game log fetch failed: {exc}")
+    except Exception:
+        raise HTTPException(status_code=503, detail=LIVE_GAME_LOG_UNAVAILABLE)
 
     games = [
         {
@@ -1723,11 +1031,11 @@ def _fetch_player_game_ids(player_id: int, season: int, team_id: int):
             player_id_nullable=str(player_id),
             season_nullable=season_label,
             season_type_nullable="Regular Season",
-            timeout=30,
+            timeout=_LIVE_REQUEST_TIMEOUT_SECONDS,
         )
         df = endpoint.get_data_frames()[0]
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Live player game log fetch failed: {exc}")
+    except Exception:
+        raise HTTPException(status_code=503, detail=LIVE_GAME_LOG_UNAVAILABLE)
 
     game_ids = set(df[df["TEAM_ID"] == team_id]["GAME_ID"].tolist())
     _CACHE["player_game_log"][cache_key] = {"ts": time.time(), "data": game_ids}
@@ -2056,6 +1364,221 @@ def _pick_bucket_label(overall_pick):
         if lo <= overall_pick <= hi:
             return label
     return "61+"
+# ─── Live scores, box scores and standings without stats.nba.com (round 8 step 4) ───────────────
+# Stored data first (the real final scores and records), ESPN's public API for anything live, a
+# clear "unreachable" answer within espn_live.TIMEOUT_SECONDS when ESPN doesn't answer. The
+# cdn.nba.com liveData fallbacks that used to sit behind these (403 since at least 2026-10-05,
+# R8-003) and the stats.nba.com scoreboard/box score (empty for future dates, R8-002) are gone.
+
+def _final_text(periods):
+    if not periods or periods <= 4:
+        return "Final"
+    return "Final/OT" if periods == 5 else f"Final/{periods - 4}OT"
+
+
+def _stored_side(abbr, score):
+    return {"abbr": abbr, "city": "", "name": TEAM_META.get(abbr, {}).get("name") or abbr, "score": score,
+            "wins": None, "losses": None, "winner": None}
+
+
+def stored_games_by_date(cursor, date_str: str):
+    """The finished games of a date from the stored tables, in the scoreboard's shape: the regular
+    season from game_scores (2009-10 on, ESPN's final scores matched to NBA game ids) and the
+    play-in and playoffs from postseason_games (2009-10 on). [] when the date has none (preseason,
+    a season not loaded yet, a day off). At a neutral site both rows are is_home = false and the
+    first team by id order is shown as the home side (neutral_site says so)."""
+    try:
+        day = date.fromisoformat(date_str)
+    except ValueError:
+        return []
+    cursor.execute("SELECT to_regclass('public.game_scores'), to_regclass('public.postseason_games');")
+    has_scores, has_post = cursor.fetchone()
+    games = []
+    if has_scores:
+        cursor.execute(
+            """SELECT game_id, espn_id, team_abbreviation, is_home, neutral_site, pts_for, pts_against, periods, season
+               FROM game_scores WHERE game_date = %s
+               ORDER BY game_id, is_home DESC, team_abbreviation;""",
+            (day,),
+        )
+        by_game = {}
+        for gid, espn_id, team, is_home, neutral, pf, pa, periods, season in cursor.fetchall():
+            g = by_game.setdefault(gid, {"espn_id": espn_id, "season": season, "periods": periods,
+                                         "neutral": bool(neutral), "rows": []})
+            g["rows"].append((team, bool(is_home), pf, pa))
+        for gid, g in by_game.items():
+            if len(g["rows"]) != 2:
+                continue
+            home = next((r for r in g["rows"] if r[1]), g["rows"][0])
+            away = next(r for r in g["rows"] if r is not home)
+            home_side, away_side = _stored_side(home[0], home[2]), _stored_side(away[0], away[2])
+            home_side["winner"], away_side["winner"] = home[2] > away[2], away[2] > home[2]
+            games.append({
+                "id": str(g["espn_id"]) if g["espn_id"] else gid, "espn_id": str(g["espn_id"]) if g["espn_id"] else None,
+                "nba_game_id": gid, "status": "FINAL", "status_text": _final_text(g["periods"]),
+                "period": g["periods"], "clock": "0.0", "tip_utc": None, "date": date_str, "season": g["season"],
+                "kind": "Regular season", "neutral_site": g["neutral"], "venue": None, "note": None,
+                "away": away_side, "home": home_side,
+            })
+    if has_post:
+        cursor.execute(
+            """SELECT espn_id, season, stage, round, home, away, pts_home, pts_away, note
+               FROM postseason_games WHERE game_date = %s ORDER BY espn_id;""",
+            (day,),
+        )
+        for espn_id, season, stage, rnd, home, away, ph, pa, note in cursor.fetchall():
+            home_side, away_side = _stored_side(home, ph), _stored_side(away, pa)
+            home_side["winner"], away_side["winner"] = ph > pa, pa > ph
+            games.append({
+                "id": str(espn_id), "espn_id": str(espn_id), "nba_game_id": None, "status": "FINAL",
+                "status_text": "Final", "period": None, "clock": "0.0", "tip_utc": None, "date": date_str,
+                "season": season, "kind": "Play-in" if str(stage or "").lower() == "play-in" else "Playoffs",
+                "neutral_site": False, "venue": None, "note": note or rnd,
+                "away": away_side, "home": home_side,
+            })
+    games.sort(key=lambda g: (g["kind"] != "Regular season", g["id"]))
+    return games
+
+
+def games_by_date(date_str: str):
+    """{"games", "source": "stored" | "espn" | "none", "status": "ok" | "unreachable", "message"}.
+    Stored results first (exact, no network); every other date, including today, the future and the
+    preseason, from ESPN's scoreboard (espn_live.scoreboard, cached briefly). When ESPN can't be
+    reached the answer says so instead of looking like a day without games (R8-002, R8-003)."""
+    with get_db() as conn:
+        stored = stored_games_by_date(conn.cursor(), date_str)
+    if stored:
+        return {"games": stored, "source": "stored", "status": "ok", "message": None}
+    live = espn_live.scoreboard(date_str)
+    if live is None:
+        return {
+            "games": [], "source": "none", "status": "unreachable",
+            "message": (f"ESPN's scoreboard didn't answer within {espn_live.TIMEOUT_SECONDS:g} s and {date_str} "
+                        "isn't in the stored results (regular-season, play-in and playoff games 2009-10 to "
+                        "2025-26). Try again in a moment."),
+        }
+    for g in live:
+        if g["status"] == "SCHEDULED":
+            g["away"]["score"] = g["home"]["score"] = None
+    return {"games": live, "source": "espn", "status": "ok", "message": None}
+
+
+def game_boxscore(game_id: str):
+    """A game's box score from ESPN's summary (espn_live.boxscore). Takes an ESPN event id
+    ("401705029", also "espn_401705029") or an NBA game id ("0022400062", mapped through
+    game_scores.espn_id: regular season 2009-10 on). Returns {"game_id", "espn_id", "boxscore":
+    {"away", "home"}, "teams", "game_status", "status": "ok" | "unreachable" | "unknown_game",
+    "message"}; plus-minus is an int, None for a player who didn't play (R8-005)."""
+    gid = str(game_id or "").strip()
+    espn_id = nba_id = None
+    if gid.startswith("espn_"):
+        espn_id = gid[5:]
+    elif gid.isdigit() and len(gid) == 10 and gid.startswith("00"):
+        nba_id = gid
+    elif gid.isdigit():
+        espn_id = gid
+    empty = {"away": [], "home": []}
+    if nba_id:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT espn_id FROM game_scores WHERE game_id = %s AND espn_id IS NOT NULL LIMIT 1;", (nba_id,))
+            row = cur.fetchone()
+        espn_id = str(row[0]) if row else None
+    if not espn_id:
+        return {"game_id": gid, "espn_id": None, "boxscore": empty, "teams": {}, "game_status": None,
+                "status": "unknown_game",
+                "message": f"No ESPN game id on file for {gid} (NBA ids are mapped for the regular seasons 2009-10 to 2025-26)."}
+    box = espn_live.boxscore(espn_id)
+    if box is None:
+        return {"game_id": gid, "espn_id": espn_id, "boxscore": empty, "teams": {}, "game_status": None,
+                "status": "unreachable",
+                "message": f"ESPN's box score didn't answer within 5 s. Try again in a moment."}
+    message = None
+    if box["status"] == "SCHEDULED" and not box["away"] and not box["home"]:
+        message = "This game hasn't tipped off yet; the box score appears once it starts."
+    return {"game_id": gid, "espn_id": espn_id, "boxscore": {"away": box["away"], "home": box["home"]},
+            "teams": box["teams"], "game_status": box["status"], "game_status_text": box["status_text"],
+            "status": "ok", "message": message}
+
+
+def stored_standings_rows(cursor, season):
+    """[(abbr, wins, losses)] of a stored season: the real record (team_seasons, Basketball-Reference;
+    equal to the final scores in game_scores for every team-season 2009-10 on, test_known_facts)."""
+    cursor.execute("SELECT to_regclass('public.team_seasons');")
+    if cursor.fetchone()[0] is None:
+        return []
+    cursor.execute(
+        "SELECT abbreviation, w, l FROM team_seasons WHERE season = %s AND NOT is_league_avg AND w IS NOT NULL;",
+        (season,),
+    )
+    return cursor.fetchall()
+
+
+def stored_standings(cursor, season):
+    """team_seasons -> {"eastern": [...], "western": [...]} in the live standings' shape (rank by
+    win percentage within the conference, games back from the leader, no last-10 or streak)."""
+    rows = []
+    for abbr, w, l in stored_standings_rows(cursor, season):
+        if abbr in TEAM_META and w is not None:
+            rows.append({"abbr": abbr, "team": TEAM_META[abbr]["name"], "conference": TEAM_META[abbr]["conference"],
+                         "w": int(w), "l": int(l), "w_pct": w / (w + l) if w + l else 0.0})
+    out = {}
+    for conf in ("eastern", "western"):
+        conf_rows = sorted([r for r in rows if r["conference"] == conf], key=lambda r: (-r["w_pct"], r["team"]))
+        decorated = []
+        for i, r in enumerate(conf_rows, start=1):
+            lead = conf_rows[0]
+            gb = ((lead["w"] - r["w"]) + (r["l"] - lead["l"])) / 2
+            decorated.append({
+                "rank": i, "abbr": r["abbr"], "team": r["team"], "w": r["w"], "l": r["l"],
+                "pct": f".{int(round(r['w_pct'] * 1000)):03d}",
+                "gb": "-" if i == 1 else f"{gb:.1f}".rstrip("0").rstrip("."),
+                "last10": "-", "streak": "-",
+            })
+        out[conf] = decorated
+    return out
+
+
+def current_standings(season: int):
+    """{"standings", "source": "espn" | "stored", "season", "played"}: ESPN's regular-season
+    standings for `season` (espn_live.standings; every team 0-0 before opening night), else the
+    latest stored season's record from team_seasons (so the page always has a real table and says
+    which season it is). The upstream names are the app's."""
+    live = espn_live.standings(season)
+    if live:
+        for conf in ("eastern", "western"):
+            for item in live[conf]:
+                item["team"] = TEAM_META.get(item["abbr"], {}).get("name") or item["team"]
+        return {"standings": live, "source": "espn", "season": int(season), "played": espn_live.played(live)}
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT to_regclass('public.team_seasons');")
+        stored_season = None
+        if cur.fetchone()[0] is not None:
+            cur.execute("SELECT MAX(season) FROM team_seasons WHERE NOT is_league_avg AND w IS NOT NULL AND season <= %s;", (season,))
+            stored_season = cur.fetchone()[0]
+        table = stored_standings(cur, stored_season) if stored_season else {"eastern": [], "western": []}
+    return {"standings": table, "source": "stored", "season": int(stored_season) if stored_season else None,
+            "played": espn_live.played(table)}
+
+
+def standings_win_pct(season: int):
+    """{abbr: win pct} of the current standings (ESPN, else stored), used by the Vegas Scanner's
+    naive proxy. Before a season's first game ESPN's table is all zeros, so the latest season with a
+    decision is used instead; the season it came from is returned beside the dict."""
+    cur_ = current_standings(season)
+    if not cur_["played"] and cur_["source"] == "espn":
+        cur_ = current_standings(season - 1)
+    out = {}
+    for conf in ("eastern", "western"):
+        for item in cur_["standings"].get(conf, []):
+            try:
+                out[item["abbr"]] = float(item["pct"])
+            except (KeyError, ValueError, TypeError):
+                continue
+    return out, cur_["season"], cur_["source"]
+
+
 def _attach_rest_tags(games: list, date_str: str):
     """Real rest-days context for each team in each game, from the real
     schedule already on file (team_game_fatigue). Purely informational —
@@ -2219,29 +1742,3 @@ def get_championship_odds_cached():
     data = _fetch_championship_odds_live()
     _CACHE["championship_odds"] = {"ts": time.time(), "data": data}
     return data
-def _real_standings_win_pct(season: int):
-    """
-    Same source-priority chain /meta/current uses (live nba_api -> NBA CDN
-    -> balldontlie -> local DB last resort) — reused here rather than
-    re-derived, because a naive MAX(w_pct) GROUP BY team over
-    player_season_stats turned out to give nonsense (1.000 for several
-    teams) for the current in-progress season: that column is each
-    player's own win rate over the games THEY personally played, so a
-    player who only appeared in a short hot streak for a team distorts the
-    team-level MAX. The real standings feeds report the team's actual
-    win-loss record directly.
-    """
-    standings = (
-        fetch_nba_api_standings(season)
-        or fetch_nba_cdn_standings()
-        or fetch_balldontlie_standings(season)
-    )
-    win_pct_by_abbr = {}
-    if standings:
-        for conf in ("eastern", "western"):
-            for item in standings.get(conf, []):
-                try:
-                    win_pct_by_abbr[item["abbr"]] = float(item["pct"])
-                except (KeyError, ValueError, TypeError):
-                    continue
-    return win_pct_by_abbr

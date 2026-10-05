@@ -2,10 +2,11 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 
+from source_badge import make_source
+
 from impact_core import (
     PAIR_SYNERGY_MODEL,
     PAIR_SYNERGY_SCALER,
-    _fetch_lineup_stats_season,
     _player_synergy_features,
     find_player,
     get_db,
@@ -36,6 +37,33 @@ def get_pair_synergy(player_a: str, player_b: str, season: Optional[int] = None)
         )
         validation_row = cursor.fetchone()
 
+        # Observed pair minutes from the stored play-by-play stints (pair_seasons, 2020-21 on; the
+        # Pair Chemistry grid's table), the row with the most minutes if the two were traded
+        # together. Until round 8 step 4 this was a live stats.nba.com two-man lineup call with a
+        # 45 s timeout (R8-008).
+        observed = None
+        observed_source = "none"
+        cursor.execute("SELECT to_regclass('public.pair_seasons');")
+        if cursor.fetchone()[0] is not None:
+            cursor.execute(
+                """SELECT team_abbreviation, minutes, net_rating, off_rating, def_rating, games, poss
+                   FROM pair_seasons WHERE season = %s AND player_a = %s AND player_b = %s
+                   ORDER BY minutes DESC LIMIT 1;""",
+                (resolved_season, min(pid_a, pid_b), max(pid_a, pid_b)),
+            )
+            row = cursor.fetchone()
+            cursor.execute("SELECT MIN(season) FROM pair_seasons;")
+            first_pair_season = cursor.fetchone()[0]
+            if row:
+                observed = {
+                    "team_abbreviation": row[0], "min": round(float(row[1]), 1), "net_rating": round(float(row[2]), 2),
+                    "off_rating": round(float(row[3]), 2), "def_rating": round(float(row[4]), 2),
+                    "games": int(row[5]), "poss": round(float(row[6]), 1),
+                }
+                observed_source = "pair_seasons"
+            elif first_pair_season is not None and resolved_season >= first_pair_season:
+                observed_source = "pair_seasons"  # on file for the season, these two just never shared the floor
+
     if not fa or not fb:
         raise HTTPException(
             status_code=404,
@@ -53,20 +81,6 @@ def get_pair_synergy(player_a: str, player_b: str, season: Optional[int] = None)
     expected_baseline = (fa["net_rating"] * fa["min"] + fb["net_rating"] * fb["min"]) / (fa["min"] + fb["min"])
     predicted_pair_net_rating = expected_baseline + predicted_synergy
 
-    # Real observed data: have these two actually shared the floor this season?
-    observed = None
-    try:
-        pairs = _fetch_lineup_stats_season(resolved_season, group_quantity=2)
-        for p in pairs:
-            if set(p["player_ids"]) == {pid_a, pid_b}:
-                observed = {
-                    "min": p["min"], "net_rating": p["net_rating"],
-                    "off_rating": p["off_rating"], "def_rating": p["def_rating"],
-                }
-                break
-    except HTTPException:
-        observed = None
-
     validation = None
     if validation_row:
         validation = {
@@ -83,6 +97,7 @@ def get_pair_synergy(player_a: str, player_b: str, season: Optional[int] = None)
         "predicted_pair_net_rating": round(predicted_pair_net_rating, 2),
         "expected_baseline_net_rating": round(expected_baseline, 2),
         "observed": observed,
+        "observed_source": observed_source,
         "validation": validation,
         "methodology": (
             "predicted_synergy is a real ridge regression's output: the real pair net rating you'd expect ABOVE "
@@ -99,12 +114,20 @@ def get_pair_synergy(player_a: str, player_b: str, season: Optional[int] = None)
                 "No stored validation found — run scripts/train_pair_synergy.py to see the real cross-validated R². "
             )
             + (
-                "'observed' is these two real players' actual real net rating in real minutes they've actually "
-                "shared the floor together this season, live-fetched from the NBA's own data — compare it "
-                "directly against the model's prediction when available."
-                if observed else
-                "These two real players haven't shared the floor together (enough) this season for a real "
-                "observed pair net rating — 'observed' is null rather than guessed."
+                "'observed' is these two players' actual net rating over the minutes they shared the floor "
+                "that season, from the stored play-by-play stints (pair_seasons, possessions averaged over "
+                "both sides like the On/Off page) — compare it directly against the model's prediction."
+                if observed else (
+                    "These two players never shared the floor that season in the stored play-by-play stints, "
+                    "so 'observed' is null rather than guessed."
+                    if observed_source == "pair_seasons" else
+                    "Observed pair minutes are on file from 2020-21 (pair_seasons); for this season 'observed' "
+                    "is null rather than guessed."
+                )
             )
+        ),
+        "_source": make_source(
+            ["player_season_stats", "player_clusters", "pair_synergy_validation"] + (["pair_seasons"] if observed_source == "pair_seasons" else []),
+            "ridge model on stored season stats; observed pair from ESPN play-by-play stints",
         ),
     }

@@ -10,6 +10,7 @@ import PlayerDetailModal from '../common/PlayerDetailModal';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import TableExport from '../common/TableExport';
+import SourceBadge from '../common/SourceBadge';
 
 const STAT_OPTIONS = [
   { key: 'pts', label: 'Points' },
@@ -41,6 +42,8 @@ export default function StatLeaders() {
   const [statKey, setStatKey] = useState('pts');
   const [leaders, setLeaders] = useState([]);
   const [season, setSeason] = useState(null);
+  const [note, setNote] = useState('');
+  const [source, setSource] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState(null);
@@ -70,9 +73,13 @@ export default function StatLeaders() {
         }));
         setLeaders(normalized);
         setSeason(data?.season || null);
+        setNote(data?.note || '');
+        setSource(data?._source || null);
       } catch (err) {
         if (!mounted) return;
         setLeaders([]);
+        setNote('');
+        setSource(null);
         setError(err?.response?.data?.detail || 'Failed to load stat leaders.');
       } finally {
         if (mounted) setLoading(false);
@@ -96,7 +103,9 @@ export default function StatLeaders() {
           </div>
           <p className="page-subtitle" style={{ marginTop: '-0.75rem' }}>
             Top 10 {season ? `· ${season - 1}-${String(season).slice(-2)}` : ''}
+            <SourceBadge source={source} />
           </p>
+          {note && <p className="page-subtitle" style={{ marginTop: '-0.5rem' }}>{note}</p>}
 
           <div className="hb-rail-group">
             <span className="hb-rail-label">Stat</span>

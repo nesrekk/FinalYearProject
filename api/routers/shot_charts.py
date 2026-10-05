@@ -159,11 +159,14 @@ def get_league_shot_sample(n: int = 6000):
 
 @router.get("/shots/league-zones/{season}")
 def get_league_shot_zones(season: int):
-    """League-wide FG% by the same 5 zones, one cheap aggregate call per
-    season (not per player), cached forever after the first fetch."""
+    """League-wide FG% by the same 5 zones from league_shot_zones (2023-24 and 2024-25 on file).
+    A season that isn't stored is fetched from stats.nba.com and inserted only when
+    ENABLE_LIVE_SHOT_FETCH=true (round 8 R8-007); otherwise 404 with the reason."""
     season_label = f"{season - 1}-{str(season)[-2:]}"
     try:
         zones = shots_lib.get_league_zone_stats(season_label)
+    except shots_lib.ShotsUnavailable as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Live league shot fetch failed: {e}")
     return {"season": season_label, "zones": zones,

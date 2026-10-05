@@ -3,6 +3,8 @@ from typing import Optional
 
 from fastapi import APIRouter
 
+from source_badge import make_source
+
 from impact_core import (
     fetch_current_news,
 )
@@ -22,4 +24,6 @@ def get_current_news(date: Optional[str] = None, limit: int = 20, team: Optional
     return {
         "date": date or datetime.now().strftime("%Y-%m-%d"),
         "items": items,
+        "_source": make_source([], "public RSS feeds (ESPN, Google News; live)", live=True,
+                               as_of=datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")),
     }

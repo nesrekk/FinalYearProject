@@ -41,8 +41,13 @@ def get_heliocentricity_leaderboard(season: Optional[int] = None, top_n: int = 2
         db_rows = cursor.fetchall()
 
     pt_stats = _fetch_pt_possession_stats(resolved_season)
+    if pt_stats is None:
+        raise HTTPException(
+            status_code=503,
+            detail="stats.nba.com didn't answer within 3 s (touch and time-of-possession tracking isn't stored). Try again in a moment.",
+        )
     if not pt_stats:
-        raise HTTPException(status_code=502, detail="Live touch/possession tracking data is unavailable right now.")
+        raise HTTPException(status_code=404, detail=f"stats.nba.com has no tracking rows for season {resolved_season}.")
 
     combined = []
     for player_id, player_name, team_abbr, usg_pct, ast_pct in db_rows:

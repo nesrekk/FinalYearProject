@@ -14,9 +14,12 @@ Design goals (see progress.txt / PROJECT_DETAILS.md conventions):
   - Once a player's career shots are fetched, they are cached in Postgres
     forever (historical shot locations never change), so a given player is
     only ever fetched live once, by whoever searches them first.
-  - ENABLE_LIVE_SHOT_FETCH=false fully disables live fetching (e.g. for a
-    demo where you want zero network dependency) — only pre-warmed / already
-    cached players will work.
+  - Live fetching is OFF unless ENABLE_LIVE_SHOT_FETCH=true (round 8 step 4, R8-007): a GET for
+    a player who isn't cached used to fetch his career from stats.nba.com and write it into
+    player_shots, a table the paper manifest hashes and that shot-making, xRAPM and Layerbase all
+    read, so the first view of an uncached rookie would have changed the data under the paper.
+    With it off, an uncached player gets a clear "not on file" answer; scripts/prewarm_shots.py
+    turns it on for itself. The same switch gates the league zone totals (league_shot_zones).
 """
 
 from __future__ import annotations
@@ -34,7 +37,7 @@ from psycopg2.extras import execute_values
 
 # ─── Config ─────────────────────────────────────────────────────────────────
 
-LIVE_FETCH_ENABLED = os.getenv("ENABLE_LIVE_SHOT_FETCH", "true").strip().lower() != "false"
+LIVE_FETCH_ENABLED = os.getenv("ENABLE_LIVE_SHOT_FETCH", "false").strip().lower() in ("true", "1", "yes")
 REQUEST_SLEEP_SECONDS = 5
 BACKOFF_SLEEP_SECONDS = 30
 MAX_RETRIES = 3
@@ -463,8 +466,9 @@ def ensure_player_shots_cached(player_id: int, player_name: str, log=print) -> d
 
     if not LIVE_FETCH_ENABLED:
         raise ShotsUnavailable(
-            f"'{player_name}' isn't cached yet and live fetching is disabled "
-            "(ENABLE_LIVE_SHOT_FETCH=false)."
+            f"{player_name}'s shots aren't on file (player_shots holds the careers of the players fetched so far) "
+            "and fetching from stats.nba.com is off: set ENABLE_LIVE_SHOT_FETCH=true in api/.env to allow it "
+            "(it writes new rows into player_shots)."
         )
 
     with _FETCH_LOCK:
@@ -600,8 +604,8 @@ def ensure_season_shots_cached(player_id: int, player_name: str, season_label: s
 
     if not LIVE_FETCH_ENABLED:
         raise ShotsUnavailable(
-            f"'{player_name}' isn't cached for {season_label} and live fetching is disabled "
-            "(ENABLE_LIVE_SHOT_FETCH=false)."
+            f"{player_name}'s {season_label} shots aren't on file and fetching from stats.nba.com is off: set "
+            "ENABLE_LIVE_SHOT_FETCH=true in api/.env to allow it (it writes new rows into player_shots)."
         )
 
     with _FETCH_LOCK:
@@ -686,6 +690,11 @@ def get_league_zone_stats(season_label: str, log=print) -> list[dict]:
     rows = _read_cache()
     if rows:
         return [{"zone": r[0], "fgm": r[1], "fga": r[2], "fg_pct": r[3]} for r in rows]
+    if not LIVE_FETCH_ENABLED:
+        raise ShotsUnavailable(
+            f"League zone totals for {season_label} aren't on file (league_shot_zones) and fetching from "
+            "stats.nba.com is off: set ENABLE_LIVE_SHOT_FETCH=true in api/.env to allow it."
+        )
 
     with _FETCH_LOCK:
         rows = _read_cache()  # another request may have just finished this

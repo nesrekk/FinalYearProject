@@ -2,6 +2,8 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 
+from source_badge import make_source
+
 from impact_core import (
     HUSTLE_STAT_MAP,
     find_player,
@@ -46,6 +48,7 @@ def get_hustle_leaders(stat: str = "deflections", season: Optional[int] = None, 
             "hustle-stat tracking (LeagueHustleStatsPlayer) — real effort/activity stats the traditional "
             "box score doesn't capture."
         ),
+        "_source": make_source(["player_hustle"], "nba_api (stats.nba.com, LeagueHustleStatsPlayer), stored"),
     }
 
 @router.get("/players/playtype-profile/{player_name}")

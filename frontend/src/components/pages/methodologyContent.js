@@ -513,7 +513,7 @@ export const SECTIONS = [
                 answers: 'How did real five-man units, and teams with and without a star, actually do?',
                 method: 'Real lineup ratings with a stated minutes cutoff, from every play-by-play stint from 2020-21 on and from stats.nba.com\'s stored 2,000 most-used lineups before that (the page names the source); team results split by whether a player played.',
                 checked: 'The 2023-24 76ers with and without Embiid (79.5% vs 37.2% wins) reproduce that season\'s known story. The 2025-26 Thunder\'s most-used lineup has 155 tracked minutes here against 167 stored by stats.nba.com; the gap is one game excluded because its play-by-play is missing six points. Checked on 2026-09-28.',
-                limits: ['Other absences and opponents aren\'t controlled for; small lineups are noisy, and at a low minutes floor the top of the list is small samples.', 'With vs. Without fetches its games live from stats.nba.com, whose per-game point differential is summed player plus-minus ÷ 5: in 160 of 20,348 games 2009-10 to 2025-26 it isn\'t the final margin (134 by a point or more), so its average point differential can be off by a fraction of a point. Wins and losses are right.'],
+                limits: ['Other absences and opponents aren\'t controlled for; small lineups are noisy, and at a low minutes floor the top of the list is small samples.', 'With vs. Without reads stored data from 2020-21 on (wins and the real final margin from game_scores, who played from the play-by-play game lines; the 2023-24 Embiid split is 31-8 / 16-27 either way). Seasons before 2020-21 are still fetched live from stats.nba.com, whose per-game point differential is summed player plus-minus ÷ 5: in 160 of 20,348 games 2009-10 to 2025-26 it isn\'t the final margin (134 by a point or more), so that average can be off by a fraction of a point there. Wins and losses are right.'],
             },
             {
                 id: 'pairs',
@@ -663,8 +663,8 @@ export const OPEN_ISSUES = [
         body: 'In 9 ESPN games (2020-21 to 2023-24) one substitution is logged with no team, and the per-game player lines count that player twice for the rest of the period (Luka Dončić shows 45.4 minutes on 2022-01-30; he played 37.1). The Rotations page reads the five-man stints, which only track the two real teams, so its minutes are right there and differ from the Game Log in exactly those 9 player-games. Fixing the lines means rebuilding them and everything built on them (on/off, Stat Stability, Hot Streaks, Situational Splits, Projections), so it is planned as one deliberate rebuild.',
     },
     {
-        title: 'Some models can\'t be retrained right now',
-        body: 'stats.nba.com has been unreachable from the build machine since 2026-09-26, so Pair Synergy still uses the old in-house defensive BPM it was trained on.',
+        title: 'Pair Synergy still uses the old in-house defensive BPM',
+        body: 'Its model was trained on this project\'s own BPM reproduction (dbpm_repro) and hasn\'t been retrained on Basketball-Reference\'s published values, so it keeps reading the old column. stats.nba.com, which the retrain needs for two-man lineups, was unreachable from the build machine from 2026-09-26 and answers again through nba_api since 2026-10-05 (plain curl still times out); the retrain is a planned, deliberate step.',
     },
     {
         title: 'The Hot Streak Checker\'s "carries on" share is not a share of real change',

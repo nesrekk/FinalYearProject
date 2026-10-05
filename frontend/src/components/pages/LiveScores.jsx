@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchGameBoxscore, fetchGamesByDate } from '../../services/api';
 import { TEAM_NAME_TO_ABBR } from '../../utils/teamAssets';
+import { nbaDateIso, shiftIsoDate } from '../../utils/date';
+import SourceBadge from '../common/SourceBadge';
+import { signed } from '../../utils/format';
 import TeamLink from '../common/TeamLink';
 import TeamLogo from '../common/TeamLogo';
 
@@ -30,13 +33,6 @@ function GameTeam({ team, isScheduled }) {
     );
 }
 
-function toIsoDate(dateObj) {
-    const y = dateObj.getFullYear();
-    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const d = String(dateObj.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-}
-
 function formatMinutes(value) {
     if (value == null) return 'DNP';
     const raw = String(value).trim();
@@ -57,27 +53,24 @@ function formatMinutes(value) {
     return raw;
 }
 
+// Dates are the NBA's calendar dates (US Eastern): at 8 am in India on 21 October "today" is still
+// 20 October in the US, when that night's games are being played.
+const STATUS_LABEL = { POSTPONED: 'Postponed', CANCELED: 'Canceled', SUSPENDED: 'Suspended' };
+
 export default function LiveScores() {
-    const [selectedDate, setSelectedDate] = useState(toIsoDate(new Date()));
+    const [selectedDate, setSelectedDate] = useState(nbaDateIso());
     const [games, setGames] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
+    const [feed, setFeed] = useState(null); // { source, status, message, _source } from the route
     const [selectedGame, setSelectedGame] = useState(null);
     const [boxscore, setBoxscore] = useState(null);
     const [loadingBoxscore, setLoadingBoxscore] = useState(false);
     const [activeTeamSide, setActiveTeamSide] = useState('away');
 
     const quickDates = useMemo(() => {
-        const today = new Date();
-        const y = new Date(today);
-        y.setDate(today.getDate() - 1);
-        const t = new Date(today);
-        t.setDate(today.getDate() + 1);
-        return {
-            yesterday: toIsoDate(y),
-            today: toIsoDate(today),
-            tomorrow: toIsoDate(t),
-        };
+        const today = nbaDateIso();
+        return { yesterday: shiftIsoDate(today, -1), today, tomorrow: shiftIsoDate(today, 1) };
     }, []);
 
     useEffect(() => {
@@ -87,22 +80,23 @@ export default function LiveScores() {
             setLoadError(false);
             try {
                 const data = await fetchGamesByDate(selectedDate);
-                if (active && Array.isArray(data?.games) && data.games.length > 0) {
-                    const mapped = data.games.map((g) => ({
-                        id: g.id,
-                        status: g.status === 'SCHEDULED' ? (g.status_text || 'SCHEDULED') : g.status,
-                        quarter: g.status === 'LIVE' ? 'LIVE' : '',
-                        clock: g.status === 'LIVE' ? '' : '',
-                        away: g.away,
-                        home: g.home,
-                    }));
-                    setGames(mapped);
-                } else if (active) {
-                    setGames([]);
-                }
+                if (!active) return;
+                setFeed({ source: data?.source, status: data?.status, message: data?.message, _source: data?._source });
+                const mapped = (Array.isArray(data?.games) ? data.games : []).map((g) => ({
+                    id: g.id,
+                    status: g.status,
+                    // "Final", "Final/OT", "Q3 5:12", "7:00 PM ET", "Postponed"...
+                    statusText: g.status_text || STATUS_LABEL[g.status] || g.status,
+                    kind: g.kind,
+                    note: g.note,
+                    away: g.away,
+                    home: g.home,
+                }));
+                setGames(mapped);
             } catch {
                 if (active) {
                     setGames([]);
+                    setFeed(null);
                     setLoadError(true);
                 }
             } finally {
@@ -115,19 +109,30 @@ export default function LiveScores() {
         };
     }, [selectedDate]);
 
+    const [boxMessage, setBoxMessage] = useState('');
+
     async function openGame(game) {
         setSelectedGame(game);
         setActiveTeamSide('away');
         setLoadingBoxscore(true);
+        setBoxMessage('');
         try {
             const data = await fetchGameBoxscore(game.id);
             setBoxscore(data?.boxscore || { away: [], home: [] });
+            setBoxMessage(data?.message || '');
         } catch {
             setBoxscore({ away: [], home: [] });
+            setBoxMessage('The box score couldn\'t load right now.');
         } finally {
             setLoadingBoxscore(false);
         }
     }
+
+    const feedLine = !loading && !loadError && feed && games.length > 0 ? (
+        feed.source === 'stored'
+            ? 'Final scores from the stored results (ESPN, matched to the schedule).'
+            : 'ESPN scoreboard, live; refreshed about once a minute.'
+    ) : null;
 
     return (
         <div className="page page-scores fade-in">
@@ -143,13 +148,18 @@ export default function LiveScores() {
                 />
             </div>
             {loading && <p className="page-subtitle" style={{ marginBottom: '0.75rem' }}>Loading games...</p>}
+            {feedLine && (
+                <p className="page-subtitle" style={{ marginBottom: '0.75rem' }}>
+                    {feedLine}
+                    <SourceBadge source={feed._source} />
+                </p>
+            )}
             <div className="scores-grid">
                 {games.map((game) => {
                     const isLive = game.status === 'LIVE';
                     const isFinal = game.status === 'FINAL';
                     const isScheduled = !isLive && !isFinal;
-                    // NBA.com game ids: 001… preseason, 002… regular season, 004… playoffs, 005… play-in.
-                    const kind = { '001': 'Preseason', '004': 'Playoffs', '005': 'Play-in' }[String(game.id).slice(0, 3)];
+                    const kind = game.kind && game.kind !== 'Regular season' ? game.kind : null;
 
                     return (
                         <div
@@ -166,12 +176,13 @@ export default function LiveScores() {
                             <div className="game-status-row">
                                 {isLive && (
                                     <span className="badge badge--live">
-                                        <span className="live-dot"></span> LIVE · {game.quarter} {game.clock}
+                                        <span className="live-dot"></span> LIVE · {game.statusText}
                                     </span>
                                 )}
-                                {isFinal && <span className="badge badge--final">FINAL</span>}
-                                {isScheduled && <span className="badge badge--scheduled">{game.status}</span>}
+                                {isFinal && <span className="badge badge--final">{game.statusText || 'FINAL'}</span>}
+                                {isScheduled && <span className="badge badge--scheduled">{game.statusText}</span>}
                                 {kind && <span className="badge badge--scheduled">{kind}</span>}
+                                {game.note && <span className="badge badge--scheduled" title={game.note}>{game.note}</span>}
                             </div>
 
                             {/* Teams */}
@@ -190,7 +201,11 @@ export default function LiveScores() {
                 <p className="empty-message">Scores for {selectedDate} couldn&apos;t load right now.</p>
             )}
             {!loading && !loadError && games.length === 0 && (
-                <p className="empty-message">No games found for {selectedDate}.</p>
+                <p className="empty-message">
+                    {feed?.status === 'unreachable'
+                        ? (feed.message || 'ESPN\'s scoreboard didn\'t answer. Try again in a moment.')
+                        : `No NBA games on ${selectedDate} (ESPN's schedule).`}
+                </p>
             )}
 
             {selectedGame && (
@@ -203,7 +218,7 @@ export default function LiveScores() {
                                 <span className="bsm-score">{selectedGame.away.score ?? '-'}</span>
                             </div>
                             <div className="bsm-vs-block">
-                                <span className="bsm-status">{selectedGame.status}</span>
+                                <span className="bsm-status">{selectedGame.statusText || selectedGame.status}</span>
                             </div>
                             <div className="bsm-team">
                                 <span className="bsm-name">{teamName(selectedGame.home)}</span>
@@ -260,19 +275,21 @@ export default function LiveScores() {
                                                 <th>FG</th>
                                                 <th>3PT</th>
                                                 <th>FT</th>
+                                                <th>+/-</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {(activeTeamSide === 'away' ? (boxscore?.away || []) : (boxscore?.home || [])).slice(0, 15).map((p, idx) => (
                                                 <tr key={`${activeTeamSide}-${idx}`}>
                                                     <td>{p.name}</td>
-                                                    <td>{formatMinutes(p.min)}</td>
+                                                    <td title={p.dnp_reason || undefined}>{formatMinutes(p.min)}</td>
                                                     <td>{p.pts}</td>
                                                     <td>{p.reb}</td>
                                                     <td>{p.ast}</td>
                                                     <td>{p.fg}</td>
                                                     <td>{p.three}</td>
                                                     <td>{p.ft}</td>
+                                                    <td>{p.pm == null ? '—' : signed(p.pm, 0)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -280,7 +297,7 @@ export default function LiveScores() {
                                 </div>
                                 {(activeTeamSide === 'away' ? (boxscore?.away || []) : (boxscore?.home || [])).length === 0 && (
                                     <p className="empty-message" style={{ marginTop: '0.5rem' }}>
-                                        No player box score rows returned for {activeTeamSide === 'away' ? selectedGame.away.abbr : selectedGame.home.abbr}.
+                                        {boxMessage || `No player box score rows returned for ${activeTeamSide === 'away' ? selectedGame.away.abbr : selectedGame.home.abbr}.`}
                                     </p>
                                 )}
                             </>

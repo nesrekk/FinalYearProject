@@ -15,8 +15,10 @@
 #
 # Stages, in the order they run when several are named:
 #   fetch         outside feeds over the network. Tags: net = public ESPN/CDN endpoints (reachable),
-#                 nbaapi = stats.nba.com (times out from the author's machine since 2026-09-26; the stored
-#                 tables are what those calls returned), key = needs CBBD_API_KEY in api/.env.
+#                 nbaapi = stats.nba.com through nba_api (it timed out from the author's machine from 2026-09-26
+#                 and answers again since 2026-10-05, 0.1-2.5 s a call; plain curl still times out, so a curl
+#                 check says "down"; the stored tables are what those calls returned), key = needs CBBD_API_KEY
+#                 in api/.env.
 #   load          local raw files into source tables. Tags name the gitignored input (docs/DATASHEET.md says
 #                 where each comes from): kaggle = nba_data/kaggle_1947_present/, shotcsv =
 #                 shots_data/pbp_shots_1997_2026/, salaries = nba_data/salaries/, torvik = nba_data/college_teams/.

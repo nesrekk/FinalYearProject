@@ -129,6 +129,7 @@ export default function TeamComparison() {
     const [teamB, setTeamB] = useState('BOS');
     const [loading, setLoading] = useState(true);
     const [standings, setStandings] = useState(null);
+    const [statsMeta, setStatsMeta] = useState(null);
     const [extra, setExtra] = useState(null);
     const [extraError, setExtraError] = useState('');
     const [extraLoading, setExtraLoading] = useState(false);
@@ -153,6 +154,14 @@ export default function TeamComparison() {
                     // needing teamA/teamB as dependencies.
                     setTeamA((cur) => (incoming[cur] ? cur : keys[0]));
                     setTeamB((cur) => (incoming[cur] ? cur : keys[1] || keys[0]));
+                }
+                if (active && meta) {
+                    setStatsMeta({
+                        statsSeason: meta.team_stats_season ?? null,
+                        statsSource: meta.team_stats_source ?? null,
+                        standingsSeason: meta.standings_season ?? null,
+                        standingsSource: meta.standings_source ?? null,
+                    });
                 }
                 if (active && meta?.standings) {
                     const combined = [...(meta.standings.eastern || []), ...(meta.standings.western || [])];
@@ -201,6 +210,13 @@ export default function TeamComparison() {
         <div className="page page-teams fade-in">
             {loading && <p className="page-subtitle" style={{ marginBottom: '0.75rem' }}>Loading current season team stats...</p>}
             {!loading && loadError && <p className="empty-message">Current team stats couldn&apos;t load right now.</p>}
+            {!loading && statsMeta?.statsSeason && (
+                <p className="page-subtitle" style={{ marginBottom: '0.75rem' }}>
+                    Per-game stats: {statsMeta.statsSeason - 1}-{String(statsMeta.statsSeason).slice(-2)}
+                    {statsMeta.statsSource === 'nba_api' ? ' (stats.nba.com, live)' : ' (stored final scores and play-by-play lines)'}
+                    {statsMeta.standingsSeason ? ` · record: ${statsMeta.standingsSeason - 1}-${String(statsMeta.standingsSeason).slice(-2)}${statsMeta.standingsSource === 'espn' ? ' (ESPN, live)' : ' (stored)'}` : ''}.
+                </p>
+            )}
             {/* Team Selectors */}
             <div className="comparison-selectors">
                 <div className="selector-group">

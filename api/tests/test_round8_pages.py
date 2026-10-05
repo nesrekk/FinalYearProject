@@ -190,7 +190,9 @@ def test_live_scores_names_and_logos_come_from_the_app():
     assert "<TeamLink abbr={team.abbr}>" in src
     assert "team.logo" not in src and "game.away.logo" not in src and "TEAM_COLORS" not in src
     assert 'role="button"' in src and "onKeyDown" in src  # the card opens the box score from the keyboard too
-    assert "'001': 'Preseason'" in src
+    # Since step 4 the game's kind (Preseason / Play-in / Playoffs) comes from the route (ESPN's season
+    # type), not from the NBA id's prefix: the ids are ESPN's now.
+    assert "game.kind" in src and "'001'" not in src
 
 
 def test_standings_say_when_no_game_has_been_played():

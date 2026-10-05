@@ -17,6 +17,7 @@ export default function StandingsSection() {
     const [standings, setStandings] = useState({ eastern: [], western: [] });
     const [loading, setLoading] = useState(false);
     const [season, setSeason] = useState(null);
+    const [source, setSource] = useState(null);
     const data = standings[conference] || [];
 
     const { isAdvanced } = useMotionMode();
@@ -30,7 +31,11 @@ export default function StandingsSection() {
                 const meta = await fetchCurrentMeta();
                 if (active && meta?.standings?.eastern && meta?.standings?.western) {
                     setStandings(meta.standings);
-                    setSeason(meta.season ?? null);
+                    // The season the table is for (ESPN's regular-season standings for the season in
+                    // progress, or the latest stored season when ESPN doesn't answer), not the league
+                    // year (round 8 R8-004).
+                    setSeason(meta.standings_season ?? meta.season ?? null);
+                    setSource(meta.standings_source ?? null);
                 }
             } catch {
                 // keep mock fallback
@@ -55,7 +60,8 @@ export default function StandingsSection() {
             {season && data.length > 0 && (
                 <p className="page-subtitle" style={{ marginBottom: '0.75rem' }}>
                     {season - 1}-{String(season).slice(-2)} standings
-                    {played ? '.' : ': no games played yet, so every team is 0-0 until the first tip-off.'}
+                    {played ? '' : ': no games played yet, so every team is 0-0 until the first tip-off'}
+                    {source === 'espn' ? ' (ESPN, live).' : source === 'stored' ? ' (stored final record; ESPN didn\'t answer).' : '.'}
                 </p>
             )}
             <div className="hb-segmented" style={{ marginBottom: '1rem' }}>

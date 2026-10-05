@@ -9,7 +9,7 @@
  */
 
 import axios from 'axios';
-import { localDateIso } from '../utils/date';
+import { localDateIso, nbaDateIso } from '../utils/date';
 
 const MVP_BASE = 'http://localhost:8000';
 const SIMILARITY_BASE = 'http://localhost:8001';
@@ -569,10 +569,10 @@ export async function fetchTradeRoster(team, season) {
 }
 
 // ─── With vs. Without a Star ────────────────────────────────────
-export async function fetchWithWithoutStar(team, season, playerName) {
+export async function fetchWithWithoutStar(team, season, playerName, playerId) {
     const response = await axios.get(
         `${IMPACT_BASE}/teams/with-without/${team}/${season}`,
-        { params: { player_name: playerName } }
+        { params: { player_name: playerName, ...(playerId ? { player_id: playerId } : {}) } }
     );
     return response.data;
 }
@@ -953,8 +953,9 @@ export async function fetchLeagueShotSample(n = 6000) {
     return response.data;
 }
 
+// `date` is a US Eastern calendar date (the NBA's and the database's), default today's.
 export async function fetchGamesByDate(date) {
-    const d = date || localDateIso();
+    const d = date || nbaDateIso();
     const key = `games_by_date:${d}`;
     return getWithCache(key, 30 * 1000, async () => {
         const response = await axios.get(
@@ -1087,7 +1088,7 @@ export async function prefetchCoreData() {
     await Promise.allSettled([
         fetchCurrentMeta(),
         fetchCurrentNews(today, 10),
-        fetchGamesByDate(today),
+        fetchGamesByDate(nbaDateIso()),
         fetchStatLeaders('pts', undefined, 10),
     ]);
 }

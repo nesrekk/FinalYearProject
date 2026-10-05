@@ -65,7 +65,9 @@ export default function WithWithoutStarSection() {
         setError('');
         setResult(null);
         try {
-            const data = await fetchWithWithoutStar(team, season, name);
+            // The roster knows the id, so two players with the same name can't be mixed up.
+            const picked = roster.find((p) => p.player_name === name);
+            const data = await fetchWithWithoutStar(team, season, name, picked?.player_id);
             setResult(data);
         } catch (e) {
             setError(e?.response?.data?.detail || 'Could not load this split.');
@@ -80,12 +82,13 @@ export default function WithWithoutStarSection() {
                 <span className="card-icon"><Icon name="person_off" /></span>
                 With vs. Without a Star
                 <InfoTooltip label="How this works" title="A real association, not a causal claim">
-                    Real team record and real point differential split by whether a real player actually
-                    played in each real game, live-fetched from the NBA's own real per-game data for the whole
-                    season (not a model or a sample). This is an association, not causation — other players
-                    being in or out of the lineup for those same real games also affects the real result, and
-                    this doesn't control for that. Real sample sizes for both splits are always shown; a
-                    durable player who rarely sits will have a small, noisy "without" sample.
+                    The team&apos;s record and average final margin split by whether the player had minutes in
+                    each game. From 2020-21 this is read from stored data (the final scores and the play-by-play
+                    game lines); earlier seasons are fetched live from stats.nba.com, which can take a few
+                    seconds or not answer. This is an association, not causation — other players being in or
+                    out of the lineup for those same games also affects the result, and this doesn&apos;t control
+                    for that. Both sample sizes are always shown; a durable player who rarely sits will have a
+                    small, noisy &quot;without&quot; sample.
                 </InfoTooltip>
                 <SourceBadge source={result?._source} />
             </h2>

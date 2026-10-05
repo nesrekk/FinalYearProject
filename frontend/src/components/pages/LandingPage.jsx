@@ -8,7 +8,7 @@ import {
     fetchSiteStats, fetchLeagueShotSample, fetchGamesByDate, fetchWpReplayList,
     fetchCurrentMeta, fetchMVPPrediction, fetchBacktestOverview, fetchWpaValidation,
 } from '../../services/api';
-import { localDateIso } from '../../utils/date';
+import { nbaDateIso } from '../../utils/date';
 
 const ShotCourtFlight = lazy(() => import('../landing/ShotCourtFlight'));
 
@@ -44,8 +44,9 @@ function useLandingData() {
 
         (async () => {
             const meta = await fetchCurrentMeta().catch(() => null);
-            const start = meta?.season ?? new Date().getFullYear();
-            // /meta/current can run ahead of the loaded data, so walk back to a season the model covers.
+            // The latest stored season (the award models' newest), not the league year in progress:
+            // asking for the season in progress was a 404 on every load (round 8 R8-049).
+            const start = meta?.stored_season ?? meta?.season ?? new Date().getFullYear();
             for (let s = start; s >= start - 3; s--) {
                 const res = await fetchMVPPrediction(s).catch(() => null);
                 if (res?.results?.length) { patch({ mvpSeason: s, mvpFavorite: res.results[0].player_name }); break; }
@@ -53,7 +54,7 @@ function useLandingData() {
         })();
 
         (async () => {
-            const today = await fetchGamesByDate(localDateIso()).catch(() => null);
+            const today = await fetchGamesByDate(nbaDateIso()).catch(() => null);
             const live = (today?.games || []).map((g) => ({
                 key: g.game_id || `${g.away?.abbr}-${g.home?.abbr}`,
                 away: g.away?.abbr, home: g.home?.abbr,

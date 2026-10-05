@@ -24,9 +24,14 @@ single user manually searching each of these players one at a time.
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from pathlib import Path
+
+# This script exists to fetch: it turns the live fetch on for itself (off by default in the API
+# since round 8 step 4, so a page view never writes player_shots).
+os.environ.setdefault("ENABLE_LIVE_SHOT_FETCH", "true")
 
 # shots_lib.py lives in api/, this script lives in scripts/.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))

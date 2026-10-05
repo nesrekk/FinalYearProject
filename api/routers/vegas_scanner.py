@@ -4,9 +4,10 @@ from fastapi import APIRouter
 
 from impact_core import (
     TEAM_NAME_TO_ABBR,
-    _real_standings_win_pct,
+    standings_win_pct,
     get_championship_odds_cached,
     get_db,
+    get_current_nba_season,
     get_latest_season,
 )
 
@@ -24,9 +25,12 @@ def get_championship_odds_scanner():
 
     with get_db() as conn:
         cursor = conn.cursor()
-        season = get_latest_season(cursor)
+        season = max(get_latest_season(cursor), get_current_nba_season())
 
-    win_pct_by_abbr = _real_standings_win_pct(season)
+    # ESPN's standings for the season in progress (stored team_seasons when ESPN doesn't answer);
+    # before opening night every team is 0-0, so the latest season with a decision is used and
+    # named (round 8 step 4; this used to come from stats.nba.com).
+    win_pct_by_abbr, win_pct_season, win_pct_source = standings_win_pct(season)
 
     total_win_pct = sum(win_pct_by_abbr.values()) or 1.0
     proxy_prob_by_abbr = {abbr: wp / total_win_pct for abbr, wp in win_pct_by_abbr.items()}
@@ -53,6 +57,8 @@ def get_championship_odds_scanner():
 
     return {
         "season": season,
+        "win_pct_season": win_pct_season,
+        "win_pct_source": win_pct_source,
         "last_update": odds_data["last_update"],
         "books_used": odds_data["books_used"],
         "avg_z": odds_data["avg_z"],
@@ -68,7 +74,8 @@ def get_championship_odds_scanner():
         ),
         "teams": rows,
         "_source": make_source(
-            ["player_season_stats"], "The Odds API (live) + nba_api (stats.nba.com)",
+            ["team_seasons"] if win_pct_source == "stored" else [],
+            "The Odds API (live) + ESPN standings" + (" (live)" if win_pct_source == "espn" else " (stored)"),
             as_of=odds_data["last_update"], live=True,
         ),
     }

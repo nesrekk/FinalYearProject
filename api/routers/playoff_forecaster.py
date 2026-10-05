@@ -42,6 +42,12 @@ def get_playoff_comparison(player_name: str, season: int):
     }
 
     playoff_by_name = _fetch_playoff_stats_season(season)
+    if playoff_by_name is None:
+        # Round 8 step 4: a failed live call used to read as "didn't make the playoffs".
+        raise HTTPException(
+            status_code=503,
+            detail="stats.nba.com didn't answer within 3 s (playoff stats aren't stored). Try again in a moment.",
+        )
     playoff = playoff_by_name.get(resolved_name.lower())
 
     if not playoff:

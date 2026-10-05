@@ -22,7 +22,7 @@ import {
     fetchAllNBAPrediction,
     fetchWpReplayList,
 } from '../../services/api';
-import { localDateIso } from '../../utils/date';
+import { localDateIso, nbaDateIso } from '../../utils/date';
 
 const AWARD_META = {
     mvp: { icon: 'emoji_events', label: 'MVP' },
@@ -74,7 +74,8 @@ export default function DashboardHome({ onNavigate }) {
 
         async function loadGames() {
             try {
-                const g = await fetchGamesByDate(today);
+                // The NBA's calendar date (US Eastern), not the browser's.
+                const g = await fetchGamesByDate(nbaDateIso());
                 if (!active) return;
                 const list = Array.isArray(g?.games) ? g.games : [];
                 setGames(list);
@@ -109,8 +110,10 @@ export default function DashboardHome({ onNavigate }) {
                     );
                 }
                 if (m) setMeta(m);
-                if (m?.season) {
-                    const resolvedSeason = await resolveSeasonWithData(m.season);
+                if (m?.stored_season || m?.season) {
+                    // Start from the latest stored season (the award models' newest): asking for the
+                    // league year in progress was a 404 on every load (round 8 R8-049).
+                    const resolvedSeason = await resolveSeasonWithData(m.stored_season ?? m.season);
                     if (active && resolvedSeason) {
                         const [mvp, dpoy, roy, allnba] = await Promise.allSettled([
                             fetchMVPPrediction(resolvedSeason),
@@ -314,7 +317,7 @@ export default function DashboardHome({ onNavigate }) {
                 </Tile>
 
                 <Tile span={4} className="dashboard-tile" onClick={() => onNavigate('leaders')}>
-                    <p className="text-eyebrow">Top Scorer</p>
+                    <p className="text-eyebrow">Top Scorer{meta?.top_scorer_season ? ` · ${seasonLabel(meta.top_scorer_season)}` : ''}</p>
                     {meta?.top_scorer ? (
                         <BigStat
                             label={meta.top_scorer.player_name}
@@ -327,10 +330,10 @@ export default function DashboardHome({ onNavigate }) {
                 </Tile>
 
                 <Tile span={4} className="dashboard-tile" onClick={() => onNavigate('standings')}>
-                    <p className="text-eyebrow">Best record</p>
+                    <p className="text-eyebrow">Best record{meta?.standings_season ? ` · ${seasonLabel(meta.standings_season)}` : ''}</p>
                     {topSeed?.notStarted ? (
                         <span className="dashboard-tile-sub">
-                            {meta?.season ? `${meta.season - 1}-${String(meta.season).slice(-2)}: ` : ''}no games played yet.
+                            {meta?.standings_season ? `${seasonLabel(meta.standings_season)}: ` : ''}no games played yet.
                         </span>
                     ) : topSeed ? (
                         <>

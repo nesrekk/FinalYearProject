@@ -12,15 +12,16 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
-Counts (2026-10-05, after Step 3): **67 entries**, 33 open, 34 fixed: 6 broken, 20 wrong number,
-5 slow, 36 looks wrong. 6 are from Step 3's cross-page checks (R8-062 to R8-067, all fixed in its
-commit). 17 are new from Step 1 (R8-001 to R8-017); 15 are known gaps already written
-down in README "Known real gaps" / Methodology open issues, listed so a step owns each (R8-018 to
-R8-032); 11 are from Step 2a's sweep of the Players pages (R8-033 to R8-043, 10 fixed in its commit);
-6 are from Step 2b's sweep of the Teams, Games and Today pages (R8-044 to R8-049, 5 fixed in its commit,
-which also fixed R8-016 and the 2b parts of R8-004, R8-014 and R8-043); 12 are from Step 2c's sweep of
-Analytics, Shot Charts, the Workbench and the rest (R8-050 to R8-061, 10 fixed in its commit, which also
-fixed R8-015 and R8-043 and the 2c part of R8-014).
+Counts (2026-10-05, after Step 4): **68 entries**, 22 open, 46 fixed: 6 broken, 21 wrong number,
+5 slow, 36 looks wrong. 1 is new from Step 4 (R8-068, open). Step 4 fixed 12: R8-001 to R8-008, R8-021,
+R8-031 (Step 7's, taken with R8-002), R8-049, plus the Step 4 parts of R8-014 and R8-017. Before that: 6 from Step 3's
+cross-page checks (R8-062 to R8-067, all fixed in its commit); 17 new from Step 1 (R8-001 to R8-017); 15 known
+gaps already written down in README "Known real gaps" / Methodology open issues, listed so a step owns each
+(R8-018 to R8-032); 11 from Step 2a's sweep of the Players pages (R8-033 to R8-043, 10 fixed in its commit);
+6 from Step 2b's sweep of the Teams, Games and Today pages (R8-044 to R8-049, 5 fixed in its commit, which also
+fixed R8-016 and the 2b parts of R8-004, R8-014 and R8-043); 12 from Step 2c's sweep of Analytics, Shot Charts,
+the Workbench and the rest (R8-050 to R8-061, 10 fixed in its commit, which also fixed R8-015 and R8-043 and
+the 2c part of R8-014).
 
 ## Step 1 health check (2026-10-05)
 
@@ -185,6 +186,43 @@ Game Finder), Trae Young's 880 assists (lines and Assist Network), Wembanyama's 
 176-175 (scores, Best Games, Play Finder points), the Clippers' 35-point comeback (Best Games), the 2024
 NBA Cup final kept out of the regular season, Curry's 2020-21 scoring title.
 
+## Step 4: live pages without stats.nba.com (2026-10-05)
+
+Every page that called stats.nba.com live (the Step 1 table above) got one of the plan's three answers.
+New module **`api/espn_live.py`** (scoreboard of a date, one game's box score, regular-season standings;
+3 s timeout, short in-memory cache, None when ESPN doesn't answer); new composites in `impact_core.py`
+(`games_by_date`, `game_boxscore`, `current_standings`, `standings_win_pct`); every remaining nba_api call
+uses `_LIVE_REQUEST_TIMEOUT_SECONDS` = 3 (was 6, 30 or 45). Dates are US Eastern everywhere (the pages
+compute "today" in America/New_York: `utils/date.js` `nbaDateIso`). 19 tests in
+**`api/tests/test_round8_live.py`** (monkeypatched ESPN for the offline ones; the four that read ESPN for
+real skip when it doesn't answer).
+
+| Route (pages) | Decision | Before → after |
+|---|---|---|
+| `/games/by-date` (Live Scores, Dashboard, landing) | **(a) stored first** (`game_scores`, `postseason_games`) **then (b) ESPN**; (c) `status: unreachable` + message | 2026-10-20: 0 games in 6.2 s → 3 openers in 1.1 s; 2025-01-02: live call → stored in 0.04 s; ESPN down: "No games found" → "didn't answer within 3 s" |
+| `/games/boxscore/{id}` (Live Scores) | **(b) ESPN summary**, ESPN or NBA id | `pm: "nan"` for DNPs → int / null with the reason; +/- column on the page |
+| `/meta/current` standings (Dashboard, Standings, Team Comparison, Vegas proxy) | **(b) ESPN**, regular-season type; (a) `team_seasons` when ESPN doesn't answer; every block labelled with its season and source | 2026-27 rows ranked 0 → 1-15; "2027" over 2025-26 numbers → "Top Scorer · 2025-26", "record: 2026-27 (ESPN, live)" |
+| `/meta/current` team block and scoring leader | **(c)** stats.nba.com with a 3 s timeout, else (a) stored, labelled | unchanged numbers, now named |
+| `/leaders/{stat}` (Stat Leaders, app-shell prefetch) | **(a) stored** for stored seasons; (c) live only for a newer season, else the latest stored season with a note | empty "Top 10 · 2027" → "Top 10 · 2025-26" + note + badge |
+| `/players/search` (CommandPalette, Comparison, Trend, Radar, Archetypes, Playoff Forecaster, Draft Prospects) | **(a) stored names only**, accent-insensitive, most recent first | up to 6 s a keystroke → ~10 ms |
+| `/players/profile/{name}` (no page) | **(a)** DB only | 45 s live path gone |
+| `/teams/with-without/{team}/{season}` (With/Without a Star) | **(a) stored** 2020-21 on (`game_scores` + `player_game_lines`, optional `player_id`); (c) live before 2020-21 with a 3 s timeout | DEN 2025-26 / Jokić 21 s → 36 ms; margins = real final margins (R8-021) |
+| `/players/pair-synergy` (Player Comparison) | **(a)** observed pair from `pair_seasons` (2020-21 on); null with a note before | 45 s live two-man lineups → 80 ms |
+| `/players/playoff-comparison/{name}`, `/players/heliocentricity` | **(c)** keep the live call (nothing stored), 3 s timeout, 503 "didn't answer within 3 s" | 45 s / 30 s hangs; a failed fetch read as "didn't make the playoffs" |
+| `/odds/championship` (Vegas Scanner) | proxy win% from the same ESPN/stored standings, named (`win_pct_season`) | stats.nba.com standings |
+| `/shots/player/*`, `/shots/league-zones/*` | live fetch **off by default** (`ENABLE_LIVE_SHOT_FETCH`), 404 with the reason | a page view could write `player_shots` (R8-007) |
+| `/news/current` | unchanged (RSS; R8-011 is Step 8's), `_source` added | — |
+
+Deleted from `impact_core.py` (723 lines): the cdn.nba.com liveData readers (403), balldontlie, the
+thesportsdb team badges, the stats.nba.com scoreboard, box score, standings, player search, player
+profile and two-man lineup fetches. Browser check (desktop app, harness deleted before the commit):
+Live Scores today (5 preseason games, tip times, ESPN badge), yesterday (2 preseason finals, box score
+with +/-), 2026-10-20; Standings, Dashboard (no 404 probe, labelled tiles), Team Comparison (labelled),
+Stat Leaders (note + badge), With/Without DEN / Jokić; 375 px Ink Live Scores: no overflow, no console
+error on any of them. Full suite 483 passed + 1 skipped (101 s), eslint 0, vite build clean. Nothing
+written to any table; nothing to sync. Found on the way: R8-068 (percentage leaders without an attempts
+floor, Step 7).
+
 ## Constraints (not defects)
 
 - **Layerbase:** 4,202 of 5,000 MB used (2026-10-04). A Step 6 rebuild rewrites tables of about the same size; any sync needs the owner's OK (Step 10 decides whether the biggest tables stay local).
@@ -193,58 +231,66 @@ NBA Cup final kept out of the regular season, Curry's 2020-21 scoring title.
 ## Issues
 
 ### R8-001 · Stat Leaders is empty between seasons
-- **Severity:** broken · **Step:** 4 · **Status:** open
+- **Severity:** broken · **Step:** 4 · **Status:** fixed in the Step 4 commit
 - **Where:** Stat Leaders (`StatLeaders.jsx`), `GET /leaders/{stat_key}` (`api/routers/leaders.py`), also the app-shell prefetch (`prefetchCoreData`).
 - **Reproduce:** `curl 127.0.0.1:8002/leaders/pts` → `{"season":2027,"results":[]}`. The page calls it without a season, so the season defaults to `max(latest DB season, current NBA season)` = 2026-27. The live call returns nothing (no games yet) and the DB fallback queries the same season, so it's empty too. The page shows "Top 10 · 2027" and nothing else, with no reason given.
 - **Found by:** crawl (empty answer). It stays empty until stats.nba.com has 2026-27 leaders, and goes empty again whenever the live call fails, since the DB never has the current season.
 
+- **Step 4:** without `season`, `/leaders/{stat}` fetches the season in progress live only when it is newer than the stored ones (3 s timeout) and otherwise shows the latest stored season, saying so (`season` 2026, `requested_season` 2027, `fallback`, `note`); a stored season never goes to the network. The page shows the note and a source badge. Old → new today: an empty "Top 10 · 2027" → "Top 10 · 2025-26" with Dončić 33.5. Test `test_leaders_default_falls_back_to_the_latest_stored_season`.
 ### R8-002 · Live Scores says "No games found" for future dates
-- **Severity:** wrong number · **Step:** 4 · **Status:** open
+- **Severity:** wrong number · **Step:** 4 · **Status:** fixed in the Step 4 commit
 - **Where:** Live Scores, `GET /games/by-date?date=` (`impact_core.fetch_nba_games_by_date`).
 - **Reproduce:** `/games/by-date?date=2026-10-20` → 0 games in 6.2 s, and the page reads "No games found for 2026-10-20". `ledger_schedule` (ESPN) has 3 games that day. Today (2026-10-05) returns 5 preseason games. The team objects carry `name: ""`, and some have `logo: null` (MEM); Step 2b should check whether that shows.
 - **Found by:** crawl + manual calls. Opening night itself works only if stats.nba.com answers on the day; there is no ESPN or stored fallback (cdn.nba.com is 403, R8-003).
 - **Step 2b:** the empty `name` and the null/third-party logos did show (bare logos, no team names, a white-on-orange fallback at 2.6:1); the page now uses the app's names and NBA.com logos (R8-045). The route's own fields stay Step 4's.
 
+- **Step 4:** `/games/by-date` reads the stored results first (`game_scores`, `postseason_games`) and ESPN's scoreboard for every other date (`api/espn_live.py`, 3 s timeout, cached 60 s for today and the future): 2026-10-20 lists the three openers (BOS-DET 3:00 PM ET, PHI-NYK, OKC-SAS) with their kind, and a date ESPN can't answer for says `status: unreachable` with a message instead of "No games found". The page shows tip times in ET, the quarter and clock for live games, "Final/OT", a Preseason/Play-in/Playoffs badge from ESPN's season type, and the ESPN badge; "today" is the US Eastern date (`utils/date.js` `nbaDateIso`). Tests `test_by_date_lists_opening_night_from_espn`, `test_by_date_says_when_espn_is_unreachable`.
 ### R8-003 · The cdn.nba.com fallbacks are dead (403)
-- **Severity:** broken · **Step:** 4 · **Status:** open
+- **Severity:** broken · **Step:** 4 · **Status:** fixed in the Step 4 commit
 - **Where:** `impact_core._fetch_nba_cdn_standings_uncached`, `fetch_nba_cdn_games_by_date`, `fetch_boxscore_from_cdn` (used by `/meta/current`, `/games/by-date`, `/games/boxscore`).
 - **Reproduce:** `curl -A Mozilla/5.0 https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json` → 403, and the same for `standings/leagueStandings.json` and `boxscore/boxscore_<id>.json`. Headshots and logos on the same host are 200.
 - **Found by:** probing the hosts the code calls. When stats.nba.com fails, these fallbacks fail too, so Live Scores and the box score have nothing behind them. Step 4 picks ESPN or stored data.
 
+- **Step 4:** the three cdn.nba.com readers, the balldontlie reader (needed a key nobody set), the thesportsdb badges and the stats.nba.com scoreboard, box score, standings, player search and player profile fetches are deleted from `impact_core.py` (723 lines). Standings: ESPN (regular-season type; its default counted preseason games, TOR 0-1 on 2026-10-05) → `team_seasons`. Box score: ESPN's summary by ESPN id or NBA id (mapped through `game_scores.espn_id`). Test `test_dead_fallbacks_and_live_search_are_gone`.
 ### R8-004 · The dashboard mixes 2026-27 standings with 2025-26 numbers before the season
-- **Severity:** looks wrong · **Step:** 4 · **Status:** open
+- **Severity:** looks wrong · **Step:** 4 · **Status:** fixed in the Step 4 commit
 - **Where:** Dashboard (`DashboardHome.jsx`), Team Comparison, Standings; `GET /meta/current`.
 - **Reproduce:** `/meta/current` → `season: 2027` and every team 0-0 from stats.nba.com (streak "W 0"), but `top_scorer` = Luka Dončić 33.5 (2025-26 `player_season_stats`) and `team_stats` = 2025-26 DB values. None of these carries a season label. The "#1 Seed" tile takes `standings.western[0]`, i.e. only the West's first row (never the East), which is a 0-0 team before the season.
 - **Found by:** reading the crawl answer and the components.
 - **Step 2b (Standings, Dashboard tile):** Standings now names the season ("2026-27 standings: no games played yet, so every team is 0-0 until the first tip-off"), shows no "#1 Seed" hero and no "W 0" streaks before a game is played; the Dashboard tile is "Best record" over both conferences (it was the West's first row) and says "no games played yet" before the season. Test: `test_standings_say_when_no_game_has_been_played`. Left for Step 4: `top_scorer` and `team_stats` from 2025-26 without a season label, and the 2026-27 standings coming only from stats.nba.com.
 
+- **Step 4:** `/meta/current` labels every block: `standings_season` / `standings_source` (ESPN 2026-27, 0-0 until opening night, numbered 1-15; stored 2025-26 when ESPN doesn't answer), `team_stats_season` / `team_stats_source`, `top_scorer_season` / `top_scorer_source`, plus `stored_season`. The Dashboard's tiles read "Top Scorer · 2025-26" and "Best record · 2026-27", Standings says "2026-27 standings … (ESPN, live)", Team Comparison says "Per-game stats: 2025-26 (stored …) · record: 2026-27 (ESPN, live)". Tests `test_meta_current_labels_every_block_with_its_season`, `test_meta_current_standings_fall_back_to_the_stored_record`.
 ### R8-005 · Live box score shows "nan" as +/- for players who didn't play
-- **Severity:** looks wrong · **Step:** 4 · **Status:** open
+- **Severity:** looks wrong · **Step:** 4 · **Status:** fixed in the Step 4 commit
 - **Where:** Live Scores box score, `GET /games/boxscore/{game_id}` (`impact_core.fetch_boxscore`).
 - **Reproduce:** `/games/boxscore/0022400062` → 9 of 28 rows (DNPs, `min: "0"`) have `pm: "nan"`. Every other row has plus-minus as text with a decimal (`"19.0"`).
 - **Found by:** crawl (placeholder-text check).
 - **Step 2b:** not visible on the page: the Live Scores box score has no +/- column (Player, MIN, PTS, REB, AST, FG, 3PT, FT). Still worth fixing in the route (Step 4).
 
+- **Step 4:** the box score comes from ESPN: `pm` is an integer (None for a player who didn't play, with `dnp_reason`), and the page gained a +/- column. Test `test_boxscore_takes_both_ids_and_has_no_nan`.
 ### R8-006 · stats.nba.com is reachable again, but the docs and code comments say it isn't
-- **Severity:** looks wrong · **Step:** 4 · **Status:** open
+- **Severity:** looks wrong · **Step:** 4 · **Status:** fixed in the Step 4 commit
 - **Where:** CLAUDE.md ("unreachable from this machine since 2026-09-26"), README Known real gaps, `scripts/rebuild_all.sh` help ("nbaapi = stats.nba.com (times out …)"), Methodology open issue "Some models can't be retrained right now", the round-8 plan's facts.
 - **Reproduce:** `python3 -c "from nba_api.stats.endpoints import leaguestandingsv3 as s; print(s.LeagueStandingsV3(season='2025-26', timeout=30).get_data_frames()[0].shape)"` → (30, 92) in 0.5 s. `curl` against the same URL with browser headers still gets no answer in 20-25 s (so a curl check says "down").
 - **Found by:** the With/Without smoke test passing with real data (41 s), then direct calls. Step 4 decides which live pages keep a live call. Any `nbaapi` fetch script (R8-028, R8-032) can be tried again, and the wording should change wherever it says unreachable.
 
+- **Step 4:** CLAUDE.md, README (Known real gaps), `scripts/rebuild_all.sh`'s help, `docs/DATASHEET.md` and the Methodology open issue now say it answers `nba_api` again since 2026-10-05 (plain curl still times out). The retrain itself is R8-032 (Step 7).
 ### R8-007 · Opening a shot chart can write rows into `player_shots`
-- **Severity:** wrong number (risk) · **Step:** 4 · **Status:** open
+- **Severity:** wrong number (risk) · **Step:** 4 · **Status:** fixed in the Step 4 commit
 - **Where:** Shot Charts and Player Comparison, `GET /shots/player/{name}` (+ `/seasons`, `/zones`), `shots_lib.ensure_player_shots_cached` / `ensure_season_shots_cached`.
 - **Reproduce:** read the code. For a player whose `player_shots_cache_status` isn't `done`, a GET fetches his career from stats.nba.com and stores it in `player_shots`. `ENABLE_LIVE_SHOT_FETCH` defaults to true. Today nothing has been written since 2026-09-25 (2,842 players `done`, `player_shots` 6,318,078 rows). With stats.nba.com answering again (R8-006), the first view of an uncached player after 2026-10-20 (e.g. a rookie) would add 2026-27 shots to a table the paper manifest hashes, and that shot-making, xRAPM and Layerbase all read.
 - **Found by:** mapping the live callers. Step 4 decides: turn live fetching off, or keep it and exclude live-fetched rows.
 - **Step 2c:** the same happens to `league_shot_zones` ("cached forever after the first fetch"): it has 2023-24 and 2024-25 only, so the first `GET /shots/league-zones/2026` (Player Comparison's shot zones for 2025-26, or a test) fetches 2025-26 from stats.nba.com and inserts 5 rows. A 2c test did exactly that on 2026-10-05; the 5 rows were deleted again (the table is back to its 10 rows) and the test now asks for a cached season. `player_shots` and `player_shots_cache_status` were checked unchanged after every 2c run (6,318,078 rows; 2,842 done, last update 2026-09-25): every player opened in the sweep (Curry, Wembanyama, Jordan, Jokić, Thompson) was already cached.
 
+- **Step 4:** `ENABLE_LIVE_SHOT_FETCH` defaults to **off** (`shots_lib.LIVE_FETCH_ENABLED` is true only when `api/.env` sets it to true/1/yes); an uncached player or an unstored league-zone season gets a 404 that says so and how to turn fetching on; `scripts/prewarm_shots.py` turns it on for itself. Test `test_live_shot_fetch_is_off_by_default` (also checks nothing was written).
 ### R8-008 · With/Without a Star and Pair Synergy can wait 30-60 s on a live call
-- **Severity:** slow · **Step:** 4 · **Status:** open
+- **Severity:** slow · **Step:** 4 · **Status:** fixed in the Step 4 commit
 - **Where:** `/teams/with-without/{team}/{season}` (two leaguegamefinder calls, 30 s timeout each), `/players/pair-synergy` (leaguedashlineups, 45 s), `/players/playoff-comparison` and `/players/profile` (45 s), `/players/heliocentricity` (30 s).
 - **Reproduce:** in the full pytest run the With/Without test took 41.0 s and Pair Synergy 18.8 s. The same routes took 2.5 s and 0.7 s in the crawl a few minutes later. stats.nba.com's first answer is sometimes very slow, and the timeouts let a page hang for up to a minute before a 502.
 - **Found by:** pytest durations + crawl. The plan's target is a clear state within 3 s.
 - **Step 2c (browser):** With/Without a Star for DEN 2025-26 / Jokić took 21.0 s in the sweep (`/teams/with-without/DEN/2026`).
 
+- **Step 4:** With/Without reads stored data from 2020-21 (36 ms for DEN 2025-26 / Jokić in the browser; 21 s before); Pair Synergy's observed pair comes from `pair_seasons` (no live call); Playoff Forecaster and Heliocentricity keep their live call (no stored equivalent) with `_LIVE_REQUEST_TIMEOUT_SECONDS` = 3 and answer 503 "stats.nba.com didn't answer within 3 s" instead of hanging (a failed playoff fetch used to read as "didn't make the playoffs"); With/Without before 2020-21 the same (GSW 2015-16 answered 503 in 3.0 s on 2026-10-05: LeagueGameFinder for old seasons times out). `/players/profile/{name}`'s 45 s live path is gone. Tests `test_every_live_call_fails_within_three_seconds`, `test_with_without_before_2020_21_says_when_the_source_is_unreachable`, `test_playoff_comparison_distinguishes_unreachable_from_missed_playoffs`, `test_heliocentricity_unreachable_is_a_503_with_the_reason`.
 ### R8-009 · The 2025-26 awards were never loaded
 - **Severity:** wrong number (stale) · **Step:** 7 · **Status:** open
 - **Where:** `award_winners` and `mvp_winners` (max season 2025 = 2024-25), `player_awards` (2026: All-Star only). Affects: Analytics › Prediction Ledger (60 logged 2025-26 prediction rows in `prediction_ledger` can't resolve: "no seasons resolved yet"), award backtests and history, profile award lists (no 2025-26 MVP, DPOY, ROY, All-NBA).
@@ -285,6 +331,7 @@ NBA Cup final kept out of the regular season, Curry's 2020-21 scoring title.
 - **Step 2b (Teams, Games, Today):** `/trade/teams/{season}`, `/trade/roster/{team}/{season}` and `/trade/simulate` now return `_source`, shown on the Trade Analyzer's result (test `test_trade_analyzer_carries_a_source`). Left, all live and Step 4's: `/games/by-date`, `/games/boxscore/{id}` (Live Scores), `/meta/current` (Dashboard, Standings, Team Comparison), `/news/current` (News). `/games/wp-replay/*` is 2c's (Analytics › Game Replay).
 - **Step 2c (Analytics, Shot Charts, the rest):** `/shots/player/{name}`, `/shots/player/{name}/seasons` and `/zones` now return `_source` (`player_shots`; `live` true when the shots were fetched just now) and `/shots/league-zones/{season}` too (`league_shot_zones`); Shot Charts shows the badge on its dots and heat-map views (the other three views already had theirs). Test `test_shot_charts_carry_a_source`. The rest of the 2c routes sit under their page's own badge: `/games/wp-replay/list` and `/{id}/whatif` under the replay's, `/backtest` under Model Validation's, `/explain/*` under Awards Race's, `/clusters/player/{name}` under Player Archetypes'. Unused by any page (R8-017): `/players/profile/{name}`, `/similarity/career/{name}`, `/impact/player/{name}/{season}`. Left, all Step 4's: `/leaders/{stat}`, `/hustle/leaders` (Stat Leaders), `/players/pair-synergy`, `/games/by-date`, `/games/boxscore/{id}`, `/meta/current`, `/news/current`.
 
+- **Step 4:** `/leaders/{stat}`, `/hustle/leaders`, `/players/pair-synergy`, `/games/by-date`, `/games/boxscore/{id}`, `/meta/current` and `/news/current` now return `_source` (Stat Leaders and Live Scores show the badge). Left: nothing from this entry's Step 4 list.
 ### R8-015 · Season shown as a raw end year ("2027") in labels
 - **Severity:** looks wrong · **Step:** 2 (2a Stat Leaders, 2c Prediction Ledger) · **Status:** fixed (2a: Stat Leaders; 2c: Prediction Ledger)
 - **Where:** Stat Leaders subtitle "Top 10 · 2027", Analytics › Prediction Ledger "Current season 2027". The app's label is "2026-27".
@@ -304,6 +351,7 @@ NBA Cup final kept out of the regular season, Curry's 2020-21 scoring title.
 - **Where:** routes no frontend file names: similarity `/similarity/career/{name}`, impact `/impact/player/{name}/{season}`, `/shots/quality-map/options`. `services/api.js` wrappers no component calls (9 of 202): `fetchPlayerShotZones`, `fetchLeagueShotZones`, `fetchRapmValidation`, `fetchPlayerImage`, `fetchPlayerProfile`, `fetchShotSeasons`, `fetchProjectionBacktest`, `fetchPlayerProjections`, `fetchLedgerHindcast` (their routes may still be called another way).
 - **Found by:** comparing the crawl's route list with `frontend/src`. Keep (API-only, tested) or remove, with a reason either way.
 
+- **Step 4:** `/players/profile/{name}` is DB-only now (its live path is gone); `/shots/league-zones/{season}` no longer fetches by default (R8-007). The unused routes themselves are still Step 10's call.
 ### R8-018 · Typed-name tools pick the first of two same-name players
 - **Severity:** wrong number · **Step:** 5 · **Status:** open
 - **Where:** every caller of `impact_core.find_player()`: Player Comparison (+ `/shots/player/{name}/zones`), Trend Analysis, Radar, Scouting Report, With/Without a Star, and others. 19 names belong to two players.
@@ -320,10 +368,11 @@ NBA Cup final kept out of the regular season, Curry's 2020-21 scoring title.
 - **Found by:** known gap (README, Methodology).
 
 ### R8-021 · With/Without a Star's point differential comes from stats.nba.com's summed plus-minus
-- **Severity:** wrong number · **Step:** 4 · **Status:** open
+- **Severity:** wrong number · **Step:** 4 · **Status:** fixed in the Step 4 commit
 - **Where:** `/teams/with-without/...`: live `PLUS_MINUS` from leaguegamefinder, which differs from the final margin in some games (160 of 20,348 in the stored copy). Its Methodology card says so.
 - **Found by:** known gap (README). Fix: stored data (`game_scores` + `player_game_lines`, 2020-21 on).
 
+- **Step 4:** `/teams/with-without/{team}/{season}` reads `game_scores` (result and the real final margin) and `player_game_lines` (who had minutes, joined on team + date like the Game Log) for every season with lines; takes an optional `player_id`, which the page passes from the roster. PHI 2023-24 / Embiid: 31-8 and 16-27 as before, +10.36 / −3.58 average margin (the live version's summed-plus-minus margins are gone for these seasons). Methodology card and README updated. Tests `test_with_without_reads_stored_data_from_2020_21`, the With/Without smoke test.
 ### R8-022 · ESPN's no-id players get no line and break their stints
 - **Severity:** wrong number · **Step:** 6a (owner's OK) · **Status:** open
 - **Where:** `scripts/pbp_lineups.py` resolves names only through `player_season_stats`. 100-155 names a season get no `player_game_lines` row, and their stints aren't `tracked_ok` (2-6% of minutes before 2025-26).
@@ -371,11 +420,12 @@ NBA Cup final kept out of the regular season, Curry's 2020-21 scoring title.
 - **Found by:** known gap (README).
 
 ### R8-031 · `/games/by-date` has no stored fallback for past dates
-- **Severity:** broken · **Step:** 7 · **Status:** open
+- **Severity:** broken · **Step:** 7 · **Status:** fixed in the Step 4 commit (taken with R8-002)
 - **Where:** Live Scores date browsing. README: "returns an empty list for an older historical date".
 - **Re-measured 2026-10-05:** `/games/by-date?date=2025-01-02` → 6 final games with scores in 1.0 s, equal to `game_scores` (6). It works because stats.nba.com answers scoreboardv2 again; it would be empty again if that stops (R8-003). Fix: past dates from `game_scores` (or ESPN by date).
 - **Found by:** known gap (README) + crawl.
 
+- **Step 4:** stored dates answer from `game_scores` / `postseason_games` without any network (2025-01-02: 6 games in 0.04 s; 2025-06-05: Finals game 1 as "Playoffs"); other past dates (preseason) from ESPN. Test `test_by_date_reads_stored_results_first`.
 ### R8-032 · Pair Synergy's model still uses the old in-house defensive BPM
 - **Severity:** wrong number · **Step:** 7 (owner's call: a retrain) · **Status:** open
 - **Where:** Pair Synergy reads `dbpm_repro` until retrained. Methodology open issue "Some models can't be retrained right now" says stats.nba.com is unreachable, which is no longer true (R8-006).
@@ -467,11 +517,12 @@ NBA Cup final kept out of the regular season, Curry's 2020-21 scoring title.
 - **Found by:** the copy-link round trip. **Fix:** `?page=games&g=trivia` (`guess`, `blurred`, `higherlower`, `trivia`, `guessgame`) through `useInitialParams` / `useUrlSync`; checked in the browser (a fresh load of the link opens Trivia). Test: `test_games_hub_keeps_the_open_game_in_the_link`.
 
 ### R8-049 · The Dashboard requests next season's MVP prediction and gets a 404 on every load
-- **Severity:** looks wrong · **Step:** 4 · **Status:** open
+- **Severity:** looks wrong · **Step:** 4 · **Status:** fixed in the Step 4 commit
 - **Where:** `DashboardHome.jsx` `resolveSeasonWithData()` starts at `/meta/current`'s season (2027) and walks back on failure, so every Dashboard load logs `404 GET /mvp/predict/2027` in the browser's network panel before 2025-26's answer. The page itself is right ("MVP Favorite · 2025-26").
 - **Found by:** the scanner's failed-request list. Fix with R8-004's season work in Step 4 (e.g. a route that says which seasons the award models cover), not a guess in the page.
 - **Step 2c:** the landing page asks for it too (`404 GET /mvp/predict/2027`, twice in dev's StrictMode, on every load).
 
+- **Step 4:** `/meta/current` returns `stored_season` (the latest stored season) and the Dashboard and landing page start their award-season walk there: the Dashboard's network list on 2026-10-05 is `/mvp/predict/2026` 200 and no 404. Test `test_pages_use_nba_dates_and_the_routes_season_labels`.
 ### R8-050 · Older charts drew in dark-theme pastels: 1.2-2.6:1 on Paper
 - **Severity:** looks wrong · **Step:** 2c · **Status:** fixed in the Step 2c commit
 - **Where:** hard-coded Tailwind-400 colours (`#38bdf8`, `#f87171`, `#facc15`, `#a78bfa`, `#34d399`, `#f59e0b`, `#94a3b8`, `#00e5ff`, ...) made for a dark page, in 16 Analytics components and two shared ones: Model Validation (ROC/calibration lines and their AUC/label text, SHAP bars), Garbage-Time Deflator (slope chart, focus label 2.0:1, bucket bars and labels), Contract Value ("fair value" line and text 2.0:1, dots), DAD Index (position dots), Draft Prospects (projected-outcome numbers as text, 2.6:1), Career Trajectory, Player Archetypes (10-colour palette, sparklines), Offensive Style, Radar Compare (also the player names in its table), Trend Analysis, Referee Tendencies (diff cells as text: 2.0-2.6:1 in Paper), Game Replay (win-probability dots, what-if markers), Matchup Finder (FG% text), Spacing Lab, Length Matters, Prediction Ledger; `common/ShotCourt.jsx` (every shot chart: made shots `#00e5ff` 1.2:1 on Paper's court, misses at 45% opacity 2.1:1), `PlayerDetailModal` bars; Awards Race's streak badge (`dashboard.css`, `#facc15` text).
@@ -566,3 +617,9 @@ NBA Cup final kept out of the regular season, Curry's 2020-21 scoring title.
 - **Where:** `scripts/fetch_postseason_games.py` stored ESPN's UTC stamp (`e["date"][:10]`): a 8:30 pm ET tip on June 5 is "2025-06-06T00:30Z". 909 of 1,458 games (every evening game 2009-10 to 2024-25) were a day late: the 2025 Finals read June 6-23 for June 5-22, the 2025 play-in's late games April 16/17/19 for 15/16/18. Nothing reads the dates yet (`build_season_sim.py` uses stage and teams, Best Games' rounds join by id), so no page showed them.
 - **Found by:** `test_2025_finals_games_and_champion` against Wikipedia's dates.
 - **Fix:** the script converts to US Eastern (`local_date()`, like every other date in the database) and skips ESPN's placeholder events; re-fetched 2026-10-05 and diffed against a snapshot: 909 dates moved one day earlier, no other column changed, 1,458 rows (one 2010-11 first-round game ESPN's scoreboard dropped on the first pass was fetched again). **Not on Layerbase** (for the Step 10 sync).
+
+### R8-068 · Stat Leaders ranks shooting percentages with no attempts floor
+- **Severity:** wrong number · **Step:** 7 · **Status:** open
+- **Where:** Stat Leaders (`StatLeaders.jsx`), `GET /leaders/fg_pct|fg3_pct|ft_pct` (`api/routers/leaders.py`).
+- **Reproduce:** `/leaders/fg3_pct?season=2025` → Dru Smith 53.3% first (a handful of attempts). The stored path and the old live path both rank every player with a non-null percentage; the Leaderboard Builder applies an attempts floor for the same stats (`ATTEMPT_DEFAULTS`).
+- **Found by:** Step 4, while exercising the route after the fallback change. Fix: reuse the Leaderboard's attempt floors (catalogue) in `_stored_leaders`, and state the floor on the page.
