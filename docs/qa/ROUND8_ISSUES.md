@@ -12,9 +12,10 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
-Counts (2026-10-05, after Step 1): **32 entries**, 32 open: 3 broken, 15 wrong number, 4 slow,
-10 looks wrong. 17 are new from Step 1 (R8-001 to R8-017); 15 are known gaps already written down in
-README "Known real gaps" / Methodology open issues, listed so a step owns each (R8-018 to R8-032).
+Counts (2026-10-05, after Step 2a): **43 entries**, 33 open, 10 fixed: 5 broken, 16 wrong number,
+4 slow, 18 looks wrong. 17 are new from Step 1 (R8-001 to R8-017); 15 are known gaps already written
+down in README "Known real gaps" / Methodology open issues, listed so a step owns each (R8-018 to
+R8-032); 11 are from Step 2a's sweep of the Players pages (R8-033 to R8-043, 10 fixed in its commit).
 
 ## Step 1 health check (2026-10-05)
 
@@ -77,6 +78,25 @@ Frontend direct: player photos and team logos from cdn.nba.com (`utils/teamAsset
 Fetch scripts tagged `nbaapi` in `rebuild_all.sh` (fetch_play_by_play, fetch_2025_26_season_data,
 build_schedule_fatigue, referee officials, spacing, matchups, defend dashboard, hustle, play types) may run
 again now; not tried in Step 1 (R8-006).
+
+## Step 2a page sweep: Players pages (2026-10-05)
+
+`frontend/qa/page_scan.js` (README "Testing and QA") through the desktop app's browser tool, on a temporary
+harness page (deleted before the commit). Pages: every Players menu entry except Shot Charts (2c): Player
+Stats, Player Comparison (empty and Jokić vs Murray 2025-26), Stat Leaders, Leaderboard Builder, Regression
+Explorer, Breakout Detector, Stat Stability, RAPM, Role Player Finder, Era Translator, Aging Curves,
+Projections, Stat Line Finder, Game Finder, Play Finder, Hot Streak Checker, Situational Splits, Draft
+Value Guide, Rookie Class Tracker, Greats of the Game (and its card), Hall of Fame; player profiles of
+LeBron James (2544), Michael Jordan (893, pre-2000) and Cooper Flagg (1642843, rookie).
+
+| Check | Result |
+|---|---|
+| Scan at 1280 and 375 px, Paper and Ink (100 renders) | Before: 1 console error on every profile with play-by-play blocks (R8-034), contrast failures on 4 pages (R8-033, R8-035, R8-042), nothing else. **After the fixes: 100 of 100 clean** (no console error, failed request, request over 3 s apart from `/news/current` on a cold app-shell prefetch (R8-011), overflow, contrast failure, "undefined"/"NaN" text, stuck loading text or header-only table; slowest page settled in 4.0 s). |
+| By eye (screenshots, 1280 Paper/Ink, 375) | R8-036 (phone search button), R8-037 (stale seasons, raw years), R8-041 (tooltip), the empty Stat Leaders table (R8-001, Step 4). |
+| Copy link → open fresh = same view | 15 of 15 pages that keep their inputs in the link match after changing a control (Stat Line Finder by changing a value: its "Add a stat" picker adds an empty row, which isn't in the link by design). Player Stats, Stat Leaders, Draft, Rookies, Greats and Hall of Fame have no link state and no Copy link button. Aging Curves had Copy link without Save (fixed). |
+| Links out | One of each kind per page opened fresh (player, team, Stat Stability, Replay): all open a real view; the 185 Hall of Fame and 83 Greats ids all have a profile. Profile buttons (16 on LeBron's, 4 on Jordan's, 13 on Flagg's: Workbench, Greats, Shot Charts, DAD, Spacing, Contracts, Clutch, Projections, On/Off, RAPM, Rating Tracker, Rim, Assists, Splits, Possessions, Breakouts): all open the page they name; On/Off opened the wrong team (R8-040). |
+| Back / Forward | Leaderboard Builder, RAPM, Game Finder → profile → Back → Forward, and profile → profile: each returns the same view and inputs. |
+| Empty results | Game Finder, Leaderboard Builder, Stat Line Finder, Play Finder say what happened; Breakout Detector and Regression Explorer didn't (R8-038). |
 
 ## Constraints (not defects)
 
@@ -168,11 +188,13 @@ again now; not tried in Step 1 (R8-006).
 - **Where:** mvp `/backtest`, `/explain/{award}`, `/explain/{award}/{name}`; similarity `/clusters/player/{name}`, `/similarity/career/{name}`; impact `/contracts/player/{id}`, `/games/boxscore/{id}`, `/games/by-date`, `/games/wp-replay/list`, `/games/wp-replay/{id}/whatif`, `/hustle/leaders`, `/impact/player/{name}/{season}`, `/leaders/{stat}`, `/meta/current`, `/news/current`, `/player-profile/{id}/shot-zones`, `/players/compare-profile/{name}`, `/players/pair-synergy`, `/players/playtype-profile/{name}`, `/players/profile/{name}`, `/players/table/{season}`, `/shots/league-zones/{season}`, `/shots/player/{name}` (+ `/seasons`, `/zones`), `/trade/roster/{team}/{season}`, `/trade/simulate`, `/trade/teams/{season}`.
 - **Reproduce:** crawl column `source` = `no`.
 - **Found by:** crawl. The convention asks for a badge on the main Analytics endpoints. Each page sweep decides per page (add one, or note why the page doesn't need one).
+- **Step 2a (Players pages):** `/players/table/{season}` (Player Stats) and `/players/compare-profile/{name}` (Player Comparison) now return `_source`, and both pages show the badge; Rookie Class Tracker now shows the one `/roy/predict` already returned. Left: `/leaders/{stat}` (Stat Leaders, with R8-001 in Step 4), `/players/pair-synergy` (a live call, Step 4), and the profile's sub-routes (`/player-profile/{id}/shot-zones`, `/contracts/player/{id}`, `/players/playtype-profile/{name}`), which sit under the profile's own badge for `/player-profile/{id}`. Shot routes: 2c.
 
 ### R8-015 · Season shown as a raw end year ("2027") in labels
 - **Severity:** looks wrong · **Step:** 2 (2a Stat Leaders, 2c Prediction Ledger) · **Status:** open
 - **Where:** Stat Leaders subtitle "Top 10 · 2027", Analytics › Prediction Ledger "Current season 2027". The app's label is "2026-27".
 - **Found by:** reading the components behind the crawl's empty answers. The sweeps should look for others.
+- **Step 2a:** Stat Leaders now reads "Top 10 · 2026-27" (test `test_stat_leaders_season_label`). The same kind of raw-year box was on Player Stats, Player Comparison and Rookie Class Tracker (R8-037, fixed). Prediction Ledger is 2c's; still open for it.
 
 ### R8-016 · Trivia asks about "this season" from last season's numbers
 - **Severity:** looks wrong · **Step:** 2b · **Status:** open
@@ -260,3 +282,60 @@ again now; not tried in Step 1 (R8-006).
 - **Severity:** wrong number · **Step:** 7 (owner's call: a retrain) · **Status:** open
 - **Where:** Pair Synergy reads `dbpm_repro` until retrained. Methodology open issue "Some models can't be retrained right now" says stats.nba.com is unreachable, which is no longer true (R8-006).
 - **Found by:** known gap (CLAUDE.md Open items, Methodology).
+
+### R8-033 · Muted text on the page rails was just under 4.5:1 in Paper
+- **Severity:** looks wrong · **Step:** 2a · **Status:** fixed in the Step 2a commit
+- **Where:** `--text-3` (#6b6458) on `--surface-2` (#e8e1d3): the rail items of Player Stats, Stat Leaders and Hall of Fame (and anything else muted on a `--surface-2` panel).
+- **Reproduce:** contrast 4.497:1 (floor 4.5). Ink passes.
+- **Found by:** the scanner. **Fix:** `--text-3` → #665f53 in Paper (4.85:1 on `--surface-2`, 5.36 on `--bg`, 5.95 on `--surface`); a hair darker everywhere it is used. Test: `test_muted_text_reads_on_the_rails`.
+
+### R8-034 · Every profile with play-by-play blocks logged React's duplicate-key error
+- **Severity:** broken (console error) · **Step:** 2a · **Status:** fixed in the Step 2a commit
+- **Where:** `PlayerProfile.jsx`: Game Log, Rating Tracker, Rim, Assists, Situational Splits and Possessions blocks were siblings all keyed `d.player.player_id` ("Encountered two children with the same key"; React may then duplicate or drop children). LeBron and Flagg had it, Jordan (no such blocks) didn't.
+- **Found by:** the scanner's console capture. **Fix:** each block's key gets its own prefix (`log-…`, `tracker-…`, …); the reset-per-player purpose is kept. Test: `test_profile_blocks_have_distinct_keys`.
+
+### R8-035 · Player Comparison's player colours were unreadable on Paper
+- **Severity:** looks wrong · **Step:** 2a · **Status:** fixed in the Step 2a commit
+- **Where:** `PlayerComparison.jsx` `COLOR_A` #f87171 / `COLOR_B` #38bdf8, fixed hex in both themes: the winning Tale of the Tape values, the skill-profile percentages and the table headers.
+- **Reproduce:** Jokić vs Murray 2025-26 in Paper: 2.61:1, 2.02:1 on `--surface`; 2.13:1, 1.65:1 on `--surface-2`.
+- **Found by:** the scanner (filled comparison). **Fix:** theme tokens `--compare-a` / `--compare-b` (Paper #b91c1c / #1d4ed8, ≥ 4.97:1 on both surfaces; Ink keeps the old colours, which pass there). Test: `test_comparison_colours_read_as_text`.
+
+### R8-036 · Below 480 px the top bar's search button was an empty box
+- **Severity:** looks wrong · **Step:** 2a (app shell, every page) · **Status:** fixed in the Step 2a commit
+- **Where:** `styles/shell.css` `.nav-search-pill span { display: none }` hid the "Search" label and also the icon (`Icon` renders a span). The button had no accessible name either.
+- **Found by:** 375 px screenshots. **Fix:** the rule skips `.icon`; `aria-label="Search"`. Test: `test_phone_search_button_shows_its_icon`.
+
+### R8-037 · Player Stats and Player Comparison opened on 2024-25; season boxes showed a raw year
+- **Severity:** wrong number (stale default) · **Step:** 2a · **Status:** fixed in the Step 2a commit
+- **Where:** Player Stats (`useState(2025)`) and Player Comparison (`?? 2025`) opened on 2024-25 although 2025-26 is loaded; both, and Rookie Class Tracker, had a number box showing "2025". Player Stats' line "min ≥ N MPG" and its team links used the inputs before Load was pressed; Rookie Class Tracker's comps used the picker's season instead of the loaded class's, its tooltip said "tracked live" (a stored model) and its count said "this season" for any season.
+- **Found by:** screenshots. **Fix:** a season picker labelled 2025-26 … 2009-10 defaulting to 2025-26 on all three; the loaded table's season and floor in the text and links. Test: `test_season_pickers_default_to_the_latest_season`. Other pages with the same pattern: R8-043.
+
+### R8-038 · Two empty results didn't say why
+- **Severity:** looks wrong · **Step:** 2a · **Status:** fixed in the Step 2a commit
+- **Where:** `/explore/breakouts` with floors nobody meets (e.g. 82+ games, 44+ minutes, 2025-26) said "Not enough seasons with these stats."; `/explore/regression` said "Only 0 player-seasons pass these filters".
+- **Found by:** running each finder with filters that match nothing (Game Finder, Leaderboard Builder, Stat Line Finder and Play Finder already explain themselves). **Fix:** Breakouts names the floors and says to lower them (a season before the stats start keeps its own message); Regression says "No player-seasons pass these filters (a fit needs 30)". Test: `test_empty_results_say_why`.
+
+### R8-039 · Hall of Fame names weren't links; a Greats card had no way to the profile
+- **Severity:** looks wrong · **Step:** 2a · **Status:** fixed in the Step 2a commit
+- **Where:** `HallOfFame.jsx` built its own headshot + name (no link, no watchlist star); `GreatsOfTheGame.jsx`'s detail card had no profile link.
+- **Found by:** following links (0 player links on both pages). Checked first: all 185 Hall of Fame ids (five career-leader stats, longevity, greatest seasons) and all 83 Greats ids open a profile. **Fix:** `PlayerName` in the three Hall of Fame tables (the 75 badge kept); "Open full profile →" in the Greats card.
+
+### R8-040 · The profile's "Open On/Off" opened Atlanta
+- **Severity:** broken (link to the wrong view) · **Step:** 2a · **Status:** fixed in the Step 2a commit
+- **Where:** `PlayerProfile.jsx` On/off block called `onNavigate('analytics', 'onoff')` with no team, so the On/Off page opened on its default team (ATL) for every player.
+- **Found by:** clicking every navigation button on the profiles. **Fix:** passes the latest season and team (`?season=2026&team=LAL#onoff` for LeBron, DAL for Flagg); checked in the browser.
+
+### R8-041 · Player Comparison's tooltip said there is no height or wingspan data
+- **Severity:** looks wrong · **Step:** 2a · **Status:** fixed in the Step 2a commit
+- **Where:** the page's "How this works" tooltip, while the bio cards show NBA Draft Combine height and wingspan when a player was measured (`draft_combine`, said in the route's docstring and the card's own tooltip).
+- **Found by:** reading the page. **Fix:** the tooltip says the measurements are the Combine's, shown only for measured players.
+
+### R8-042 · Greats' "From the data" / "Source" labels were 4.49:1 in Ink
+- **Severity:** looks wrong · **Step:** 2a · **Status:** fixed in the Step 2a commit
+- **Where:** `greats.css` `.gg-dyk a, .gg-dyk .gg-from` #0d0d0d on Ink's orange `--hi` (#ff5b14).
+- **Found by:** the scanner with the card open. **Fix:** #000 (4.85:1; higher on Paper's lime).
+
+### R8-043 · Other season pickers still open on 2024-25 or show a raw year
+- **Severity:** looks wrong · **Step:** 2b / 2c · **Status:** open
+- **Where:** `useState(2025)` in Analytics sections `WithWithoutStarSection`, `OffensiveStyleSection`, `RadarCompareSection`, `PlayerArchetypesSection`, `PlayoffForecasterSection` (2c); Trade Impact's number box (2b). Check each page's data range before changing the default (Contract Value has no 2025-26).
+- **Found by:** grep during Step 2a (same pattern as R8-037).

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { fetchGreats } from '../../services/api';
 import { initials } from '../../utils/teamAssets';
+import { isPlainClick, openPlayerProfile, playerProfileHref } from '../../utils/useUrlState';
 import Loader from '../Loader';
 import SourceBadge from '../common/SourceBadge';
 import '../../styles/greats.css';
@@ -183,6 +184,10 @@ function Detail({ g, onClose }) {
                     <div className="gg-years">
                         {seasonLabel(g.first_season)} – {seasonLabel(g.last_season)} · {g.position} · {g.games.toLocaleString()} games
                     </div>
+                    <a className="gg-profile-link" href={playerProfileHref(g.player_id)}
+                        onClick={(e) => { if (!isPlainClick(e)) return; e.preventDefault(); openPlayerProfile(g.player_id); }}>
+                        Open full profile →
+                    </a>
                     <dl>
                         <div><dt>Career points</dt><dd>{g.pts.toLocaleString()}</dd></div>
                         <div><dt>Rebounds / assists</dt><dd>{g.reb.toLocaleString()} / {g.ast.toLocaleString()}</dd></div>

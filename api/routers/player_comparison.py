@@ -2,6 +2,7 @@ from psycopg2 import pool
 
 from fastapi import APIRouter, HTTPException
 
+from source_badge import make_source
 from impact_core import (
     COMPARE_DETAIL_STATS,
     COMPOSITE_SKILL_AXES,
@@ -60,7 +61,7 @@ def get_compare_profile(player_name: str, season: int):
         combine_row = cursor.fetchone()
 
     if not pool:
-        raise HTTPException(status_code=404, detail=f"No qualified player data for season {season}.")
+        raise HTTPException(status_code=404, detail=f"No qualified player data for {season - 1}-{str(season)[-2:]}.")
 
     row_cols = ["player_id"] + cols + ["archetype"]
     pool_by_id = {row[0]: dict(zip(row_cols, row)) for row in pool}
@@ -68,7 +69,7 @@ def get_compare_profile(player_name: str, season: int):
         raise HTTPException(
             status_code=404,
             detail=f"{resolved_name} doesn't meet the qualified-pool minimum "
-                   f"(min>={RADAR_MIN_MINUTES}mpg, gp>={RADAR_MIN_GAMES}) for season {season}.",
+                   f"({RADAR_MIN_MINUTES}+ minutes a game, {RADAR_MIN_GAMES}+ games) in {season - 1}-{str(season)[-2:]}.",
         )
 
     # FTr / 3PAr aren't stored columns — derive for the whole pool (needed
@@ -120,4 +121,6 @@ def get_compare_profile(player_name: str, season: int):
         },
         "skill_profile": [pct_entry(stat, label) for _, label, stat in COMPOSITE_SKILL_AXES],
         "detail_stats": [pct_entry(stat, label) for stat, label in COMPARE_DETAIL_STATS],
+        "_source": make_source(["player_season_stats", "player_clusters", "draft_combine"],
+                               "nba_api (stats.nba.com) + Basketball-Reference"),
     }

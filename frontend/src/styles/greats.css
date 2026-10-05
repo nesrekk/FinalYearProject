@@ -482,6 +482,14 @@
   padding: 22px;
 }
 
+.gg-profile-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--brand-text);
+}
+
 .gg-close {
   float: right;
   padding: 4px 8px;
@@ -594,7 +602,8 @@
   font-family: var(--font-mono);
   font-size: 10.5px;
   text-transform: uppercase;
-  color: #0d0d0d;
+  /* #0d0d0d was 4.49:1 on Ink's orange --hi; black is 4.85:1 there (and higher on Paper's lime). */
+  color: #000;
 }
 
 .gg-dyk .gg-from {

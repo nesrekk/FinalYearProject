@@ -11,6 +11,7 @@ import PlayerDetailModal from '../common/PlayerDetailModal';
 import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import TableExport from '../common/TableExport';
+import SourceBadge from '../common/SourceBadge';
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'];
 
@@ -57,6 +58,11 @@ const STAT_TABS = {
 
 const TOP_LEVEL_LABELS = { age: 'AGE', gp: 'GP', min: 'MIN' };
 
+// The table covers 2009-10 to the latest finished season (GET /players/table).
+const LATEST_SEASON = 2026;
+const SEASONS = Array.from({ length: LATEST_SEASON - 2010 + 1 }, (_, i) => LATEST_SEASON - i);
+const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
+
 function fmt(v, digits = 1, signed = false) {
     if (v == null) return '—';
     const s = Number(v).toFixed(digits);
@@ -64,7 +70,7 @@ function fmt(v, digits = 1, signed = false) {
 }
 
 export default function PlayerStats() {
-    const [season, setSeason] = useState(2025);
+    const [season, setSeason] = useState(LATEST_SEASON);
     const [minMinutes, setMinMinutes] = useState(10);
     const [table, setTable] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -173,13 +179,9 @@ export default function PlayerStats() {
 
                     <div className="hb-rail-group">
                         <span className="hb-rail-label">Season</span>
-                        <input
-                            type="number"
-                            value={season}
-                            onChange={(e) => setSeason(Number(e.target.value))}
-                            min={2010}
-                            max={2026}
-                        />
+                        <select value={season} onChange={(e) => setSeason(Number(e.target.value))} aria-label="Season">
+                            {SEASONS.map((y) => <option key={y} value={y}>{seasonLabel(y)}</option>)}
+                        </select>
                     </div>
                     <div className="hb-rail-group">
                         <span className="hb-rail-label">Search</span>
@@ -263,7 +265,8 @@ export default function PlayerStats() {
                             )}
 
                             <p className="page-subtitle">
-                                Showing {rows.length} of {table.count} players (min ≥ {minMinutes} MPG), sorted by {leaderLabel}.
+                                Showing {rows.length} of {table.count} players, {seasonLabel(table.season)} (min ≥ {table.min_minutes} MPG), sorted by {leaderLabel}.
+                                <SourceBadge source={table._source} />
                             </p>
 
                             <motion.div
@@ -336,7 +339,7 @@ export default function PlayerStats() {
                                                     </span>
                                                 </td>
                                                 <td className={isSortedCell('team_abbreviation', null) ? 'hb-cell-accent' : ''}>
-                                                    <TeamLink abbr={r.team_abbreviation} season={season} className="entity-row">
+                                                    <TeamLink abbr={r.team_abbreviation} season={table.season} className="entity-row">
                                                         <TeamLogo abbreviation={r.team_abbreviation} size={18} />
                                                         <span>{r.team_abbreviation}</span>
                                                     </TeamLink>

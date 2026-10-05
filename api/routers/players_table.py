@@ -1,6 +1,8 @@
 
 from fastapi import APIRouter
 
+from source_badge import make_source
+
 from impact_core import (
     _position_label,
     check_season_exists,
@@ -81,4 +83,5 @@ def get_players_table(season: int, min_minutes: float = 0.0):
             },
         })
 
-    return {"season": season, "min_minutes": min_minutes, "count": len(results), "results": results}
+    return {"season": season, "min_minutes": min_minutes, "count": len(results), "results": results,
+            "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) + Basketball-Reference")}

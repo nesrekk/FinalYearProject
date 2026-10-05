@@ -11,7 +11,8 @@
   --surface-2: #e8e1d3;
   --text: #0d0d0d;
   --text-2: #4a443a;
-  --text-3: #6b6458;
+  /* #6b6458 was 4.497:1 on --surface-2 (the page rails), just under 4.5 (round 8 step 2a). */
+  --text-3: #665f53;
   --hairline: rgba(13, 13, 13, 0.13);
   --line: #0d0d0d;
   --accent: #a93a0a;
@@ -27,6 +28,9 @@
   /* Active tab label: plain --accent on its 16% tint was 4.15:1 in Paper. */
   --tab-active-text: color-mix(in srgb, var(--accent) 80%, #000);
   --streak: #7a5a00;
+  /* Player Comparison's two players (text and marks): >= 4.5:1 on --surface and --surface-2. */
+  --compare-a: #b91c1c;
+  --compare-b: #1d4ed8;
   --brand-gradient: linear-gradient(90deg, #a93a0a, #a93a0a);
 
   /* ── Depth: hard offset "sticker" shadows ──────── */
@@ -114,6 +118,8 @@
   --brand-gradient: linear-gradient(90deg, #ff7a3d, #ff7a3d);
   --shadow-card: 4px 4px 0 #ff5b14;
   --streak: #facc15;
+  --compare-a: #f87171;
+  --compare-b: #38bdf8;
   --tab-active-text: var(--accent);
 }
 
@@ -135,6 +141,8 @@
     --brand-gradient: linear-gradient(90deg, #ff7a3d, #ff7a3d);
     --shadow-card: 4px 4px 0 #ff5b14;
     --streak: #facc15;
+  --compare-a: #f87171;
+  --compare-b: #38bdf8;
     --tab-active-text: var(--accent);
   }
 }

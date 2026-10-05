@@ -95,7 +95,7 @@ export default function StatLeaders() {
             Stat Leaders
           </div>
           <p className="page-subtitle" style={{ marginTop: '-0.75rem' }}>
-            Top 10 {season ? `· ${season}` : ''}
+            Top 10 {season ? `· ${season - 1}-${String(season).slice(-2)}` : ''}
           </p>
 
           <div className="hb-rail-group">

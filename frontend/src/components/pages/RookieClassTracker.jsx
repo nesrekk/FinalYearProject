@@ -5,13 +5,18 @@ import InfoTooltip from '../common/InfoTooltip';
 import PlayerName from '../common/PlayerName';
 import Icon from '../common/Icon';
 import TableExport from '../common/TableExport';
+import SourceBadge from '../common/SourceBadge';
+
+// The ROY model scores 2009-10 to the latest finished season.
+const LATEST_SEASON = 2026;
+const SEASONS = Array.from({ length: LATEST_SEASON - 2010 + 1 }, (_, i) => LATEST_SEASON - i);
 
 function fmt(v, digits = 1) {
     return v == null ? '—' : Number(v).toFixed(digits);
 }
 
 export default function RookieClassTracker() {
-    const [season, setSeason] = useState(2026);
+    const [season, setSeason] = useState(LATEST_SEASON);
     const [rookies, setRookies] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -45,7 +50,8 @@ export default function RookieClassTracker() {
         setCompsError('');
         setComps(null);
         try {
-            const data = await fetchSeasonSimilarity(playerName, season);
+            // The loaded class's season, not the picker's (it may have changed without a reload).
+            const data = await fetchSeasonSimilarity(playerName, rookies?.season ?? season);
             setComps(data);
         } catch (e) {
             setCompsError(e?.response?.data?.detail || 'No comps available.');
@@ -60,7 +66,7 @@ export default function RookieClassTracker() {
                 <h2 className="card-title hb-page-title">
                     <span className="card-icon"><Icon name="eco" /></span>
                     Rookie Class Tracker
-                    <InfoTooltip label="How this works" title="Every rookie, tracked live">
+                    <InfoTooltip label="How this works" title="Every rookie in a season">
                         "Rookie" here means the player's first NBA season, taken from Basketball-Reference
                         (so a short earlier stint counts) — the same definition the ROY model uses. The ROY
                         chance is that model's score calibrated so the whole rookie class adds up to 100%. Clicking a rookie shows their closest
@@ -68,17 +74,14 @@ export default function RookieClassTracker() {
                         useful for "who does this rookie's season actually resemble so far," not a
                         guarantee of a similar career.
                     </InfoTooltip>
+                    <SourceBadge source={rookies?._source} />
                 </h2>
 
                 <div className="input-row">
-                    <input
-                        type="number"
-                        className="input-field"
-                        value={season}
-                        onChange={(e) => setSeason(Number(e.target.value))}
-                        min={2010}
-                        max={2026}
-                    />
+                    <select className="input-field" value={season} onChange={(e) => setSeason(Number(e.target.value))}
+                        aria-label="Season" style={{ maxWidth: 130 }}>
+                        {SEASONS.map((y) => <option key={y} value={y}>{`${y - 1}-${String(y).slice(-2)}`}</option>)}
+                    </select>
                     <button type="button" className="action-btn" onClick={loadClass} disabled={loading}>
                         {loading ? 'Loading…' : 'Load Rookie Class'}
                     </button>
@@ -89,7 +92,7 @@ export default function RookieClassTracker() {
                 {rookies && !loading && (
                     <>
                         <p className="page-subtitle" style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
-                            {rookies.candidate_pool_size} rookies this season, sorted by chance to win ROY.
+                            {rookies.candidate_pool_size} rookies in {rookies.season - 1}-{String(rookies.season).slice(-2)}, sorted by chance to win ROY.
                             Click a row to see their closest historical season comp.
                         </p>
                         <TableExport />

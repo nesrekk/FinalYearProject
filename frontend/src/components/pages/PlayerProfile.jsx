@@ -699,6 +699,8 @@ export function NextSeason({ block, player, onNavigate }) {
 
 function OnOff({ block, coverage, onNavigate }) {
     const rows = block.rows;
+    // The page opens on his latest team-season (it would otherwise open on the first team, ATL).
+    const latest = rows.reduce((a, r) => (r.season > a.season || (r.season === a.season && r.minutes_on > a.minutes_on) ? r : a), rows[0]);
     const thin = rows.some((r) => r.few_off_minutes);
     return (
         <Section id="onoff" title="On/off"
@@ -712,7 +714,10 @@ function OnOff({ block, coverage, onNavigate }) {
             )}
             meta={<>Play-by-play lines cover {span(coverage)}; a traded season shows each team. Seasons under{' '}
                 {block.qualified_minutes} minutes on the floor are greyed.{' '}
-                <button type="button" className="pp-link" onClick={() => onNavigate('analytics', 'onoff')}>Open On/Off</button></>}>
+                <button type="button" className="pp-link"
+                    onClick={() => onNavigate('analytics', 'onoff', { season: latest.season, team: latest.team })}>
+                    Open On/Off
+                </button></>}>
             <TableExport />
             <div className="table-wrapper">
                 <table className="data-table lb-table pp-table">
@@ -970,7 +975,7 @@ export default function PlayerProfile({ onNavigate }) {
 
             <SeasonsTable block={d.seasons} />
             {d.game_log.seasons.length > 0 && (
-                <GameLogBlock key={d.player.player_id} playerId={d.player.player_id} seasons={d.game_log.seasons}
+                <GameLogBlock key={`log-${d.player.player_id}`} playerId={d.player.player_id} seasons={d.game_log.seasons}
                     nbaGp={Object.fromEntries(d.seasons.rows.map((r) => [r.season, r.gp]))} />
             )}
             {(d.awards.rows.length > 0 || d.player.greats) && (
@@ -995,19 +1000,19 @@ export default function PlayerProfile({ onNavigate }) {
             {(d.on_off?.rows.length ?? 0) > 0 && <OnOff block={d.on_off} coverage={d.coverage.on_off} onNavigate={onNavigate} />}
             {(d.rapm?.rows.length ?? 0) > 0 && <RapmBlock block={d.rapm} coverage={d.coverage.rapm} onNavigate={onNavigate} />}
             {(d.rating_tracker?.rows.length ?? 0) > 0 && (
-                <RatingTrackerBlock key={d.player.player_id} block={d.rating_tracker} coverage={d.coverage.rating_tracker} onNavigate={onNavigate} Section={Section} />
+                <RatingTrackerBlock key={`tracker-${d.player.player_id}`} block={d.rating_tracker} coverage={d.coverage.rating_tracker} onNavigate={onNavigate} Section={Section} />
             )}
             {(d.rim_deterrence?.rows.length ?? 0) > 0 && (
-                <RimBlock key={d.player.player_id} block={d.rim_deterrence} coverage={d.coverage.rim_deterrence} onNavigate={onNavigate} />
+                <RimBlock key={`rim-${d.player.player_id}`} block={d.rim_deterrence} coverage={d.coverage.rim_deterrence} onNavigate={onNavigate} />
             )}
             {(d.assists?.seasons.length ?? 0) > 0 && (
-                <AssistBlock key={d.player.player_id} playerId={d.player.player_id} seasons={d.assists.seasons} onNavigate={onNavigate} />
+                <AssistBlock key={`assists-${d.player.player_id}`} playerId={d.player.player_id} seasons={d.assists.seasons} onNavigate={onNavigate} />
             )}
             {(d.situational_splits?.seasons.length ?? 0) > 0 && (
-                <SituationalSplitsBlock key={d.player.player_id} playerId={d.player.player_id} seasons={d.situational_splits.seasons} />
+                <SituationalSplitsBlock key={`splits-${d.player.player_id}`} playerId={d.player.player_id} seasons={d.situational_splits.seasons} />
             )}
             {(d.possessions?.seasons.length ?? 0) > 0 && (
-                <PossessionBlock key={d.player.player_id} playerId={d.player.player_id} seasons={d.possessions.seasons} onNavigate={onNavigate} />
+                <PossessionBlock key={`poss-${d.player.player_id}`} playerId={d.player.player_id} seasons={d.possessions.seasons} onNavigate={onNavigate} />
             )}
             {d.similarity.seasons.length > 0 && <Similar player={d.player} seasons={d.similarity.seasons} />}
             {d.breakouts.flags.length > 0 && <Breakouts block={d.breakouts} />}

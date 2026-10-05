@@ -12,14 +12,20 @@ import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import TableExport from '../common/TableExport';
 import ChartExport from '../common/ChartExport';
 import CopyLinkButton from '../common/CopyLinkButton';
+import SourceBadge from '../common/SourceBadge';
 import SaveViewButton from '../common/SaveViewButton';
 import OpenInWorkbenchButton from '../common/OpenInWorkbenchButton';
 import { compareBoard } from '../../utils/openInWorkbench';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import { withSign } from '../../utils/format';
 
-const COLOR_A = '#f87171';
-const COLOR_B = '#38bdf8';
+// compare-profile covers 2009-10 to the latest finished season.
+const LATEST_SEASON = 2026;
+const SEASONS = Array.from({ length: LATEST_SEASON - 2010 + 1 }, (_, i) => LATEST_SEASON - i);
+
+// Theme tokens (styles/tokens.css): the Ink colours were 1.6-2.6:1 as text on Paper.
+const COLOR_A = 'var(--compare-a)';
+const COLOR_B = 'var(--compare-b)';
 
 const TALE_ROWS = [
     { key: 'pts', label: 'Points', min: 0, max: 35, digits: 1 },
@@ -210,7 +216,7 @@ export default function PlayerComparison() {
     const radarRef = useRef(null);
     // A shared link carries ?season=&a=&b= (utils/useUrlState.js).
     const params = useInitialParams();
-    const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: 2026 }) ?? 2025);
+    const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: LATEST_SEASON }) ?? LATEST_SEASON);
     const { isAdvanced } = useMotionMode();
     const preset = motionPreset(isAdvanced);
 
@@ -301,10 +307,11 @@ export default function PlayerComparison() {
                         Skill Profile and every percentile bar here rank a player against the same qualified pool
                         used by Radar Comparison (min≥15 mpg, gp≥20 that season) — 0-100, where 100 means nobody
                         in the pool beat them. "Archetype" is this project's own statistical clustering, shown in
-                        place of a scouted offensive/defensive role — this project has no real role, height,
-                        weight, or wingspan data anywhere in its pipeline, so those are omitted rather than
-                        guessed.
+                        place of a scouted offensive/defensive role (there is no scouted role data). Height,
+                        wingspan and weight are the NBA Draft Combine's measurements, shown only for players who
+                        were measured there; never guessed.
                     </InfoTooltip>
+                    <SourceBadge source={profileA?._source ?? profileB?._source} />
                     <CopyLinkButton />
                     <SaveViewButton pageId="compare" />
                     <OpenInWorkbenchButton disabled={!profileA && !profileB}
@@ -313,15 +320,10 @@ export default function PlayerComparison() {
                 <p className="page-subtitle">Pick a season and two players to compare their full statistical profile.</p>
 
                 <div className="input-row">
-                    <input
-                        type="number"
-                        className="input-field"
-                        value={season}
-                        onChange={(e) => setSeason(Number(e.target.value))}
-                        min={2010}
-                        max={2026}
-                        style={{ maxWidth: 110 }}
-                    />
+                    <select className="input-field" value={season} onChange={(e) => setSeason(Number(e.target.value))}
+                        aria-label="Season" style={{ maxWidth: 130 }}>
+                        {SEASONS.map((y) => <option key={y} value={y}>{`${y - 1}-${String(y).slice(-2)}`}</option>)}
+                    </select>
                 </div>
 
                 <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>

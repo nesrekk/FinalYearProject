@@ -2381,7 +2381,8 @@ body {
   color: var(--text-muted);
 }
 
-.hb-rail-group input {
+.hb-rail-group input,
+.hb-rail-group select {
   background: var(--bg-elevated);
   border: 1px solid var(--border-light);
   border-radius: 6px;
@@ -2394,7 +2395,8 @@ body {
   transition: border-color var(--transition-fast);
 }
 
-.hb-rail-group input:focus {
+.hb-rail-group input:focus,
+.hb-rail-group select:focus {
   border-color: var(--accent);
 }
 

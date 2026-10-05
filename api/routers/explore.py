@@ -83,7 +83,8 @@ def explore_regression(
         rows = cur.fetchall()
 
     if len(rows) < 30:
-        raise HTTPException(status_code=404, detail=f"Only {len(rows)} player-seasons pass these filters; "
+        found = f"Only {len(rows)} player-seasons pass" if rows else "No player-seasons pass"
+        raise HTTPException(status_code=404, detail=f"{found} these filters (a fit needs 30); "
                                                     f"widen the range or lower the floors.")
 
     pid = np.array([r[0] for r in rows])
@@ -307,11 +308,16 @@ def breakouts(
     stats_t = tuple(keys)
     zs = _season_z(stats_t, min_gp, float(min_mpg))
     seasons = sorted(zs)
+    floors = f"{min_gp}+ games and {min_mpg:g}+ minutes a game"
     if len(seasons) < 2:
-        raise HTTPException(status_code=404, detail="Not enough seasons with these stats.")
+        raise HTTPException(status_code=404, detail=(
+            f"No two seasons have players with {floors} and these stats; lower the floors."))
     season = seasons[-1] if season is None else season
     if season not in zs or season - 1 not in zs:
         first = STATS[max(keys, key=lambda k: STATS[k][3])][3]
+        if season - 1 >= first:
+            raise HTTPException(status_code=404, detail=(
+                f"No players have {floors} in both {_label(season - 1)} and {_label(season)}; lower the floors."))
         raise HTTPException(status_code=404, detail=(
             f"Pick a season from {_label(first + 1)} on: these stats start in {_label(first)} "
             f"and a breakout needs the season before."))

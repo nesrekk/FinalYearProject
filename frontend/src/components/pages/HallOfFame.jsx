@@ -4,7 +4,7 @@ import Loader from '../Loader';
 import InfoTooltip from '../common/InfoTooltip';
 import SourceBadge from '../common/SourceBadge';
 import Icon from '../common/Icon';
-import PlayerHeadshot from '../common/PlayerHeadshot';
+import PlayerName from '../common/PlayerName';
 import TableExport from '../common/TableExport';
 
 const STAT_OPTIONS = [
@@ -142,11 +142,9 @@ export default function HallOfFame() {
                                             <tr key={l.player_id}>
                                                 <td>{l.rank}</td>
                                                 <td>
-                                                    <div className="entity-row">
-                                                        <PlayerHeadshot playerId={l.player_id} playerName={l.player_name} size={26} />
-                                                        {l.player_name}
+                                                    <PlayerName playerId={l.player_id} name={l.player_name} size={26}>
                                                         {l.is_nba75 && <Nba75Badge />}
-                                                    </div>
+                                                    </PlayerName>
                                                 </td>
                                                 <td>{l.career_total.toLocaleString()}</td>
                                                 <td>{l.per_game}</td>
@@ -171,11 +169,9 @@ export default function HallOfFame() {
                                             <tr key={`${s.player_id}-${s.season}`}>
                                                 <td>{s.rank}</td>
                                                 <td>
-                                                    <div className="entity-row">
-                                                        <PlayerHeadshot playerId={s.player_id} playerName={s.player_name} size={26} />
-                                                        {s.player_name}
+                                                    <PlayerName playerId={s.player_id} name={s.player_name} size={26}>
                                                         {s.is_nba75 && <Nba75Badge />}
-                                                    </div>
+                                                    </PlayerName>
                                                 </td>
                                                 <td>{s.season_label}</td>
                                                 <td>{s.age}</td>
@@ -198,11 +194,9 @@ export default function HallOfFame() {
                                             <tr key={l.player_id}>
                                                 <td>{l.rank}</td>
                                                 <td>
-                                                    <div className="entity-row">
-                                                        <PlayerHeadshot playerId={l.player_id} playerName={l.player_name} size={26} />
-                                                        {l.player_name}
+                                                    <PlayerName playerId={l.player_id} name={l.player_name} size={26}>
                                                         {l.is_nba75 && <Nba75Badge />}
-                                                    </div>
+                                                    </PlayerName>
                                                 </td>
                                                 <td>{l.seasons_played}</td>
                                                 <td>{l.career_gp.toLocaleString()}</td>

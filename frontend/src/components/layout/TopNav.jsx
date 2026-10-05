@@ -124,7 +124,7 @@ export default function TopNav({ activePage, onNavigate, onGoToLanding }) {
                                 <Icon name="home" size="1.1em" />
                             </button>
                         )}
-                        <button type="button" className="nav-search-pill" onClick={() => setPaletteOpen(true)}>
+                        <button type="button" className="nav-search-pill" onClick={() => setPaletteOpen(true)} aria-label="Search">
                             <Icon name="search" size="1em" />
                             <span>Search</span>
                             <kbd>⌘K</kbd>

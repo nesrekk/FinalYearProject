@@ -7,6 +7,7 @@ import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import ChartExport from '../common/ChartExport';
 import CopyLinkButton from '../common/CopyLinkButton';
+import SaveViewButton from '../common/SaveViewButton';
 import AutocompleteDropdown from '../common/AutocompleteDropdown';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/stability.css';
@@ -310,6 +311,7 @@ export default function AgingCurves() {
                 </InfoTooltip>
                 <SourceBadge source={data._source} />
                 <CopyLinkButton />
+                <SaveViewButton pageId="aging" />
             </h2>
             <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
                 How a typical NBA player&apos;s game changes from one birthday to the next: every player who played two
