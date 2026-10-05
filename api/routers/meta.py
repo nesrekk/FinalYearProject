@@ -3,6 +3,7 @@ from functools import lru_cache
 
 from fastapi import APIRouter
 
+from local_only import LOCAL_ONLY, NOTE as LOCAL_ONLY_NOTE
 from routers.leaders import live_leaders, qualifying
 from source_badge import make_source
 
@@ -655,8 +656,11 @@ def _coverage():
         for entry in COVERAGE_MAP:
             table = entry["table"]
             cursor.execute("SELECT to_regclass(%s);", (f"public.{table}",))
+            local_only = table in LOCAL_ONLY
             if cursor.fetchone()[0] is None:
-                rows.append({**entry, "exists": False, "n_rows": 0, "season_from": None, "season_to": None})
+                # A LOCAL_ONLY table is absent from the Layerbase mirror on purpose (api/local_only.py).
+                rows.append({**entry, "exists": False, "n_rows": 0, "season_from": None, "season_to": None,
+                             "local_only": local_only, "note": LOCAL_ONLY_NOTE if local_only else None})
                 continue
 
             cursor.execute(f"SELECT COUNT(*) FROM {table};")  # nosec: table from our own hand-written map, never user input
@@ -680,6 +684,8 @@ def _coverage():
                 "n_rows": n_rows,
                 "season_from": season_from,
                 "season_to": season_to,
+                "local_only": local_only,
+                "note": None,
             })
     return tuple(rows)
 

@@ -19,10 +19,23 @@ SERIAL/sequence defaults still aren't recreated -- copied data already has
 explicit real IDs, and this migration is for real read access, not
 local/cloud parity for writes.
 
+LOCAL_ONLY (api/local_only.py; round 8 step 10, the owner's decision of 2026-10-05): six paper-only
+per-unit tables (~0.6 GB with indexes) that no page reads stay in the local database. They are never
+copied (asking for one with --tables stops the run), --check doesn't count them as missing, and
+--drop-local-only removes them from Layerbase. Compare contents (not just counts) with
+`DB_TARGET=layerbase python3 paper_manifest.py --out $TMPDIR/lb` then `paper_manifest.py --compare $TMPDIR/lb`.
+
 Usage:
-    cd scripts && python3 migrate_to_layerbase.py                    # every table
+    cd scripts && python3 migrate_to_layerbase.py                    # every table except LOCAL_ONLY
     cd scripts && python3 migrate_to_layerbase.py --tables a,b,c     # just these
     cd scripts && python3 migrate_to_layerbase.py --check            # compare row counts only, no writes
+    cd scripts && python3 migrate_to_layerbase.py --drop-local-only  # drop the LOCAL_ONLY tables on Layerbase
+    cd scripts && python3 migrate_to_layerbase.py --reindex [a,b]     # REINDEX TABLE on Layerbase, biggest index first
+
+The copy creates each table's primary key before loading it, so the key index is built row by row and loosely
+packed (pbp_events' was 181 MB on Layerbase vs 133 MB after a re-pack): run --reindex after a sync (all tables, or the
+ones just copied). One table at a time, a fresh connection each, a 20 s lock timeout (a table another session holds a
+lock on is skipped and named); it changes no data.
 """
 
 import io
@@ -32,8 +45,13 @@ import sys
 import psycopg2
 from dotenv import load_dotenv
 
-_ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "api", ".env")
+_API_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "api")
+_ENV_PATH = os.path.join(_API_DIR, ".env")
 load_dotenv(_ENV_PATH)
+if _API_DIR not in sys.path:
+    sys.path.append(_API_DIR)
+
+from local_only import LOCAL_ONLY  # noqa: E402  (never copied to Layerbase)
 
 LOCAL_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
@@ -164,13 +182,68 @@ def migrate_table(local_cur, cloud_conn, cloud_cur, table, row_count):
     return cloud_cur.fetchone()[0], len(indexes)
 
 
+def drop_local_only(cloud_conn, cloud_cur):
+    """Drop every LOCAL_ONLY table that is on Layerbase; prints each one's size before it goes."""
+    freed = 0
+    for table in LOCAL_ONLY:
+        cloud_cur.execute("SELECT pg_total_relation_size(to_regclass(%s));", (f"public.{table}",))
+        size = cloud_cur.fetchone()[0]
+        if size is None:
+            print(f"  {table:35s} not on Layerbase")
+            continue
+        cloud_cur.execute(f'DROP TABLE "{table}";')
+        cloud_conn.commit()
+        freed += size
+        print(f"  {table:35s} dropped ({size / 1e6:,.1f} MB with its indexes)")
+    print(f"Dropped LOCAL_ONLY tables: {freed / 1e6:,.1f} MB freed.")
+
+
+def reindex(only=None):
+    """REINDEX TABLE on Layerbase one table at a time, biggest index first; prints the index size before and after."""
+    import time
+    mb = 1e6
+    with psycopg2.connect(**CLOUD_CONFIG) as conn, conn.cursor() as cur:
+        cur.execute("""SELECT c.relname, pg_indexes_size(c.oid) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                       WHERE n.nspname = 'public' AND c.relkind = 'r' AND pg_indexes_size(c.oid) > 0 ORDER BY 2 DESC""")
+        todo = [(t, size) for t, size in cur.fetchall() if only is None or t in only]
+    conn.close()
+    before = after = 0
+    for table, size in todo:
+        conn = psycopg2.connect(**CLOUD_CONFIG)
+        conn.autocommit = True
+        cur = conn.cursor()
+        t0 = time.time()
+        cur.execute("SET lock_timeout = '20s'")
+        try:
+            cur.execute(f'REINDEX TABLE "{table}"')
+        except psycopg2.errors.LockNotAvailable:
+            print(f"  {table:35s} skipped: another session holds a lock on it", flush=True)
+            conn.close()
+            continue
+        cur.execute("SELECT pg_indexes_size(%s::regclass)", (table,))
+        new = cur.fetchone()[0]
+        conn.close()
+        before, after = before + size, after + new
+        print(f"  {table:35s} {size / mb:8.1f} -> {new / mb:8.1f} MB  ({time.time() - t0:.0f} s)", flush=True)
+    print(f"Indexes of the re-packed tables: {before / mb:,.1f} -> {after / mb:,.1f} MB.")
+
+
 def main():
+    if "--reindex" in sys.argv:
+        i = sys.argv.index("--reindex")
+        only = set(sys.argv[i + 1].split(",")) if len(sys.argv) > i + 1 and not sys.argv[i + 1].startswith("--") else None
+        reindex(only)
+        return
     local_conn = psycopg2.connect(**LOCAL_CONFIG)
     local_cur = local_conn.cursor()
     cloud_conn = psycopg2.connect(**CLOUD_CONFIG)
     cloud_cur = cloud_conn.cursor()
 
-    tables = list_tables(local_cur)
+    all_tables = list_tables(local_cur)
+    tables = [t for t in all_tables if t not in LOCAL_ONLY]
+    if "--drop-local-only" in sys.argv:
+        drop_local_only(cloud_conn, cloud_cur)
+        return
     if "--check" in sys.argv:
         cloud_cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
         cloud_tables = {r[0] for r in cloud_cur.fetchall()}
@@ -186,15 +259,25 @@ def main():
             if cloud_n != local_n:
                 mismatches += 1
                 print(f"  {table:35s} local {local_n:>9,}  cloud {cloud_n if cloud_n is not None else 'missing'}")
-        print(f"{len(tables)} local tables, {mismatches} differ from Layerbase.")
+        on_cloud = sorted(set(LOCAL_ONLY) & cloud_tables)
+        extra = sorted(cloud_tables - set(all_tables))
+        print(f"{len(tables)} local tables to mirror, {mismatches} differ from Layerbase by row count. "
+              f"Kept local, not compared: {', '.join(LOCAL_ONLY)}.")
+        if on_cloud:
+            print(f"LOCAL_ONLY tables still on Layerbase (--drop-local-only removes them): {', '.join(on_cloud)}")
+        if extra:
+            print(f"On Layerbase but not local: {', '.join(extra)}")
         return
     if "--tables" in sys.argv:
         wanted = sys.argv[sys.argv.index("--tables") + 1].split(",")
-        unknown = set(wanted) - set(tables)
+        unknown = set(wanted) - set(all_tables)
         if unknown:
             raise SystemExit(f"Not local tables: {', '.join(sorted(unknown))}")
+        kept = set(wanted) & set(LOCAL_ONLY)
+        if kept:
+            raise SystemExit(f"Kept local, never copied (api/local_only.py): {', '.join(sorted(kept))}")
         tables = [t for t in tables if t in wanted]
-    print(f"Migrating {len(tables)} tables...")
+    print(f"Migrating {len(tables)} tables (kept local: {', '.join(LOCAL_ONLY)})...")
 
     total_rows = 0
     total_indexes = 0
@@ -203,7 +286,7 @@ def main():
         local_n = local_cur.fetchone()[0]
         cloud_n, idx_n = migrate_table(local_cur, cloud_conn, cloud_cur, table, local_n)
         status = "OK" if local_n == cloud_n else f"MISMATCH (local={local_n})"
-        print(f"  {table:35s} {cloud_n:>9,} rows  {idx_n} idx  [{status}]")
+        print(f"  {table:35s} {cloud_n:>9,} rows  {idx_n} idx  [{status}]", flush=True)
         total_rows += cloud_n
         total_indexes += idx_n
 

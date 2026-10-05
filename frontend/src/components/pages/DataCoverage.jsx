@@ -23,13 +23,17 @@ const pageLabel = (id) => STATIC_PAGES[id] || TOOL_LABELS[id] || NAV_LABELS[id] 
 
 function CoverageRow({ row, onNavigate }) {
     return (
-        <tr className={row.exists ? undefined : 'cov-missing'}>
+        <tr className={row.exists || row.local_only ? undefined : 'cov-missing'}>
             <td>
                 <code className="cov-table">{row.table}</code>
                 <div className="cov-label">{row.label}</div>
             </td>
             <td className="lb-num">{row.exists ? fmtN(row.n_rows) : '—'}</td>
-            <td>{row.exists ? (row.season_from ? `${row.season_from} → ${row.season_to}` : '—') : 'table not found'}</td>
+            <td>
+                {row.exists && (row.season_from ? `${row.season_from} → ${row.season_to}` : '—')}
+                {/* A table kept in the local database only is absent from the cloud mirror on purpose (api/local_only.py). */}
+                {!row.exists && (row.local_only ? <span className="cov-none">{row.note}</span> : 'table not found')}
+            </td>
             <td className="cov-source">{row.source}</td>
             <td className="cov-gap">{row.gap || <span className="cov-none">No known gap</span>}</td>
             <td>
@@ -74,7 +78,8 @@ export default function DataCoverage({ onNavigate }) {
     if (!data) return <Loader />;
 
     const totalRows = data.tables.reduce((sum, r) => sum + (r.exists ? r.n_rows : 0), 0);
-    const missing = data.tables.filter((r) => !r.exists);
+    const missing = data.tables.filter((r) => !r.exists && !r.local_only);
+    const keptLocal = data.tables.filter((r) => !r.exists && r.local_only);
 
     return (
         <section className="dashboard-card lb-card">
@@ -100,6 +105,12 @@ export default function DataCoverage({ onNavigate }) {
                 <p className="cov-alert">
                     {missing.length} table{missing.length > 1 ? 's' : ''} in this map {missing.length > 1 ? 'don\'t' : 'doesn\'t'} exist
                     in this database right now: {missing.map((r) => r.table).join(', ')}.
+                </p>
+            )}
+            {keptLocal.length > 0 && (
+                <p className="page-subtitle">
+                    {keptLocal.map((r) => r.table).join(', ')}: {keptLocal[0].note} (the paper&apos;s per-prediction
+                    rows; no page reads them).
                 </p>
             )}
 

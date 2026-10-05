@@ -35,6 +35,7 @@ for _d in (os.path.join(_ROOT, "api"), os.path.join(_ROOT, "scripts")):
         sys.path.insert(0, _d)
 
 from db_config import DB_CONFIG  # noqa: E402
+import local_only  # noqa: E402
 
 TUNE, VALIDATE, TEST = (2021, 2022, 2023, 2024), 2025, 2026
 TUNE_SPAN, VAL_LABEL, TEST_LABEL = "2020-21 to 2023-24", "2024-25", "2025-26"
@@ -60,10 +61,12 @@ def cur():
     conn = psycopg2.connect(**DB_CONFIG)
     conn.set_session(readonly=True, autocommit=True)
     c = conn.cursor()
-    c.execute("SELECT to_regclass('paper_eval_metrics'), to_regclass('paper_eval_predictions'), to_regclass('paper_eval_choices')")
-    if any(v is None for v in c.fetchone()):
+    names = ("paper_eval_metrics", "paper_eval_predictions", "paper_eval_choices")
+    c.execute("SELECT " + ", ".join(f"to_regclass('{t}')" for t in names))
+    missing = [t for t, v in zip(names, c.fetchone()) if v is None]
+    if missing:
         conn.close()
-        pytest.skip("paper_eval tables not built (run scripts/paper_eval.py)")
+        pytest.skip(local_only.kept_local_reason(missing) or "paper_eval tables not built (run scripts/paper_eval.py)")
     yield c
     conn.close()
 

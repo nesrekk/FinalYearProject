@@ -12,6 +12,8 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
+**Final counts (2026-10-06, Step 10, round 8 closed): 85 entries: 77 fixed, 1 won't fix, 7 open.** By severity: 8 broken (8 fixed), 27 wrong number (25 fixed, 2 open: R8-028, R8-032), 8 slow (6 fixed, 1 won't fix: R8-013, 1 open: R8-012), 42 looks wrong (38 fixed, 4 open: R8-010, R8-059, R8-071, R8-082). Every open one is an owner's call or waits for data (each entry says which). Step 10 closed R8-014 (every route without `_source` accounted for) and found no new app defect; the round's one-page summary for the guide is at the end of the Step 10 section.
+
 Counts (2026-10-06, after Step 8): **85 entries**, 8 open, 76 fixed, 1 won't fix: 8 broken, 27 wrong number,
 8 slow, 42 looks wrong. Step 8 fixed R8-011, R8-017 and R8-060 and three it found (R8-083 to R8-085), measured R8-013
 (won't fix: it doesn't delay the first paint) and left R8-012 open (a page decision). After Step 7: 82 entries, 12 open,
@@ -554,9 +556,95 @@ the empty-answer cache, the pool read once under concurrency, the two-connection
 **535 passed, 1 skipped**, exit 0, 119 s; eslint 0; vite build passes; the landing → Dashboard link works with the lazy Dashboard; no console error on
 any of the 50 pages.
 
+## Step 10: close-out, the Layerbase sync and slimming (2026-10-06)
+
+Step 9 (usability fixes) waits for the owner's study sessions (`docs/USABILITY_STUDY.md`); it can run any time and
+doesn't block this close-out.
+
+| Check | Result |
+|---|---|
+| `pytest api/tests` (local) | before any change **535 passed, 1 skipped**, exit 0, 117 s; after this step's changes **541 passed, 1 skipped**, exit 0, 119 s |
+| `npx eslint src` / `npx vite build` | exit 0 / passes (before and after this step's changes) |
+| `scripts/rebuild_all.sh paper-inputs` | exit 0, 35 s: 218 tables, 26,879,962 rows, digest `0ccd328c11140933` (the Step 8 digest); `numbers.tex` byte-identical (1,359 macros), 270 plotted numbers match |
+| Route crawl (`docs/qa/crawl_2026-10-06_close.tsv`) | 210 routes, **210 called, 0 not 2xx, 0 over 3 s, 0 with placeholder text**, 1 empty (`/ledger/live/games`: nothing logged before 2026-10-20, expected), 33 JSON answers without `_source` (all accounted for: R8-014, now closed). Every route's status, rows and `_source` equal to Step 8's crawl; only `/news/current`'s bytes moved (a live feed) |
+| Page sweep of what this step touched | Data Coverage only: opened in the browser with impact_api on `DB_TARGET=layerbase` after the sync (1280 px, Paper): `report_card_units` reads "kept local, not on the cloud mirror" in `--text-3`, no "table not found" alert, no console error; pinned by `test_meta_coverage` (both databases) and `test_data_coverage_marks_a_local_only_table_that_is_absent`. No other page changed in Step 10 |
+
+**Layerbase slimming (the owner's OK, 2026-10-05).** Re-grepped `api/` and `frontend/src` first: no route or page reads
+any of the six tables (only Data Coverage's map names `report_card_units`), so all six stay local:
+`paper_eval_predictions`, `shot_xfg`, `paper_ablation_predictions`, `report_card_units`, `report_card_game_sums`,
+`paper_ablation_shot_games`. The list lives in **`api/local_only.py`** (`LOCAL_ONLY`) and is used by
+`scripts/migrate_to_layerbase.py` (never copied; `--tables` refuses them; `--check` doesn't count them;
+`--drop-local-only` drops them on Layerbase; new `--reindex [tables]` re-packs indexes the way this step did), `scripts/paper_manifest.py` (`--compare DIR`: a mirror's manifest checked
+table by table, LOCAL_ONLY skipped and named; `stale_reasons()` doesn't call them stale on the mirror),
+`api/routers/meta.py` (Data Coverage marks them `local_only` and, where absent, "kept local, not on the cloud mirror"
+instead of "table not found") and **`api/tests/conftest.py`** (on `DB_TARGET=layerbase` a test or fixture stopped by one
+of them not existing is skipped with the table named; any other error still fails). Tests:
+`api/tests/test_round8_closeout.py` (6).
+
+**The sync, in order** (sizes in decimal MB from `pg_database_size` / `pg_table_size` / `pg_indexes_size`; the plan's
+4,008 is the same database in MiB):
+
+| | Database | Indexes | Tables |
+|---|---|---|---|
+| Before (2026-10-06, still the 2026-10-04 sync: digest `e5e7bae46a7ccf7a`) | 4,203 MB | 1,086 MB | 218 |
+| Six LOCAL_ONLY tables dropped (`--drop-local-only`: 588 MB) | 3,614 MB | 843 MB | 212 |
+| 98 tables copied (`--tables`; 10,255,718 rows, 1,299 MB locally) | 3,630 MB | 849 MB | 212 |
+| `REINDEX TABLE`, one at a time, biggest first (189 tables: 842 → 698 MB) | **3,487 MB** | **705 MB** | 212 |
+
+**1,513 MB free of the 5 GB tier** (was 797). The 98 changed tables were found by content hash, not row count:
+`migrate_to_layerbase.py --check` saw only 28 with a different count. `player_shots` and `pbp_events` hashed equal and
+were not re-sent; no `ledger_*` table differed or was touched (nor re-indexed). The re-pack mattered most where the key
+index had been built while rows were loaded (the script creates the primary key before the COPY): `pbp_events`
+181 → 133, `pbp_event_clock` 114 → 76 (fresh copy), `possessions` 107 → 79 (fresh copy), `player_shots` unchanged.
+The plan expected ~765 MB freed (its MiB, measured on the old tables); freed 716 MB (683 MiB) while taking in the round's ~1.3 GB of rebuilt tables.
+
+**Verify:** `DB_TARGET=layerbase python3 paper_manifest.py --out $TMPDIR/lb` then `paper_manifest.py --compare $TMPDIR/lb`:
+**212 of 212 tables equal (schema, rows, content), mirror digest `27175bbdea7992e1` on both** (UTC session); the six
+LOCAL_ONLY skipped and named. Tests with `DB_TARGET=layerbase` in batches: 542 tests in four batches (smoke 25 min; Workbench + usability 12 min; round 8 + consistency + known facts 29 min; the rest 12 min): **510 passed, 31 skipped, 1 failed**. Skipped: 30 that read a LOCAL_ONLY table (each names it) and the ledger test until the first game. Four failed in the batches with `SSL connection has been closed unexpectedly` (Layerbase's connection drop, seen at every sync) or a 502 caused by it, and passed rerun alone (`test_shot_endpoints_take_a_player_id`, `test_live_shot_fetch_is_off_by_default`, `test_player_season_line_everywhere`, `test_shot_totals_everywhere`). The one failure is the known one: `test_workbench.py::test_every_verified_column_runs` hits the Workbench's 8 s `statement_timeout` on Layerbase only (504 "narrow the query", as designed). The first run of the last batch also showed that a module fixture's cached error skipped only its first test, so `conftest.py` now converts the test report itself (3 errors → skips).
+
+**Found on the way (not app defects, for the owner):**
+- **Two orphaned Layerbase sessions** from the 2026-10-04 sync's test run (`idle in transaction` since 08:51 UTC that
+  day, client gone) still hold read locks on `game_scores`, `team_game_fatigue`, `game_pregame_odds`,
+  `season_sim_params` and the `ledger_*` tables. Reads aren't blocked, but `REINDEX` waited on `game_scores` (cancelled;
+  those four tables were skipped with a 20 s lock timeout) and a future copy of any of them (`DROP TABLE`) would hang.
+  Ending them changes no data: `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state = 'idle in
+  transaction' AND xact_start < now() - interval '1 day';` (left for the owner).
+- **No pre-6a dump exists:** `~/nba_backups/` was never created and there is no `pre-6a` tag; Step 6a snapshotted its
+  nine tables as `zz_r86a_*` instead (diffed, then dropped). The only full dump on this Mac is the migration bundle's
+  `~/Desktop/NBA_Hub_Migration_2026-10-01/nba_analytics.dump` (369 MB, 2026-10-01, before round 8). Nothing to delete for
+  Step 6; the owner decides about the bundle (already on the owner's to-do list).
+
+## For the guide: round 8 in one page (2026-10-05 to 2026-10-06)
+
+**What was tested.** Every API route (210, crawled with real arguments at the start, after Step 8 and at the close),
+every page (49 pages plus profiles and team pages; ~720 renders at 1280 and 375 px in light and dark themes, with a
+scripted scan for console errors, slow requests, overflow, contrast, placeholder text and broken links), every
+quantity the app shows on more than one page (one consistency test file over a seeded sample), 14 new outside facts,
+the live pages without stats.nba.com, the play-by-play chain rebuilt end to end, the paper regenerated on it, and the
+speed of the slowest routes and pages. Tests went from 410 to 542.
+
+**Counts.** 85 problems logged: 8 broken, 27 wrong number, 8 slow, 42 looks wrong. **77 fixed, 1 won't fix (measured
+harmless), 7 open**, none of them broken: two need the owner's call (a chart orange that is 2.8:1 on the light theme, a
+Pair Synergy retrain), one is a page decision (paging Referee crews), two wait for refreshed source data (the 2026 draft,
+2025-26 award lists on profiles), one is a shot-chart gap in four 2025-26 games, one a leftover of a contrast issue.
+
+**Biggest fixes.** The play-by-play lines and five-man stints were rebuilt: players ESPN gives no id now matched by name
+(minutes not tracked: 2-6% → 0.02-0.16% a season), free throws credited to the five on the floor at the foul (box-score
++/- exact in 98.2% of games, was 42.5%), phantom minutes gone; 82 downstream tables refitted on it. Live Scores,
+standings and box scores read ESPN, not the unreliable stats.nba.com. Same-name players picked by id everywhere. A
+stored team stats fallback that was wrong for all 30 teams (Cleveland 147.5 points a game). Play Finder with a season
+filter 50-118 s → 0.07 s.
+
+**Conclusions that moved (Step 6c).** The Rating Tracker now trails BPM on the test season (+0.22 [+0.05, +0.40], was
+level), and BPM has the lowest test-season error in the RAPM table; dropping flagged games now moves the RAPM + prior vs
+BPM gap past every random drop (0.21 [0.01, 0.40]); two ablations' test-season edges moved to or inside their intervals (the prior at scale 1, possession weights). Unchanged: RAPM + prior vs
+BPM reversal, on/off worse than zero, xRAPM's negative result, pre-game and simulator results, the popular-belief tests.
+
+**Next.** Step 9 after the usability sessions; round 9 (live 2026-27 season from 2026-10-20, own-team data).
+
 ## Constraints (not defects)
 
-- **Layerbase:** 4,202 of 5,000 MB used (2026-10-04). A Step 6 rebuild rewrites tables of about the same size; any sync needs the owner's OK (Step 10 decides whether the biggest tables stay local).
+- **Layerbase:** 3,487 of 5,000 MB used (2026-10-06, after the Step 10 sync and slimming; was 4,203). Six paper-only tables stay local (`api/local_only.py`); any sync needs the owner's OK.
 - **Locked forecast:** no step touches the `ledger_*` tables, the `ledger-2026-27` tag or `api/ledger_lib.py` / `season_sim_lib.py` / `luck_lib.py`; from 2026-10-20 the owner runs `scripts/ledger_update.py` by hand on game days.
 
 ## Issues
@@ -659,7 +747,7 @@ any of the 50 pages.
 - **Step 8:** it doesn't. Resource and paint timings of the landing page in the harness: first contentful paint at 104 ms, the chunk (and three.js) requested at 344 ms, after `/shots/league-sample` answers; it renders below the hero inside a `Suspense` with no fallback. The landing page has no image files (the ribbon and ball are drawn on canvas/WebGL), so there are no image sizes to cut.
 
 ### R8-014 · 28 data routes answer without a `_source` badge
-- **Severity:** looks wrong · **Step:** 2 (2a/2b/2c, per page) · **Status:** open
+- **Severity:** looks wrong · **Step:** 2 (2a/2b/2c, per page) · **Status:** fixed (2a, 2b, 2c and the Step 4 commit; closed in the Step 10 commit)
 - **Where:** mvp `/backtest`, `/explain/{award}`, `/explain/{award}/{name}`; similarity `/clusters/player/{name}`, `/similarity/career/{name}`; impact `/contracts/player/{id}`, `/games/boxscore/{id}`, `/games/by-date`, `/games/wp-replay/list`, `/games/wp-replay/{id}/whatif`, `/hustle/leaders`, `/impact/player/{name}/{season}`, `/leaders/{stat}`, `/meta/current`, `/news/current`, `/player-profile/{id}/shot-zones`, `/players/compare-profile/{name}`, `/players/pair-synergy`, `/players/playtype-profile/{name}`, `/players/profile/{name}`, `/players/table/{season}`, `/shots/league-zones/{season}`, `/shots/player/{name}` (+ `/seasons`, `/zones`), `/trade/roster/{team}/{season}`, `/trade/simulate`, `/trade/teams/{season}`.
 - **Reproduce:** crawl column `source` = `no`.
 - **Found by:** crawl. The convention asks for a badge on the main Analytics endpoints. Each page sweep decides per page (add one, or note why the page doesn't need one).
@@ -668,6 +756,7 @@ any of the 50 pages.
 - **Step 2c (Analytics, Shot Charts, the rest):** `/shots/player/{name}`, `/shots/player/{name}/seasons` and `/zones` now return `_source` (`player_shots`; `live` true when the shots were fetched just now) and `/shots/league-zones/{season}` too (`league_shot_zones`); Shot Charts shows the badge on its dots and heat-map views (the other three views already had theirs). Test `test_shot_charts_carry_a_source`. The rest of the 2c routes sit under their page's own badge: `/games/wp-replay/list` and `/{id}/whatif` under the replay's, `/backtest` under Model Validation's, `/explain/*` under Awards Race's, `/clusters/player/{name}` under Player Archetypes'. Unused by any page (R8-017): `/players/profile/{name}`, `/similarity/career/{name}`, `/impact/player/{name}/{season}`. Left, all Step 4's: `/leaders/{stat}`, `/hustle/leaders` (Stat Leaders), `/players/pair-synergy`, `/games/by-date`, `/games/boxscore/{id}`, `/meta/current`, `/news/current`.
 
 - **Step 4:** `/leaders/{stat}`, `/hustle/leaders`, `/players/pair-synergy`, `/games/by-date`, `/games/boxscore/{id}`, `/meta/current` and `/news/current` now return `_source` (Stat Leaders and Live Scores show the badge). Left: nothing from this entry's Step 4 list.
+- **Step 10 (close-out crawl, `docs/qa/crawl_2026-10-06_close.tsv`):** 33 JSON answers carry no `_source`, every one accounted for above: the three services' roots, searches and resolve (`/players/search`, `/era/players`, `/games/finder/players`, `/player-profile/resolve`), the games' quiz routes (Blurred Player, Guess the Game, Guess the Player, Higher or Lower, Trivia; Step 1 counted these with the roots and searches as routes that don't need one), routes under their page's own badge (`/backtest`, `/explain/*`, `/clusters/player/{name}`, `/games/wp-replay/*`, the profile's `/contracts/player/{id}`, `/player-profile/{id}/shot-zones`, `/players/playtype-profile/{name}`), an image URL (`/media/player-image/{name}`) and the routes no page calls (R8-017: `/players/profile/{name}`, `/similarity/career/{name}`, `/impact/player/{name}/{season}`). No data route a page reads without a badge is left.
 ### R8-015 · Season shown as a raw end year ("2027") in labels
 - **Severity:** looks wrong · **Step:** 2 (2a Stat Leaders, 2c Prediction Ledger) · **Status:** fixed (2a: Stat Leaders; 2c: Prediction Ledger)
 - **Where:** Stat Leaders subtitle "Top 10 · 2027", Analytics › Prediction Ledger "Current season 2027". The app's label is "2026-27".

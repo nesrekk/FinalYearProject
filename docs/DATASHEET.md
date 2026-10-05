@@ -107,4 +107,4 @@ After any rebuild:
 
 A new pipeline must add its tables to `PRODUCERS` in `scripts/paper_manifest.py` and its script to `scripts/rebuild_all.sh`; the reproducibility test fails otherwise.
 
-The cloud mirror (Layerbase) is synced by hand with the owner's OK. To compare it with the local database, write its manifest to a separate folder and diff the two `manifest.tsv` files (`DB_TARGET=layerbase python3 scripts/paper_manifest.py --out <dir>`).
+The cloud mirror (Layerbase) is synced by hand with the owner's OK. To compare it with the local database, write its manifest to a separate folder and compare it table by table (`DB_TARGET=layerbase python3 scripts/paper_manifest.py --out <dir>`, then `python3 scripts/paper_manifest.py --compare <dir>`). Since 2026-10-06 the mirror leaves out six paper-only per-unit tables (`api/local_only.py`: `paper_eval_predictions`, `shot_xfg`, `paper_ablation_predictions`, `report_card_units`, `report_card_game_sums`, `paper_ablation_shot_games`), so its manifest has 212 tables, not 218; `--compare` skips those six and names them. The paper's inputs are made from the local database, which holds all 218.

@@ -8,7 +8,8 @@ that their rebuild holds the same data (round 5 step 9, reproducibility).
     cd scripts && python3 paper_manifest.py            # ~1 min: writes ../paper/manifest.json and manifest.tsv
     cd scripts && python3 paper_manifest.py --files    # a few seconds: writes ../paper/SHA256SUMS
     cd paper && shasum -a 256 -c SHA256SUMS            # check the generated paper inputs
-    DB_TARGET=layerbase python3 paper_manifest.py --out $TMPDIR/lb   # another database, compared with diff
+    DB_TARGET=layerbase python3 paper_manifest.py --out $TMPDIR/lb   # another database's manifest
+    cd scripts && python3 paper_manifest.py --compare $TMPDIR/lb       # ... compared table by table with paper/'s
 
 scripts/rebuild_all.sh paper-inputs runs the whole chain in one command:
 manifest -> paper_numbers.py (prints the manifest's table count, row count and
@@ -66,6 +67,13 @@ Every table carries the script that writes it (TABLES below) and a kind:
 A table in the database that isn't in TABLES stops the run (and the test), so
 a new pipeline must say where its table comes from.
 
+Comparing a mirror
+------------------
+--compare DIR checks DIR/manifest.json (e.g. the Layerbase mirror's) against paper/manifest.json table by
+table (schema md5, rows, content md5) and prints a digest over the tables both should hold. The tables in
+api/local_only.py's LOCAL_ONLY are kept in the local database only (round 8 step 10): they are skipped and
+named, never counted as missing. Exit status 1 if any other table differs or is missing.
+
 Read-only: one read-only session; nothing in the database is created or
 changed. Output is deterministic: two runs against the same database and the
 same commit give byte-identical files (no timestamps are written).
@@ -82,6 +90,11 @@ import sys
 import psycopg2
 
 from db_config import DB_CONFIG
+
+_API_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "api")
+if _API_DIR not in sys.path:
+    sys.path.append(_API_DIR)
+from local_only import LOCAL_ONLY, on_mirror  # noqa: E402  (kept local, not on the cloud mirror)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PAPER_DIR = os.path.join(ROOT, "paper")
@@ -374,9 +387,10 @@ LIVE = {"ledger_results", "ledger_game_log", "ledger_team_log", "ledger_runs", "
 def stale_reasons(cur, m):
     """Why a stored manifest no longer describes the database: table set, schemas and row counts
     (checked live in ~2 s; a change of content that keeps every count and schema is not caught; LIVE tables'
-    row counts are not compared)."""
+    row counts are not compared). On the Layerbase mirror the LOCAL_ONLY tables are absent on purpose."""
     now = db_tables(cur)
-    have = {e["table"]: e for e in m["tables"]}
+    have = {e["table"]: e for e in m["tables"]
+            if not (on_mirror() and e["table"] in LOCAL_ONLY and e["table"] not in now)}
     reasons = []
     if set(now) != set(have):
         added, gone = sorted(set(now) - set(have)), sorted(set(have) - set(now))
@@ -399,6 +413,32 @@ def file_sums():
     return "\n".join(lines) + "\n"
 
 
+def compare(local, other):
+    """Table-by-table comparison of two manifests, LOCAL_ONLY tables skipped. Returns (report lines, ok)."""
+    a = {e["table"]: e for e in local["tables"] if e["table"] not in LOCAL_ONLY}
+    b = {e["table"]: e for e in other["tables"] if e["table"] not in LOCAL_ONLY}
+    lines, bad = [], 0
+    for t in sorted(set(a) | set(b)):
+        if t not in b:
+            lines.append(f"  {t}: missing from the other database")
+        elif t not in a:
+            lines.append(f"  {t}: only in the other database")
+        else:
+            diffs = [k for k in ("schema_md5", "rows", "content_md5") if a[t][k] != b[t][k]]
+            if not diffs:
+                continue
+            lines.append(f"  {t}: {', '.join(diffs)} differ (rows {a[t]['rows']:,} here, {b[t]['rows']:,} there)")
+        bad += 1
+    shared = [a[t] for t in sorted(set(a) & set(b))]
+    da, db = digest(shared), digest([b[e["table"]] for e in shared])
+    lines.append(f"{len(shared) - (bad - len(set(a) ^ set(b)))} of {len(set(a) | set(b))} tables equal "
+                 f"(schema, rows, content); {bad} differ or are missing")
+    lines.append(f"digest over the {len(shared)} shared tables: here {da[:16]}, there {db[:16]}")
+    present = sorted({e["table"] for e in local["tables"] + other["tables"]} & set(LOCAL_ONLY))
+    lines.append(f"skipped, kept local (api/local_only.py): {', '.join(present) or 'none present'}")
+    return lines, bad == 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--files", action="store_true",
@@ -406,7 +446,13 @@ def main():
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--out", default=PAPER_DIR, help="directory for manifest.json/.tsv (default paper/); use another "
                     "one to compare a second database, e.g. DB_TARGET=layerbase ... --out $TMPDIR/lb")
+    ap.add_argument("--compare", metavar="DIR", help="compare DIR/manifest.json (another database's, e.g. the Layerbase "
+                    "mirror's) with paper/manifest.json table by table, skipping the LOCAL_ONLY tables; writes nothing")
     args = ap.parse_args()
+    if args.compare:
+        lines, ok = compare(load_manifest(), load_manifest(os.path.join(args.compare, "manifest.json")))
+        print("\n".join(lines))
+        return 0 if ok else 1
     if args.files:
         text = file_sums()
         with open(SUMS, "w") as f:

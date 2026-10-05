@@ -40,6 +40,7 @@ for _d in (os.path.join(_ROOT, "api"), os.path.join(_ROOT, "scripts")):
 
 import paper_tests as T  # noqa: E402  (numpy/scipy only at import)
 from db_config import DB_CONFIG  # noqa: E402
+import local_only  # noqa: E402
 
 
 def _db_reachable() -> bool:
@@ -58,10 +59,13 @@ def conn():
     c = psycopg2.connect(**DB_CONFIG)
     c.set_session(readonly=True, autocommit=True)
     cur = c.cursor()
-    cur.execute("SELECT to_regclass('paper_eval_tests'), to_regclass('paper_eval_predictions'), to_regclass('paper_eval_metrics')")
-    if any(v is None for v in cur.fetchone()):
+    names = ("paper_eval_tests", "paper_eval_predictions", "paper_eval_metrics")
+    cur.execute("SELECT " + ", ".join(f"to_regclass('{t}')" for t in names))
+    missing = [t for t, v in zip(names, cur.fetchone()) if v is None]
+    if missing:
         c.close()
-        pytest.skip("paper_eval tables not built (run scripts/paper_eval.py then scripts/paper_tests.py)")
+        pytest.skip(local_only.kept_local_reason(missing)
+                    or "paper_eval tables not built (run scripts/paper_eval.py then scripts/paper_tests.py)")
     yield c
     c.close()
 

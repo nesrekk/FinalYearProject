@@ -38,6 +38,7 @@ for _d in (os.path.join(_ROOT, "api"), os.path.join(_ROOT, "scripts")):
         sys.path.insert(0, _d)
 
 from db_config import DB_CONFIG  # noqa: E402
+import local_only  # noqa: E402
 
 TUNE_SPAN = "2020-21 to 2023-24"
 XRAPM = ("xrapm_single", "xrapm_prior")
@@ -59,10 +60,13 @@ def cur():
     conn = psycopg2.connect(**DB_CONFIG)
     conn.set_session(readonly=True, autocommit=True)
     c = conn.cursor()
-    c.execute("SELECT to_regclass('shot_xfg'), to_regclass('paper_xrapm_stints'), to_regclass('paper_xrapm_fits'), to_regclass('paper_eval_tests')")
-    if any(v is None for v in c.fetchone()):
+    names = ("shot_xfg", "paper_xrapm_stints", "paper_xrapm_fits", "paper_eval_tests")
+    c.execute("SELECT " + ", ".join(f"to_regclass('{t}')" for t in names))
+    missing = [t for t, v in zip(names, c.fetchone()) if v is None]
+    if missing:
         conn.close()
-        pytest.skip("step-4 tables not built (build_shot_making.py, paper_xrapm.py, paper_eval.py, paper_tests.py)")
+        pytest.skip(local_only.kept_local_reason(missing)
+                    or "step-4 tables not built (build_shot_making.py, paper_xrapm.py, paper_eval.py, paper_tests.py)")
     yield c
     conn.close()
 

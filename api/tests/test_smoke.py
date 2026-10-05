@@ -1660,7 +1660,13 @@ def test_meta_coverage():
     _assert_has_source(data)
     assert len(data["tables"]) == len(COVERAGE_MAP)
     assert set(data["groups"]) == {row["group"] for row in data["tables"]}
+    import local_only
     for row in data["tables"]:
+        assert row["local_only"] is (row["table"] in local_only.LOCAL_ONLY)
+        if row["local_only"] and local_only.on_mirror():
+            # Kept in the local database only (round 8 step 10): absent from the Layerbase mirror on purpose.
+            assert row["exists"] is False and row["note"] == local_only.NOTE
+            continue
         # Every table in the hand-maintained map must actually exist in this
         # database and return a real row count, not a placeholder.
         assert row["exists"] is True, f"{row['table']} is in COVERAGE_MAP but missing from the database"
