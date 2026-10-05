@@ -321,11 +321,11 @@ export default function TeamComparison() {
                     <div className="dashboard-card" style={{ marginTop: '1.5rem' }}>
                         <h3 className="section-heading" style={{ marginTop: 0 }}>
                             Advanced Stats
-                            <InfoTooltip label="How this works" title="Real season aggregates, minutes/games-weighted">
-                                Offensive/Defensive/Net Rating are real per-100-possession ratings, games-weighted across
-                                the real roster. Turnovers is a real team total per game (sum of each player's real
-                                contribution, not an average of individual rates) — same methodology as the Points/
-                                Rebounds/Assists rows above.
+                            <InfoTooltip label="How this works" title="The team page's numbers">
+                                Offensive/Defensive/Net Rating are Basketball-Reference&apos;s team ratings (points per
+                                100 possessions), the same numbers as each team&apos;s page. Turnovers per game are the
+                                team&apos;s from NBA.com&apos;s box score, team turnovers included (from 2020-21; earlier
+                                seasons sum the players&apos; season rows over the team&apos;s games).
                             </InfoTooltip>
                             <SourceBadge source={extra._source} />
                         </h3>

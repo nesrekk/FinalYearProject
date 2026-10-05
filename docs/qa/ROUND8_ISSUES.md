@@ -12,8 +12,9 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
-Counts (2026-10-05, after Step 2c): **61 entries**, 33 open, 28 fixed: 6 broken, 16 wrong number,
-5 slow, 34 looks wrong. 17 are new from Step 1 (R8-001 to R8-017); 15 are known gaps already written
+Counts (2026-10-05, after Step 3): **67 entries**, 33 open, 34 fixed: 6 broken, 20 wrong number,
+5 slow, 36 looks wrong. 6 are from Step 3's cross-page checks (R8-062 to R8-067, all fixed in its
+commit). 17 are new from Step 1 (R8-001 to R8-017); 15 are known gaps already written
 down in README "Known real gaps" / Methodology open issues, listed so a step owns each (R8-018 to
 R8-032); 11 are from Step 2a's sweep of the Players pages (R8-033 to R8-043, 10 fixed in its commit);
 6 are from Step 2b's sweep of the Teams, Games and Today pages (R8-044 to R8-049, 5 fixed in its commit,
@@ -154,6 +155,35 @@ Dashboard) and the Workbench's lazy blocks render in a hidden pane.
 | Links out | One of each kind per page opened fresh: player and team links (Clutch WPA, Rim, Lineups, Pairs, On/Off, Fatigue, College → NBA, Shot-making, Shot value, Watchlist), Data Quality's Replay links: all real views. Buttons: Saved analyses' Open, Learn's three, Report Card's task tabs; Data Coverage's "used by" showed raw ids (R8-061, fixed). |
 | Back / Forward | Rim → profile, Shot value → team page, Data Quality → Game Replay, Data Coverage → Player Stats: each Back then Forward returns the same URL and view. |
 | Data writes | None left behind. A 2c test made `/shots/league-zones/2026` fetch and insert 5 rows (R8-007); they were deleted and the test changed. `player_shots` unchanged after every run. |
+
+## Step 3: the same number agrees everywhere (2026-10-05)
+
+`api/tests/test_consistency.py` (13 tests, ~8 s) reads every quantity the app shows on more than one page
+through every route that shows it, on 8 player-seasons and 6 team-seasons drawn with a fixed seed
+(20261005), and asserts they agree to the rounding each route applies; where two pages differ by
+definition the difference is stated on both and pinned with its size. Before that, a probe of the same
+routes on a 12-player / 8-team sample found the problems below.
+
+| Quantity | Routes compared | Result |
+|---|---|---|
+| Player season (games, points, TS%, minutes) | profile, Player Stats table, Leaderboard Builder, Player Comparison, Stat Line Finder, Workbench `player_season` | Equal everywhere (all read `player_season_stats`). |
+| Team wins, losses, games, margin | team page (summary, games, luck blocks), Luck & Schedule, Season Simulator, Workbench `team_season` / `team_game`, the Standings fallback | Equal; the Simulator's as-of view is "that morning" (wins + losses + games left = games). **The Standings / Team Comparison stored fallback was wrong for all 30 teams** (R8-062). |
+| Team ratings, turnovers (Team Comparison's advanced block) | `/teams/compare` vs the team page | **Different numbers** (R8-063): a games-weighted mean of the players' on-court ratings, 0.9 off the team's net rating on average, 4.0 at worst. |
+| RAPM, Rating Tracker (value, interval, rank) | RAPM page, profile, Workbench, every version | Equal to each route's rounding; **ranks of tied players differed by one** (R8-064). |
+| Per-game lines | Game Log, Game Finder, Play Finder, Workbench `player_game`, profile season counts | Equal in every column; a game's plays add up to its line. Games vs NBA.com's GP: at most 2 apart (the page shows both). Minutes vs the stints: the 9 phantom games (R8-023). |
+| On/off (net, interval) | On/Off page, profile, team page, Workbench `player_onoff` | Equal; the Workbench interval is closed-form, half-width within 25% of the page's bootstrap. |
+| Shot totals (regular-season FGA, FGM) | Shot Charts, profile zones, zones route, shot-making, quality map, shot value, zone history | Equal, except **the zones route counted playoff shots** (R8-065). Chart vs season table: within the per-game rounding every season but 2025-26 (R8-028, re-measured). |
+| Postseason game dates | `postseason_games` vs Wikipedia's Finals and play-in dates | **A day late for every evening game** (R8-067). |
+| Live standings | stats.nba.com rows vs the team list | **The Clippers' row had no team code** (R8-066). |
+
+Fixed in the Step 3 commit: R8-062, R8-063, R8-064, R8-065, R8-066, R8-067 (every fix has a test in
+`test_consistency.py` or `test_known_facts.py`). Also 14 new outside-sourced facts in
+`test_known_facts.py` (48 tests now): 2022-23 to 2024-25 award winners, the 2025 draft's top five, the
+2025 Finals and play-in game by game, 2024-25 records with home/road splits, the annual three-point
+leaders 2020-21 to 2024-25 from the play-by-play, Jokić's 2024-25 line and 34 triple-doubles (Finder and
+Game Finder), Trae Young's 880 assists (lines and Assist Network), Wembanyama's block titles, the Kings'
+176-175 (scores, Best Games, Play Finder points), the Clippers' 35-point comeback (Best Games), the 2024
+NBA Cup final kept out of the regular season, Curry's 2020-21 scoring title.
 
 ## Constraints (not defects)
 
@@ -328,6 +358,7 @@ Dashboard) and the Workbench's lazy blocks render in a hidden pane.
 - **Severity:** wrong number · **Step:** 6 (owner's OK: changes `player_shots` and the shot chain) · **Status:** open
 - **Where:** `player_shots` has no rows for 0022500259-0022500261 and 0022500265 (2025-11-19/20). 2025-26's ESPN-to-chart match rate is 97.5% vs ≥ 99.8% elsewhere. Affects shot-making, quality map, shot value and xRAPM.
 - **Found by:** known gap (README: "re-fetch when stats.nba.com is reachable again"). It is reachable now (R8-006).
+- **Step 3 (re-measured 2026-10-05):** per game, the chart is short of the lines' FGA in 776 of 1,225 games of 2025-26 (1,079 attempts in all, at most 6 a game, spread one or two a game) against 18 games in 2024-25; 805 games have at least one player-game where the two disagree (2024-25: 98 player-games). Per player-season the chart still lands within the per-game rounding of NBA.com's FGA × GP once the four games with no rows are added back (`test_shot_chart_fga_matches_the_season_table` pins both). So the whole 2025-26 chart is thin, not just four games: the re-fetch should be the full season.
 
 ### R8-029 · Hot Streak Checker's "carries on" share includes the shuffled-null centre
 - **Severity:** wrong number · **Step:** 7 · **Status:** open
@@ -498,3 +529,40 @@ Dashboard) and the Workbench's lazy blocks render in a hidden pane.
 - **Severity:** looks wrong · **Step:** 2c · **Status:** fixed in the Step 2c commit
 - **Where:** `DataCoverage.jsx` labelled `used_by` ids from a hand-kept list that missed eight of the 30 ids in `COVERAGE_MAP`: `analytics#onoff`, `analytics#replay`, `assists`, `bestgames`, `plays`, `rapm`, `simulator`, `team` showed as raw ids, and "team" was a button to a team page with no team.
 - **Found by:** clicking every navigation button on the page. **Fix:** labels come from the nav (`navConfig.js`) and the Analytics tab list; the player and team pages are named, not linked (they need an id); the page also gets Save next to Copy link. Test: `test_coverage_names_every_page_it_links`.
+
+### R8-062 · The Dashboard / Standings / Team Comparison stored fallback was wrong for every team, and the live team block never loaded
+- **Severity:** wrong number · **Step:** 3 · **Status:** fixed in the Step 3 commit
+- **Where:** `GET /meta/current` (`api/routers/meta.py`), the basic per-game block of Team Comparison and the Standings page when stats.nba.com has nothing; `impact_core.fetch_nba_api_team_stats`.
+- **Reproduce (before):** `/meta/current` → `team_stats.CLE.ppg` 147.5 (the real 2025-26 figure is 119.5): the fallback summed every player's season row under his last team and divided by the roster's most games played; every team was off, by up to 28 points a game. The standings fallback took each team's record as its best player's `w_pct` × 82: CLE 82-0, HOU 82-0, POR 70-12 for the real 52-30 / 52-30 / 42-40 (all 30 teams wrong, up to 40 wins). And the live block never worked: stats.nba.com's LeagueDashTeamStats has no `TEAM_ABBREVIATION` column, so the parser skipped every row and returned None, which means **Team Comparison has always shown the wrong fallback** (R8-004 noted the missing season label, not the numbers).
+- **Found by:** Step 3's probe of team records across pages; then calling the live endpoint directly.
+- **Fix:** `db_standings()` reads `team_seasons` (the real record); `db_team_stats()` takes points per game from the final scores (`game_scores`) and rebounds, assists, steals, blocks and the shooting percentages from the play-by-play lines summed per team (within 0.5 rebounds, 0.2 assists and 0.4 FG% points of NBA.com's own 2025-26 team block, checked live on 2026-10-05; team rebounds belong to nobody in the lines). The live parser (`parse_team_stats_rows`) derives the code from the team name and returns None when nothing has been played (every GP 0), so the stored season shows instead of a table of zeros; the response says `team_stats_source` and `team_stats_season`. Old → new on Team Comparison today: CLE 147.5 → 119.5 points, 52.6 → 44.4 rebounds, 36.9 → 28.3 assists. Tests: `test_standings_and_team_stats_fallback_are_the_real_season`, `test_2024_25_records_and_home_road_splits`. Step 4 still owns the season label (R8-004).
+
+### R8-063 · Team Comparison's advanced block disagreed with the team page
+- **Severity:** wrong number · **Step:** 3 · **Status:** fixed in the Step 3 commit
+- **Where:** `GET /teams/compare/{a}/{b}` (`api/routers/team_comparison.py`), the Offensive / Defensive / Net Rating and Turnovers rows.
+- **Reproduce (before):** CHI 2019-20: `/teams/compare` 104.2 / 107.1 / −2.9, the team page 106.7 / 109.8 / −3.1. The route averaged the players' own on-court ratings weighted by games (a traded player's whole season under his last team): over all 510 team-seasons 0.9 points from Basketball-Reference's team net rating on average, 4.0 at worst. Turnovers summed the players' rows and divided by the roster's most games.
+- **Found by:** Step 3's probe.
+- **Fix:** the ratings are `team_seasons`' (Basketball-Reference, the team page's numbers); turnovers per game are NBA.com's team box score (`game_team_box`, team turnovers included, from 2020-21; earlier seasons sum the players' rows over the team's games, said in `tovSource`). The page's tooltip says so. Test: `test_team_comparison_advanced_block_is_the_team_page`.
+
+### R8-064 · RAPM page ranks: tied players ranked one apart from the profile
+- **Severity:** looks wrong · **Step:** 3 · **Status:** fixed in the Step 3 commit
+- **Where:** `GET /rapm` (`api/routers/rapm.py`), `rapm_rank` / `orapm_rank` / `drapm_rank`; the profile ranks with `RANK()`.
+- **Reproduce (before):** the stored ratings carry three decimals, so 5-19 pairs a season tie; the page numbered them 1, 2, 3 … in sorted order, the profile gave both the same rank (Finney-Smith, three-season RAPM 2023-24: page 194, profile 193).
+- **Found by:** Step 3's probe (one of 56 rank comparisons). **Fix:** competition ranking on the page. Test: `test_rapm_page_ties_share_a_rank`.
+
+### R8-065 · The shot-zones route counted playoff and play-in shots
+- **Severity:** wrong number · **Step:** 3 · **Status:** fixed in the Step 3 commit
+- **Where:** `GET /shots/player/{name}/zones?season=` (`api/routers/shot_charts.py`). No page calls it today (R8-017's `fetchPlayerShotZones`); the profile uses `/player-profile/{id}/shot-zones`.
+- **Reproduce (before):** Bane 2024-25: 1,117 attempts (regular season 1,018), so its zone FG% included 99 playoff shots while the league zones it is meant to be compared with, the profile's zones, shot-making, the quality map, shot value and the Shot Charts page all count the regular season.
+- **Found by:** Step 3's probe. **Fix:** regular season only (`games: "regular season"` in the response). Tests: `test_shot_zones_route_counts_the_regular_season`, `test_shot_totals_everywhere`.
+
+### R8-066 · The live standings had no team code for the Clippers
+- **Severity:** looks wrong · **Step:** 3 (Step 4's page) · **Status:** fixed in the Step 3 commit
+- **Where:** `impact_core._fetch_nba_api_standings_uncached`: stats.nba.com names the team "LA Clippers", which wasn't in `TEAM_NAME_TO_ABBR`, so the row had `abbr: ""` (no logo, no team link on Standings; Team Comparison's record look-up by code found nothing).
+- **Found by:** comparing the live 2025-26 standings with `team_seasons` (29 of 30 matched; the Clippers' row had no code). **Fix:** the alias. Test: `test_standings_and_team_stats_fallback_are_the_real_season` (the parser's name mapping).
+
+### R8-067 · `postseason_games` dated every evening game a day late
+- **Severity:** wrong number · **Step:** 3 · **Status:** fixed in the Step 3 commit
+- **Where:** `scripts/fetch_postseason_games.py` stored ESPN's UTC stamp (`e["date"][:10]`): a 8:30 pm ET tip on June 5 is "2025-06-06T00:30Z". 909 of 1,458 games (every evening game 2009-10 to 2024-25) were a day late: the 2025 Finals read June 6-23 for June 5-22, the 2025 play-in's late games April 16/17/19 for 15/16/18. Nothing reads the dates yet (`build_season_sim.py` uses stage and teams, Best Games' rounds join by id), so no page showed them.
+- **Found by:** `test_2025_finals_games_and_champion` against Wikipedia's dates.
+- **Fix:** the script converts to US Eastern (`local_date()`, like every other date in the database) and skips ESPN's placeholder events; re-fetched 2026-10-05 and diffed against a snapshot: 909 dates moved one day earlier, no other column changed, 1,458 rows (one 2010-11 first-round game ESPN's scoreboard dropped on the first pass was fetched again). **Not on Layerbase** (for the Step 10 sync).

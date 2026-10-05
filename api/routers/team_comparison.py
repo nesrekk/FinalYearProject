@@ -7,36 +7,53 @@ from impact_core import get_db, get_latest_season
 
 router = APIRouter()
 
-# Real per-player team-comparison additions: advanced team-average stats
-# (minutes/games-weighted, same methodology as /meta/current's basic stat
-# block), a real roster (top players by real points that season), a real
-# head-to-head record + recent-meetings list from team_game_fatigue, and
-# each team's real last-10-games form — all straight aggregation, nothing
-# modeled or projected. Point differentials are real final scores from
-# game_scores, not team_game_fatigue.plus_minus (summed player +/- / 5,
-# wrong in 160 games).
+# Team-comparison additions: the team's ratings and turnovers (team_seasons
+# and NBA.com's team box score, the team page's numbers), a real roster (top
+# players by real points that season), a real head-to-head record +
+# recent-meetings list from team_game_fatigue, and each team's real
+# last-10-games form — all straight aggregation, nothing modeled or
+# projected. Point differentials are real final scores from game_scores, not
+# team_game_fatigue.plus_minus (summed player +/- / 5, wrong in 160 games).
 
 
 def _advanced_team_stats(cursor, team_abbr: str, season: int) -> Optional[dict]:
+    """The team's ratings and turnovers for the season, the numbers the team page shows (round 8
+    R8-063). Ratings: Basketball-Reference's team offensive, defensive and net rating per 100
+    possessions (team_seasons). Before, this was the games-weighted mean of the players' own
+    on-court ratings, 0.9 points from the team's net rating on average and up to 4.0 (and it
+    counted a traded player's whole season under his last team). Turnovers per game: NBA.com's
+    team box score (game_team_box, from 2020-21, team turnovers included); earlier seasons sum
+    the players' season rows over the team's games."""
     cursor.execute(
-        """SELECT
-               SUM(tov * gp) / NULLIF(MAX(gp), 0) AS tov,
-               SUM(off_rating * gp) / NULLIF(SUM(gp), 0) AS off_rating,
-               SUM(def_rating * gp) / NULLIF(SUM(gp), 0) AS def_rating,
-               SUM(net_rating * gp) / NULLIF(SUM(gp), 0) AS net_rating
-           FROM player_season_stats
-           WHERE season = %s AND team_abbreviation = %s AND gp IS NOT NULL AND gp > 0;""",
+        """SELECT o_rtg, d_rtg, n_rtg, g FROM team_seasons
+           WHERE season = %s AND abbreviation = %s AND NOT is_league_avg;""",
         (season, team_abbr),
     )
     row = cursor.fetchone()
     if not row or row[0] is None:
         return None
-    tov, off_rating, def_rating, net_rating = row
+    off_rating, def_rating, net_rating, games = row
+    cursor.execute(
+        "SELECT SUM(tov)::float / COUNT(*) FROM game_team_box WHERE season = %s AND team_abbreviation = %s;",
+        (season, team_abbr),
+    )
+    tov = cursor.fetchone()[0]
+    tov_source = "game_team_box"
+    if tov is None:
+        cursor.execute(
+            """SELECT SUM(tov * gp) FROM player_season_stats
+               WHERE season = %s AND team_abbreviation = %s AND gp IS NOT NULL AND gp > 0;""",
+            (season, team_abbr),
+        )
+        total = cursor.fetchone()[0]
+        tov = float(total) / games if total is not None and games else None
+        tov_source = "player_season_stats"
     return {
-        "tov": round(tov, 1) if tov is not None else None,
-        "offRating": round(off_rating, 1) if off_rating is not None else None,
-        "defRating": round(def_rating, 1) if def_rating is not None else None,
-        "netRating": round(net_rating, 1) if net_rating is not None else None,
+        "tov": round(float(tov), 1) if tov is not None else None,
+        "tovSource": tov_source,
+        "offRating": round(float(off_rating), 1),
+        "defRating": round(float(def_rating), 1) if def_rating is not None else None,
+        "netRating": round(float(net_rating), 1) if net_rating is not None else None,
     }
 
 
@@ -128,7 +145,7 @@ def get_team_comparison(team_a: str, team_b: str, season: Optional[int] = None):
         "team_b": {"abbreviation": team_b, "advanced_stats": adv_b, "roster": roster_b, "recent_form": form_b},
         "head_to_head": head_to_head,
         "_source": make_source(
-            ["player_season_stats", "team_game_fatigue", "game_scores"],
-            "nba_api (stats.nba.com), ESPN scoreboard final scores",
+            ["team_seasons", "game_team_box", "player_season_stats", "team_game_fatigue", "game_scores"],
+            "Basketball-Reference team ratings, nba_api (stats.nba.com) box scores, ESPN scoreboard final scores",
         ),
     }

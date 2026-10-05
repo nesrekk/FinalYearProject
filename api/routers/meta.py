@@ -21,6 +21,58 @@ from impact_core import (
 router = APIRouter()
 
 
+def db_standings(cursor, season):
+    """[(abbr, wins, losses)] for a stored season: the real record (team_seasons, Basketball-Reference;
+    equal to the final scores in game_scores for every team-season 2009-10 on, test_known_facts)."""
+    cursor.execute(
+        "SELECT abbreviation, w, l FROM team_seasons WHERE season = %s AND NOT is_league_avg AND w IS NOT NULL",
+        (season,),
+    )
+    return cursor.fetchall()
+
+
+def db_team_stats(cursor, season):
+    """{abbr: {ppg, rpg, apg, spg, bpg, fgPct, threePct, ftPct}} for a stored season, the shape of the
+    live stats.nba.com block (percentages as 46.5). Points per game from the real final scores
+    (game_scores, every game in the standings); rebounds, assists, steals, blocks and the shooting
+    percentages from the play-by-play game lines summed per team (player_game_lines joined to the
+    schedule, so the NBA Cup finals drop out; team rebounds belong to nobody, so rebounds run about
+    one a game under NBA.com's team total). Seasons without game lines (before 2020-21) get points only."""
+    cursor.execute(
+        """
+        WITH g AS (
+            SELECT team_abbreviation, COUNT(*) AS games, SUM(pts_for)::float / COUNT(*) AS ppg
+            FROM game_scores WHERE season = %s GROUP BY 1),
+        l AS (
+            SELECT l.team_abbreviation, COUNT(DISTINCT l.game_id) AS games,
+                   SUM(l.oreb + l.dreb) AS reb, SUM(l.ast) AS ast, SUM(l.stl) AS stl, SUM(l.blk) AS blk,
+                   SUM(l.fgm) AS fgm, SUM(l.fga) AS fga, SUM(l.fg3m) AS fg3m, SUM(l.fg3a) AS fg3a,
+                   SUM(l.ftm) AS ftm, SUM(l.fta) AS fta
+            FROM player_game_lines l
+            JOIN team_game_fatigue f ON f.team_abbreviation = l.team_abbreviation AND f.game_date = l.game_date
+            WHERE l.season = %s GROUP BY 1)
+        SELECT g.team_abbreviation, g.ppg, l.games, l.reb, l.ast, l.stl, l.blk, l.fgm, l.fga, l.fg3m, l.fg3a,
+               l.ftm, l.fta
+        FROM g LEFT JOIN l USING (team_abbreviation)
+        """,
+        (season, season),
+    )
+    out = {}
+    for abbr, ppg, games, reb, ast, stl, blk, fgm, fga, fg3m, fg3a, ftm, fta in cursor.fetchall():
+        def per_game(v):
+            return round(float(v) / games, 1) if games and v is not None else None
+
+        def pct(made, att):
+            return round(100.0 * float(made) / float(att), 1) if att else None
+
+        out[abbr] = {
+            "ppg": round(float(ppg), 1),
+            "rpg": per_game(reb), "apg": per_game(ast), "spg": per_game(stl), "bpg": per_game(blk),
+            "fgPct": pct(fgm, fga), "threePct": pct(fg3m, fg3a), "ftPct": pct(ftm, fta),
+        }
+    return out
+
+
 @router.get("/meta/site-stats")
 def get_site_stats():
     """
@@ -100,55 +152,28 @@ def get_current_meta():
         )
         top_scorer_row = cursor.fetchone()
 
-        cursor.execute(
-            """
-            SELECT team_abbreviation, MAX(w_pct) AS w_pct
-            FROM player_season_stats
-            WHERE season = %s AND team_abbreviation IS NOT NULL AND w_pct IS NOT NULL
-            GROUP BY team_abbreviation;
-            """,
-            (db_latest_season,),
-        )
-        standing_rows = cursor.fetchall()
-
-        cursor.execute(
-            """
-            SELECT
-                team_abbreviation,
-                SUM(pts * gp) / NULLIF(MAX(gp), 0) AS ppg,
-                SUM(reb * gp) / NULLIF(MAX(gp), 0) AS rpg,
-                SUM(ast * gp) / NULLIF(MAX(gp), 0) AS apg,
-                SUM(stl * gp) / NULLIF(MAX(gp), 0) AS spg,
-                SUM(blk * gp) / NULLIF(MAX(gp), 0) AS bpg,
-                SUM(fg_pct * gp) / NULLIF(SUM(gp), 0) AS fg_pct,
-                SUM(fg3_pct * gp) / NULLIF(SUM(gp), 0) AS fg3_pct,
-                SUM(ft_pct * gp) / NULLIF(SUM(gp), 0) AS ft_pct
-            FROM player_season_stats
-            WHERE season = %s
-              AND team_abbreviation IS NOT NULL
-              AND team_abbreviation <> 'TOT'
-              AND gp IS NOT NULL
-              AND gp > 0
-            GROUP BY team_abbreviation;
-            """,
-            (db_latest_season,),
-        )
-        team_rows = cursor.fetchall()
+        # Stored fallbacks (round 8 R8-062). Before, the standings took each team's
+        # record as its best player's w_pct x 82 (CLE 82-0 for a real 52-30) and the
+        # per-game stats summed every player's season row under his last team and
+        # divided by the roster's most games played (CLE 147.5 points a game for a real
+        # 119.5). Now: the record from team_seasons, points from the real final scores,
+        # the rest from the play-by-play game lines (team rebounds aren't anybody's, so
+        # rebounds run a little under NBA.com's team total).
+        standing_rows = db_standings(cursor, db_latest_season)
+        team_rows = db_team_stats(cursor, db_latest_season)
 
     standings = []
-    for abbr, w_pct in standing_rows:
-        if abbr not in TEAM_META or w_pct is None:
+    for abbr, wins, losses in standing_rows:
+        if abbr not in TEAM_META or wins is None:
             continue
-        wins = int(round(float(w_pct) * 82))
-        losses = max(0, 82 - wins)
         standings.append(
             {
                 "abbr": abbr,
                 "team": TEAM_META[abbr]["name"],
                 "conference": TEAM_META[abbr]["conference"],
-                "w": wins,
-                "l": losses,
-                "w_pct": float(w_pct),
+                "w": int(wins),
+                "l": int(losses),
+                "w_pct": wins / (wins + losses) if wins + losses else 0.0,
             }
         )
 
@@ -178,37 +203,11 @@ def get_current_meta():
             )
         return out
 
-    db_team_stats = {}
-    for row in team_rows:
-        abbr = row[0]
+    stored_team_stats = {}
+    for abbr, stats in team_rows.items():
         if abbr not in TEAM_META:
             continue
-
-        fg_pct = float(row[6]) if row[6] is not None else 0.0
-        fg3_pct = float(row[7]) if row[7] is not None else 0.0
-        ft_pct = float(row[8]) if row[8] is not None else 0.0
-
-        # Normalize to percent style expected by frontend (e.g. 48.1).
-        if fg_pct <= 1:
-            fg_pct *= 100
-        if fg3_pct <= 1:
-            fg3_pct *= 100
-        if ft_pct <= 1:
-            ft_pct *= 100
-
-        db_team_stats[abbr] = {
-            "name": TEAM_META[abbr]["name"],
-            "abbr": abbr,
-            "ppg": round(float(row[1] or 0), 1),
-            "rpg": round(float(row[2] or 0), 1),
-            "apg": round(float(row[3] or 0), 1),
-            "spg": round(float(row[4] or 0), 1),
-            "bpg": round(float(row[5] or 0), 1),
-            "fgPct": round(fg_pct, 1),
-            "threePct": round(fg3_pct, 1),
-            "ftPct": round(ft_pct, 1),
-            "logo": badges.get(abbr),
-        }
+        stored_team_stats[abbr] = {"name": TEAM_META[abbr]["name"], "abbr": abbr, **stats, "logo": badges.get(abbr)}
 
     if live_team_stats:
         for abbr, item in live_team_stats.items():
@@ -245,7 +244,10 @@ def get_current_meta():
             "eastern": decorate_with_rank_and_gb(east),
             "western": decorate_with_rank_and_gb(west),
         },
-        "team_stats": live_team_stats or db_team_stats,
+        "team_stats_source": "nba_api" if live_team_stats else "local_db",
+        # The stored fallback's season (the live block is the current season's).
+        "team_stats_season": season if live_team_stats else db_latest_season,
+        "team_stats": live_team_stats or stored_team_stats,
         "top_scorer": live_top_scorer or (
             {
                 "player_name": top_scorer_row[0],

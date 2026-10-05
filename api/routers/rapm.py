@@ -497,12 +497,18 @@ def rapm(version: str = "single", season: Optional[int] = None, min_poss: float 
         rows.append(d)
     if team:
         rows = [r for r in rows if team in r["team_list"]]
-    # Ranks among the qualified, league-wide (a team filter keeps the league rank).
+    # Ranks among the qualified, league-wide (a team filter keeps the league rank). Tied values share
+    # a rank (competition ranking, the profile's RANK()): the stored ratings carry three decimals, so
+    # 5-19 pairs a season tie (round 8 R8-064).
     qualified = [r for r in rows if r["qualified"]] if not team else None
     league_q = [r for r in _all_qualified(version, season, floor, kind if tracker or shotaware else "")] if team else qualified
     for key in ("rapm", "orapm", "drapm"):
         order = sorted(league_q, key=lambda r: -r[key])
-        rank = {r["player_id"]: i + 1 for i, r in enumerate(order)}
+        rank, last_value, last_rank = {}, None, 0
+        for i, r in enumerate(order, start=1):
+            if r[key] != last_value:
+                last_value, last_rank = r[key], i
+            rank[r["player_id"]] = last_rank
         for r in rows:
             r[f"{key}_rank"] = rank.get(r["player_id"])
     n_q = len(league_q)

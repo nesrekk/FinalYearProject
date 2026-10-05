@@ -87,8 +87,8 @@ def get_player_shots(player_name: str, season: Optional[str] = None, player_id: 
 
 @router.get("/shots/player/{player_name}/zones")
 def get_player_shot_zones(player_name: str, season: int):
-    """A player's own FG% by the 5 real NBA shot zones (Restricted Area,
-    Paint, Mid-Range, Corner 3, Above the Break 3), for the comparison
+    """A player's own regular-season FG% by the 5 real NBA shot zones (Restricted
+    Area, Paint, Mid-Range, Corner 3, Above the Break 3), for the comparison
     page's shot-chart section. Fetches (and caches forever) just the ONE
     requested season — one live request instead of the ~N+1 a full-career
     fetch needs, so this is both much faster and has far fewer places to
@@ -107,12 +107,16 @@ def get_player_shot_zones(player_name: str, season: int):
     except shots_lib.ShotsFetchFailed as e:
         raise HTTPException(status_code=502, detail=f"Live shot fetch failed: {e}")
 
-    shots = shots_lib.get_shots_for_season(int(player_id), season_label)
+    # Regular season only (game_id '002…'), like the profile's zones, the league zones this is
+    # compared with and every other shot view; before, playoff and play-in shots were counted too
+    # (round 8 R8-065).
+    shots = [s for s in shots_lib.get_shots_for_season(int(player_id), season_label)
+             if str(s["game_id"]).startswith("002")]
     if not shots:
-        raise HTTPException(status_code=404, detail=f"No shot data for {resolved_name} in {season_label}.")
+        raise HTTPException(status_code=404, detail=f"No regular-season shot data for {resolved_name} in {season_label}.")
     zones = shots_lib.compute_zone_stats(shots)
-    return {"player_id": player_id, "player_name": resolved_name, "season": season_label, "zones": zones,
-            "_source": _shots_source(how)}
+    return {"player_id": player_id, "player_name": resolved_name, "season": season_label, "games": "regular season",
+            "zones": zones, "_source": _shots_source(how)}
 
 @lru_cache(maxsize=8)
 def _league_sample(n: int):

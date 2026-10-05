@@ -325,6 +325,251 @@ def test_on_floor_plus_minus_matches_box_score(cur, game_id):
             assert ours[pid] == pm, pid
 
 
+# ─── Round 8 step 3: pages the facts above didn't reach ──────────────────────
+# Each fact was read from its page on 2026-10-05 (URL in the comment) before it
+# was written down here; nothing in this block comes from memory.
+
+# Award winners. Sources (Wikipedia, read 2026-10-05):
+#   https://en.wikipedia.org/wiki/NBA_Most_Valuable_Player_Award          2022-23 Embiid (PHI), 2023-24 Jokić (DEN), 2024-25 Gilgeous-Alexander (OKC)
+#   https://en.wikipedia.org/wiki/NBA_Defensive_Player_of_the_Year_Award  2022-23 Jaren Jackson Jr. (MEM), 2023-24 Gobert (MIN), 2024-25 Mobley (CLE)
+#   https://en.wikipedia.org/wiki/NBA_Rookie_of_the_Year_Award            2022-23 Banchero (ORL), 2023-24 Wembanyama (SAS), 2024-25 Castle (SAS)
+AWARD_WINNERS = {
+    ("MVP", 2023): 203954, ("MVP", 2024): 203999, ("MVP", 2025): 1628983,
+    ("DPOY", 2023): 1628991, ("DPOY", 2024): 203497, ("DPOY", 2025): 1630596,
+    ("ROY", 2023): 1631094, ("ROY", 2024): 1641705, ("ROY", 2025): 1642264,
+}
+
+
+def test_award_winners_2023_to_2025(cur):
+    """award_winners (the Awards Race backtests, Prediction Ledger, profile awards): the MVP, DPOY and
+    ROY of 2022-23 to 2024-25 by NBA id. 2025-26 is not loaded yet (R8-009, Step 7)."""
+    need(cur, "award_winners")
+    got = dict(((a, s), p) for s, a, p in rows(cur, "SELECT season, award, player_id FROM award_winners WHERE season >= 2023"))
+    for key, pid in AWARD_WINNERS.items():
+        assert got.get(key) == pid, key
+
+
+def test_2025_draft_top_five(cur):
+    """draft_history (Draft Value, profile bios): the first five picks of the 2025 draft. Source:
+    https://en.wikipedia.org/wiki/2025_NBA_draft (read 2026-10-05): 1 Cooper Flagg (DAL), 2 Dylan Harper
+    (SAS), 3 V. J. Edgecombe (PHI), 4 Kon Knueppel (CHA), 5 Ace Bailey (UTA); June 25-26, 2025. The table
+    spells the third pick "VJ Edgecombe" (NBA.com's spelling)."""
+    need(cur, "draft_history")
+    got = rows(cur, """SELECT overall_pick, player_name, team_abbreviation FROM draft_history
+                       WHERE draft_year = 2025 AND overall_pick <= 5 ORDER BY overall_pick""")
+    assert got == [(1, "Cooper Flagg", "DAL"), (2, "Dylan Harper", "SAS"), (3, "VJ Edgecombe", "PHI"),
+                   (4, "Kon Knueppel", "CHA"), (5, "Ace Bailey", "UTA")]
+
+
+# The 2025 NBA Finals, Thunder over Pacers 4-3. Source: https://en.wikipedia.org/wiki/2025_NBA_Finals
+# (read 2026-10-05): June 5 IND 111-110 @ OKC; June 8 OKC 123-107; June 11 IND 116-107 (at IND); June 13
+# OKC 111-104 (at IND); June 16 OKC 120-109; June 19 IND 108-91 (at IND); June 22 OKC 103-91.
+FINALS_2025 = [
+    ("2025-06-05", "OKC", "IND", 110, 111), ("2025-06-08", "OKC", "IND", 123, 107),
+    ("2025-06-11", "IND", "OKC", 116, 107), ("2025-06-13", "IND", "OKC", 104, 111),
+    ("2025-06-16", "OKC", "IND", 120, 109), ("2025-06-19", "IND", "OKC", 108, 91),
+    ("2025-06-22", "OKC", "IND", 103, 91),
+]
+
+
+def test_2025_finals_games_and_champion(cur):
+    """postseason_games (Season Simulator's backtest, Best Games' rounds): the seven 2025 Finals games
+    with their home team, score and US Eastern date (R8-067: ESPN's stamp is UTC, a day late for an
+    evening game, and was stored as such until 2026-10-05); season_postseason has both finalists in the
+    playoffs and the Thunder first in the West."""
+    need(cur, "postseason_games", "season_postseason")
+    got = rows(cur, """SELECT game_date::text, home, away, pts_home, pts_away FROM postseason_games
+                       WHERE season = 2025 AND round = 'NBA Finals' ORDER BY game_date""")
+    assert got == FINALS_2025
+    wins = {t: sum(1 for d, h, a, ph, pa in FINALS_2025 if (ph > pa) == (h == t)) for t in ("OKC", "IND")}
+    assert wins == {"OKC": 4, "IND": 3}
+    post = dict((t, (p, pos)) for t, p, pos in rows(
+        cur, "SELECT team_abbreviation, playoffs, position FROM season_postseason WHERE season = 2025 AND team_abbreviation IN ('OKC', 'IND')"))
+    assert post["OKC"] == (True, 1) and post["IND"][0] is True
+
+
+# 2024-25 regular-season records and home/road splits. Source: https://en.wikipedia.org/wiki/2024%E2%80%9325_NBA_season
+# (read 2026-10-05): Cleveland 64-18 (home 34-7, road 30-11), Oklahoma City 68-14 (36-6, 32-8), Utah 17-65
+# (10-31, 7-34), Washington 18-64 (8-33, 10-31). Wikipedia counts a neutral-site game (the Thunder's NBA Cup
+# semifinal in Las Vegas, the Wizards' Mexico City game) in the designated home team's home record;
+# game_scores marks both sides of such a game as not at home (neutral_site) and the team page lists it
+# as "Neutral site", so here neutral games count on the home side.
+RECORDS_2025 = {"CLE": (64, 18, 34, 7, 30, 11), "OKC": (68, 14, 36, 6, 32, 8), "UTA": (17, 65, 10, 31, 7, 34),
+                "WAS": (18, 64, 8, 33, 10, 31)}
+
+
+def test_2024_25_records_and_home_road_splits(cur):
+    """team_seasons, game_scores (team page record and splits), and the Standings fallback (R8-062)."""
+    need(cur, "team_seasons", "game_scores")
+    import sys as _sys
+    _sys.path.insert(0, _API_DIR)
+    from routers.meta import db_standings
+    fallback = {a: (int(w), int(l)) for a, w, l in db_standings(cur, 2025)}
+    for team, (w, l, hw, hl, rw, rl) in RECORDS_2025.items():
+        assert one(cur, "SELECT w, l FROM team_seasons WHERE season = 2025 AND abbreviation = %s", (team,)) == (w, l)
+        assert fallback[team] == (w, l)
+        home_w, home_l, road_w, road_l, neut_w, neut_l = one(cur, """
+            SELECT COUNT(*) FILTER (WHERE is_home AND NOT neutral_site AND pts_for > pts_against),
+                   COUNT(*) FILTER (WHERE is_home AND NOT neutral_site AND pts_for < pts_against),
+                   COUNT(*) FILTER (WHERE NOT is_home AND NOT neutral_site AND pts_for > pts_against),
+                   COUNT(*) FILTER (WHERE NOT is_home AND NOT neutral_site AND pts_for < pts_against),
+                   COUNT(*) FILTER (WHERE neutral_site AND pts_for > pts_against),
+                   COUNT(*) FILTER (WHERE neutral_site AND pts_for < pts_against)
+            FROM game_scores WHERE season = 2025 AND team_abbreviation = %s""", (team,))
+        assert (home_w + neut_w, home_l + neut_l, road_w, road_l) == (hw, hl, rw, rl), team
+
+
+# The 2025 play-in. Source: the same Wikipedia page (read 2026-10-05): East, Orlando 120-95 Atlanta,
+# Miami 109-90 Chicago, Miami 123-114 (OT) Atlanta for the 8th seed; West, Golden State 121-116 Memphis,
+# Memphis 120-106 Dallas, Dallas 120-106 Sacramento for the 8th seed.
+PLAY_IN_2025 = [("ORL", "ATL", 120, 95), ("MIA", "CHI", 109, 90), ("MIA", "ATL", 123, 114),
+                ("GSW", "MEM", 121, 116), ("MEM", "DAL", 120, 106), ("DAL", "SAC", 120, 106)]
+
+
+def test_2025_play_in(cur):
+    """postseason_games and season_postseason: the six play-in results, who played in it and who got
+    through (Orlando, Miami, Golden State, Memphis)."""
+    need(cur, "postseason_games", "season_postseason")
+    got = {(w, l): (pw, pl) for w, l, pw, pl in PLAY_IN_2025}
+    for home, away, ph, pa in rows(cur, "SELECT home, away, pts_home, pts_away FROM postseason_games WHERE season = 2025 AND stage = 'play-in'"):
+        winner, loser = (home, away) if ph > pa else (away, home)
+        assert got.pop((winner, loser)) == (max(ph, pa), min(ph, pa)), (home, away)
+    assert not got
+    post = {t: (pi, po) for t, pi, po in rows(cur, "SELECT team_abbreviation, play_in, playoffs FROM season_postseason WHERE season = 2025")}
+    assert {t for t, (pi, _) in post.items() if pi} == {"ORL", "ATL", "MIA", "CHI", "GSW", "MEM", "DAL", "SAC"}
+    assert {t for t, (pi, po) in post.items() if pi and po} == {"ORL", "MIA", "GSW", "MEM"}
+
+
+# Annual three-point leaders. Source: https://en.wikipedia.org/wiki/List_of_National_Basketball_Association_annual_3-point_field_goals_leaders
+# (read 2026-10-05): 2020-21 Curry 337, 2021-22 Curry 285, 2022-23 Klay Thompson 301, 2023-24 Curry 357,
+# 2024-25 Anthony Edwards 320.
+THREE_POINT_LEADERS = {2021: (201939, 337), 2022: (201939, 285), 2023: (202691, 301), 2024: (201939, 357),
+                       2025: (1630162, 320)}
+
+
+def test_three_point_leaders_from_the_play_by_play(cur):
+    """player_game_lines (Game Log, Game Finder, the Workbench's player_game and the Finder): summed
+    made threes give each season's leader and his exact total; nobody else reaches it. The Play Finder's
+    made-3 rows are the same events (test_consistency checks a game's plays add up to its line)."""
+    need(cur, "player_game_lines", "game_scores")
+    data = rows(cur, """SELECT season, player_id, SUM(fg3m) FROM player_game_lines
+                        WHERE game_id IN (SELECT 'espn_' || espn_id FROM game_scores) AND season BETWEEN 2021 AND 2025
+                        GROUP BY 1, 2 HAVING SUM(fg3m) >= 250 ORDER BY 1, 3 DESC""")
+    for season, (pid, made) in THREE_POINT_LEADERS.items():
+        top = [(p, m) for s, p, m in data if s == season]
+        assert top[0] == (pid, made), (season, top[:3])
+        assert all(m < made for _, m in top[1:]), season
+
+
+def test_jokic_2024_25_season_line(cur):
+    """player_season_stats, player_shots, player_game_lines: Jokić's 2024-25 games, field goals and
+    averages. Source: ESPN, https://www.espn.com/nba/player/stats/_/id/3112335/nikola-jokic (read
+    2026-10-05): 70 GP, 786-1364 FG (57.6%), 2,071 points, 29.6 / 12.7 / 10.2. The chart has the 1,364
+    attempts exactly; the lines count 1,363 (one shot ESPN's feed doesn't carry, pinned at 0-1)."""
+    need(cur, "player_season_stats", "player_shots", "player_game_lines")
+    assert one(cur, "SELECT gp, pts, reb, ast, fg_pct FROM player_season_stats WHERE player_id = 203999 AND season = 2025") == \
+        (70, 29.6, 12.7, 10.2, 0.576)
+    assert one(cur, """SELECT COUNT(*), COUNT(*) FILTER (WHERE shot_made_flag = 1) FROM player_shots
+                       WHERE player_id = 203999 AND season = '2024-25' AND game_id LIKE '002%%'""") == (1364, 786)
+    fga, fgm, pts = one(cur, """SELECT SUM(fga), SUM(fgm), SUM(pts) FROM player_game_lines
+                                WHERE player_id = 203999 AND season = 2025 AND game_id IN (SELECT 'espn_' || espn_id FROM game_scores)""")
+    assert (fgm, pts) == (786, 2071) and 1364 - fga in (0, 1)
+
+
+def test_jokic_thirty_four_triple_doubles(cur):
+    """The Workbench Finder's count condition and the Game Finder: Jokić had 34 triple-doubles in
+    2024-25 (StatMuse, https://www.statmuse.com/nba/ask/nikola-jokic-triple-doubles-2024-25, read
+    2026-10-05: "Nikola Jokić had 34 triple-doubles in 2024-25"), i.e. 34 game lines with 10+ points,
+    rebounds and assists in the same game."""
+    need(cur, "player_game_lines", "team_game_fatigue")
+    from fastapi.testclient import TestClient
+    from impact_api import app
+    client = TestClient(app)
+    d = client.post("/workbench/finder", json={
+        "dataset": "player_game", "scope": "season", "entities": [203999], "season_from": 2025, "season_to": 2025,
+        "conditions": [{"type": "count", "count": 1, "tests": [{"stat": "pts", "op": "gte", "value": 10},
+                                                              {"stat": "reb", "op": "gte", "value": 10},
+                                                              {"stat": "ast", "op": "gte", "value": 10}]}]})
+    assert d.status_code == 200, d.text
+    (row,) = d.json()["rows"]
+    assert row["conditions"][0] == {"count": 34, "of": 70}
+    gf = client.get("/games/finder", params={"f": "pts:gte:10,reb:gte:10,ast:gte:10", "player_id": 203999,
+                                             "season_from": 2025, "season_to": 2025, "limit": 1}).json()
+    assert gf["total"] == 34
+
+
+def test_trae_young_2024_25_assists(cur):
+    """player_season_stats, player_game_lines and assist_pairs (Assist Network): Trae Young's 2024-25.
+    Source: https://en.wikipedia.org/wiki/Trae_Young (read 2026-10-05): 76 games, 11.6 assists a game
+    (led the league), 24.2 points, "a franchise record for total assists in a season with 880"."""
+    need(cur, "player_season_stats", "player_game_lines", "assist_pairs")
+    assert one(cur, "SELECT gp, ast, pts FROM player_season_stats WHERE player_id = 1629027 AND season = 2025") == (76, 11.6, 24.2)
+    assert one(cur, """SELECT SUM(ast), COUNT(*) FILTER (WHERE seconds > 0) FROM player_game_lines
+                       WHERE player_id = 1629027 AND season = 2025 AND game_id IN (SELECT 'espn_' || espn_id FROM game_scores)""") == (880, 76)
+    assert one(cur, "SELECT SUM(ast) FROM assist_pairs WHERE passer_id = 1629027 AND season = 2025") == (880,)
+
+
+def test_wembanyama_blocks(cur):
+    """player_season_stats and the lines: Wembanyama led the league in blocks in both seasons. Source:
+    https://en.wikipedia.org/wiki/Victor_Wembanyama (read 2026-10-05): 2023-24 71 games, 3.6 blocks,
+    21.4 points, 10.6 rebounds; 2024-25 46 games, 3.8 blocks, 24.3 points, 11.0 rebounds."""
+    need(cur, "player_season_stats", "player_game_lines")
+    assert rows(cur, "SELECT season, gp, blk, pts, reb FROM player_season_stats WHERE player_id = 1641705 AND season IN (2024, 2025) ORDER BY season") == \
+        [(2024, 71, 3.6, 21.4, 10.6), (2025, 46, 3.8, 24.3, 11.0)]
+    for season, gp, bpg in ((2024, 71, 3.6), (2025, 46, 3.8)):
+        blk, games = one(cur, """SELECT SUM(blk), COUNT(*) FILTER (WHERE seconds > 0) FROM player_game_lines
+                                 WHERE player_id = 1641705 AND season = %s AND game_id IN (SELECT 'espn_' || espn_id FROM game_scores)""", (season,))
+        assert games == gp and abs(blk / games - bpg) <= 0.05, season
+
+
+def test_kings_176_175_double_overtime(cur):
+    """game_scores, best_games and play_finder_events: the Kings beat the Clippers 176-175 in double
+    overtime on 2023-02-24, "the second-highest scoring game in NBA history". Source:
+    https://en.wikipedia.org/wiki/2022%E2%80%9323_Sacramento_Kings_season (read 2026-10-05)."""
+    need(cur, "game_scores", "best_games", "play_finder_events", "play_finder_games")
+    assert one(cur, "SELECT pts_for, pts_against, periods, is_home FROM game_scores WHERE game_date = '2023-02-24' AND team_abbreviation = 'SAC' AND opponent = 'LAC'") == \
+        (176, 175, 6, False)
+    assert one(cur, "SELECT pts_home, pts_away, periods, home_team, away_team FROM best_games WHERE game_date = '2023-02-24' AND away_team = 'SAC'") == \
+        (175, 176, 6, "LAC", "SAC")
+    pts = one(cur, """SELECT SUM(CASE WHEN cat = 1 THEN 2 WHEN cat = 2 THEN 3 WHEN cat = 11 THEN 1 ELSE 0 END)
+                      FROM play_finder_events p JOIN play_finder_games g USING (game_no) WHERE g.game_date = '2023-02-24' AND g.home_team = 'LAC'""")
+    assert pts == (176 + 175,)
+
+
+def test_clippers_thirty_five_point_comeback(cur):
+    """best_games (Best Games & Upsets' comeback column) and game_scores: the Clippers won 116-115 at
+    Washington on 2022-01-25 after trailing by 35. Sources: Wikipedia game log
+    https://en.wikipedia.org/wiki/2021%E2%80%9322_Los_Angeles_Clippers_season ("January 25 @ Washington
+    W 116-115") and ESPN's recap https://www.espn.com/nba/recap/_/gameId/401360535 ("the Clippers
+    overcame a 35-point first-half deficit to stun the Wizards 116-115"), read 2026-10-05."""
+    need(cur, "best_games", "game_scores")
+    assert one(cur, "SELECT pts_for, pts_against, is_home FROM game_scores WHERE espn_id = '401360535' AND team_abbreviation = 'LAC'") == (116, 115, False)
+    assert one(cur, "SELECT comeback, pts_home, pts_away, home_team FROM best_games WHERE game_id = 'espn_401360535'") == (35, 115, 116, "WAS")
+    assert one(cur, "SELECT MAX(comeback) FROM best_games WHERE score_ok") == (35,)
+
+
+def test_2024_nba_cup_final_is_not_a_regular_season_game(cur):
+    """player_game_lines holds the 2024 NBA Cup final (the Bucks beat the Thunder 97-81 in Las Vegas on
+    2024-12-17), while game_scores, the Game Log and every season total leave it out: "Statistics from
+    the championship game were also not counted in regular season totals". Sources:
+    https://en.wikipedia.org/wiki/2024_NBA_Cup and ESPN's recap https://www.espn.com/nba/recap/_/gameId/401734908
+    ("Bucks 97-81 Thunder"), read 2026-10-05."""
+    need(cur, "player_game_lines", "game_scores")
+    assert rows(cur, "SELECT team_abbreviation, SUM(pts) FROM player_game_lines WHERE game_id = 'espn_401734908' GROUP BY 1 ORDER BY 1") == \
+        [("MIL", 97), ("OKC", 81)]
+    assert one(cur, "SELECT COUNT(*) FROM game_scores WHERE game_date = '2024-12-17'") == (0,)
+    assert one(cur, "SELECT COUNT(*) FROM team_game_fatigue WHERE game_date = '2024-12-17'") == (0,)
+
+
+def test_curry_2020_21_scoring_title(cur):
+    """player_season_stats: Curry's 2020-21, 63 games at 32.0 points a game. Source:
+    https://en.wikipedia.org/wiki/2020%E2%80%9321_Golden_State_Warriors_season (read 2026-10-05)."""
+    need(cur, "player_season_stats")
+    assert one(cur, "SELECT gp, pts FROM player_season_stats WHERE player_id = 201939 AND season = 2021") == (63, 32.0)
+    (top,) = one(cur, "SELECT MAX(pts) FROM player_season_stats WHERE season = 2021 AND gp >= 58")
+    assert top == 32.0
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # B. INTERNAL INVARIANTS
 # ═════════════════════════════════════════════════════════════════════════════

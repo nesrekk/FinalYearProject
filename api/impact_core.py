@@ -125,6 +125,10 @@ _NEWS_CACHE_TTL_SECONDS = 5 * 60  # news moves fast — much shorter TTL than th
 _LIVE_REQUEST_TIMEOUT_SECONDS = 6
 _LIVE_CACHE_TTL_SECONDS = 5 * 60
 TEAM_NAME_TO_ABBR = {info["name"]: abbr for abbr, info in TEAM_META.items()}
+# stats.nba.com names the Clippers "LA Clippers" (TeamCity "LA"); without this the live
+# standings row had no team code, so the Standings page showed it with no logo or link
+# and Team Comparison couldn't find its record (round 8 R8-066).
+TEAM_NAME_TO_ABBR["LA Clippers"] = "LAC"
 @contextmanager
 def get_db():
     conn = DB_POOL.getconn()
@@ -595,47 +599,59 @@ def _fetch_nba_api_team_stats_uncached(season: int):
         if not result_sets:
             return None
         rs = result_sets[0]
-        headers = rs.get("headers", []) or []
-        rows = rs.get("rowSet", []) or []
-        idx = {name: i for i, name in enumerate(headers)}
-
-        def get_val(row, key, default=None):
-            i = idx.get(key)
-            if i is None or i >= len(row):
-                return default
-            return row[i]
-
-        out = {}
-        for row in rows:
-            abbr = str(get_val(row, "TEAM_ABBREVIATION", "") or "").upper()
-            if not abbr or abbr not in TEAM_META:
-                continue
-            fg = float(get_val(row, "FG_PCT", 0) or 0)
-            fg3 = float(get_val(row, "FG3_PCT", 0) or 0)
-            ft = float(get_val(row, "FT_PCT", 0) or 0)
-            if fg <= 1:
-                fg *= 100
-            if fg3 <= 1:
-                fg3 *= 100
-            if ft <= 1:
-                ft *= 100
-
-            out[abbr] = {
-                "name": TEAM_META[abbr]["name"],
-                "abbr": abbr,
-                "ppg": round(float(get_val(row, "PTS", 0) or 0), 1),
-                "rpg": round(float(get_val(row, "REB", 0) or 0), 1),
-                "apg": round(float(get_val(row, "AST", 0) or 0), 1),
-                "spg": round(float(get_val(row, "STL", 0) or 0), 1),
-                "bpg": round(float(get_val(row, "BLK", 0) or 0), 1),
-                "fgPct": round(fg, 1),
-                "threePct": round(fg3, 1),
-                "ftPct": round(ft, 1),
-            }
-
-        return out or None
+        return parse_team_stats_rows(rs.get("headers", []) or [], rs.get("rowSet", []) or [])
     except Exception:
         return None
+
+
+def parse_team_stats_rows(headers, rows):
+    """LeagueDashTeamStats' result set -> {abbr: {name, abbr, ppg, rpg, apg, spg, bpg, fgPct,
+    threePct, ftPct}} (percentages as 46.5), or None when there is nothing to show.
+
+    The result set has no TEAM_ABBREVIATION column (TEAM_ID, TEAM_NAME, GP, W, L, ...), so the
+    code comes from the team name. Before round 8 (R8-062) the parser looked for the missing
+    column, skipped every row and returned None, so Team Comparison always showed the stored
+    fallback (then itself wrong). When every GP is 0 (2026-27 before opening night) it returns
+    None too, so the stored season shows instead of a table of zeros."""
+    idx = {name: i for i, name in enumerate(headers)}
+
+    def get_val(row, key, default=None):
+        i = idx.get(key)
+        if i is None or i >= len(row):
+            return default
+        return row[i]
+
+    if rows and not any(get_val(row, "GP", 0) for row in rows):
+        return None
+    out = {}
+    for row in rows:
+        abbr = str(get_val(row, "TEAM_ABBREVIATION", "") or "").upper()
+        if not abbr:
+            abbr = TEAM_NAME_TO_ABBR.get(str(get_val(row, "TEAM_NAME", "") or "").strip(), "")
+        if not abbr or abbr not in TEAM_META:
+            continue
+        fg = float(get_val(row, "FG_PCT", 0) or 0)
+        fg3 = float(get_val(row, "FG3_PCT", 0) or 0)
+        ft = float(get_val(row, "FT_PCT", 0) or 0)
+        if fg <= 1:
+            fg *= 100
+        if fg3 <= 1:
+            fg3 *= 100
+        if ft <= 1:
+            ft *= 100
+        out[abbr] = {
+            "name": TEAM_META[abbr]["name"],
+            "abbr": abbr,
+            "ppg": round(float(get_val(row, "PTS", 0) or 0), 1),
+            "rpg": round(float(get_val(row, "REB", 0) or 0), 1),
+            "apg": round(float(get_val(row, "AST", 0) or 0), 1),
+            "spg": round(float(get_val(row, "STL", 0) or 0), 1),
+            "bpg": round(float(get_val(row, "BLK", 0) or 0), 1),
+            "fgPct": round(fg, 1),
+            "threePct": round(fg3, 1),
+            "ftPct": round(ft, 1),
+        }
+    return out or None
 def _normalize_search_text(text: str) -> str:
     """Lowercase + strip accents so 'jokic' matches 'Jokić'."""
     decomposed = unicodedata.normalize("NFKD", text or "")

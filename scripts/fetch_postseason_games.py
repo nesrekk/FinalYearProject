@@ -16,7 +16,9 @@ Team codes are the NBA's, with the codes the rest of the database uses in
 that season (NJN before 2012-13, NOH before 2013-14).
 
 Table written (dropped and rebuilt): postseason_games
-  espn_id, season (end year), game_date, stage ('play-in' | 'playoffs'),
+  espn_id, season (end year), game_date (US Eastern, like game_scores; ESPN's
+  own stamp is UTC and a day late for evening games, round 8 R8-067),
+  stage ('play-in' | 'playoffs'),
   round ('Play-In', '1st Round', 'Conf Semifinals', 'Conf Finals', 'NBA Finals'),
   conference (East/West/NULL for the Finals), home, away, pts_home, pts_away,
   winner, note (ESPN's headline).
@@ -28,7 +30,8 @@ Usage:
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import psycopg2
 import requests
@@ -37,6 +40,7 @@ from psycopg2.extras import execute_values
 from db_config import DB_CONFIG
 
 URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+EASTERN = ZoneInfo("America/New_York")
 ESPN_TO_NBA = {"GS": "GSW", "NO": "NOP", "NY": "NYK", "SA": "SAS", "UTAH": "UTA", "WSH": "WAS", "NJ": "BKN"}
 WINDOW_DAYS = 75
 
@@ -48,6 +52,13 @@ def season_code(abbr, season):
     if abbr == "NOP" and season <= 2013:
         return "NOH"
     return abbr
+
+
+def local_date(iso_utc):
+    """ESPN stamps a game in UTC ("2025-06-06T00:30Z" for a 8:30 pm ET tip on June 5): the date
+    is the US Eastern one, as every other date in the database and on the pages (round 8 R8-067:
+    before, the UTC date was stored, a day late for every evening game)."""
+    return datetime.fromisoformat(iso_utc.replace("Z", "+00:00")).astimezone(EASTERN).date()
 
 
 def fetch_date(day):
@@ -65,6 +76,8 @@ def parse(events, season):
     rows = []
     for e in events:
         stype = e.get("season", {}).get("type")
+        if not e.get("competitions"):      # a placeholder event (seen 2026-10-05: no competition yet)
+            continue
         c = e["competitions"][0]
         notes = " ".join(n.get("headline", "") for n in c.get("notes", []))
         up = notes.upper()      # older seasons' notes are all caps ("EASTERN CONFERENCE SEMIFINALS - GAME 1")
@@ -83,7 +96,7 @@ def parse(events, season):
                else "Conf Semifinals" if "SEMI" in up
                else ("Conf Finals" if m else "NBA Finals") if "FINAL" in up
                else "1st Round" if ("1ST" in up or "FIRST" in up) else None)
-        rows.append((e["id"], season, e["date"][:10], stage, rnd, m.group(1).title() if m else None,
+        rows.append((e["id"], season, local_date(e["date"]), stage, rnd, m.group(1).title() if m else None,
                      season_code(home["team"]["abbreviation"], season), season_code(away["team"]["abbreviation"], season),
                      int(home["score"]), int(away["score"]),
                      season_code((home if home.get("winner") else away)["team"]["abbreviation"], season), notes))
