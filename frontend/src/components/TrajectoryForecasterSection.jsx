@@ -9,6 +9,7 @@ import AutocompleteDropdown from './common/AutocompleteDropdown';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
 import ChartTooltip from './common/ChartTooltip';
+import SeasonSelect from './common/SeasonSelect';
 
 const CHART_W = 720, CHART_H = 320, PAD_L = 56, PAD_R = 20, PAD_T = 20, PAD_B = 36;
 
@@ -23,9 +24,9 @@ function buildChartPoints(data) {
     return { actual, projected, overlay };
 }
 
-const COLOR_ACTUAL = '#38bdf8';
-const COLOR_PROJECTED = '#a78bfa';
-const COLOR_OVERLAY = '#facc15';
+const COLOR_ACTUAL = 'var(--series-1)';
+const COLOR_PROJECTED = 'var(--series-3)';
+const COLOR_OVERLAY = 'var(--series-4)';
 
 function TrajectoryChart({ data }) {
     const svgRef = useRef(null);
@@ -257,16 +258,7 @@ export default function TrajectoryForecasterSection() {
                         />
                         <AutocompleteDropdown anchorRef={searchInputRef} items={suggestions} onPick={pick} />
                     </div>
-                    <input
-                        type="number"
-                        className="input-field"
-                        value={season}
-                        onChange={(e) => setSeason(Number(e.target.value))}
-                        min={2010}
-                        max={2026}
-                        style={{ maxWidth: 110 }}
-                        title="Season"
-                    />
+                    <SeasonSelect value={season} onChange={setSeason} from={2010} />
                     <select
                         className="input-field"
                         value={projectYears}
@@ -296,9 +288,9 @@ export default function TrajectoryForecasterSection() {
                         </div>
                         <TrajectoryChart data={data} />
                         <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', marginTop: '0.75rem', fontSize: '0.78rem' }}>
-                            <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#38bdf8', marginRight: 5 }} /> Real career</span>
-                            <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#a78bfa', marginRight: 5 }} /> Projected (comp-weighted)</span>
-                            <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #facc15', marginRight: 5 }} /> What actually happened</span>
+                            <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: COLOR_ACTUAL, marginRight: 5 }} /> Real career</span>
+                            <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: COLOR_PROJECTED, marginRight: 5 }} /> Projected (comp-weighted)</span>
+                            <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: `2px solid ${COLOR_OVERLAY}`, marginRight: 5 }} /> What actually happened</span>
                         </div>
                     </div>
 

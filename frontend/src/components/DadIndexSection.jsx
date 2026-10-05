@@ -10,7 +10,7 @@ import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
 import { signed as signedNum } from '../utils/format';
 
-const POS_COLORS = { G: '#38bdf8', F: '#a78bfa', C: '#f59e0b' };
+const POS_COLORS = { G: 'var(--series-1)', F: 'var(--series-3)', C: 'var(--series-0)' };
 const POS_LABELS = { G: 'Guards', F: 'Forwards', C: 'Centers' };
 const QUADRANT_ORDER = ['lockdown', 'struggling', 'hidden', 'targeted'];
 
@@ -131,7 +131,7 @@ function DefenderDetail({ d, zKey, quadrants }) {
     if (!d) return <p className="page-subtitle">Hover or click a dot, or search a defender, to see their real assignments.</p>;
     const q = zKey === 'dad_pos_z' ? d.quadrant_pos : d.quadrant;
     return (
-        <div style={{ opacity: d.small_dfg_sample ? 0.75 : 1 }}>
+        <div>
             <div className="entity-row" style={{ gap: '0.75rem', marginBottom: '0.5rem' }}>
                 <PlayerHeadshot playerId={d.player_id} playerName={d.player_name} size={44} />
                 <div>
@@ -344,7 +344,7 @@ export default function DadIndexSection() {
                                 <tbody>
                                     {sorted.map((d, i) => (
                                         <tr key={d.player_id} onClick={() => setSelectedId(d.player_id)}
-                                            style={{ cursor: 'pointer', opacity: d.small_dfg_sample ? 0.55 : 1 }}>
+                                            style={{ cursor: 'pointer' }}>
                                             <td>{i + 1}</td>
                                             <td>
                                                 <div className="entity-row">

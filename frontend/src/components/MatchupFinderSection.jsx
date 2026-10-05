@@ -4,17 +4,20 @@ import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
+import PlayerName from './common/PlayerName';
 import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
+import SeasonSelect from './common/SeasonSelect';
 
+// Small samples were faded with opacity (text at 2.1-4.1:1, R8-051) and got an extra cell the header
+// didn't have; they now say "small sample" under the name.
 function MatchupRow({ row, highlight }) {
     return (
-        <tr style={{ opacity: row.reliable ? 1 : 0.45 }}>
+        <tr>
             <td>
-                <span className="entity-row">
-                    <PlayerHeadshot playerId={row.player_id} playerName={row.player_name} size={26} />
-                    {row.player_name}
-                </span>
+                <PlayerName playerId={row.player_id} name={row.player_name} size={26}>
+                    {!row.reliable && <span className="page-subtitle" style={{ display: 'block', fontSize: '0.7rem', margin: 0 }}>small sample</span>}
+                </PlayerName>
             </td>
             <td>{row.gp}</td>
             <td>{row.partial_poss.toFixed(1)}</td>
@@ -23,11 +26,6 @@ function MatchupRow({ row, highlight }) {
                 {row.matchup_fg_pct == null ? '—' : `${(row.matchup_fg_pct * 100).toFixed(0)}%`}
             </td>
             <td>{row.player_pts}</td>
-            {!row.reliable && (
-                <td>
-                    <span className="page-subtitle" style={{ fontSize: '0.7rem' }}>small sample</span>
-                </td>
-            )}
         </tr>
     );
 }
@@ -35,7 +33,7 @@ function MatchupRow({ row, highlight }) {
 export default function MatchupFinderSection() {
     const [player, setPlayer] = useState('');
     const [role, setRole] = useState('scorer');
-    const [season, setSeason] = useState('2026');
+    const [season, setSeason] = useState(2026);
     const [suggestions, setSuggestions] = useState([]);
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -111,15 +109,7 @@ export default function MatchupFinderSection() {
                     <option value="scorer">As scorer — who guards them best?</option>
                     <option value="defender">As defender — who do they shut down?</option>
                 </select>
-                <input
-                    type="number"
-                    placeholder="Season (e.g. 2026)"
-                    value={season}
-                    onChange={(e) => setSeason(e.target.value)}
-                    className="input-field"
-                    min={2018}
-                    max={2026}
-                />
+                <SeasonSelect value={season} onChange={setSeason} from={2018} label="Season" />
                 <button
                     className="action-btn"
                     onClick={handleSearch}
@@ -163,7 +153,7 @@ export default function MatchupFinderSection() {
                                     </thead>
                                     <tbody>
                                         {result.toughest.map((row) => (
-                                            <MatchupRow key={row.player_id} row={row} highlight="#f87171" />
+                                            <MatchupRow key={row.player_id} row={row} highlight="var(--negative)" />
                                         ))}
                                     </tbody>
                                 </table>
@@ -189,7 +179,7 @@ export default function MatchupFinderSection() {
                                     </thead>
                                     <tbody>
                                         {result.easiest.map((row) => (
-                                            <MatchupRow key={row.player_id} row={row} highlight="#34d399" />
+                                            <MatchupRow key={row.player_id} row={row} highlight="var(--positive)" />
                                         ))}
                                     </tbody>
                                 </table>

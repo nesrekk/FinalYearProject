@@ -185,11 +185,11 @@ export default function DraftProspectSection() {
                             </span>
                         </h3>
                         <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-                            <span className="page-subtitle">PTS <strong style={{ color: '#a78bfa' }}>{fmt(data.projected_nba_rookie_outcome.pts)}</strong></span>
-                            <span className="page-subtitle">TS% <strong style={{ color: '#a78bfa' }}>{fmtPct(data.projected_nba_rookie_outcome.ts_pct)}</strong></span>
-                            <span className="page-subtitle">AST% <strong style={{ color: '#a78bfa' }}>{fmtPct(data.projected_nba_rookie_outcome.ast_pct)}</strong></span>
-                            <span className="page-subtitle">REB% <strong style={{ color: '#a78bfa' }}>{fmtPct(data.projected_nba_rookie_outcome.reb_pct)}</strong></span>
-                            <span className="page-subtitle">Net Rtg <strong style={{ color: '#a78bfa' }}>{fmt(data.projected_nba_rookie_outcome.net_rating)}</strong></span>
+                            <span className="page-subtitle">PTS <strong style={{ color: 'var(--text)' }}>{fmt(data.projected_nba_rookie_outcome.pts)}</strong></span>
+                            <span className="page-subtitle">TS% <strong style={{ color: 'var(--text)' }}>{fmtPct(data.projected_nba_rookie_outcome.ts_pct)}</strong></span>
+                            <span className="page-subtitle">AST% <strong style={{ color: 'var(--text)' }}>{fmtPct(data.projected_nba_rookie_outcome.ast_pct)}</strong></span>
+                            <span className="page-subtitle">REB% <strong style={{ color: 'var(--text)' }}>{fmtPct(data.projected_nba_rookie_outcome.reb_pct)}</strong></span>
+                            <span className="page-subtitle">Net Rtg <strong style={{ color: 'var(--text)' }}>{fmt(data.projected_nba_rookie_outcome.net_rating)}</strong></span>
                         </div>
                     </div>
 

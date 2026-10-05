@@ -10,9 +10,10 @@ import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
 
 const BUCKET_META = {
-    garbage: { label: 'Garbage time', color: '#94a3b8' },
-    low: { label: 'Low leverage', color: '#64748b' },
-    medium: { label: 'Medium leverage', color: '#38bdf8' },
+    // Theme tokens: each reads at 3:1 or better on both Paper and Ink (round 8, R8-050).
+    garbage: { label: 'Garbage time', color: 'var(--text-3)' },
+    low: { label: 'Low leverage', color: 'var(--compare-b)' },
+    medium: { label: 'Medium leverage', color: 'var(--accent)' },
     high: { label: 'High leverage / clutch', color: 'var(--streak)' },
 };
 
@@ -100,10 +101,10 @@ function SlopeChart({ rows, selectedId, onSelect }) {
                             <line x1={xL} x2={xR} y1={yScale(r.ppg_raw)} y2={yScale(r.ppg_filtered)}
                                 stroke="transparent" strokeWidth="10" />
                             <line x1={xL} x2={xR} y1={yScale(r.ppg_raw)} y2={yScale(r.ppg_filtered)}
-                                stroke={isFocus ? '#f59e0b' : '#38bdf8'} strokeOpacity={focusId && !isFocus ? 0.25 : 0.8}
+                                stroke={isFocus ? 'var(--streak)' : 'var(--compare-b)'} strokeOpacity={focusId && !isFocus ? 0.25 : 0.8}
                                 strokeWidth={isFocus ? 3 : 1.5} />
-                            <circle cx={xL} cy={yScale(r.ppg_raw)} r={isFocus ? 4 : 2.5} fill={isFocus ? '#f59e0b' : '#38bdf8'} />
-                            <circle cx={xR} cy={yScale(r.ppg_filtered)} r={isFocus ? 4 : 2.5} fill={isFocus ? '#f59e0b' : '#38bdf8'} />
+                            <circle cx={xL} cy={yScale(r.ppg_raw)} r={isFocus ? 4 : 2.5} fill={isFocus ? 'var(--streak)' : 'var(--compare-b)'} />
+                            <circle cx={xR} cy={yScale(r.ppg_filtered)} r={isFocus ? 4 : 2.5} fill={isFocus ? 'var(--streak)' : 'var(--compare-b)'} />
                         </g>
                     );
                 })}
@@ -114,11 +115,10 @@ function SlopeChart({ rows, selectedId, onSelect }) {
                     return (
                         <g key={l.id}>
                             <line x1={xR + 4} y1={yScale(r.ppg_filtered)} x2={xR + 44} y2={l.y}
-                                stroke={isFocus ? '#f59e0b' : 'var(--text-muted)'} strokeOpacity={isFocus ? 0.9 : 0.35} strokeWidth="1" />
+                                stroke={isFocus ? 'var(--streak)' : 'var(--text-muted)'} strokeOpacity={isFocus ? 0.9 : 0.7} strokeWidth="1" />
                             <text x={xR + 48} y={l.y + 4} fontSize="11"
                                 fontWeight={isFocus ? 700 : 400}
-                                fill={isFocus ? '#f59e0b' : 'var(--text-secondary)'}
-                                opacity={focusId && !isFocus ? 0.5 : 1}
+                                fill={isFocus ? 'var(--streak)' : focusId ? 'var(--text-muted)' : 'var(--text-secondary)'}
                                 style={{ cursor: 'pointer' }}
                                 onMouseEnter={() => setHoverId(l.id)}
                                 onMouseLeave={() => setHoverId(null)}
@@ -130,7 +130,7 @@ function SlopeChart({ rows, selectedId, onSelect }) {
                 })}
 
                 {focus && (
-                    <text x={xL - 38} y={yScale(focus.ppg_raw) + 4} textAnchor="end" fontSize="11" fontWeight="700" fill="#f59e0b">
+                    <text x={xL - 38} y={yScale(focus.ppg_raw) + 4} textAnchor="end" fontSize="11" fontWeight="700" fill="var(--streak)">
                         {focus.ppg_raw.toFixed(1)}
                     </text>
                 )}
@@ -207,7 +207,7 @@ function PlayerCard({ detail, loading, error }) {
     const p = detail.player;
     const maxPts = Math.max(1, ...detail.splits.map((s) => s.pts));
     return (
-        <div style={{ opacity: detail.small_sample_warning ? 0.7 : 1 }}>
+        <div>
             <div className="entity-row" style={{ gap: '0.75rem', marginBottom: '0.75rem' }}>
                 <PlayerHeadshot playerId={p.player_id} playerName={p.player_name} size={48} />
                 <div>
@@ -370,7 +370,7 @@ export default function GarbageTimeSection() {
                     <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>
                         {['garbage', 'high', 'low', 'medium'].map((b) => (
                             <li key={b}>
-                                <strong style={{ color: BUCKET_META[b].color }}>{BUCKET_META[b].label}:</strong> {data.thresholds[b]}
+                                <strong><span aria-hidden="true" style={{ display: 'inline-block', width: 10, height: 10, marginRight: 6, background: BUCKET_META[b].color }} />{BUCKET_META[b].label}:</strong> {data.thresholds[b]}
                             </li>
                         ))}
                         <li>{data.thresholds.order}</li>

@@ -5,6 +5,7 @@ import PlayerName from '../common/PlayerName';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
+import SourceBadge from '../common/SourceBadge';
 import ShotCourt, { HeatmapLegend } from '../common/ShotCourt';
 import ShotMixHistory from '../common/ShotMixHistory';
 import { ShotMakingLeaderboard, ShotMakingModel, ShotMakingPlayer } from '../common/ShotMaking';
@@ -64,6 +65,7 @@ export default function ShotCharts() {
   const [seasons, setSeasons] = useState([]);
   const [season, setSeason] = useState('');
   const [source, setSource] = useState('');
+  const [badge, setBadge] = useState(null); // the shots route's _source (R8-014)
   // Which games' shots to draw and count (player_shots mixes in playoffs and play-in).
   const [games, setGames] = useState(() => parseParam.oneOf(params, 'games', ['playoffs', 'all']) ?? 'regular');
   // Other players with the loaded player's name: { for: id, list }.
@@ -144,6 +146,7 @@ export default function ShotCharts() {
       setSeason(data.season || '');
       setShots(data.shots || []);
       setSource(data.source || '');
+      setBadge(data._source || null);
       setSearchInput(data.player_name);
       setSuggestions([]);
     } catch (e) {
@@ -222,6 +225,7 @@ export default function ShotCharts() {
         <h2 className="card-title hb-page-title">
           <span className="card-icon"><Icon name="adjust" /></span>
           Shot Chart
+          {!onShotMaking && !onQuality && !onValue && <SourceBadge source={badge} />}
           <CopyLinkButton />
           <SaveViewButton pageId="shotcharts" />
         </h2>

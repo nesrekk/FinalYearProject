@@ -8,6 +8,7 @@ import PlayerHeadshot from './common/PlayerHeadshot';
 import AutocompleteDropdown from './common/AutocompleteDropdown';
 import { STAT_GLOSSARY } from '../utils/statGlossary';
 import TableExport from './common/TableExport';
+import SeasonSelect from './common/SeasonSelect';
 
 const ROWS = [
     { key: 'ts_pct', label: 'True Shooting %', pct: true },
@@ -31,10 +32,10 @@ function deltaColor(v) {
 
 export default function PlayoffForecasterSection() {
     const searchInputRef = useRef(null);
-    const [searchInput, setSearchInput] = useState('Jayson Tatum');
+    const [searchInput, setSearchInput] = useState('Shai Gilgeous-Alexander');
     const [suggestions, setSuggestions] = useState([]);
-    const [playerName, setPlayerName] = useState('Jayson Tatum');
-    const [season, setSeason] = useState(2025);
+    const [playerName, setPlayerName] = useState('Shai Gilgeous-Alexander');
+    const [season, setSeason] = useState(2026);
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -113,15 +114,7 @@ export default function PlayoffForecasterSection() {
                         />
                         <AutocompleteDropdown anchorRef={searchInputRef} items={suggestions} onPick={pick} />
                     </div>
-                    <input
-                        type="number"
-                        className="input-field"
-                        value={season}
-                        onChange={(e) => setSeason(Number(e.target.value))}
-                        min={2010}
-                        max={2026}
-                        style={{ maxWidth: 110 }}
-                    />
+                    <SeasonSelect value={season} onChange={setSeason} from={2010} />
                 </div>
                 {error && <p className="error-message" style={{ marginTop: '0.5rem' }}>{error}</p>}
             </div>

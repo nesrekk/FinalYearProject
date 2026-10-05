@@ -24,7 +24,7 @@ const CREW_MIN_GAMES_OPTIONS = [1, 2, 3, 4];
 
 function DiffCell({ diffPct, ciLow, ciHigh }) {
     if (diffPct == null) return <td>—</td>;
-    const color = shownSign(diffPct, 1) === 0 ? '#94a3b8' : diffPct > 0 ? '#f87171' : '#38bdf8';
+    const color = shownSign(diffPct, 1) === 0 ? 'var(--text-3)' : diffPct > 0 ? 'var(--compare-a)' : 'var(--compare-b)';
     return (
         <td style={{ color, fontWeight: 600 }}>
             {signed(diffPct, 1, '-')}%
@@ -172,7 +172,7 @@ export default function RefereeTendenciesSection() {
                                         const key = mode === 'crew' ? row.crew_key : row.official_id;
                                         const label = mode === 'crew' ? row.official_names : row.official_name;
                                         return (
-                                            <tr key={key} style={{ opacity: row.small_n_warning ? 0.55 : 1 }}>
+                                            <tr key={key}>
                                                 <td>
                                                     {label}
                                                     {row.small_n_warning && (

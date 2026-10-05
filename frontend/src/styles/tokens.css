@@ -31,6 +31,19 @@
   /* Player Comparison's two players (text and marks): >= 4.5:1 on --surface and --surface-2. */
   --compare-a: #b91c1c;
   --compare-b: #1d4ed8;
+  /* Chart series (lines, dots, bars, categories) for pages outside the Workbench (round 8, R8-050):
+     each >= 3:1 against --bg, --surface and --surface-2 in its theme. 0-7 equal the Workbench's
+     --wb-series-N (workbench.css). Text in a series colour needs 4.5:1: use --text / --accent instead. */
+  --series-0: #c2410c;
+  --series-1: #1d4ed8;
+  --series-2: #15803d;
+  --series-3: #7e22ce;
+  --series-4: #a16207;
+  --series-5: #0e7490;
+  --series-6: #be185d;
+  --series-7: #57534e;
+  --series-8: #b91c1c;
+  --series-9: #4d7c0f;
   --brand-gradient: linear-gradient(90deg, #a93a0a, #a93a0a);
 
   /* ── Depth: hard offset "sticker" shadows ──────── */
@@ -120,6 +133,16 @@
   --streak: #facc15;
   --compare-a: #f87171;
   --compare-b: #38bdf8;
+  --series-0: #fb923c;
+  --series-1: #60a5fa;
+  --series-2: #4ade80;
+  --series-3: #c084fc;
+  --series-4: #facc15;
+  --series-5: #22d3ee;
+  --series-6: #f472b6;
+  --series-7: #d6d3d1;
+  --series-8: #f87171;
+  --series-9: #a3e635;
   --tab-active-text: var(--accent);
 }
 
@@ -143,6 +166,16 @@
     --streak: #facc15;
   --compare-a: #f87171;
   --compare-b: #38bdf8;
+    --series-0: #fb923c;
+    --series-1: #60a5fa;
+    --series-2: #4ade80;
+    --series-3: #c084fc;
+    --series-4: #facc15;
+    --series-5: #22d3ee;
+    --series-6: #f472b6;
+    --series-7: #d6d3d1;
+    --series-8: #f87171;
+    --series-9: #a3e635;
     --tab-active-text: var(--accent);
   }
 }

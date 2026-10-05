@@ -40,7 +40,7 @@ function RocCurveChart({ points, auc, color, exportName }) {
             <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" />
             <text x={ROC_SIZE / 2} y={ROC_SIZE - 6} fill="var(--text-2)" fontSize="11" textAnchor="middle">False Positive Rate</text>
             <text x="12" y={ROC_SIZE / 2} fill="var(--text-2)" fontSize="11" textAnchor="middle" transform={`rotate(-90 12 ${ROC_SIZE / 2})`}>True Positive Rate</text>
-            <text x={ROC_SIZE - ROC_PAD} y={ROC_PAD - 12} fill={color} fontSize="13" fontWeight="700" textAnchor="end">
+            <text x={ROC_SIZE - ROC_PAD} y={ROC_PAD - 12} fill="var(--text)" fontSize="13" fontWeight="700" textAnchor="end">
                 AUC = {auc?.toFixed(3) ?? '—'}
             </text>
         </svg>
@@ -85,7 +85,7 @@ function ReliabilityChart({ bins, color, label }) {
             <text x={ROC_SIZE / 2} y={ROC_SIZE - 6} fill="var(--text-2)" fontSize="11" textAnchor="middle">Predicted Win Probability</text>
             <text x="12" y={ROC_SIZE / 2} fill="var(--text-2)" fontSize="11" textAnchor="middle" transform={`rotate(-90 12 ${ROC_SIZE / 2})`}>Real Observed Win Rate</text>
             {label && (
-                <text x={ROC_SIZE - ROC_PAD} y={ROC_PAD - 12} fill={color} fontSize="12" fontWeight="700" textAnchor="end">
+                <text x={ROC_SIZE - ROC_PAD} y={ROC_PAD - 12} fill="var(--text)" fontSize="12" fontWeight="700" textAnchor="end">
                     {label}
                 </text>
             )}
@@ -116,11 +116,11 @@ function ShapBar({ feature, featureValue, shapValue, maxAbs }) {
                         position: 'absolute', top: 0, bottom: 0,
                         left: positive ? '50%' : `${50 - widthPct / 2}%`,
                         width: `${widthPct / 2}%`,
-                        background: positive ? '#34d399' : '#f87171',
+                        background: positive ? 'var(--positive)' : 'var(--negative)',
                         borderRadius: 3,
                     }}
                 />
-                <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: '#475569' }} />
+                <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'var(--text-3)' }} />
             </div>
         </div>
     );
@@ -135,7 +135,7 @@ const AWARDS = [
 ];
 
 const WPA_SCOPE_META = {
-    all_events: { label: 'All Held-Out Events', color: '#38bdf8' },
+    all_events: { label: 'All Held-Out Events', color: 'var(--compare-b)' },
     clutch_only: { label: 'Real Clutch Time Only', color: 'var(--streak)' },
 };
 
@@ -437,7 +437,7 @@ export default function ModelValidationSection() {
                                 Pooled across every held-out season's out-of-fold predictions — the dashed
                                 diagonal is what random guessing would trace.
                             </p>
-                            <RocCurveChart points={allNbaDetail.summary.roc_curve} auc={allNbaDetail.summary.roc_auc} color="#facc15" exportName="All-NBA ROC curve" />
+                            <RocCurveChart points={allNbaDetail.summary.roc_curve} auc={allNbaDetail.summary.roc_auc} color="var(--streak)" exportName="All-NBA ROC curve" />
                         </>
                     )}
 
@@ -585,7 +585,7 @@ export default function ModelValidationSection() {
 
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem' }}>
                         {Object.entries(wpaValidation.scopes).map(([scopeKey, scope]) => {
-                            const meta = WPA_SCOPE_META[scopeKey] || { label: scopeKey, color: '#38bdf8' };
+                            const meta = WPA_SCOPE_META[scopeKey] || { label: scopeKey, color: 'var(--compare-b)' };
                             return (
                                 <div key={scopeKey}>
                                     <h3 className="section-heading" style={{ marginTop: 0 }}>{meta.label}</h3>
@@ -666,7 +666,7 @@ export default function ModelValidationSection() {
                                 top-left corner because the model is discriminating real signal from noise well
                                 above chance, matching the {detail.summary.roc_auc?.toFixed(3) ?? '—'} AUC above.
                             </p>
-                            <RocCurveChart points={detail.summary.roc_curve} auc={detail.summary.roc_auc} color="#38bdf8" exportName={`${detail.summary.model_label} ROC curve`} />
+                            <RocCurveChart points={detail.summary.roc_curve} auc={detail.summary.roc_auc} color="var(--compare-b)" exportName={`${detail.summary.model_label} ROC curve`} />
                         </>
                     )}
 

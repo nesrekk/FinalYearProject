@@ -75,13 +75,13 @@ function Scatter({ points, costPerWin, minSalary, minMinutes, exportName }) {
                 <text x={m.left + iw / 2} y={H - 6} textAnchor="middle" fontSize="12" fill="var(--text-secondary)">WAR (calibrated wins above replacement)</text>
                 <text transform={`translate(14 ${m.top + ih / 2}) rotate(-90)`} textAnchor="middle" fontSize="12" fill="var(--text-secondary)">Real salary</text>
 
-                <polyline fill="none" stroke="#f59e0b" strokeWidth={2} strokeDasharray="6 4"
+                <polyline fill="none" stroke="var(--series-4)" strokeWidth={2} strokeDasharray="6 4"
                     points={`${x(xMin)},${y(fairAt(xMin))} ${x(0)},${y(fairAt(0))} ${x(lineEnd)},${y(fairAt(lineEnd))}`} />
-                <text x={x(lineEnd) - 4} y={y(fairAt(lineEnd)) + 14} textAnchor="end" fontSize="11" fill="#f59e0b">fair value</text>
+                <text x={x(lineEnd) - 4} y={y(fairAt(lineEnd)) + 14} textAnchor="end" fontSize="11" fill="var(--streak)">fair value</text>
 
                 {points.map((p) => (
                     <circle key={p.player_id} cx={x(p.war)} cy={y(p.salary)} r={p.player_id === hover ? 6 : 3.5}
-                        fill={p.surplus >= 0 ? '#34d399' : '#f87171'}
+                        fill={p.surplus >= 0 ? 'var(--positive)' : 'var(--negative)'}
                         fillOpacity={p.minutes >= minMinutes ? 0.75 : 0.25}
                         stroke={p.player_id === hover ? 'var(--text-primary)' : 'none'}
                         onMouseEnter={() => setHover(p.player_id)} onMouseLeave={() => setHover(null)} />

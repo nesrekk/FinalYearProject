@@ -31,7 +31,7 @@ button.dq-live { cursor: pointer; }
   background: none; border: 0; padding: 0 0 0 6px; font: inherit; font-size: 0.78rem; color: var(--brand-text);
   cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
 }
-.dq-link { padding: 0; font-size: inherit; font-variant-numeric: tabular-nums; }
+.dq-link { padding: 0; font-size: inherit; font-variant-numeric: tabular-nums; color: var(--text); } /* sits on the heat-map tints: brand text fell to 4.3:1 (R8-050) */
 .dq-why:hover, .dq-link:hover, .dq-why:focus-visible, .dq-link:focus-visible { color: var(--text); }
 .dq-detail td { background: var(--surface-2); }
 .dq-detail-p { margin: 0 0 var(--space-2); font-size: 0.82rem; color: var(--text-2); max-width: 70ch; }

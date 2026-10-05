@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Icon from './Icon';
 import { NAV_GROUPS } from '../layout/navConfig';
+import { ANALYTICS_TABS } from '../analytics/analyticsTabs';
 import { addToActiveReport } from '../../utils/reportStore';
 import { openPage, PAGE_PARAM } from '../../utils/useUrlState';
 
 const NAV_LABELS = Object.fromEntries(NAV_GROUPS.flatMap((g) => g.items).map((i) => [i.id, i.label]));
+const ANALYTICS_LABELS = Object.fromEntries(ANALYTICS_TABS.map((t) => [t.id, t.label]));
 
 // What the page is called, for the line under a report item ("Source: …").
 // Analytics keeps its tab in the #hash, which has no label of its own.
@@ -17,6 +19,8 @@ function sourcePageLabel() {
     // The page header's own title (every page but the two hero pages has one).
     const heading = document.querySelector('.page-header .page-title')?.textContent.trim();
     const label = heading || NAV_LABELS[page] || page || 'NBA Hub';
+    const tool = page === 'analytics' ? ANALYTICS_LABELS[hash] : null;
+    if (tool) return `Analytics › ${tool}`;
     return page === 'analytics' && hash ? `${label} (${hash} tab)` : label;
 }
 

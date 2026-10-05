@@ -28,7 +28,7 @@ function ScatterChart({ points, xKey, yKey, xLabel, yLabel, color }) {
             <svg ref={svgRef} viewBox={`0 0 ${CHART_W} ${CHART_H}`} style={{ width: '100%', display: 'block' }} role="img" aria-label={`Scatter plot of ${xLabel} versus ${yLabel} for every player, showing the real correlation between wingspan-minus-height and defensive production`}>
                 <rect x="0" y="0" width={CHART_W} height={CHART_H} fill="var(--surface-2)" rx="8" />
                 {points.map((p) => (
-                    <circle key={p.player_id} cx={x(p[xKey])} cy={y(p[yKey])} r={3} fill={color} fillOpacity={0.65}>
+                    <circle key={p.player_id} cx={x(p[xKey])} cy={y(p[yKey])} r={3} fill={color} fillOpacity={0.85}>
                         <title>{p.player_name}: {xLabel} {p[xKey]}, {yLabel} {p[yKey]}</title>
                     </circle>
                 ))}
@@ -102,7 +102,7 @@ export default function LengthMattersCard() {
                         yKey={metric}
                         xLabel="Wingspan − Height (in)"
                         yLabel={metric === 'avg_dbpm' ? 'Career Avg DBPM' : 'Career Stocks/36'}
-                        color={metric === 'avg_dbpm' ? '#38bdf8' : '#facc15'}
+                        color={metric === 'avg_dbpm' ? 'var(--series-1)' : 'var(--series-4)'}
                     />
                 </>
             )}

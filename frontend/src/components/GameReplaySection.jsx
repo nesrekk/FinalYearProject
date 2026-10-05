@@ -7,6 +7,8 @@ import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
+import CopyLinkButton from './common/CopyLinkButton';
+import SaveViewButton from './common/SaveViewButton';
 import { currentPageParam, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
 import { bySign, signed } from '../utils/format';
 
@@ -41,9 +43,9 @@ function formatClock(secondsElapsed) {
 }
 
 function wpColor(v) {
-    if (v == null) return '#94a3b8';
-    if (v >= 0.5) return '#34d399';
-    return '#f87171';
+    if (v == null) return 'var(--text-3)';
+    if (v >= 0.5) return 'var(--positive)';
+    return 'var(--negative)';
 }
 
 export default function GameReplaySection() {
@@ -59,20 +61,22 @@ export default function GameReplaySection() {
     const [linkedGame] = useState(() => parseParam.str(params, 'game'));
     const [linkedT] = useState(() => parseParam.num(params, 't', { min: 0, max: 6000 }));
     const [linkedEv] = useState(() => parseParam.int(params, 'ev', { min: 1 }));
+    // A game picked from the list goes into the link too (round 8, R8-057), so Copy link / Save / reload
+    // reopen it; the list's first game stays out of the URL until something else is picked.
+    const [picked, setPicked] = useState(false);
     const onLinkedGame = !selectedGameId || selectedGameId === linkedGame;
-    useUrlSync(linkedGame ? {
+    useUrlSync(linkedGame || picked ? {
         game: selectedGameId || linkedGame,
         t: onLinkedGame ? linkedT : null,
         ev: onLinkedGame ? linkedEv : null,
     } : null);
     const [page] = useState(currentPageParam);
     useEffect(() => () => {
-        if (!linkedGame) return;
         const url = new URL(window.location.href);
         if (url.searchParams.get('page') !== page) return;
         ['game', 't', 'ev'].forEach((k) => url.searchParams.delete(k));
         window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
-    }, [linkedGame, page]);
+    }, [page]);
 
     const [replay, setReplay] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -196,13 +200,16 @@ export default function GameReplaySection() {
                         {replay?.clock_note && <> {replay.clock_note}</>}
                     </InfoTooltip>
                     <SourceBadge source={replay?._source} />
+                    <CopyLinkButton />
+                    <SaveViewButton pageId="analytics" />
                 </h3>
                 {gamesError && <p className="error-message">{gamesError}</p>}
                 {games && (
                     <select
                         className="input-field"
                         value={selectedGameId}
-                        onChange={(e) => setSelectedGameId(e.target.value)}
+                        onChange={(e) => { setPicked(true); setSelectedGameId(e.target.value); }}
+                        aria-label="Game"
                         style={{ marginTop: '0.5rem' }}
                     >
                         {games.games.map((g) => (
@@ -354,7 +361,7 @@ export default function GameReplaySection() {
                                 cx={chartX(p.seconds_elapsed)}
                                 cy={14}
                                 r={whatifEventId === p.event_id ? 5.5 : 3}
-                                fill={whatifEventId === p.event_id ? '#facc15' : '#64748b'}
+                                fill={whatifEventId === p.event_id ? 'var(--series-4)' : 'var(--text-3)'}
                                 style={{ cursor: 'pointer' }}
                                 onMouseEnter={() => setHovered(p)}
                                 onMouseLeave={() => setHovered(null)}

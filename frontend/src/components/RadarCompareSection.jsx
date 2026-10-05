@@ -5,6 +5,7 @@ import SourceBadge from './common/SourceBadge';
 import Icon from './common/Icon';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
+import SeasonSelect from './common/SeasonSelect';
 
 // Debounced suggestion fetch for one search slot, with a cancellation guard
 // so an earlier keystroke's response can't resolve after a later one and
@@ -39,7 +40,8 @@ function useSlotSuggestions(query, resolvedName, setSuggestions) {
     }, [query, resolvedName]);
 }
 
-const PALETTE = ['#38bdf8', '#f87171', '#facc15'];
+// Also the colour of each player's name in the table: text tokens (>= 4.5:1 on Paper and Ink).
+const PALETTE = ['var(--compare-b)', 'var(--compare-a)', 'var(--series-3)'];
 const STAT_LABELS = {
     pts: 'PTS', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', ts_pct: 'TS%', usg_pct: 'USG%',
     shooting_proficiency: 'Shot Proficiency', spacing: 'Spacing',
@@ -117,7 +119,7 @@ function PlayerSlot({ index, color, entry, onSearch, onPick, onRemove, suggestio
 
 export default function RadarCompareSection() {
     const svgRef = useRef(null);
-    const [season, setSeason] = useState(2025);
+    const [season, setSeason] = useState(2026);
     const [slots, setSlots] = useState([null, null, null]); // {playerName, data, error}
     const [searchValues, setSearchValues] = useState(['', '', '']);
     const [suggestionsBySlot, setSuggestionsBySlot] = useState([[], [], []]);
@@ -212,15 +214,7 @@ export default function RadarCompareSection() {
             <p className="page-subtitle">Compare up to 3 players' statistical profiles for one season.</p>
 
             <div className="input-row">
-                <input
-                    type="number"
-                    className="input-field"
-                    value={season}
-                    onChange={(e) => setSeason(Number(e.target.value))}
-                    min={2010}
-                    max={2026}
-                    style={{ maxWidth: 120 }}
-                />
+                <SeasonSelect value={season} onChange={setSeason} from={2010} />
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.75rem', marginBottom: '1.5rem' }}>

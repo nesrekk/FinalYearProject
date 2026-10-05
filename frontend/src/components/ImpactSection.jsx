@@ -5,9 +5,10 @@ import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
 import SourceBadge from './common/SourceBadge';
+import SeasonSelect from './common/SeasonSelect';
 
 export default function ImpactSection() {
-    const [season, setSeason] = useState('2026');
+    const [season, setSeason] = useState(2026);
     const [results, setResults] = useState(null);
     const [source, setSource] = useState(null);
     const [activeTab, setActiveTab] = useState(null); // 'raw' | 'star'
@@ -79,15 +80,7 @@ export default function ImpactSection() {
             </h2>
 
             <div className="input-row">
-                <input
-                    type="number"
-                    placeholder="Season (e.g. 2026)"
-                    value={season}
-                    onChange={(e) => setSeason(e.target.value)}
-                    className="input-field"
-                    min={1980}
-                    max={2030}
-                />
+                <SeasonSelect value={season} onChange={setSeason} from={1950} label="Season (BPM / VORP from 1973-74)" />
                 <button
                     className={`action-btn ${activeTab === 'raw' ? 'active-tab' : ''}`}
                     onClick={() => fetchData('raw')}

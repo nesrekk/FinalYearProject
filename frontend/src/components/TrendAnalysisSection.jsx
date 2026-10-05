@@ -96,7 +96,7 @@ function LineTrendChart({ points, statDef, color, exportName }) {
                         <circle
                             key={p.season} cx={xFor(p.i)} cy={yFor(p.value)}
                             r={hovered?.season === p.season ? (p.season === peak.season ? 6 : 5) : (p.season === peak.season ? 4.5 : 3)}
-                            fill={p.season === peak.season ? '#facc15' : color}
+                            fill={p.season === peak.season ? 'var(--series-4)' : color}
                             style={{ pointerEvents: 'none' }}
                         />
                     ))}
@@ -276,7 +276,7 @@ export default function TrendAnalysisSection() {
                             <p className="page-subtitle" style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
                                 {playerHistory.player_name} · {playerHistory.seasons.length} seasons · {playerStatDef.label} · gold dot marks the peak season
                             </p>
-                            <LineTrendChart points={playerPoints} statDef={playerStatDef} color="#38bdf8" exportName={`${playerHistory.player_name} ${playerStatDef.label} trend`} />
+                            <LineTrendChart points={playerPoints} statDef={playerStatDef} color="var(--series-1)" exportName={`${playerHistory.player_name} ${playerStatDef.label} trend`} />
                         </>
                     )}
                 </>
@@ -301,7 +301,7 @@ export default function TrendAnalysisSection() {
                             <p className="page-subtitle" style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
                                 {teamHistory.team} · {teamHistory.seasons.length} seasons · {teamStatDef.label} · gold dot marks the peak season
                             </p>
-                            <LineTrendChart points={teamPoints} statDef={teamStatDef} color="#f87171" exportName={`${teamHistory.team} ${teamStatDef.label} trend`} />
+                            <LineTrendChart points={teamPoints} statDef={teamStatDef} color="var(--series-8)" exportName={`${teamHistory.team} ${teamStatDef.label} trend`} />
                         </>
                     )}
                 </>

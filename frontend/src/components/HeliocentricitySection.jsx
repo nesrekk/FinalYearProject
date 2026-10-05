@@ -7,6 +7,7 @@ import PlayerHeadshot from './common/PlayerHeadshot';
 import TeamLogo from './common/TeamLogo';
 import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
+import SeasonSelect from './common/SeasonSelect';
 
 function indexColor(v) {
     if (v == null) return 'var(--text-muted)';
@@ -59,15 +60,7 @@ export default function HeliocentricitySection() {
                     <SourceBadge source={data?._source} />
                 </h3>
                 <div className="input-row">
-                    <input
-                        type="number"
-                        className="input-field"
-                        value={season}
-                        onChange={(e) => setSeason(Number(e.target.value))}
-                        min={2014}
-                        max={2026}
-                        style={{ maxWidth: 110 }}
-                    />
+                    <SeasonSelect value={season} onChange={setSeason} from={2014} />
                 </div>
                 {error && <p className="error-message" style={{ marginTop: '0.5rem' }}>{error}</p>}
                 {data && (

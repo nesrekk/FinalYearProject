@@ -7,6 +7,7 @@ import Icon from './common/Icon';
 import TeamLogo from './common/TeamLogo';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import { signed } from '../utils/format';
+import SeasonSelect from './common/SeasonSelect';
 
 function fmt(v, digits = 1) {
     return v == null ? '—' : Number(v).toFixed(digits);
@@ -29,7 +30,7 @@ function SplitCard({ label, split, color }) {
 }
 
 export default function WithWithoutStarSection() {
-    const [season, setSeason] = useState(2025);
+    const [season, setSeason] = useState(2026);
     const [teams, setTeams] = useState([]);
     const [team, setTeam] = useState('');
     const [roster, setRoster] = useState([]);
@@ -91,14 +92,7 @@ export default function WithWithoutStarSection() {
             <p className="page-subtitle">Pick a season, a team, then a player from that roster.</p>
 
             <div className="input-row">
-                <input
-                    type="number"
-                    className="input-field"
-                    value={season}
-                    onChange={(e) => setSeason(Number(e.target.value))}
-                    min={2010}
-                    max={2026}
-                />
+                <SeasonSelect value={season} onChange={setSeason} from={2010} />
                 <select className="input-field" value={team} onChange={(e) => setTeam(e.target.value)}>
                     <option value="">Team…</option>
                     {teams.map((t) => <option key={t} value={t}>{t}</option>)}

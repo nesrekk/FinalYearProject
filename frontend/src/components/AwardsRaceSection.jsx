@@ -5,6 +5,7 @@ import Loader from './Loader';
 import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
 import SourceBadge from './common/SourceBadge';
+import SeasonSelect from './common/SeasonSelect';
 
 const AWARDS = {
     mvp: {
@@ -66,7 +67,7 @@ const AWARDS = {
 
 export default function AwardsRaceSection() {
     const [award, setAward] = useState('mvp');
-    const [season, setSeason] = useState('2025');
+    const [season, setSeason] = useState(2026);
     const [results, setResults] = useState(null);
     const [poolInfo, setPoolInfo] = useState(null);
     const [source, setSource] = useState(null);
@@ -138,15 +139,7 @@ export default function AwardsRaceSection() {
             </div>
 
             <div className="input-row">
-                <input
-                    type="number"
-                    placeholder="Season (e.g. 2025)"
-                    value={season}
-                    onChange={(e) => setSeason(e.target.value)}
-                    className="input-field"
-                    min={1980}
-                    max={2030}
-                />
+                <SeasonSelect value={season} onChange={setSeason} from={2010} label="Season (the award models cover 2009-10 on)" />
                 <button
                     className="action-btn"
                     onClick={handlePredict}

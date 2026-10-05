@@ -7,9 +7,11 @@ import Icon from './common/Icon';
 import OffensiveStyleSection from './OffensiveStyleSection';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
+import SeasonSelect from './common/SeasonSelect';
 
 // Ten distinct hues for the ten roles; fills only (never text), readable on Paper and Ink.
-const PALETTE = ['#ff5b14', '#2e86de', '#f5b700', '#8e5bd6', '#12a4a0', '#e0245e', '#6ab04c', '#9aa5b1', '#c97c3a', '#4dc9f6'];
+// Ten roles, ten theme series colours (tokens.css --series-N, >= 3:1 on Paper and Ink).
+const PALETTE = Array.from({ length: 10 }, (_, i) => `var(--series-${i})`);
 
 const EVO_W = 640, EVO_H = 260, EVO_PAD_L = 42, EVO_PAD_R = 12, EVO_PAD_T = 10, EVO_PAD_B = 22;
 const EVO_PLOT_W = EVO_W - EVO_PAD_L - EVO_PAD_R;
@@ -52,7 +54,7 @@ function StackedArchetypeChart({ evolution, colorByArchetype }) {
                     </React.Fragment>
                 ))}
                 {layers.map((l) => (
-                    <path key={l.archetype} d={l.path} fill={colorByArchetype[l.archetype] || '#94a3b8'} fillOpacity={0.85} stroke="var(--surface)" strokeWidth="0.5" />
+                    <path key={l.archetype} d={l.path} fill={colorByArchetype[l.archetype] || 'var(--text-3)'} fillOpacity={0.85} stroke="var(--surface)" strokeWidth="0.5" />
                 ))}
                 {seasons.map((s, i) => (
                     i % tickEvery === 0 && (
@@ -96,7 +98,7 @@ function TrendMiniChart({ label, data, valueKey, format, color }) {
 export default function PlayerArchetypesSection() {
     const scatterRef = useRef(null);
     const [archetypes, setArchetypes] = useState([]);
-    const [season, setSeason] = useState(2025);
+    const [season, setSeason] = useState(2026);
     const [seasonData, setSeasonData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -266,14 +268,7 @@ export default function PlayerArchetypesSection() {
             )}
 
             <div className="input-row" style={{ marginTop: '1.25rem' }}>
-                <input
-                    type="number"
-                    className="input-field"
-                    value={season}
-                    onChange={(e) => setSeason(Number(e.target.value))}
-                    min={2010}
-                    max={2026}
-                />
+                <SeasonSelect value={season} onChange={setSeason} from={2010} />
             </div>
 
             {loading && <Loader />}
@@ -290,8 +285,8 @@ export default function PlayerArchetypesSection() {
                                 cx={plot.scaleX(p.pca_x)}
                                 cy={plot.scaleY(p.pca_y)}
                                 r={hoveredArchetype ? 4 : 3}
-                                fill={colorByArchetype[p.archetype] || '#94a3b8'}
-                                opacity={0.8}
+                                fill={colorByArchetype[p.archetype] || 'var(--text-3)'}
+                                opacity={0.9}
                             >
                                 <title>{p.player_name} ({p.team_abbreviation}) — {p.archetype}: {p.pts} pts, {p.reb} reb, {p.ast} ast</title>
                             </circle>
@@ -441,21 +436,21 @@ export default function PlayerArchetypesSection() {
                             data={evolution.trends}
                             valueKey="three_pt_rate"
                             format={(v) => `${Math.round(v * 100)}%`}
-                            color="#facc15"
+                            color="var(--series-4)"
                         />
                         <TrendMiniChart
                             label="True Shooting %"
                             data={evolution.trends}
                             valueKey="ts_pct"
                             format={(v) => `${Math.round(v * 100)}%`}
-                            color="#34d399"
+                            color="var(--series-2)"
                         />
                         <TrendMiniChart
                             label="Pace (real proxy)"
                             data={evolution.trends}
                             valueKey="pace_proxy"
                             format={(v) => v.toFixed(1)}
-                            color="#38bdf8"
+                            color="var(--series-1)"
                         />
                     </div>
                 </>

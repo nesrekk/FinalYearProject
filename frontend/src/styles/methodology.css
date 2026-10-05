@@ -134,6 +134,8 @@
   color: var(--text);
 }
 .meth-stats .meth-live-note { flex-basis: 100%; }
+/* The source badge in a live note ("NBA_API + ESPN VIA SPORTSDATAVERSE (PLAY-BY-PLAY)") ran 37 px past a 375 px screen (R8-055). */
+.meth-live-note .pill-badge { max-width: 100%; white-space: normal; }
 .meth-issue h3 {
   display: flex;
   align-items: center;

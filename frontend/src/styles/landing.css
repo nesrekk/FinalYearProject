@@ -430,6 +430,8 @@
 .lp .app-footer p {
   margin: 0;
   max-width: 90ch;
+  /* shell.css gives footer text --text-3, which on the landing's orange was 2.0:1 (Paper) and 1.1:1 (Ink): R8-050 */
+  color: inherit;
 }
 
 .lp button:focus-visible {

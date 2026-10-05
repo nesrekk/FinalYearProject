@@ -3,8 +3,9 @@
 // It drives the app in same-origin iframes, one page at a time, at a given width and theme, waits until
 // the page has settled (no request in flight and no "Loading" text, or a cap), then scans the rendered
 // page for: console errors, failed or slow (> 3 s) requests, horizontal overflow, text below the WCAG
-// contrast floor (4.5:1, 3:1 for large text), "undefined"/"NaN"/"null"/"[object Object]" in visible text,
-// loading text that never went away, empty tables, and internal links that can't open a real view.
+// contrast floor (4.5:1, 3:1 for large text), chart marks (SVG dots, lines, bars) under 3:1 (`marks`, step 2c),
+// "undefined"/"NaN"/"null"/"[object Object]" in visible text, loading text that never went away, empty
+// tables, and internal links that can't open a real view.
 //
 // It needs a page that loads the app with request/console recording. Round 8 used a temporary copy of
 // index.html (`zz-harness.html`, deleted before committing) whose inline script, before the app loads:
@@ -27,10 +28,16 @@
 // One browser-tool call gets ~45 s, so start a long sweep without awaiting it and read window.__zzResults
 // in later calls. Editing this file while the driver page is open makes Vite reload it (results lost).
 // Also: linkRoundTrip() (change a <select>, open the URL fresh, compare), followLinks() (open one link of
-// each kind), followButtons() (click navigation-looking buttons).
+// each kind), followButtons() (click navigation-looking buttons), checkAfter() (act on a page, e.g. click
+// "Predict MVP", then scan the filled-in view; helpers typeInto() and clickText()).
+// Step 2c's harness also replaces IntersectionObserver with a stub that reports every observed element as on
+// screen (a hidden pane never fires the real one), so `whileInView` sections and the Workbench's lazy blocks
+// render; without it they stay at opacity 0 / unloaded. Blind spots: a segmented control's active pill is a sibling layer (its label reads as a contrast failure), and a chart
+// panel drawn inside a chart counts only when it is a <rect> covering at least half the <svg>.
 
-// "the null" / "a null" is statistics wording (Coaching Decisions' footnotes), not a leaked value.
-const BAD_TEXT = /\b(undefined|NaN)\b|(?<!\b(?:the|a) )\bnull\b|\[object Object\]|\bInfinity\b/;
+// "the null" / "a null result" / "null centre" is statistics wording (Coaching Decisions' footnotes, Methodology),
+// not a leaked value.
+const BAD_TEXT = /\b(undefined|NaN)\b|(?<!\b(?:[Tt]he|[Aa]|[Ii]ts|shuffled|permutation) )\bnull\b(?! (?:centre|center|result|hypothesis|distribution|model))|\[object Object\]|\bInfinity\b/;
 const LOADING_TEXT = /\bLoading\b|\bloading…|\bLoading…/;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -91,6 +98,26 @@ function backgroundOf(el, win) {
   return bg;
 }
 
+// A chart's own panel: <rect>s covering at least half the <svg> (e.g. fill var(--surface-2)), composited over
+// the page behind the <svg>. Used for SVG text and chart marks.
+const backdropCache = new WeakMap();
+function svgBackdrop(svg, win, pageBg) {
+  if (backdropCache.has(svg)) return backdropCache.get(svg);
+  const sr = svg.getBoundingClientRect();
+  let bg = pageBg;
+  for (const rect of svg.querySelectorAll('rect')) {
+    const r = rect.getBoundingClientRect();
+    if (r.width * r.height < 0.5 * sr.width * sr.height) continue;
+    const cs = win.getComputedStyle(rect);
+    const c = parseColor(cs.fill);
+    if (!c) continue;
+    const a = c.a * Number(cs.fillOpacity || 1) * Number(cs.opacity || 1);
+    if (a > 0) bg = blend({ ...c, a }, bg);
+  }
+  backdropCache.set(svg, bg);
+  return bg;
+}
+
 function opacityOf(el, win) {
   let o = 1;
   for (let n = el; n && n.nodeType === 1; n = n.parentElement) o *= Number(win.getComputedStyle(n).opacity || 1);
@@ -129,7 +156,7 @@ function directText(el) {
 
 // Scan one rendered document.
 export function scan(doc, win, opts = {}) {
-  const out = { overflow: null, wide: [], contrast: [], unknownBg: 0, invisible: 0, badText: [], loading: [], emptyTables: 0, links: {}, badLinks: [] };
+  const out = { overflow: null, wide: [], contrast: [], marks: [], unknownBg: 0, invisible: 0, badText: [], loading: [], emptyTables: 0, links: {}, badLinks: [] };
   const vw = doc.documentElement.clientWidth;
   out.overflow = doc.documentElement.scrollWidth > vw + 1 ? doc.documentElement.scrollWidth - vw : 0;
 
@@ -160,17 +187,21 @@ export function scan(doc, win, opts = {}) {
     const text = directText(el);
     if (!text) continue;
     if (!visible(el, win)) continue;
-    if (BAD_TEXT.test(text)) out.badText.push({ el: describe(el), text: text.slice(0, 120) });
+    const bad = text.match(BAD_TEXT);
+    if (bad) out.badText.push({ el: describe(el), text: text.slice(Math.max(0, bad.index - 50), bad.index + 60) });
     if (LOADING_TEXT.test(text)) out.loading.push({ el: describe(el), text: text.slice(0, 80) });
     if (el.closest('[disabled], [aria-disabled="true"]')) continue;
     const cs = win.getComputedStyle(el);
     const isSvg = el instanceof win.SVGElement;
-    let fg = parseColor(isSvg ? cs.fill : cs.color);
+    // Outlined text (-webkit-text-stroke, the landing's title) reads by its stroke.
+    const stroked = parseFloat(cs.webkitTextStrokeWidth) >= 1 && parseColor(cs.webkitTextStrokeColor)?.a > 0.5;
+    let fg = parseColor(stroked ? cs.webkitTextStrokeColor : isSvg ? cs.fill : cs.color);
     if (!fg) continue;
     const op = opacityOf(el, win);
     if (op < 0.05) { out.invisible++; continue; } // faded out (or a fade-in that never finished: see invisible)
-    const bg = backgroundOf(el, win);
+    let bg = backgroundOf(el, win);
     if (!bg) { out.unknownBg++; continue; }
+    if (isSvg && el.ownerSVGElement) bg = svgBackdrop(el.ownerSVGElement, win, bg);
     fg = { ...fg, a: fg.a * op * (isSvg ? Number(cs.fillOpacity || 1) : 1) };
     const ratio = contrast(blend(fg, bg), bg);
     const size = parseFloat(cs.fontSize);
@@ -186,6 +217,59 @@ export function scan(doc, win, opts = {}) {
       out.contrast.push(rec);
     }
   }
+
+  // Chart marks (step 2c): SVG dots, lines, bars and outlines should be >= 3:1 against what's behind the chart
+  // (WCAG 1.4.11). An element passes if any of its paints (stroke or fill) reads: a hollow dot is its stroke.
+  // Skipped: layers under 40% opacity (faded on purpose: gridlines, bands, background population), paints
+  // the colour of the background (knockouts, separators), heat-map cells (20+ same-size <rect>s: a colour
+  // scale read against its legend), shapes as big as the chart, anything without a visible box.
+  const markSeen = new Map();
+  const cellSizes = new WeakMap();
+  const isHeatCell = (el, svg) => {
+    if (el.tagName !== 'rect') return false;
+    let sizes = cellSizes.get(svg);
+    if (!sizes) {
+      sizes = new Map();
+      for (const r of svg.querySelectorAll('rect')) { const k = r.getAttribute('width') + 'x' + r.getAttribute('height'); sizes.set(k, (sizes.get(k) || 0) + 1); }
+      cellSizes.set(svg, sizes);
+    }
+    return (sizes.get(el.getAttribute('width') + 'x' + el.getAttribute('height')) || 0) >= 20;
+  };
+  for (const el of doc.body.querySelectorAll('svg circle, svg path, svg line, svg rect, svg polyline, svg polygon, svg ellipse')) {
+    if (!visible(el, win) || el.closest('defs, clipPath, mask, pattern, marker')) continue;
+    const svg = el.ownerSVGElement;
+    if (!svg) continue;
+    const r = el.getBoundingClientRect(), sr = svg.getBoundingClientRect();
+    if (r.width * r.height > 0.5 * sr.width * sr.height) continue;
+    if (isHeatCell(el, svg)) continue;
+    const cs = win.getComputedStyle(el);
+    const op = opacityOf(el, win);
+    const strokeW = parseFloat(cs.strokeWidth) || 0;
+    const paints = [];
+    if (cs.stroke && cs.stroke !== 'none' && strokeW >= 1) paints.push([cs.stroke, Number(cs.strokeOpacity || 1)]);
+    if (cs.fill && cs.fill !== 'none' && !(el.tagName === 'line' || el.tagName === 'polyline')) paints.push([cs.fill, Number(cs.fillOpacity || 1)]);
+    const pageBg = backgroundOf(svg, win);
+    if (!pageBg) continue;
+    const bg = svgBackdrop(svg, win, pageBg);
+    let best = null;
+    for (const [paint, po] of paints) {
+      const c = parseColor(paint);
+      if (!c) continue;
+      const a = c.a * po * op;
+      if (a < 0.4) continue;
+      const ratio = contrast(blend({ ...c, a }, bg), bg);
+      if (ratio < 1.1) continue;
+      if (!best || ratio > best.ratio) best = { paint, a, ratio };
+    }
+    if (!best || best.ratio + 1e-6 >= 3) continue;
+    const key = describe(svg) + '|' + best.paint + '|' + Math.round(best.a * 100);
+    const prev = markSeen.get(key);
+    if (prev) { prev.count++; continue; }
+    const rec = { svg: describe(svg), el: el.tagName, paint: best.paint, alpha: Math.round(best.a * 100) / 100, ratio: Math.round(best.ratio * 100) / 100, bg: `rgb(${Math.round(bg.r)}, ${Math.round(bg.g)}, ${Math.round(bg.b)})`, count: 1 };
+    markSeen.set(key, rec);
+    out.marks.push(rec);
+  }
+  if (out.marks.length > 12) out.marks = out.marks.slice(0, 12);
 
   // Tables with a header and no rows.
   for (const t of doc.querySelectorAll('table')) {
@@ -285,6 +369,46 @@ export async function sweep(targets, { widths = [1280, 375], themes = ['light', 
   return results;
 }
 
+// Load a page, run `action(win, doc)` in it (fill a box, click a button), wait until it settles again, then scan:
+// for views that only exist after input (step 2c: Awards Race after "Predict MVP", a Workbench board after
+// "Load every block now"). `action` may be async; the returned record is check()'s plus `action` (its result).
+export async function checkAfter(target, action, opts = {}) {
+  const { frame, settledMs } = await load(target, opts);
+  const w = frame.contentWindow;
+  let acted;
+  try { acted = await action(w, w.document); } catch (e) { acted = 'action failed: ' + e; }
+  const t0 = performance.now();
+  let quietSince = null;
+  for (;;) {
+    await sleep(150);
+    if (performance.now() - t0 > (opts.cap || 25000)) break;
+    const busy = w.__zz.pending > 0 || LOADING_TEXT.test(w.document.body.innerText);
+    if (busy) { quietSince = null; continue; }
+    if (quietSince == null) quietSince = performance.now();
+    if (performance.now() - quietSince > (opts.quiet || 1200)) break;
+  }
+  const zz = w.__zz;
+  const s = scan(w.document, w, opts);
+  return {
+    page: (target.page || 'link') + (target.hash ? '#' + target.hash : '') + (opts.label ? ' [' + opts.label + ']' : ''),
+    width: opts.width, theme: opts.theme, settledMs: settledMs + Math.round(performance.now() - t0), url: w.location.pathname + w.location.search + w.location.hash,
+    h1: (w.document.querySelector('h1')?.innerText || '').slice(0, 60), textLen: w.document.body.innerText.length,
+    requests: zz.reqs.length,
+    failed: zz.reqs.filter((r) => !(r.status >= 200 && r.status < 400)).map((r) => `${r.status} ${r.method} ${r.url.replace(/^https?:\/\/[^/]+/, '')}`),
+    slow: zz.reqs.filter((r) => r.ms > 3000).map((r) => `${r.ms}ms ${r.url.replace(/^https?:\/\/[^/]+/, '')}`),
+    errors: [...new Set(zz.errors)].slice(0, 8), pending: zz.pending, action: acted, ...s,
+  };
+}
+
+// Helpers for actions: set a box's value the way React sees it, and click the first button whose text matches.
+export function typeInto(el, value) { setValue(el, value); }
+export function clickText(doc, re, sel = 'button') {
+  const b = [...doc.querySelectorAll(sel)].find((x) => re.test((x.innerText || x.getAttribute('aria-label') || '').trim()));
+  if (!b) throw new Error('no ' + sel + ' matching ' + re);
+  b.click();
+  return (b.innerText || '').trim().slice(0, 40);
+}
+
 // One line per problem, grouped by page.
 export function summarise(results) {
   const lines = [];
@@ -296,6 +420,7 @@ export function summarise(results) {
     if (r.pending) p.push(`pending ${r.pending}`);
     if (r.overflow) p.push(`overflow ${r.overflow}px: ` + r.wide.map((w) => `${w.el}(${w.right})`).join(', '));
     if (r.contrast.length) p.push('contrast: ' + r.contrast.slice(0, 6).map((c) => `${c.el} "${c.text}" ${c.ratio}<${c.floor} ${c.fg} on ${c.bg} ×${c.count}`).join(' ; ') + (r.contrast.length > 6 ? ` ; +${r.contrast.length - 6} more` : ''));
+    if (r.marks?.length) p.push('marks: ' + r.marks.slice(0, 6).map((m) => `${m.svg} ${m.el} ${m.paint}@${m.alpha} ${m.ratio}<3 on ${m.bg} ×${m.count}`).join(' ; ') + (r.marks.length > 6 ? ` ; +${r.marks.length - 6} more` : ''));
     if (r.badText.length) p.push('text: ' + r.badText.map((b) => `${b.el} "${b.text}"`).join(' ; '));
     if (r.loading.length) p.push('loading: ' + r.loading.map((b) => `${b.el} "${b.text}"`).join(' ; '));
     if (r.invisible) p.push(`text at opacity ~0: ${r.invisible} elements`);
@@ -313,7 +438,7 @@ export function fingerprint(doc) {
   const controls = [...main.querySelectorAll('select, input:not([type=hidden]):not([type=file])')]
     .map((el) => (el.type === 'checkbox' || el.type === 'radio' ? (el.checked ? 1 : 0) : el.value));
   const tables = [...main.querySelectorAll('table')].map((t) => [...t.querySelectorAll('tbody tr')].slice(0, 3).map((tr) => tr.innerText.replace(/\s+/g, ' ').trim()).join(' | '));
-  const pressed = [...main.querySelectorAll('[aria-pressed="true"], [aria-selected="true"], .active, [class*="--active"]')].map((el) => el.innerText.trim().slice(0, 30));
+  const pressed = [...main.querySelectorAll('[aria-pressed="true"], [aria-selected="true"], .active, [class*="--active"]')].map((el) => (el.innerText ?? el.textContent ?? '').trim().slice(0, 30)); // SVG elements have no innerText
   return JSON.stringify({ controls, tables, pressed });
 }
 

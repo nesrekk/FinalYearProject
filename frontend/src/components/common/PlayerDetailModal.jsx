@@ -169,7 +169,7 @@ export default function PlayerDetailModal({ player, onClose }) {
                                     <div key={pt.play_type} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                         <span style={{ width: 110, fontSize: '0.78rem', color: 'var(--text-secondary)', flexShrink: 0 }}>{pt.play_type}</span>
                                         <div style={{ flex: 1, height: 8, background: 'rgba(100,116,139,0.15)', borderRadius: 4, position: 'relative' }}>
-                                            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(100, pt.freq * 100 * 3)}%`, background: '#38bdf8', borderRadius: 4 }} />
+                                            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(100, pt.freq * 100 * 3)}%`, background: 'var(--series-1)', borderRadius: 4 }} />
                                         </div>
                                         <span style={{ width: 40, fontSize: '0.75rem', textAlign: 'right', color: 'var(--text-secondary)' }}>{(pt.freq * 100).toFixed(0)}%</span>
                                         <span style={{ width: 48, fontSize: '0.75rem', textAlign: 'right', color: pt.percentile >= 0.6 ? 'var(--positive)' : pt.percentile <= 0.4 ? 'var(--negative)' : 'var(--text-muted)' }}>

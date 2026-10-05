@@ -673,6 +673,7 @@
 .wb-fd-ask-row .wb-input { flex: 1 1 auto; min-width: 0; width: 100%; }
 .wb-fd-ask-row .wb-fd-lead { white-space: nowrap; }
 .wb-fd-ask-about { flex: 1 1 100%; margin: 0; line-height: 1.5; }
+.wb-fd-ask-about a { color: var(--brand-text); } /* was the browser default blue: 1.9:1 in Ink (R8-050) */
 .wb-fd-ask-out { flex: 1 1 100%; display: flex; flex-direction: column; gap: 4px; }
 .wb-fd-ask-out:empty { display: none; }
 .wb-fd-ask-out p { margin: 0; }

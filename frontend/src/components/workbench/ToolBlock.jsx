@@ -131,7 +131,7 @@ function ShotTool({ d, settings, onSettings }) {
                         FG {t.attempts ? pct(t.fgPct) : '—'} ({t.makes.toLocaleString()} made) ·
                         3P {t.threeAtt ? pct(t.threePct) : '—'} ({t.threeMake} of {t.threeAtt})
                         {left > 0 && ` · ${left.toLocaleString()} other shots this season left out`}
-                        {view === 'dots' && ` · light blue dots went in, red missed${t.attempts > 5000 ? '; the first 5,000 are drawn' : ''}`}
+                        {view === 'dots' && ` · teal dots went in, red missed${t.attempts > 5000 ? '; the first 5,000 are drawn' : ''}`}
                     </p>
                     {t.attempts === 0 ? (
                         <p className="wb-hint">No {GAMES[games][0].toLowerCase()} shots on file for {p.player_name} in {seasonLabel(season)}.</p>

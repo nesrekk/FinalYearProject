@@ -12,12 +12,14 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
-Counts (2026-10-05, after Step 2b): **49 entries**, 33 open, 16 fixed: 6 broken, 16 wrong number,
-4 slow, 23 looks wrong. 17 are new from Step 1 (R8-001 to R8-017); 15 are known gaps already written
+Counts (2026-10-05, after Step 2c): **61 entries**, 33 open, 28 fixed: 6 broken, 16 wrong number,
+5 slow, 34 looks wrong. 17 are new from Step 1 (R8-001 to R8-017); 15 are known gaps already written
 down in README "Known real gaps" / Methodology open issues, listed so a step owns each (R8-018 to
 R8-032); 11 are from Step 2a's sweep of the Players pages (R8-033 to R8-043, 10 fixed in its commit);
 6 are from Step 2b's sweep of the Teams, Games and Today pages (R8-044 to R8-049, 5 fixed in its commit,
-which also fixed R8-016 and the 2b parts of R8-004, R8-014 and R8-043).
+which also fixed R8-016 and the 2b parts of R8-004, R8-014 and R8-043); 12 are from Step 2c's sweep of
+Analytics, Shot Charts, the Workbench and the rest (R8-050 to R8-061, 10 fixed in its commit, which also
+fixed R8-015 and R8-043 and the 2c part of R8-014).
 
 ## Step 1 health check (2026-10-05)
 
@@ -123,6 +125,36 @@ GSW 2025-26; the Games hub and all five games (Trivia and Higher or Lower played
 | Back / Forward | Rotations → profile, team page → Rotations, Best Games → team page, each Back then Forward: same URL and view. |
 | Empty and pre-season states | Standings and the Dashboard before opening night (R8-004, fixed for the page); Live Scores for a date without games says so (future dates: R8-002, Step 4); the Forecast Ledger's Live tab before any game is final says so. |
 
+## Step 2c page sweep: Analytics, Shot Charts, Workbench and the rest (2026-10-05)
+
+Same scanner and harness as 2a/2b (the harness deleted again before the commit). Pages: the Analytics index and
+all 30 tools, Shot Charts (all five views), the Workbench (empty and the six starter boards), Learn,
+Methodology, Data Coverage, Data Quality (three views), Model Report Card, Saved analyses, Report builder,
+Watchlist and the landing page: 48 default views, then 35 filled in (Awards Race's four predictions, Impact
+Rankings' three tables, Season Similarity, Radar with three players, Matchup Finder, With/Without a Star,
+Trend Analysis by team, Referees by crew, Prediction Ledger, Model Validation's WPA and All-NBA, Vegas
+Scanner expanded, a Game Replay what-if, Shot Charts for Wembanyama, Jordan 1997-98 with every game, a
+quality map against Klay Thompson and Jokić's shot-making, Data Quality's "why" and a game-count link, Report
+Card's tasks, a Methodology card link, the six starter boards with every block loaded, and Saved analyses /
+Report builder with real items saved and added through the UI).
+
+The scanner learned four things: a **chart-mark check** (SVG dots, lines and bars under 3:1, WCAG 1.4.11: an
+element passes if its stroke or fill reads; faded layers under 40% opacity, background-coloured knockouts and
+heat-map grids are skipped), **SVG text and marks are measured against the chart's own panel** (a `<rect>`
+covering half the chart, usually `--surface-2`), **outlined text** reads by its `-webkit-text-stroke`, and
+"a null result" / "null centre" are statistics wording. The harness now also replaces IntersectionObserver
+with a stub that reports everything as on screen, so scroll-in sections (the Analytics index, Learn, the
+Dashboard) and the Workbench's lazy blocks render in a hidden pane.
+
+| Check | Result |
+|---|---|
+| Scan at 1280 and 375 px, Paper and Ink (about 430 renders of 83 views in the final passes, after earlier passes before the fixes) | Before: dark-theme pastels in 18 chart components (R8-050), faded small-sample rows (R8-051), Shot value's sorted header (R8-052), a browser-blue link in Ink (R8-053), Data Quality's links on tints (R8-054), Methodology overflowing at 375 px (R8-055), the landing footer on orange (R8-056). **After the fixes every render is clean of console errors, failed requests (except R8-049's 404 probe, on the landing page too), overflow, text contrast, "undefined"/"NaN" text, stuck loading and header-only tables.** Left, reviewed: chart marks in brand orange at 2.8-2.9:1 on Paper (R8-059, owner's call); Shot mix's three lighter zone colours (2.0-2.65:1 on Paper, a documented choice: the legend, hover panel and table carry the values); the quality map's hexagons and other heat maps (colour scales read against a legend); the Workbench's grey context population drawn at 40-55% opacity behind the coloured set; the Referees segmented control (the known sibling-layer false positive). Slow: `/news/current` on a cold prefetch (R8-011), With/Without's live call 21 s (R8-008), Data Quality's first load (R8-060). |
+| By eye (screenshots, 1280 Paper/Ink) | Shot Charts' made/missed dots in both themes, the Garbage-Time slope chart, Saved analyses and the Report builder with items. Found R8-058 (saved titles) by reading the Saved page. |
+| Copy link → open fresh = same view | 14 of 14 after the fix: Shot Charts (season and games, on all five views), Data Quality, Model Report Card, Pair Chemistry, Lineup Chemistry, Luck & Schedule, On/Off, Rim Deterrence, Game Replay (R8-057, fixed), the Workbench (`b=` after adding a block). Pairs, Lineups and On/Off reopen with the same parameters in a different order (same view). |
+| Links out | One of each kind per page opened fresh: player and team links (Clutch WPA, Rim, Lineups, Pairs, On/Off, Fatigue, College → NBA, Shot-making, Shot value, Watchlist), Data Quality's Replay links: all real views. Buttons: Saved analyses' Open, Learn's three, Report Card's task tabs; Data Coverage's "used by" showed raw ids (R8-061, fixed). |
+| Back / Forward | Rim → profile, Shot value → team page, Data Quality → Game Replay, Data Coverage → Player Stats: each Back then Forward returns the same URL and view. |
+| Data writes | None left behind. A 2c test made `/shots/league-zones/2026` fetch and insert 5 rows (R8-007); they were deleted and the test changed. `player_shots` unchanged after every run. |
+
 ## Constraints (not defects)
 
 - **Layerbase:** 4,202 of 5,000 MB used (2026-10-04). A Step 6 rebuild rewrites tables of about the same size; any sync needs the owner's OK (Step 10 decides whether the biggest tables stay local).
@@ -174,12 +206,14 @@ GSW 2025-26; the Games hub and all five games (Trivia and Higher or Lower played
 - **Where:** Shot Charts and Player Comparison, `GET /shots/player/{name}` (+ `/seasons`, `/zones`), `shots_lib.ensure_player_shots_cached` / `ensure_season_shots_cached`.
 - **Reproduce:** read the code. For a player whose `player_shots_cache_status` isn't `done`, a GET fetches his career from stats.nba.com and stores it in `player_shots`. `ENABLE_LIVE_SHOT_FETCH` defaults to true. Today nothing has been written since 2026-09-25 (2,842 players `done`, `player_shots` 6,318,078 rows). With stats.nba.com answering again (R8-006), the first view of an uncached player after 2026-10-20 (e.g. a rookie) would add 2026-27 shots to a table the paper manifest hashes, and that shot-making, xRAPM and Layerbase all read.
 - **Found by:** mapping the live callers. Step 4 decides: turn live fetching off, or keep it and exclude live-fetched rows.
+- **Step 2c:** the same happens to `league_shot_zones` ("cached forever after the first fetch"): it has 2023-24 and 2024-25 only, so the first `GET /shots/league-zones/2026` (Player Comparison's shot zones for 2025-26, or a test) fetches 2025-26 from stats.nba.com and inserts 5 rows. A 2c test did exactly that on 2026-10-05; the 5 rows were deleted again (the table is back to its 10 rows) and the test now asks for a cached season. `player_shots` and `player_shots_cache_status` were checked unchanged after every 2c run (6,318,078 rows; 2,842 done, last update 2026-09-25): every player opened in the sweep (Curry, Wembanyama, Jordan, Jokić, Thompson) was already cached.
 
 ### R8-008 · With/Without a Star and Pair Synergy can wait 30-60 s on a live call
 - **Severity:** slow · **Step:** 4 · **Status:** open
 - **Where:** `/teams/with-without/{team}/{season}` (two leaguegamefinder calls, 30 s timeout each), `/players/pair-synergy` (leaguedashlineups, 45 s), `/players/playoff-comparison` and `/players/profile` (45 s), `/players/heliocentricity` (30 s).
 - **Reproduce:** in the full pytest run the With/Without test took 41.0 s and Pair Synergy 18.8 s. The same routes took 2.5 s and 0.7 s in the crawl a few minutes later. stats.nba.com's first answer is sometimes very slow, and the timeouts let a page hang for up to a minute before a 502.
 - **Found by:** pytest durations + crawl. The plan's target is a clear state within 3 s.
+- **Step 2c (browser):** With/Without a Star for DEN 2025-26 / Jokić took 21.0 s in the sweep (`/teams/with-without/DEN/2026`).
 
 ### R8-009 · The 2025-26 awards were never loaded
 - **Severity:** wrong number (stale) · **Step:** 7 · **Status:** open
@@ -204,6 +238,7 @@ GSW 2025-26; the Games hub and all five games (Trivia and Higher or Lower played
 - **Where:** Analytics › Referee Tendencies, By Crew. Also large: `/defense/rim-deterrence` 510 kB, `/shots/shot-value` 380 kB, `/games/higher-lower/pool` 332 kB.
 - **Reproduce:** crawl `bytes` column.
 - **Found by:** crawl. 5,373 crews, most of which worked one game together; the page could page through them or filter on the server.
+- **Step 2c (browser):** Referee Tendencies › By Crew renders every crew at once: 490,899 characters of page text at 1280 px (the By Official view is 9,127). Paging or a server-side filter would fix both the payload and the page.
 
 ### R8-013 · The landing page's 3D court chunk is 532 kB
 - **Severity:** slow · **Step:** 8 · **Status:** open
@@ -218,12 +253,14 @@ GSW 2025-26; the Games hub and all five games (Trivia and Higher or Lower played
 - **Found by:** crawl. The convention asks for a badge on the main Analytics endpoints. Each page sweep decides per page (add one, or note why the page doesn't need one).
 - **Step 2a (Players pages):** `/players/table/{season}` (Player Stats) and `/players/compare-profile/{name}` (Player Comparison) now return `_source`, and both pages show the badge; Rookie Class Tracker now shows the one `/roy/predict` already returned. Left: `/leaders/{stat}` (Stat Leaders, with R8-001 in Step 4), `/players/pair-synergy` (a live call, Step 4), and the profile's sub-routes (`/player-profile/{id}/shot-zones`, `/contracts/player/{id}`, `/players/playtype-profile/{name}`), which sit under the profile's own badge for `/player-profile/{id}`. Shot routes: 2c.
 - **Step 2b (Teams, Games, Today):** `/trade/teams/{season}`, `/trade/roster/{team}/{season}` and `/trade/simulate` now return `_source`, shown on the Trade Analyzer's result (test `test_trade_analyzer_carries_a_source`). Left, all live and Step 4's: `/games/by-date`, `/games/boxscore/{id}` (Live Scores), `/meta/current` (Dashboard, Standings, Team Comparison), `/news/current` (News). `/games/wp-replay/*` is 2c's (Analytics › Game Replay).
+- **Step 2c (Analytics, Shot Charts, the rest):** `/shots/player/{name}`, `/shots/player/{name}/seasons` and `/zones` now return `_source` (`player_shots`; `live` true when the shots were fetched just now) and `/shots/league-zones/{season}` too (`league_shot_zones`); Shot Charts shows the badge on its dots and heat-map views (the other three views already had theirs). Test `test_shot_charts_carry_a_source`. The rest of the 2c routes sit under their page's own badge: `/games/wp-replay/list` and `/{id}/whatif` under the replay's, `/backtest` under Model Validation's, `/explain/*` under Awards Race's, `/clusters/player/{name}` under Player Archetypes'. Unused by any page (R8-017): `/players/profile/{name}`, `/similarity/career/{name}`, `/impact/player/{name}/{season}`. Left, all Step 4's: `/leaders/{stat}`, `/hustle/leaders` (Stat Leaders), `/players/pair-synergy`, `/games/by-date`, `/games/boxscore/{id}`, `/meta/current`, `/news/current`.
 
 ### R8-015 · Season shown as a raw end year ("2027") in labels
-- **Severity:** looks wrong · **Step:** 2 (2a Stat Leaders, 2c Prediction Ledger) · **Status:** open
+- **Severity:** looks wrong · **Step:** 2 (2a Stat Leaders, 2c Prediction Ledger) · **Status:** fixed (2a: Stat Leaders; 2c: Prediction Ledger)
 - **Where:** Stat Leaders subtitle "Top 10 · 2027", Analytics › Prediction Ledger "Current season 2027". The app's label is "2026-27".
 - **Found by:** reading the components behind the crawl's empty answers. The sweeps should look for others.
 - **Step 2a:** Stat Leaders now reads "Top 10 · 2026-27" (test `test_stat_leaders_season_label`). The same kind of raw-year box was on Player Stats, Player Comparison and Rookie Class Tracker (R8-037, fixed). Prediction Ledger is 2c's; still open for it.
+- **Step 2c:** Prediction Ledger reads "Current season 2026-27" (`seasonLabel` in `utils/format.js`, test `test_prediction_ledger_season_label`). The sweep found no other raw year in a label on its pages (the season boxes were R8-043).
 
 ### R8-016 · Trivia asks about "this season" from last season's numbers
 - **Severity:** looks wrong · **Step:** 2b · **Status:** fixed in the Step 2b commit
@@ -366,10 +403,11 @@ GSW 2025-26; the Games hub and all five games (Trivia and Higher or Lower played
 - **Found by:** the scanner with the card open. **Fix:** #000 (4.85:1; higher on Paper's lime).
 
 ### R8-043 · Other season pickers still open on 2024-25 or show a raw year
-- **Severity:** looks wrong · **Step:** 2b / 2c · **Status:** open
+- **Severity:** looks wrong · **Step:** 2b / 2c · **Status:** fixed (2b: the trade pages; 2c: ten Analytics sections)
 - **Where:** `useState(2025)` in Analytics sections `WithWithoutStarSection`, `OffensiveStyleSection`, `RadarCompareSection`, `PlayerArchetypesSection`, `PlayoffForecasterSection` (2c); Trade Impact's number box (2b). Check each page's data range before changing the default (Contract Value has no 2025-26).
 - **Found by:** grep during Step 2a (same pattern as R8-037).
 - **Step 2b:** Trade Analyzer opened on 2023-24 (`?? 2024`) although its rosters and win model cover 2025-26 (checked: `/trade/simulate?season=2026` runs); it now opens on 2025-26. Both trade pages have a labelled season picker (2025-26 … 2009-10) instead of the number box; Trade Impact keeps its 2024-25 default (the last season with all three blocks, said on the page). Test: `test_trade_pages_use_season_pickers`. Left: the five Analytics sections (2c).
+- **Step 2c:** ten Analytics sections had a bare number box ("2025"): With/Without a Star, Offensive Style, Radar Compare, Player Archetypes, Playoff Forecaster (all opened on 2024-25), Heliocentricity, Career Trajectory, Awards Race (opened on 2024-25 too), Impact Rankings and Matchup Finder. All now use `common/SeasonSelect.jsx` ("2025-26" … the first season each one's data covers, checked against its route: Awards Race 2009-10, Impact 1949-50 (BPM/VORP from 1973-74, said in the label), Matchup Finder 2017-18, Offensive Style 2012-13, Heliocentricity 2013-14, the rest 2009-10) and open on 2025-26, except Career Trajectory, which keeps 2021-22 on purpose (later seasons exist to check the projection against). Playoff Forecaster's default player is now Shai Gilgeous-Alexander (15 playoff games in 2025-26; Jayson Tatum played 6 after his injury). Test: `test_analytics_season_pickers`.
 
 ### R8-044 · The Simulator's finish-odds cells were unreadable in Ink
 - **Severity:** looks wrong · **Step:** 2b · **Status:** fixed in the Step 2b commit
@@ -401,4 +439,62 @@ GSW 2025-26; the Games hub and all five games (Trivia and Higher or Lower played
 - **Severity:** looks wrong · **Step:** 4 · **Status:** open
 - **Where:** `DashboardHome.jsx` `resolveSeasonWithData()` starts at `/meta/current`'s season (2027) and walks back on failure, so every Dashboard load logs `404 GET /mvp/predict/2027` in the browser's network panel before 2025-26's answer. The page itself is right ("MVP Favorite · 2025-26").
 - **Found by:** the scanner's failed-request list. Fix with R8-004's season work in Step 4 (e.g. a route that says which seasons the award models cover), not a guess in the page.
+- **Step 2c:** the landing page asks for it too (`404 GET /mvp/predict/2027`, twice in dev's StrictMode, on every load).
 
+### R8-050 · Older charts drew in dark-theme pastels: 1.2-2.6:1 on Paper
+- **Severity:** looks wrong · **Step:** 2c · **Status:** fixed in the Step 2c commit
+- **Where:** hard-coded Tailwind-400 colours (`#38bdf8`, `#f87171`, `#facc15`, `#a78bfa`, `#34d399`, `#f59e0b`, `#94a3b8`, `#00e5ff`, ...) made for a dark page, in 16 Analytics components and two shared ones: Model Validation (ROC/calibration lines and their AUC/label text, SHAP bars), Garbage-Time Deflator (slope chart, focus label 2.0:1, bucket bars and labels), Contract Value ("fair value" line and text 2.0:1, dots), DAD Index (position dots), Draft Prospects (projected-outcome numbers as text, 2.6:1), Career Trajectory, Player Archetypes (10-colour palette, sparklines), Offensive Style, Radar Compare (also the player names in its table), Trend Analysis, Referee Tendencies (diff cells as text: 2.0-2.6:1 in Paper), Game Replay (win-probability dots, what-if markers), Matchup Finder (FG% text), Spacing Lab, Length Matters, Prediction Ledger; `common/ShotCourt.jsx` (every shot chart: made shots `#00e5ff` 1.2:1 on Paper's court, misses at 45% opacity 2.1:1), `PlayerDetailModal` bars; Awards Race's streak badge (`dashboard.css`, `#facc15` text).
+- **Reproduce (before):** Paper theme, Analytics › Model Validation: "AUC = 0.996" in `#38bdf8` on cream, 2.02:1; Shot Charts: made-shot dots almost invisible on Paper.
+- **Found by:** the scanner's text check (5 pages), then its new chart-mark check (3:1 for dots, lines, bars, WCAG 1.4.11), then grep for the same hexes.
+- **Fix:** ten chart series tokens `--series-0..9` in `tokens.css` (Paper and Ink values, each ≥ 3:1 on `--bg`, `--surface` and `--surface-2` in its theme; 0-7 equal the Workbench's `--wb-series-N`); text uses `--text`, `--streak`, `--compare-a/-b` (≥ 4.5:1) or `--positive`/`--negative`. Shot dots: made `--series-5` (teal), missed `--series-8` (red) at 65% opacity (≥ 3:1 on the court in both themes); the Workbench shot block's caption now says "teal dots went in". Scatter dots at 80-90% opacity where needed (Archetypes, Offensive Style, Length Matters). Tests: `test_chart_series_read_in_both_themes`, `test_no_dark_theme_pastels_left_in_charts`. The same hexes remain only as backgrounds under dark text or decorative borders on 2a/2b pages (News tags, Team Comparison W/L boxes, Hall of Fame's 75 badge, Trivia/Comparison borders), which scanned clean.
+
+### R8-051 · Small-sample rows and labels were faded below 4.5:1
+- **Severity:** looks wrong · **Step:** 2c · **Status:** fixed in the Step 2c commit
+- **Where:** DAD Index (rows at 55% opacity, detail card at 75%), Referee Tendencies (rows at 55%), Matchup Finder (rows at 45%, plus an extra "small sample" cell the header didn't have), Garbage-Time Deflator (player detail at 70%, non-focus labels at 50%).
+- **Reproduce (before):** DAD Index in Paper: a small-sample row's numbers at 4.23:1 and its "± 6.4 · n = 230 · small sample" line at 2.81:1; Matchup Finder (Curry as scorer): "100%" at 2.08:1.
+- **Found by:** the scanner (default views and, for Matchup Finder, after "Find Matchups"). **Fix:** no opacity on text; every such row already says "small sample" in words (Matchup Finder now under the name, which is a `PlayerName` link). Test: `test_small_sample_rows_are_not_faded`.
+
+### R8-052 · Shot value's sorted column header was 1.2-2.0:1
+- **Severity:** looks wrong · **Step:** 2c · **Status:** fixed in the Step 2c commit
+- **Where:** Shot Charts › Shot value, the sorted header ("SVA"): `.sv-sort--active` set `--brand-text` on the header cell that theme.css paints brand orange.
+- **Found by:** the scanner. **Fix:** the button inherits the sorted header's dark text. Test: `test_2c_contrast_fixes_in_css`.
+
+### R8-053 · The Workbench Finder's "How it was measured" link was browser blue in Ink (1.9:1)
+- **Severity:** looks wrong · **Step:** 2c · **Status:** fixed in the Step 2c commit
+- **Where:** Finder block, the line under the type-in box (`.wb-fd-ask-about a` had no colour). **Found by:** the scanner. **Fix:** `--brand-text`. Test: `test_2c_contrast_fixes_in_css`.
+
+### R8-054 · Data Quality's game-count links were 4.3:1 on the heat-map tints
+- **Severity:** looks wrong · **Step:** 2c · **Status:** fixed in the Step 2c commit
+- **Where:** Data Quality › classes and seasons tables, `.dq-link` (brand text on the tinted cells: 4.32:1 Paper, 4.35:1 Ink). **Found by:** the scanner. **Fix:** `--text`, still underlined. Test: `test_2c_contrast_fixes_in_css`.
+
+### R8-055 · Methodology ran 37 px off a 375 px screen
+- **Severity:** looks wrong · **Step:** 2c · **Status:** fixed in the Step 2c commit
+- **Where:** the win-probability card's live note: its source badge ("NBA_API + ESPN VIA SPORTSDATAVERSE (PLAY-BY-PLAY)") doesn't wrap. **Found by:** the scanner (overflow). **Fix:** `.meth-live-note .pill-badge` wraps (the Quality map's pattern). Test: `test_2c_contrast_fixes_in_css`.
+
+### R8-056 · The landing page's footer was 1.1-2.0:1 on orange
+- **Severity:** looks wrong · **Step:** 2c · **Status:** fixed in the Step 2c commit
+- **Where:** `.lp .app-footer p` took shell.css's `--text-3` on the landing's orange (Paper 2.03:1, Ink 1.06:1). **Found by:** the scanner. **Fix:** inherits the landing's ink. Test: `test_2c_contrast_fixes_in_css`. (The outlined title "number." was a scanner false positive: it reads by its 3 px ink stroke; the scanner now reads `-webkit-text-stroke`.)
+
+### R8-057 · Game Replay didn't keep a picked game in the link
+- **Severity:** looks wrong · **Step:** 2c · **Status:** fixed in the Step 2c commit
+- **Where:** Analytics › Game Replay wrote `?game=` only when opened from a link; a game picked from its list was lost on Copy link, Save or reload, and the tool had no Copy link / Save buttons. **Found by:** the copy-link round trip. **Fix:** a picked game goes into the link (the list's first game stays out of it until something else is picked); Copy link and Save added; checked in the browser (reopening the link shows the picked game). Test: `test_game_replay_keeps_a_picked_game_in_the_link`.
+
+### R8-058 · Saved analyses titled every Analytics tool "College & Draft"
+- **Severity:** looks wrong · **Step:** 2c · **Status:** fixed in the Step 2c commit
+- **Where:** `SaveViewButton.autoTitle()` looked the page up by nav id, and the four Analytics nav entries share the id `analytics`, so the last one won: saving Rim Deterrence gave "College & Draft (rim, season: 2026)". A report item's source line read "ANALYTICS & PREDICTIONS (rim tab)".
+- **Found by:** saving a view in the browser and reading the Saved page. **Fix:** the tab list moved to `components/analytics/analyticsTabs.js` (small, so the shell can import it); titles read "Analytics › Rim Deterrence (season: 2026)" and report sources "Analytics › Rim Deterrence". Views saved before keep their old title (editable on the Saved page). Test: `test_saved_titles_name_the_analytics_tool`.
+
+### R8-059 · Brand-orange chart marks are 2.8-2.9:1 on Paper
+- **Severity:** looks wrong · **Step:** 10 (owner's call) · **Status:** open
+- **Where:** charts that draw data in `--brand` (#ff5b14): Rim Deterrence's on-court bars, Luck & Schedule's team dots, College → NBA's highlighted picks, Model Report Card's dots, Data Quality's "does it matter" dot (2.81-2.93:1 on Paper's `--surface`; fine in Ink). About 100 places use `var(--brand)` as a fill, most of them buttons and badges with dark text (fine).
+- **Found by:** the scanner's new chart-mark check. Each of these charts also prints the value as text, so nothing is lost; still under WCAG 1.4.11's 3:1. A chart-only Paper orange (e.g. #e04a0d, 3.1-3.8:1 on the three Paper backgrounds) would fix it without touching buttons: a brand decision, so the owner's.
+
+### R8-060 · Data Quality's first load waits 3-4 s on two live checks
+- **Severity:** slow · **Step:** 8 · **Status:** open
+- **Where:** `?page=quality` fires one `/data-quality/check/{key}` per class (14, twice in dev's StrictMode); cold, `score_fields` takes 3.2-4.3 s and `clock_offset` 3.0 s (fast once cached).
+- **Found by:** the scanner's slow-request list.
+
+### R8-061 · Data Coverage showed raw page ids ("analytics#onoff", "team") in "Used by"
+- **Severity:** looks wrong · **Step:** 2c · **Status:** fixed in the Step 2c commit
+- **Where:** `DataCoverage.jsx` labelled `used_by` ids from a hand-kept list that missed eight of the 30 ids in `COVERAGE_MAP`: `analytics#onoff`, `analytics#replay`, `assists`, `bestgames`, `plays`, `rapm`, `simulator`, `team` showed as raw ids, and "team" was a button to a team page with no team.
+- **Found by:** clicking every navigation button on the page. **Fix:** labels come from the nav (`navConfig.js`) and the Analytics tab list; the player and team pages are named, not linked (they need an id); the page also gets Save next to Copy link. Test: `test_coverage_names_every_page_it_links`.

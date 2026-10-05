@@ -38,3 +38,8 @@ export function plain(v, d = 1) {
     const t = Number(v).toFixed(d);
     return Number(t) === 0 ? t.replace('-', '') : t;
 }
+
+// A season end year as the app writes it: 2026 → "2025-26".
+export function seasonLabel(s) {
+    return `${s - 1}-${String(s).slice(-2)}`;
+}

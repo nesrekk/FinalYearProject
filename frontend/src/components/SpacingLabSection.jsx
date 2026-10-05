@@ -55,7 +55,7 @@ function HalfCourt({ percentile }) {
                 <line x1={220} y1={0} x2={220} y2={Y(arcY)} stroke={line} strokeWidth={2} />
                 <path d={`M -220 ${Y(arcY)} A 237.5 237.5 0 0 0 220 ${Y(arcY)}`} fill="none" stroke={line} strokeWidth={2} />
                 <line x1={-30} y1={Y(-7.5)} x2={30} y2={Y(-7.5)} stroke={line} strokeWidth={3} />
-                <circle cx={0} cy={Y(0)} r={7.5} fill="none" stroke="#f97316" strokeWidth={2.5} />
+                <circle cx={0} cy={Y(0)} r={7.5} fill="none" stroke="var(--series-0)" strokeWidth={2.5} />
             </svg>
         </div>
     );

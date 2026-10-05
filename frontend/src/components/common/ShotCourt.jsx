@@ -200,8 +200,8 @@ export default function ShotCourt({ shots, viewMode, playerName, season }) {
               cx={cx}
               cy={cy}
               r={2.2}
-              fill={made ? '#00e5ff' : '#f87171'}
-              opacity={made ? 0.85 : 0.45}
+              fill={made ? 'var(--series-5)' : 'var(--series-8)'}
+              opacity={made ? 0.85 : 0.65} /* misses fainter, still >= 3:1 on the court (R8-050) */
             />
           );
         })}

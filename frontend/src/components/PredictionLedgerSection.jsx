@@ -7,6 +7,7 @@ import Icon from './common/Icon';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
+import { seasonLabel } from '../utils/format';
 
 const MODELS = [
     { id: 'mvp', label: 'MVP' },
@@ -15,7 +16,7 @@ const MODELS = [
     { id: 'all_nba', label: 'All-NBA' },
 ];
 
-const COLORS = ['#38bdf8', '#f87171', '#facc15', '#a78bfa', '#34d399'];
+const COLORS = ['var(--series-1)', 'var(--series-8)', 'var(--series-4)', 'var(--series-3)', 'var(--series-2)'];
 
 const CHART_W = 640;
 const CHART_H = 220;
@@ -129,7 +130,7 @@ export default function PredictionLedgerSection() {
 
             {data && (
                 <p className="page-subtitle">
-                    Current season {data.current_season} · {data.resolved.length === 0
+                    Current season {seasonLabel(data.current_season)} · {data.resolved.length === 0
                         ? 'no seasons resolved yet — check back once real award winners are recorded'
                         : `${data.resolved.length} resolved (model, season) result${data.resolved.length === 1 ? '' : 's'}`}
                 </p>

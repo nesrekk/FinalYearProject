@@ -15,6 +15,12 @@ from impact_core import (
 router = APIRouter()
 
 
+def _shots_source(how: str):
+    # Round 8 (R8-014): the Shot Charts badge. `how` is ensure_*_cached()'s "cache" or "live" (fetched just now).
+    return make_source(["player_shots"], "stats.nba.com shotchartdetail (bulk files, and per player on first view)",
+                       live=how == "live")
+
+
 @router.get("/shots/player/{player_name}/seasons")
 def get_shot_seasons(player_name: str):
     """
@@ -40,6 +46,7 @@ def get_shot_seasons(player_name: str):
         "player_name": resolved_name,
         "seasons": result["seasons"],
         "source": result["source"],
+        "_source": _shots_source(result["source"]),
     }
 
 @router.get("/shots/player/{player_name}")
@@ -75,6 +82,7 @@ def get_player_shots(player_name: str, season: Optional[str] = None, player_id: 
         "seasons": seasons,
         "source": result["source"],
         "shots": shots,
+        "_source": _shots_source(result["source"]),
     }
 
 @router.get("/shots/player/{player_name}/zones")
@@ -93,7 +101,7 @@ def get_player_shot_zones(player_name: str, season: int):
 
     season_label = f"{season - 1}-{str(season)[-2:]}"
     try:
-        shots_lib.ensure_season_shots_cached(int(player_id), resolved_name, season_label)
+        how = shots_lib.ensure_season_shots_cached(int(player_id), resolved_name, season_label)
     except shots_lib.ShotsUnavailable as e:
         raise HTTPException(status_code=404, detail=str(e))
     except shots_lib.ShotsFetchFailed as e:
@@ -103,7 +111,8 @@ def get_player_shot_zones(player_name: str, season: int):
     if not shots:
         raise HTTPException(status_code=404, detail=f"No shot data for {resolved_name} in {season_label}.")
     zones = shots_lib.compute_zone_stats(shots)
-    return {"player_id": player_id, "player_name": resolved_name, "season": season_label, "zones": zones}
+    return {"player_id": player_id, "player_name": resolved_name, "season": season_label, "zones": zones,
+            "_source": _shots_source(how)}
 
 @lru_cache(maxsize=8)
 def _league_sample(n: int):
@@ -153,7 +162,8 @@ def get_league_shot_zones(season: int):
         zones = shots_lib.get_league_zone_stats(season_label)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Live league shot fetch failed: {e}")
-    return {"season": season_label, "zones": zones}
+    return {"season": season_label, "zones": zones,
+            "_source": make_source(["league_shot_zones"], "stats.nba.com shotchartdetail (league totals per season)")}
 
 
 # A season with fewer tracked attempts than this is shown greyed out: one

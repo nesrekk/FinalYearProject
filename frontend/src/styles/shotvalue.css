@@ -19,6 +19,9 @@
 
 .sv-sort { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-transform: inherit; letter-spacing: inherit; }
 .sv-sort--active { color: var(--brand-text); }
+/* Inside a sorted .data-table header the cell is brand orange with dark text (theme.css): keep that text (R8-050). */
+.data-table th[aria-sort='ascending'] .sv-sort--active,
+.data-table th[aria-sort='descending'] .sv-sort--active { color: inherit; }
 
 .sv-track { position: relative; margin: var(--space-3) 0; }
 .sv-track svg { display: block; width: 100%; height: auto; }

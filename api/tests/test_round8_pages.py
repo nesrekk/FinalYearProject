@@ -271,3 +271,142 @@ def test_games_hub_keeps_the_open_game_in_the_link():
     hub, never Trivia or Guess the Game."""
     src = _read("components/pages/GamesHub.jsx")
     assert "parseParam.oneOf(params, 'g', tabs.map((t) => t.id))" in src and "useUrlSync({ g: activeTab })" in src
+
+
+# ─── Step 2c: Analytics, Shot Charts, Workbench and the rest ─────────────────
+
+_PASTELS = ("#38bdf8", "#f87171", "#facc15", "#a78bfa", "#34d399", "#f59e0b", "#94a3b8", "#64748b",
+            "#fb923c", "#f97316", "#00e5ff")
+
+
+def test_chart_series_read_in_both_themes():
+    """R8-050: --series-0..9 (tokens.css) are the chart colours outside the Workbench; each must be >= 3:1
+    (WCAG 1.4.11, non-text marks) on every background of its theme, and the "System" dark block must
+    repeat Ink's values."""
+    tokens = _theme_tokens()
+    for theme, t in tokens.items():
+        for i in range(10):
+            for bg in ("bg", "surface", "surface-2"):
+                assert _contrast(t[f"series-{i}"], t[bg]) >= 3, (theme, i, bg)
+    css = _read("styles/tokens.css")
+    system = css[css.index("@media (prefers-color-scheme: dark)"):]
+    system = dict(re.findall(r"--(series-\d):\s*(#[0-9a-fA-F]{6})\s*;", system[:system.index("\n}\n")]))
+    assert system == {f"series-{i}": tokens["ink"][f"series-{i}"] for i in range(10)}
+
+
+def test_no_dark_theme_pastels_left_in_charts():
+    """R8-050: the older Analytics sections, the shot court and a few others drew dots, lines and text in
+    hard-coded Tailwind-400 colours made for a dark page: 1.2-2.6:1 on Paper (Shot Charts' made shots
+    #00e5ff: 1.2:1). They now use theme tokens. (The same hexes left elsewhere are backgrounds under dark
+    text or decorative borders: News tags, Team Comparison's W/L boxes, Hall of Fame's 75 badge.)"""
+    files = ["ContractValueSection", "DadIndexSection", "DraftProspectSection", "TrajectoryForecasterSection",
+             "PlayerArchetypesSection", "GameReplaySection", "MatchupFinderSection", "OffensiveStyleSection",
+             "TrendAnalysisSection", "RefereeTendenciesSection", "SpacingLabSection", "LengthMattersCard",
+             "PredictionLedgerSection", "RadarCompareSection", "ModelValidationSection", "GarbageTimeSection",
+             "common/ShotCourt", "common/PlayerDetailModal"]
+    for name in files:
+        text = _read(f"components/{name}.jsx").lower()
+        assert not [h for h in _PASTELS if h in text], name
+    assert "#facc15" not in _read("styles/dashboard.css").lower()  # Awards Race's streak badge text
+
+
+def test_small_sample_rows_are_not_faded():
+    """R8-051: DAD Index, Referee Tendencies, Matchup Finder and the Garbage-Time Deflator faded small-sample rows and
+    labels with opacity (text fell to 2.8-4.2:1); each row already says "small sample" in words."""
+    assert "opacity: d.small_dfg_sample" not in _read("components/DadIndexSection.jsx")
+    assert "opacity: row.small_n_warning" not in _read("components/RefereeTendenciesSection.jsx")
+    src = _read("components/GarbageTimeSection.jsx")
+    assert "opacity: detail.small_sample_warning" not in src and "opacity={focusId && !isFocus ? 0.5 : 1}" not in src
+    src = _read("components/MatchupFinderSection.jsx")  # also had an extra cell the header didn't have
+    assert "opacity: row.reliable" not in src and "<PlayerName playerId={row.player_id}" in src
+
+
+def test_analytics_season_pickers():
+    """R8-043 (2c part): ten Analytics sections had a bare number box ("2025") and most opened on 2024-25;
+    they now use common/SeasonSelect ("2025-26" ... their first season) and open on 2025-26. Career
+    Trajectory keeps 2021-22 on purpose (later seasons exist to check the projection against)."""
+    first = {"WithWithoutStarSection": 2010, "OffensiveStyleSection": 2013, "RadarCompareSection": 2010,
+             "PlayerArchetypesSection": 2010, "PlayoffForecasterSection": 2010, "HeliocentricitySection": 2014,
+             "TrajectoryForecasterSection": 2010, "AwardsRaceSection": 2010, "ImpactSection": 1950,
+             "MatchupFinderSection": 2018}
+    for name, frm in first.items():
+        src = _read(f"components/{name}.jsx")
+        assert "import SeasonSelect from './common/SeasonSelect';" in src, name
+        assert f"from={{{frm}}}" in src, name
+        assert not re.search(r'type="number"[^/]*?value=\{season\}', src, re.S), name
+        expect = 2022 if name == "TrajectoryForecasterSection" else 2026
+        assert f"const [season, setSeason] = useState({expect});" in src, name
+    assert "Shai Gilgeous-Alexander" in _read("components/PlayoffForecasterSection.jsx")  # played 2025-26's playoffs
+
+
+def test_prediction_ledger_season_label():
+    """R8-015 (Prediction Ledger part): "Current season 2027" → "Current season 2026-27"."""
+    assert "Current season {seasonLabel(data.current_season)}" in _read("components/PredictionLedgerSection.jsx")
+
+
+def test_2c_contrast_fixes_in_css():
+    """R8-052..056: Shot value's sorted header (accent on the header's orange, 1.2-2.0:1), the Finder's
+    "How it was measured" link (browser blue in Ink, 1.9:1), Data Quality's game-count links on the
+    heat-map tints (4.3:1), Methodology's live notes overflowing a 375 px screen, the landing footer on
+    orange (1.1-2.0:1)."""
+    assert ".data-table th[aria-sort='descending'] .sv-sort--active { color: inherit; }" in _read("styles/shotvalue.css")
+    assert ".wb-fd-ask-about a { color: var(--brand-text); }" in _read("styles/workbench.css")
+    assert re.search(r"\.dq-link \{[^}]*color: var\(--text\);", _read("styles/dataquality.css"))
+    assert ".meth-live-note .pill-badge { max-width: 100%; white-space: normal; }" in _read("styles/methodology.css")
+    assert re.search(r"\.lp \.app-footer p \{[^}]*color: inherit;", _read("styles/landing.css"))
+
+
+@needs_db
+def test_shot_charts_carry_a_source():
+    """R8-014 (Shot Charts part): /shots/player/{name} (+ /seasons, /zones) and /shots/league-zones had no
+    _source; the Shot Charts page now shows the badge on its dots and heat-map views."""
+    from impact_api import app
+    client = TestClient(app)
+    d = client.get("/shots/player/Stephen Curry", params={"season": "2025-26"}).json()
+    assert d["_source"]["tables"] == ["player_shots"] and d["_source"]["live"] is (d["source"] == "live")
+    assert client.get("/shots/player/Stephen Curry/seasons").json()["_source"]["tables"] == ["player_shots"]
+    assert client.get("/shots/player/Stephen Curry/zones", params={"season": 2025}).json()["_source"]["tables"] == ["player_shots"]
+    assert client.get("/shots/league-zones/2025").json()["_source"]["tables"] == ["league_shot_zones"]
+    assert "<SourceBadge source={badge} />" in _read("components/pages/ShotCharts.jsx")
+
+
+def test_game_replay_keeps_a_picked_game_in_the_link():
+    """R8-057: Game Replay wrote ?game= only when it was opened from a link, so a game picked from its list
+    was lost on Copy link, Save or reload; it had no Copy link / Save buttons either."""
+    src = _read("components/GameReplaySection.jsx")
+    assert "useUrlSync(linkedGame || picked ? {" in src
+    assert "onChange={(e) => { setPicked(true); setSelectedGameId(e.target.value); }}" in src
+    assert "<CopyLinkButton />" in src and '<SaveViewButton pageId="analytics" />' in src
+
+
+def test_saved_titles_name_the_analytics_tool():
+    """R8-058: the four Analytics nav entries share the id `analytics`, so a saved Analytics view was titled
+    after the last one ("College & Draft (rim, ...)"). Titles and report sources now name the tool, from a
+    tab list small enough for the shell to import."""
+    tabs = _read("components/analytics/analyticsTabs.js")
+    assert "export const TAB_GROUPS = [" in tabs and "{ id: 'rim', label: 'Rim Deterrence'" in tabs
+    assert "import { ANALYTICS_TABS, TAB_GROUPS } from '../analytics/analyticsTabs';" in _read("components/pages/AnalyticsSection.jsx")
+    for rel in ("components/common/SaveViewButton.jsx", "components/common/AddToReport.jsx"):
+        src = _read(rel)
+        assert "ANALYTICS_LABELS[hash]" in src and "`Analytics › ${tool}`" in src, rel
+
+
+def test_coverage_names_every_page_it_links():
+    """R8-061: Data Coverage's "used by" labels came from a hand list that missed eight page ids, so it showed
+    "analytics#onoff", "analytics#replay", "assists", ... raw, and "team" as a button to a team page with no
+    team. Every id in COVERAGE_MAP must have a nav label or an Analytics tab label now."""
+    src = open(os.path.join(_API_DIR, "routers", "meta.py"), encoding="utf-8").read()
+    ids = set()
+    for m in re.finditer(r'"used_by": \[([^\]]*)\]', src):
+        ids |= set(re.findall(r'"([^"]+)"', m.group(1)))
+    nav = _read("components/layout/navConfig.js")
+    tabs = _read("components/analytics/analyticsTabs.js")
+    for pid in ids:
+        if pid in ("player", "team"):
+            continue
+        if pid.startswith("analytics#"):
+            assert f"{{ id: '{pid.split('#')[1]}', label:" in tabs, pid
+        else:
+            assert f"{{ id: '{pid}', label:" in nav, pid
+    page = _read("components/pages/DataCoverage.jsx")
+    assert "const STATIC_PAGES = { player: 'Player Profile', team: 'Team page' };" in page and "PAGE_LABELS" not in page

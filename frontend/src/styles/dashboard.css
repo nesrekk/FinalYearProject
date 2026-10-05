@@ -2330,7 +2330,7 @@ body {
 
 .voter-badge--streak {
   background: rgba(250, 204, 21, 0.12);
-  color: #facc15;
+  color: var(--streak);
 }
 
 /* ── Player Stats "Hybrid" redesign (hb-*, scoped to this page) ───────

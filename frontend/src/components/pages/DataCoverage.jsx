@@ -4,27 +4,22 @@ import Loader from '../Loader';
 import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import CopyLinkButton from '../common/CopyLinkButton';
+import SaveViewButton from '../common/SaveViewButton';
 import '../../styles/coverage.css';
+import { NAV_GROUPS } from '../layout/navConfig';
+import { ANALYTICS_TABS } from '../analytics/analyticsTabs';
 
 const fmtN = (n) => n.toLocaleString();
 
-// Only the page ids this page actually links to from `used_by` (COVERAGE_MAP
-// in api/routers/meta.py) — not a full duplicate of navConfig's labels.
-const PAGE_LABELS = {
-    players: 'Player Stats', compare: 'Player Comparison', leaders: 'Stat Leaders',
-    builder: 'Leaderboard Builder', regression: 'Regression Explorer', breakouts: 'Breakout Detector',
-    stability: 'Stat Stability', statline: 'Stat Line Finder', era: 'Era Translator',
-    shotcharts: 'Shot Charts', tradeimpact: 'Trade Impact', rolefinder: 'Role Player Finder',
-    draft: 'Draft Value Guide', greats: 'Greats of the Game', player: 'Player Profile',
-    rotations: 'Rotations',
-    ledger: 'Forecast Ledger',
-    possessions: 'Possession Explorer',
-    coaching: 'Coaching Decisions',
-    reportcard: 'Model Report Card',
-    quality: 'Data Quality',
-    // Analytics tabs as 'analytics#<tab>'.
-    'analytics#rim': 'Rim Deterrence',
-};
+// Labels for `used_by` page ids (COVERAGE_MAP in api/routers/meta.py): nav labels, and an Analytics tab
+// as 'analytics#<tab>'. A hand-kept list here missed eight ids and showed them raw ("analytics#onoff",
+// "team"; R8-061). The player and team pages need an id, so they're named, not linked.
+const NAV_LABELS = Object.fromEntries(
+    NAV_GROUPS.flatMap((g) => g.items).filter((i) => i.id !== 'analytics').map((i) => [i.id, i.label]),
+);
+const TOOL_LABELS = Object.fromEntries(ANALYTICS_TABS.map((t) => [`analytics#${t.id}`, t.label]));
+const STATIC_PAGES = { player: 'Player Profile', team: 'Team page' };
+const pageLabel = (id) => STATIC_PAGES[id] || TOOL_LABELS[id] || NAV_LABELS[id] || id;
 
 function CoverageRow({ row, onNavigate }) {
     return (
@@ -40,8 +35,8 @@ function CoverageRow({ row, onNavigate }) {
             <td>
                 {row.used_by.length === 0 && <span className="cov-none">Internal only</span>}
                 {row.used_by.map((pageId) => (
-                    pageId === 'player' ? (
-                        <span key={pageId} className="cov-page-link cov-page-link--static">Player Profile</span>
+                    STATIC_PAGES[pageId] ? (
+                        <span key={pageId} className="cov-page-link cov-page-link--static">{pageLabel(pageId)}</span>
                     ) : (
                         <button
                             key={pageId}
@@ -49,7 +44,7 @@ function CoverageRow({ row, onNavigate }) {
                             className="cov-page-link"
                             onClick={() => onNavigate(...pageId.split('#'))}
                         >
-                            {PAGE_LABELS[pageId] || pageId}
+                            {pageLabel(pageId)}
                         </button>
                     )
                 ))}
@@ -87,6 +82,7 @@ export default function DataCoverage({ onNavigate }) {
                 Data Coverage
                 <SourceBadge source={data._source} />
                 <CopyLinkButton />
+                <SaveViewButton pageId="coverage" />
             </h2>
             <p className="page-subtitle">
                 Every important table this app reads, with a live row count and season span (never hand-typed, so

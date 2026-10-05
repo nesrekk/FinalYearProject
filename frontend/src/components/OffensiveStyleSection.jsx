@@ -5,13 +5,14 @@ import InfoTooltip from './common/InfoTooltip';
 import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
+import SeasonSelect from './common/SeasonSelect';
 
-const PALETTE = ['#facc15', '#fb923c', '#38bdf8', '#a78bfa', '#34d399', '#f87171'];
+const PALETTE = ['var(--series-4)', 'var(--series-0)', 'var(--series-1)', 'var(--series-3)', 'var(--series-2)', 'var(--series-8)'];
 
 export default function OffensiveStyleSection() {
     const svgRef = useRef(null);
     const [styles, setStyles] = useState([]);
-    const [season, setSeason] = useState(2025);
+    const [season, setSeason] = useState(2026);
     const [seasonData, setSeasonData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -108,14 +109,7 @@ export default function OffensiveStyleSection() {
             )}
 
             <div className="input-row" style={{ marginBottom: '1rem' }}>
-                <input
-                    type="number"
-                    className="input-field"
-                    value={season}
-                    onChange={(e) => setSeason(Number(e.target.value))}
-                    min={2013}
-                    max={2026}
-                />
+                <SeasonSelect value={season} onChange={setSeason} from={2013} />
             </div>
 
             {loading && <Loader />}
@@ -132,8 +126,8 @@ export default function OffensiveStyleSection() {
                                 cx={plot.scaleX(p.pca_x)}
                                 cy={plot.scaleY(p.pca_y)}
                                 r={hoveredStyle ? 4 : 3}
-                                fill={colorByStyle[p.style] || '#94a3b8'}
-                                opacity={0.8}
+                                fill={colorByStyle[p.style] || 'var(--text-3)'}
+                                opacity={0.9}
                             >
                                 <title>{p.player_name} ({p.team_abbreviation}) — {p.style}</title>
                             </circle>

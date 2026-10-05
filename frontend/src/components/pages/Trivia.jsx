@@ -131,7 +131,7 @@ export default function Trivia() {
                             let style = {};
                             if (pendingResult) {
                                 if (opt.id === pendingResult.correct_option_id) {
-                                    style = { borderColor: '#34d399', color: 'var(--positive)' };
+                                    style = { borderColor: 'var(--positive)', color: 'var(--positive)' };
                                 } else if (opt.id === pendingResult.option_id) {
                                     style = { borderColor: '#f87171', color: 'var(--negative)' };
                                 }
