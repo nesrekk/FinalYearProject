@@ -108,14 +108,6 @@ export async function fetchPlayerTrajectory(player, season, topNComps = 5, proje
     return response.data;
 }
 
-export async function fetchPlayerSuggestions(query, limit = 8) {
-    const response = await axios.get(
-        `${SIMILARITY_BASE}/players/search`,
-        { params: { q: query, limit } }
-    );
-    return response.data;
-}
-
 // ─── Player Archetype Clusters ────────────────────────────────
 export async function fetchArchetypes() {
     const response = await axios.get(`${SIMILARITY_BASE}/clusters/archetypes`);
@@ -544,24 +536,6 @@ export async function fetchHigherLowerPool() {
     });
 }
 
-// A cache miss triggers the same rate-limited live fetch as Shot Charts —
-// give it the same generous timeout instead of the axios default.
-export async function fetchPlayerShotZones(playerName, season, playerId) {
-    const response = await axios.get(
-        `${IMPACT_BASE}/shots/player/${encodeURIComponent(playerName)}/zones`,
-        { params: { season, ...(playerId ? { player_id: playerId } : {}) }, timeout: 6 * 60 * 1000 }
-    );
-    return response.data;
-}
-
-export async function fetchLeagueShotZones(season) {
-    const response = await axios.get(
-        `${IMPACT_BASE}/shots/league-zones/${season}`,
-        { timeout: 90 * 1000 }
-    );
-    return response.data;
-}
-
 // ─── Trade Analyzer ────────────────────────────────────────────
 export async function fetchTradeTeams(season) {
     const response = await axios.get(`${IMPACT_BASE}/trade/teams/${season}`);
@@ -682,12 +656,6 @@ export async function fetchProfileShotZones(playerId, season) {
     return response.data;
 }
 
-// Name -> { player_id, player_name }, for links that only know a name.
-export async function resolvePlayerId(name) {
-    const response = await axios.get(`${IMPACT_BASE}/player-profile/resolve`, { params: { name } });
-    return response.data;
-}
-
 // ─── Game Log + Game Finder (player_game_lines, 2020-21 on) ──────
 export async function fetchPlayerGameLog(playerId, season) {
     const response = await axios.get(`${IMPACT_BASE}/games/player-log/${playerId}`, { params: season ? { season } : {} });
@@ -744,11 +712,6 @@ export async function fetchRapmOptions() {
 // params: { version, season, min_poss, team }
 export async function fetchRapm(params) {
     const response = await axios.get(`${IMPACT_BASE}/rapm`, { params });
-    return response.data;
-}
-
-export async function fetchRapmValidation() {
-    const response = await axios.get(`${IMPACT_BASE}/rapm/validation`);
     return response.data;
 }
 
@@ -927,21 +890,6 @@ export async function fetchTeamComparisonExtra(teamA, teamB, season) {
     });
 }
 
-export async function fetchPlayerImage(playerName) {
-    const response = await axios.get(
-        `${IMPACT_BASE}/media/player-image/${encodeURIComponent(playerName)}`
-    );
-    return response.data;
-}
-
-export async function fetchPlayerProfile(playerName, season, playerId) {
-    const response = await axios.get(
-        `${IMPACT_BASE}/players/profile/${encodeURIComponent(playerName)}`,
-        { params: { ...(season ? { season } : {}), ...(playerId ? { player_id: playerId } : {}) } }
-    );
-    return response.data;
-}
-
 // ─── Landing page ──────────────────────────────────────────────
 export async function fetchSiteStats() {
     const response = await axios.get(`${IMPACT_BASE}/meta/site-stats`);
@@ -1001,16 +949,6 @@ export async function fetchStatLeaders(statKey, season, topN = 10) {
 }
 
 // ─── Shot Charts ───────────────────────────────────────────────
-// A cache miss triggers a rate-limited live fetch on the backend (see
-// api/shots_lib.py) which can take a couple of minutes for a long career —
-// give it a generous timeout instead of the axios default.
-export async function fetchShotSeasons(playerName, playerId) {
-    const response = await axios.get(
-        `${IMPACT_BASE}/shots/player/${encodeURIComponent(playerName)}/seasons`,
-        { params: { ...(playerId ? { player_id: playerId } : {}) }, timeout: 6 * 60 * 1000 }
-    );
-    return response.data;
-}
 
 // `playerId` (optional, the Workbench): pick the player by id, since names aren't unique.
 export async function fetchPlayerShots(playerName, season, playerId) {
@@ -1147,18 +1085,6 @@ export async function fetchProjections(params) {
     return response.data;
 }
 
-export async function fetchProjectionBacktest() {
-    return getWithCache('projection_backtest', 10 * 60 * 1000, async () => {
-        const response = await axios.get(`${IMPACT_BASE}/projections/backtest`);
-        return response.data;
-    });
-}
-
-export async function fetchPlayerProjections(playerId) {
-    const response = await axios.get(`${IMPACT_BASE}/projections/player/${playerId}`);
-    return response.data;
-}
-
 // ─── Rotations (lineup_stints, rotation_closing_games/stints) ─────
 export async function fetchRotationOptions() {
     return getWithCache('rotation_options', 10 * 60 * 1000, async () => {
@@ -1280,11 +1206,6 @@ export async function fetchLedgerGames(params) {
 
 export async function fetchLedgerRoster(team, season) {
     const response = await axios.get(`${IMPACT_BASE}/ledger/roster/${team}`, { params: season ? { season } : {} });
-    return response.data;
-}
-
-export async function fetchLedgerHindcast(season) {
-    const response = await axios.get(`${IMPACT_BASE}/ledger/hindcast`, { params: season ? { season } : {} });
     return response.data;
 }
 

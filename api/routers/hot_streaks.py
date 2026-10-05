@@ -284,6 +284,10 @@ def _league(season, stat, window, as_of):
     rng = np.random.default_rng(season * 100 + window)
     out, skipped = [], 0
     upto = lines[lines.game_date <= as_of]
+    # Each player's games after the as-of date, split once (round 8 step 8: a mask over the whole season per
+    # player before; the same rows in the same order).
+    later = lines[lines.game_date > as_of]
+    later_by = dict(tuple(later.groupby("player_id", sort=False)))
     for pid, g in upto.groupby("player_id", sort=False):
         if g.game_date.iloc[-1] < as_of - timedelta(days=RECENT_DAYS):
             continue
@@ -291,7 +295,7 @@ def _league(season, stat, window, as_of):
         if not res["qualified"]:
             skipped += 1
             continue
-        after = lines[(lines.player_id == pid) & (lines.game_date > as_of)]
+        after = later_by.get(pid, later.iloc[0:0])
         res["what_happened_next"] = _next_games(after, stat, window)
         res["player_id"] = int(pid)
         out.append(res)

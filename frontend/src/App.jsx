@@ -10,7 +10,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import TopNav from './components/layout/TopNav';
 import Footer from './components/layout/Footer';
 import PageHeader from './components/layout/PageHeader';
-import DashboardHome from './components/pages/DashboardHome';
 import LandingPage from './components/pages/LandingPage';
 import Loader from './components/Loader';
 import { prefetchCoreData } from './services/api';
@@ -24,6 +23,9 @@ import './styles/theme.css';
 // own chunk, fetched the first time it's actually opened — this is what
 // keeps the single-bundle warning from `vite build` from just growing
 // forever as pages accumulate.
+// The Dashboard is lazy like every other page (round 8 step 8): the landing page, where most visits start,
+// no longer downloads it.
+const DashboardHome = lazy(() => import('./components/pages/DashboardHome'));
 const LiveScores = lazy(() => import('./components/pages/LiveScores'));
 const NewsSection = lazy(() => import('./components/pages/NewsSection'));
 const StandingsSection = lazy(() => import('./components/pages/StandingsSection'));

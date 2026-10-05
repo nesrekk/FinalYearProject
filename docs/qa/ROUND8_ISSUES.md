@@ -12,8 +12,10 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
-Counts (2026-10-06, after Step 7): **82 entries**, 12 open, 70 fixed: 8 broken, 27 wrong number,
-5 slow, 42 looks wrong. Step 7 fixed R8-009 (its outside facts; the profile part is R8-082, open), R8-029, R8-030,
+Counts (2026-10-06, after Step 8): **85 entries**, 8 open, 76 fixed, 1 won't fix: 8 broken, 27 wrong number,
+8 slow, 42 looks wrong. Step 8 fixed R8-011, R8-017 and R8-060 and three it found (R8-083 to R8-085), measured R8-013
+(won't fix: it doesn't delay the first paint) and left R8-012 open (a page decision). After Step 7: 82 entries, 12 open,
+70 fixed: 8 broken, 27 wrong number, 5 slow, 42 looks wrong. Step 7 fixed R8-009 (its outside facts; the profile part is R8-082, open), R8-029, R8-030,
 R8-068, R8-073 and two it found (R8-080, R8-081), fixed part of R8-071, and left R8-010, R8-028 and R8-032 open with
 the reason. After Step 6c: 79 entries, 16 open, 63 fixed: 8 broken, 27 wrong number,
 5 slow, 39 looks wrong. Step 6c fixed R8-074 and R8-076 and two it found (R8-078, R8-079). After Step 6b: 77 entries, 18 open, 59 fixed: 8 broken, 26 wrong number,
@@ -494,6 +496,64 @@ macros, every macro the long, 8p and 6p papers use defined; no paper number move
 `leverage_index_grid`, `leverage_validation`, `hot_streak_persistence` (13 new columns), `scouting_validation`, `award_winners`,
 `all_nba_seasons`, `prediction_ledger` (60 rows resolved).
 
+## Step 8: speed (2026-10-06)
+
+Measured on the local database with the three backends started fresh (cold = the first call after a restart, warm = the
+second), the crawl re-run (`docs/qa/crawl_2026-10-06.tsv`: 210 of 210 answered 2xx, 0 over 3 s; every route's status,
+bytes and rows equal to the morning's crawl except `/news/current`, a live feed), and 158 responses of the touched routes
+saved before any change and compared **byte for byte** after (all 158 identical; only the `seconds` / `checked_at` timing
+fields of the live checks were masked). No index was added and no table changed (nothing to sync, paper untouched).
+
+**Routes** (the crawl's slowest, plus what the before/after snapshots found):
+
+| Route | Before | After | What changed |
+|---|---|---|---|
+| `/plays/finder?season_from=2024&season_to=2024` | 49.8 s | 0.07 s | R8-083: rows picked from the plays first, sorted by `game_no + 0`; counts in one cached GROUP BY |
+| `/plays/finder?season_to=2021` | 118 s | 0.06 s | R8-083 |
+| `/plays/finder` (the page's default) | 0.93 s cold / 0.88 warm | 0.36 / 0.17 s | R8-083 |
+| `/news/current` | 5.93 s cold | 2.17 s | R8-011: the six RSS feeds at once, joined in list order |
+| `/data-quality/check/score_fields` | 2.96 s cold | 1.40 s | R8-060: its two passes on two connections; one run at a time |
+| `/data-quality/check/clock_offset` | 1.22 s cold | 0.79 s | R8-060 |
+| `/games/guess-the-game/daily` | 1.2 s every call | 1.2 s first, then 0.00 | R8-085: pool and puzzle kept per process |
+| `/games/guess-the-game/guess`, `/reveal` | 0.7 s every call | 0.00 s | R8-085 |
+| `/games/wp-replay/list` | 0.65-0.77 s every call | first per season, then 0.01 s | R8-085: the unchanged query, kept per season |
+| `/meta/current` | 1.43 s cold / 0.26-0.48 warm | 1.07 / 0.03 s | R8-084: stats.nba.com's empty pre-season answer cached |
+| `/games/hot-streaks` | 1.05-1.20 s cold | 0.92-1.14 s | later games split once, not masked per player. ~0.6 s is the 4,000-draw shuffle per player (`argpartition`); a different draw changes the p-values, so not touched. Cached after the first call |
+| `/workbench/parse` 2.27 s, `/odds/championship` 2.20 s, `/games/boxscore` 1.30 s, `/leaders/pts` 1.45 s cold, `/players/heliocentricity` 0.68 s, `/media/player-image` 0.60 s, `/games/by-date` 0.55-2.0 s | | unchanged | outside services (Gemini, the Odds API, ESPN, stats.nba.com), each already cached after the first call; nothing to do on this side |
+
+EXPLAIN ANALYZE (local): Play Finder rows for one season, before `Nested Loop` over `play_finder_games_pkey` backwards ×
+`Materialize` of 558,797 plays (not run to completion: ~50 s through the route), after `Hash Join` + top-N sort 35.9 ms;
+unfiltered rows 566 → 159 ms, counts 169 + 155 → 206 ms (one pass). The last-score scan behind R8-085: 754 ms (unchanged;
+now once per process).
+
+**First page loads** (the harness, Vite dev server, 1280 px Paper, every page of `App.jsx`'s `PAGES` plus the landing, the
+app's localStorage cache cleared before each page and the backends restarted before the run; time = the last request's
+end, from the frame's navigation start). The five slowest:
+
+| Page | Before | After | Waiting on |
+|---|---|---|---|
+| Landing | 5.63 s | 2.06 s | `/news/current` (the app-shell prefetch; the page itself is drawn at 0.1 s, first contentful paint 104 ms) |
+| News | 4.95 s | 2.29 s | `/news/current` |
+| Data Quality | 3.33 s | 2.32 s | `score_fields` (R8-060) |
+| Play Finder | 1.66 s | 1.11 s | `/plays/finder` (R8-083) |
+| Hot Streaks | 1.44 s | 1.35 s | `/games/hot-streaks` (the shuffle) |
+
+Next in line, unchanged: the player profile (1.3 s, 21 requests), Learn (1.2 s, ESPN's scoreboard in the prefetch). Pages
+from 0.4 to 1.1 s move by ±0.3 s between runs with the dev server's module loading and ESPN.
+
+**Bundle:** the Dashboard was the only page `App.jsx` imported eagerly; it is lazy now like the other 48, so the landing page
+no longer downloads it: first load (what `dist/index.html` names) 573.3 kB raw / 171.1 kB gzip in 10 files → 549.7 kB /
+163.5 kB in 5 (the Dashboard is a 15.3 kB chunk of its own). The rest of the first load is React DOM, framer-motion (page
+transitions), Lenis (the landing's scroll), `services/api.js` and the shared CSS. The landing page loads no image files.
+The 532 kB three.js chunk doesn't delay the first paint (R8-013). `frontend/public/shot_data/stephen_curry_shots.json`
+(5.4 MB, copied into every build) is referenced by no page; it is a dataset file listed in `docs/DATASHEET.md`, so left
+for the owner.
+
+Checks: `api/tests/test_round8_speed.py` (13 tests: the old queries against the new route, the counts, the feeds' order,
+the empty-answer cache, the pool read once under concurrency, the two-connection checks, the per-player mask); full suite
+**535 passed, 1 skipped**, exit 0, 119 s; eslint 0; vite build passes; the landing → Dashboard link works with the lazy Dashboard; no console error on
+any of the 50 pages.
+
 ## Constraints (not defects)
 
 - **Layerbase:** 4,202 of 5,000 MB used (2026-10-04). A Step 6 rebuild rewrites tables of about the same size; any sync needs the owner's OK (Step 10 decides whether the biggest tables stay local).
@@ -577,10 +637,11 @@ macros, every macro the long, 8p and 6p papers use defined; no paper number move
 
 - **Step 7 (left open):** `draft_history` is built from the Basketball-Reference export (Kaggle, ends at the 2025 draft); `fetch_draft_history.py` (the NBA's endpoint, answering again) replaces the whole table. Adding 2026 needs either a refreshed export or a one-year append path with its own producer entry: with the round-9 live 2026-27 season. No page shows a wrong number meanwhile (Draft Value's outcome classes stop at 2021 by design).
 ### R8-011 · `/news/current` is the slowest route (5.8 s) and runs on every app load
-- **Severity:** slow · **Step:** 8 · **Status:** open
+- **Severity:** slow · **Step:** 8 · **Status:** fixed in the Step 8 commit
 - **Where:** News, Dashboard; `prefetchCoreData()` calls it on load.
 - **Reproduce:** crawl 5.8 s cold (5.2 s in the first run, 6.3 s in pytest). No RapidAPI key is set, so it reads RSS feeds.
 - **Found by:** crawl timing.
+- **Step 8:** the six feeds were read one after another (ESPN 0.7 s, NBA.com 404 in 0.6 s, Google 0.3 s, Yahoo 1.9 s, CBS 0.2 s, Sports Illustrated 404 in 2.2 s). `impact_core._fetch_current_news_uncached` now reads them at the same time and joins them in the list's order, so the answer is the loop's (checked on the recorded feeds with scrambled finishing order: identical; `test_news_feeds_combine_in_list_order`). Cold 5.93 → 2.17 s in the crawl (what's left is the slowest feed). The two dead feeds (NBA.com, SI: 404 since at least 2026-10-06) add nothing and cost nothing extra now; left in the list.
 
 ### R8-012 · `/referees/crew-tendencies` sends 2.8 MB
 - **Severity:** slow · **Step:** 8 · **Status:** open
@@ -588,12 +649,14 @@ macros, every macro the long, 8p and 6p papers use defined; no paper number move
 - **Reproduce:** crawl `bytes` column.
 - **Found by:** crawl. 5,373 crews, most of which worked one game together; the page could page through them or filter on the server.
 - **Step 2c (browser):** Referee Tendencies › By Crew renders every crew at once: 490,899 characters of page text at 1280 px (the By Official view is 9,127). Paging or a server-side filter would fix both the payload and the page.
+- **Step 8 (left open):** the route itself takes 0.09 s; the cost is the page drawing 5,373 rows, because By Crew opens on "1+ games together" (4,859 of the crews worked one game). Gzip would shrink the transfer, not the rendering. Paging, or opening on 2+ games (514 crews), changes what the page shows: a page decision (Step 9/10 or the owner), not a speed fix that keeps every answer the same.
 
 ### R8-013 · The landing page's 3D court chunk is 532 kB
-- **Severity:** slow · **Step:** 8 · **Status:** open
+- **Severity:** slow · **Step:** 8 · **Status:** won't fix (measured: it doesn't delay the first paint)
 - **Where:** `ShotCourtFlight` (three.js, lazy-loaded on the landing page). It's the build's only chunk over 500 kB.
 - **Reproduce:** `npx vite build` warning.
 - **Found by:** build output. It's lazy, so it doesn't count toward the first load (558 kB raw / 166 kB gzip). Step 8 measures whether the landing page's first paint waits for it.
+- **Step 8:** it doesn't. Resource and paint timings of the landing page in the harness: first contentful paint at 104 ms, the chunk (and three.js) requested at 344 ms, after `/shots/league-sample` answers; it renders below the hero inside a `Suspense` with no fallback. The landing page has no image files (the ribbon and ball are drawn on canvas/WebGL), so there are no image sizes to cut.
 
 ### R8-014 · 28 data routes answer without a `_source` badge
 - **Severity:** looks wrong · **Step:** 2 (2a/2b/2c, per page) · **Status:** open
@@ -620,11 +683,12 @@ macros, every macro the long, 8p and 6p papers use defined; no paper number move
 - **Fix:** every question names the pool's season in the past tense ("Who led the league in points per game in 2025-26?"; `impact_core._trivia_season`); Trivia, Guess the Player and Blurred Player headers read "2025-26 season · …" instead of "Season 2026 · …", and their tooltips say "the latest loaded season's" pool. Tests: `test_trivia_questions_name_the_season`, `test_puzzles_name_their_season`.
 
 ### R8-017 · Routes and API wrappers nothing calls
-- **Severity:** looks wrong (code hygiene) · **Step:** 8 · **Status:** open
+- **Severity:** looks wrong (code hygiene) · **Step:** 8 · **Status:** fixed in the Step 8 commit (wrappers removed; the three routes kept)
 - **Where:** routes no frontend file names: similarity `/similarity/career/{name}`, impact `/impact/player/{name}/{season}`, `/shots/quality-map/options`. `services/api.js` wrappers no component calls (9 of 202): `fetchPlayerShotZones`, `fetchLeagueShotZones`, `fetchRapmValidation`, `fetchPlayerImage`, `fetchPlayerProfile`, `fetchShotSeasons`, `fetchProjectionBacktest`, `fetchPlayerProjections`, `fetchLedgerHindcast` (their routes may still be called another way).
 - **Found by:** comparing the crawl's route list with `frontend/src`. Keep (API-only, tested) or remove, with a reason either way.
 
 - **Step 4:** `/players/profile/{name}` is DB-only now (its live path is gone); `/shots/league-zones/{season}` no longer fetches by default (R8-007). The unused routes themselves are still Step 10's call.
+- **Step 8:** 11 wrappers were unused by then (the 9 above plus `fetchPlayerSuggestions` and `resolvePlayerId`, left behind by Step 5's id pickers): removed from `services/api.js`. The production bundle is byte-identical (the build already dropped unused exports), so this is tidiness, not speed. The three routes stay: they are API-only, cheap, answered by the crawl and covered by tests (`/impact/player` by R8-069's).
 ### R8-018 · Typed-name tools pick the first of two same-name players
 - **Severity:** wrong number · **Step:** 5 · **Status:** fixed in the Step 5 commit
 - **Where:** every caller of `impact_core.find_player()`: Player Comparison (+ `/shots/player/{name}/zones`), Trend Analysis, Radar, Scouting Report, With/Without a Star, and others. 19 names belong to two players.
@@ -853,9 +917,10 @@ macros, every macro the long, 8p and 6p papers use defined; no paper number move
 - **Found by:** the scanner's new chart-mark check. Each of these charts also prints the value as text, so nothing is lost; still under WCAG 1.4.11's 3:1. A chart-only Paper orange (e.g. #e04a0d, 3.1-3.8:1 on the three Paper backgrounds) would fix it without touching buttons: a brand decision, so the owner's.
 
 ### R8-060 · Data Quality's first load waits 3-4 s on two live checks
-- **Severity:** slow · **Step:** 8 · **Status:** open
+- **Severity:** slow · **Step:** 8 · **Status:** fixed in the Step 8 commit (3.3 → 2.3 s; what's left is the check itself)
 - **Where:** `?page=quality` fires one `/data-quality/check/{key}` per class (14, twice in dev's StrictMode); cold, `score_fields` takes 3.2-4.3 s and `clock_offset` 3.0 s (fast once cached).
 - **Found by:** the scanner's slow-request list.
+- **Step 8:** each of the two is two independent full passes over the 3.4M ESPN events (window functions). `data_quality_lib.live_score_fields` / `live_clock_offset` take an optional second cursor and the router runs the two passes on two connections at once (`TWO_PASS`; the build still runs them one after the other; same queries, `test_two_pass_checks_equal_one_connection`), and a check runs once at a time (`_LIVE_LOCKS`: the StrictMode duplicate waits and reads the cached answer instead of running the same scan beside it). Alone, cold: `score_fields` 2.96 → 1.40 s, `clock_offset` 1.22 → 0.79 s; the page settles 3.3 → 2.3 s. Faster would need an index on `pbp_events (game_id, action_number, id)` (~100 MB, too big for Layerbase) for a check that is cached after its first run.
 
 ### R8-061 · Data Coverage showed raw page ids ("analytics#onoff", "team") in "Used by"
 - **Severity:** looks wrong · **Step:** 2c · **Status:** fixed in the Step 2c commit
@@ -979,3 +1044,23 @@ macros, every macro the long, 8p and 6p papers use defined; no paper number move
 - **Severity:** looks wrong (stale) · **Step:** 10 or round 9 · **Status:** open
 - **Where:** `player_awards` (profiles' award lists), built by `build_player_profile_data.py` from the Basketball-Reference export (Kaggle, gitignored), which ends at 2024-25 except All-Star.
 - **Found by:** Step 7 (R8-009's remainder). Fix: refresh the export (owner) and rerun the script; adding hand rows would break the table's one-source rebuild.
+
+### R8-083 · Play Finder took 45 s to 2 minutes once a season or date range was picked
+- **Severity:** slow (the page looked broken) · **Step:** 8 · **Status:** fixed in the Step 8 commit
+- **Where:** Players › Play Finder, `GET /plays/finder` with `season_from`/`season_to`/`date_from`/`date_to` (`api/routers/play_finder.py`).
+- **Reproduce (before):** `/plays/finder?season_from=2024&season_to=2024` 49.8 s, `?season_to=2021` 118 s, `?date_from=2025-01-01&date_to=2025-01-31` 6.6 s. EXPLAIN: for `ORDER BY p.game_no DESC ... LIMIT 50` Postgres walked `play_finder_games`' primary key backwards and, for every one of the 7,229 games, rescanned the filter's materialised plays in a nested loop (2,459 empty games × 558,797 plays for one season); the unfiltered default page took 0.6 s of 0.9 s the same way.
+- **Found by:** Step 8's before/after snapshots (the crawl calls the route with its defaults only; Step 2a's sweep didn't pick a season).
+- **Fix:** the page of plays is picked from `play_finder_events` (joined to the games only for the filters) ordered by `p.game_no + 0` (the same order; no index can supply it, so the planner sorts the filtered rows), then joined to the games and `pbp_events` for the 50 rows; `(event_id, cat)` is unique and every play has its game and event, so nothing can move (test). The category counts and top players come from one `GROUP BY cat, player_id` instead of two scans, cached per filter so paging doesn't recount. One season 49.8 → 0.07 s, up to 2020-21 118 → 0.06 s, the default page 0.93 → 0.36 s cold (0.88 → 0.17 s warm). All 39 snapshot queries byte-identical. Tests: `test_play_finder_*` in `api/tests/test_round8_speed.py`.
+
+### R8-084 · `/meta/current` asked stats.nba.com for the team block on every call before opening night
+- **Severity:** slow · **Step:** 8 · **Status:** fixed in the Step 8 commit
+- **Where:** `impact_core.fetch_nba_api_team_stats` (Dashboard, Standings, Team Comparison, every app load through `prefetchCoreData()`).
+- **Reproduce (before):** a warm `/meta/current` took 0.26-0.48 s: LeagueDashTeamStats answers, every GP is 0 (2026-27 not started), the parser returns None, and None wasn't cached, so the next call asked again.
+- **Fix:** an answer with nothing in it is cached for the same 5 minutes as a full one; a failure still isn't. Warm 0.26 → 0.03 s; cold unchanged (~1.1 s, ESPN's standings). Test: `test_team_stats_cache_an_empty_answer_not_a_failure`.
+
+### R8-085 · Guess the Game and Game Replay's game list re-read the last score of every game on each call
+- **Severity:** slow · **Step:** 8 · **Status:** fixed in the Step 8 commit
+- **Where:** `GET /games/guess-the-game/daily|guess|reveal` (`impact_core._guess_the_game_pool`), `GET /games/wp-replay/list` (`routers/wp_replay.py`).
+- **Reproduce (before):** daily 1.2 s, guess 0.7 s, reveal 0.7 s on every call; the replay list 0.65-0.77 s per call. All four run `DISTINCT ON (game_id) ... ORDER BY game_id, action_number DESC` over the 3.6M `pbp_events` rows (0.75 s in EXPLAIN ANALYZE).
+- **Fix:** kept per process after the first read, like the app's other play-by-play tables (restart impact_api after a rebuild): the pool (with a lock, read once under concurrent first calls), the daily puzzle per date (its ~470 win-probability calls were the other 0.4 s), and the replay list per season through the **unchanged** query, so games of one date keep the order it gives (that order isn't defined by the SQL; a rewritten query would reorder them). First call unchanged, then 0.00-0.01 s. Tests: `test_guess_the_game_*`, `test_replay_list_is_the_unchanged_query`.
+

@@ -1,0 +1,211 @@
+service	method	path	url	status	seconds	bytes	rows	empty	source	source_live	upstream	odd_text	note
+mvp	GET	/	/	200	0.01	204	6		no				
+mvp	GET	/allnba/predict/{season}	/allnba/predict/2025	200	0.12	3616	15		top	false	nba_api (stats.nba.com)		
+mvp	GET	/awards/calibration	/awards/calibration	200	0.00	3058	4		top	false	nba_api (stats.nba.com)		
+mvp	GET	/backtest	/backtest	200	0.00	27342	9		no				
+mvp	GET	/backtest/allnba	/backtest/allnba	200	0.00	28321	60		top	false	nba_api (stats.nba.com)		
+mvp	GET	/backtest/{award}	/backtest/mvp	200	0.00	9707	23		top	false	nba_api (stats.nba.com)		
+mvp	GET	/backtest/{award}/compare	/backtest/mvp/compare	200	0.00	9561	3		top	false	nba_api (stats.nba.com)		
+mvp	GET	/dpoy/predict/{season}	/dpoy/predict/2025	200	0.02	3660	15		top	false	nba_api (stats.nba.com)		
+mvp	GET	/explain/{award}	/explain/mvp	200	0.00	2528	30		no				
+mvp	GET	/explain/{award}/{player_name}	/explain/mvp/Nikola%20Joki%C4%87	200	0.00	843	9		no				
+mvp	GET	/ledger/summary	/ledger/summary	200	0.01	2099	4		top	false	nba_api (stats.nba.com)		
+mvp	GET	/mvp/predict/{season}	/mvp/predict/2025	200	0.03	3342	15		top	false	nba_api (stats.nba.com)		
+mvp	GET	/roy/predict/{season}	/roy/predict/2025	200	0.00	3281	15		top	false	nba_api (stats.nba.com)		
+mvp	GET	/validation/wpa	/validation/wpa	200	0.00	3334			top	false	nba_api + ESPN via sportsdataverse (play-by-play)		
+mvp	GET	/validation/wpa/compare	/validation/wpa/compare	200	0.00	949	2		top	false	nba_api + ESPN via sportsdataverse (play-by-play)		
+similarity	GET	/	/	200	0.01	227	5		no				
+similarity	GET	/clusters/archetypes	/clusters/archetypes	200	0.00	12812	10		top	false	nba_api (stats.nba.com): season stats and shot locations		
+similarity	GET	/clusters/evolution	/clusters/evolution	200	0.01	9191	17		top	false	nba_api (stats.nba.com)		
+similarity	GET	/clusters/player/{player_name}	/clusters/player/LeBron%20James	200	0.00	2030	17		no				
+similarity	GET	/clusters/playtype-archetypes	/clusters/playtype-archetypes	200	0.00	4433	6		top	false	nba_api (Synergy play-type tracking)		
+similarity	GET	/clusters/playtype-season/{season}	/clusters/playtype-season/2025	200	0.01	68427	418		top	false	nba_api (Synergy play-type tracking)		
+similarity	GET	/clusters/season/{season}	/clusters/season/2025	200	0.07	105030	336		top	false	nba_api (stats.nba.com): season stats and shot locations		
+similarity	GET	/players/search	/players/search?q=LeBron	200	0.00	45	1		no				
+similarity	GET	/players/trajectory/{player_name}	/players/trajectory/LeBron%20James?season=2025	200	0.00	2238	23		top	false	nba_api (stats.nba.com)		
+similarity	GET	/similarity/career/{player_name}	/similarity/career/LeBron%20James	200	0.01	854	10		no				
+similarity	GET	/similarity/season-profile/{player_name}/{season}	/similarity/season-profile/LeBron%20James/2025	200	0.03	5699	10		top	false	nba_api (stats.nba.com)		
+similarity	GET	/similarity/season/{player_name}/{season}	/similarity/season/LeBron%20James/2025	200	0.00	1112	10		top	false	nba_api (stats.nba.com)		
+similarity	GET	/similarity/stat-line	/similarity/stat-line?line=pts%3A30.1%2Cast%3A6.7%2Cts_pct%3A0.669%2Cfg3a%3A11.2&season=2016	200	0.09	12392	25		top	false	nba_api (stats.nba.com) + Basketball-Reference		
+similarity	GET	/similarity/stat-line/options	/similarity/stat-line/options	200	0.00	1912	16		top	false	nba_api (stats.nba.com) + Basketball-Reference		
+impact	GET	/	/	200	0.00	325	9		no				
+impact	GET	/aging/curves	/aging/curves	200	0.01	22896	24		top	false	nba_api (stats.nba.com) + Basketball-Reference (seasons, birth dates)		
+impact	GET	/aging/player	/aging/player?player_id=2544	200	0.08	6051	23		top	false	nba_api (stats.nba.com) + Basketball-Reference (seasons, birth dates)		
+impact	GET	/assists/options	/assists/options	200	0.07	7333	30		top	false	ESPN play-by-play (pbp_events), parsed by scripts/pbp_lineups.py (build_assist_n		
+impact	GET	/assists/pairs	/assists/pairs	200	0.00	14197	50		top	false	ESPN play-by-play (pbp_events), parsed by scripts/pbp_lineups.py (build_assist_n		
+impact	GET	/assists/player/{player_id}	/assists/player/2544	200	0.00	8457	8		top	false	ESPN play-by-play (pbp_events), parsed by scripts/pbp_lineups.py (build_assist_n		
+impact	GET	/assists/team	/assists/team?team=LAL	200	0.00	68062	222		top	false	ESPN play-by-play (pbp_events), parsed by scripts/pbp_lineups.py (build_assist_n		
+impact	GET	/best-games	/best-games	200	0.25	16457	25		top	false	ESPN play-by-play and final scores via sportsdataverse (scripts/build_play_finde		
+impact	GET	/best-games/options	/best-games/options	200	0.00	5548	30		top	false	ESPN play-by-play and final scores via sportsdataverse (scripts/build_play_finde		
+impact	GET	/coaching/decision/{name}	/coaching/decision/timeout	200	0.24	15348	30		top	false	ESPN play-by-play via sportsdataverse, cut into possessions on the corrected clo		
+impact	GET	/coaching/options	/coaching/options	200	0.01	9922	30		top	false	ESPN play-by-play via sportsdataverse, cut into possessions on the corrected clo		
+impact	GET	/coaching/tests	/coaching/tests	200	0.00	8463	16		top	false	ESPN play-by-play via sportsdataverse, cut into possessions on the corrected clo		
+impact	GET	/college/madness	/college/madness	200	0.01	41758	68		top	false	CollegeBasketballData.com (every D1 game 2013-2026: scores, Elo at tip-off, NCAA		
+impact	GET	/college/pipeline	/college/pipeline	200	0.09	244219	613		top	false	Basketball-Reference (draft history, Win Shares) via Kaggle; Bart Torvik T-Rank 		
+impact	GET	/contracts/player/{player_id}	/contracts/player/2544?season=2025	200	0.01	389			no				
+impact	GET	/contracts/value	/contracts/value	200	0.01	91551	431		top	false	Kaggle salary datasets (HoopsHype / Basketball-Reference), CBA minimums, Team Su		
+impact	GET	/data-quality/check/{key}	/data-quality/check/twin_copies	200	0.04	725	2		top	true	ESPN play-by-play and scoreboard, the NBA.com shot chart, stats.nba.com team gam		
+impact	GET	/data-quality/games	/data-quality/games	200	0.01	43014	50		top	false	ESPN play-by-play and scoreboard, the NBA.com shot chart, stats.nba.com team gam		
+impact	GET	/data-quality/overview	/data-quality/overview	200	0.02	21966	18		top	false	ESPN play-by-play and scoreboard, the NBA.com shot chart, stats.nba.com team gam		
+impact	GET	/data-quality/sensitivity	/data-quality/sensitivity	200	0.01	210653	12		top	false	ESPN play-by-play and scoreboard, the NBA.com shot chart, stats.nba.com team gam		
+impact	GET	/defense/dad	/defense/dad	200	0.02	292464	341		top	false	nba_api (LeagueSeasonMatchups, LeagueDashPtDefend) + Basketball-Reference OBPM		
+impact	GET	/defense/rim-deterrence	/defense/rim-deterrence	200	0.07	510247	262		top	false	ESPN play-by-play (pbp_events) rebuilt into five-man stints by scripts/build_lin		
+impact	GET	/draft/best-value	/draft/best-value	200	0.02	3045	15		top	false	Basketball-Reference draft history, Win Shares and All-Star selections (Kaggle e		
+impact	GET	/draft/length-study	/draft/length-study	200	0.02	67269	565		top	false	nba_api (stats.nba.com)		
+impact	GET	/draft/value-curve	/draft/value-curve	200	0.01	845	5		top	false	Basketball-Reference draft history, Win Shares and All-Star selections (Kaggle e		
+impact	GET	/draft/{draft_year}	/draft/2003	200	0.00	15734	58		top	false	Basketball-Reference draft history, Win Shares and All-Star selections (Kaggle e		
+impact	GET	/era/players	/era/players?q=LeBron	200	0.02	113	1		no				
+impact	GET	/era/translate	/era/translate?player_id=2544	200	0.01	10678	77		top	false	nba_api (stats.nba.com) + Basketball-Reference league averages		
+impact	GET	/explore/breakouts	/explore/breakouts	200	0.05	20210	48		top	false	nba_api (stats.nba.com) + Basketball-Reference		
+impact	GET	/explore/regression	/explore/regression?x=ast&y=tov&season_from=2016&season_to=2026	200	0.02	286018	2500		top	false	nba_api (stats.nba.com) + Basketball-Reference		
+impact	GET	/games/blurred-player/daily	/games/blurred-player/daily	200	0.01	27444	350		no				
+impact	GET	/games/blurred-player/guess	/games/blurred-player/guess?guess_player_name=LeBron+James	200	0.00	52			no				
+impact	GET	/games/blurred-player/image	/games/blurred-player/image	200	0.44	166041			n/a				image/png
+impact	GET	/games/blurred-player/reveal	/games/blurred-player/reveal	200	0.01	171			no				
+impact	GET	/games/boxscore/{game_id}	/games/boxscore/0022400062	200	1.30	5862	15		top	true	ESPN box score (live)		
+impact	GET	/games/by-date	/games/by-date	200	0.59	3027	5		top	true	ESPN scoreboard (live)		
+impact	GET	/games/finder	/games/finder	200	0.22	20694	50		top	false	ESPN play-by-play (lines rebuilt from it) and scoreboard (final scores), nba_api		
+impact	GET	/games/finder/options	/games/finder/options	200	0.00	3251	30		top	false	ESPN play-by-play (lines rebuilt from it) and scoreboard (final scores), nba_api		
+impact	GET	/games/finder/players	/games/finder/players?q=LeBron	200	0.02	112	1		no				
+impact	GET	/games/guess-the-game/daily	/games/guess-the-game/daily	200	1.17	4728	101		no				
+impact	GET	/games/guess-the-game/guess	/games/guess-the-game/guess?team=LAL&attempt_number=1	200	0.00	96			no				
+impact	GET	/games/guess-the-game/reveal	/games/guess-the-game/reveal	200	0.00	141			no				
+impact	GET	/games/guess-the-player/daily	/games/guess-the-player/daily	200	0.01	27444	350		no				
+impact	GET	/games/guess-the-player/guess	/games/guess-the-player/guess?guess_player_name=LeBron+James	200	0.00	316			no				
+impact	GET	/games/guess-the-player/reveal	/games/guess-the-player/reveal	200	0.00	169			no				
+impact	GET	/games/higher-lower/pool	/games/higher-lower/pool	200	0.05	331784	2288		no				
+impact	GET	/games/hot-streak/options	/games/hot-streak/options	200	0.04	37255	42		top	false	ESPN play-by-play (lines rebuilt from it), nba_api (stats.nba.com)		
+impact	GET	/games/hot-streak/{player_id}	/games/hot-streak/2544	200	0.10	1521			top	false	ESPN play-by-play (lines rebuilt from it), nba_api (stats.nba.com)		
+impact	GET	/games/hot-streaks	/games/hot-streaks	200	0.92	22077	25		top	false	ESPN play-by-play (lines rebuilt from it), nba_api (stats.nba.com)		
+impact	GET	/games/player-log/{player_id}	/games/player-log/2544	200	0.04	23571	60		top	false	ESPN play-by-play (lines rebuilt from it) and scoreboard (final scores), nba_api		
+impact	GET	/games/trivia/daily	/games/trivia/daily	200	0.01	1427	5		no				
+impact	GET	/games/trivia/guess	/games/trivia/guess?question_id=top_scorer&option_id=203999	200	0.00	47			no				
+impact	GET	/games/wp-replay/list	/games/wp-replay/list	200	0.65	177432	1230		no				
+impact	GET	/games/wp-replay/{game_id}	/games/wp-replay/espn_401704628	200	0.48	146632	486		top	false	ESPN via sportsdataverse		
+impact	GET	/games/wp-replay/{game_id}/whatif	/games/wp-replay/espn_401704628/whatif?event_id=3072525	200	0.46	40633	486		no				
+impact	GET	/greats	/greats	200	0.01	66291	83		top	false	Basketball-Reference via Kaggle; NBA 75th Anniversary Team; Wikipedia (sourced t		
+impact	GET	/hof/career-leaders	/hof/career-leaders	200	0.03	9616	50		top	false	nba_api (stats.nba.com) + Kaggle historical (Basketball-Reference)		
+impact	GET	/hof/greatest-seasons	/hof/greatest-seasons	200	0.01	7492	50		top	false	nba_api (stats.nba.com) + Kaggle historical (Basketball-Reference)		
+impact	GET	/hof/longevity	/hof/longevity	200	0.02	7721	50		top	false	nba_api (stats.nba.com) + Kaggle historical (Basketball-Reference)		
+impact	GET	/hustle/leaders	/hustle/leaders	200	0.00	2218	15		top	false	nba_api (stats.nba.com, LeagueHustleStatsPlayer), stored		
+impact	GET	/impact/bpm/{season}	/impact/bpm/2025	200	0.00	3255	20		top	false	nba_api (stats.nba.com)		
+impact	GET	/impact/player/{player_name}/{season}	/impact/player/LeBron%20James/2025	200	0.00	210			no				
+impact	GET	/impact/raw/{season}	/impact/raw/2025	200	0.00	2429	20		top	false	nba_api (stats.nba.com)		
+impact	GET	/impact/star/{season}	/impact/star/2025	200	0.00	2435	20		top	false	nba_api (stats.nba.com)		
+impact	GET	/leaderboard/composite	/leaderboard/composite?weights=pts%3A1%2Cts_pct%3A1&season_from=2026	200	0.00	7057	25		top	false	nba_api (stats.nba.com) + Basketball-Reference		
+impact	GET	/leaderboard/custom	/leaderboard/custom	200	0.00	6075	25		top	false	nba_api (stats.nba.com) + Basketball-Reference		
+impact	GET	/leaderboard/options	/leaderboard/options	200	0.01	8777	72		top	false	nba_api (stats.nba.com) + Basketball-Reference		
+impact	GET	/leaderboard/stability	/leaderboard/stability	200	0.01	33525	30		top	false	ESPN play-by-play + nba_api (stats.nba.com) shot charts + Basketball-Reference		
+impact	GET	/leaders/{stat_key}	/leaders/pts	200	1.00	1469	10		top	false	nba_api (stats.nba.com) season tables, stored		
+impact	GET	/learn/basics	/learn/basics	200	0.24	1310	5		top	false	stats.nba.com (shotchartdetail, box scores, league player stats), loaded into Po		
+impact	GET	/ledger/games	/ledger/games	200	0.02	333626	1200		top	false	ESPN schedule and rosters read at lock time (scripts/ledger_lock.py); Marcel pro		
+impact	GET	/ledger/hindcast	/ledger/hindcast	200	0.01	111266	480		top	false	ESPN schedule and rosters read at lock time (scripts/ledger_lock.py); Marcel pro		
+impact	GET	/ledger/live	/ledger/live	200	0.03	10718	30		top	false	ESPN scoreboard read nightly by scripts/ledger_update.py; odds computed with the		
+impact	GET	/ledger/live/games	/ledger/live/games	200	0.00	305	0	yes	top	false	ESPN scoreboard read nightly by scripts/ledger_update.py; odds computed with the		
+impact	GET	/ledger/lock.csv	/ledger/lock.csv	200	0.08	5867075			n/a				text/csv
+impact	GET	/ledger/preseason	/ledger/preseason	200	0.01	40725	30		top	false	ESPN schedule and rosters read at lock time (scripts/ledger_lock.py); Marcel pro		
+impact	GET	/ledger/roster/{team}	/ledger/roster/LAL	200	0.00	6393	21		top	false	ESPN schedule and rosters read at lock time (scripts/ledger_lock.py); Marcel pro		
+impact	GET	/lineup-predictor/options	/lineup-predictor/options	200	0.01	82574	204		top	false	ESPN play-by-play: possessions and five-man stints (build_possessions.py, build_		
+impact	GET	/lineup-predictor/predict	/lineup-predictor/predict?team=LAL&season=2025&ids=2544%2C203076%2C1629060%2C1630559%2C1631108	200	0.00	3191	9		top	false	ESPN play-by-play: possessions and five-man stints (build_possessions.py, build_		
+impact	GET	/lineup-predictor/team	/lineup-predictor/team?team=LAL&season=2025	200	0.00	9820	24		top	false	ESPN play-by-play: possessions and five-man stints (build_possessions.py, build_		
+impact	GET	/lineups/chemistry	/lineups/chemistry	200	0.06	7700	15		top	false	ESPN play-by-play (pbp_events), rebuilt into five-man stints by scripts/build_li		
+impact	GET	/lineups/on-off	/lineups/on-off	200	0.02	239899	386		top	false	ESPN play-by-play (pbp_events), rebuilt into player lines by scripts/build_playe		
+impact	GET	/lineups/on-off/stars	/lineups/on-off/stars	200	0.01	23911	30		top	false	ESPN play-by-play (pbp_events), rebuilt into player lines by scripts/build_playe		
+impact	GET	/lineups/pair-grid	/lineups/pair-grid	200	0.01	14594	66		top	false	ESPN play-by-play (pbp_events), rebuilt into five-man stints by scripts/build_li		
+impact	GET	/matchups/player/{player_name}	/matchups/player/LeBron%20James	200	0.03	6152	15		top	false	nba_api (stats.nba.com, LeagueSeasonMatchups)		
+impact	GET	/media/player-image/{player_name}	/media/player-image/LeBron%20James	200	0.63	118			no				
+impact	GET	/meta/coverage	/meta/coverage	200	0.35	42099	60		top	false	Postgres COUNT/MIN/MAX over this project's own real tables, cached per process		
+impact	GET	/meta/current	/meta/current	200	1.07	8097	15		top	true	ESPN standings (live)		
+impact	GET	/meta/site-stats	/meta/site-stats	200	0.03	281			top	false	Postgres COUNT/MIN/MAX over this project's own real tables		
+impact	GET	/news/current	/news/current	200	2.17	9320	20		top	true	public RSS feeds (ESPN, Google News; live)		
+impact	GET	/odds/championship	/odds/championship	200	2.14	13989	30		top	true	The Odds API (live) + ESPN standings (live)		
+impact	GET	/player-profile/resolve	/player-profile/resolve?name=LeBron+James	200	0.01	47			no				
+impact	GET	/player-profile/{player_id}	/player-profile/2544	200	0.31	68425	86		top	false	nba_api (stats.nba.com), Basketball-Reference via Kaggle, ESPN play-by-play, Kag		
+impact	GET	/player-profile/{player_id}/shot-zones	/player-profile/2544/shot-zones?season=2025	200	0.01	1016	5		no				
+impact	GET	/players/clutch-split	/players/clutch-split	200	0.09	55346	184		top	false	ESPN play-by-play via sportsdataverse + this project's win-probability model		
+impact	GET	/players/clutch-wpa	/players/clutch-wpa	200	0.16	5446	25		top	false	nba_api + ESPN via sportsdataverse (play-by-play)		
+impact	GET	/players/compare-profile/{player_name}	/players/compare-profile/LeBron%20James?season=2025	200	0.01	1564	10		top	false	nba_api (stats.nba.com) + Basketball-Reference		
+impact	GET	/players/garbage-time	/players/garbage-time	200	0.02	89313	575		top	false	ESPN play-by-play via sportsdataverse (corrected clock) + this project's WPA mod		
+impact	GET	/players/garbage-time/player/{player_id}	/players/garbage-time/player/2544	200	0.00	2134	4		top	false	ESPN play-by-play via sportsdataverse (corrected clock) + this project's WPA mod		
+impact	GET	/players/heliocentricity	/players/heliocentricity	200	0.66	8722	25		top	true	nba_api (stats.nba.com, live touch/possession tracking)		
+impact	GET	/players/history/{player_name}	/players/history/LeBron%20James	200	0.02	3484	23		top	false	nba_api (stats.nba.com)		
+impact	GET	/players/pair-synergy	/players/pair-synergy?player_a=LeBron+James&player_b=Anthony+Davis	200	0.02	1567			top	false	ridge model on stored season stats; observed pair from ESPN play-by-play stints		
+impact	GET	/players/playoff-comparison/{player_name}	/players/playoff-comparison/LeBron%20James?season=2025	200	0.18	633			top	true	nba_api (stats.nba.com)		
+impact	GET	/players/playtype-profile/{player_name}	/players/playtype-profile/LeBron%20James	200	0.02	1427	11		no				
+impact	GET	/players/profile/{player_name}	/players/profile/LeBron%20James	200	0.02	204			no				
+impact	GET	/players/scouting-report/{player_name}	/players/scouting-report/LeBron%20James	200	0.02	11998	16		top	false	nba_api + ESPN play-by-play		
+impact	GET	/players/search	/players/search?q=LeBron	200	0.03	45	1		no				
+impact	GET	/players/table/{season}	/players/table/2025	200	0.04	264007	457		top	false	nba_api (stats.nba.com) + Basketball-Reference		
+impact	GET	/plays/finder	/plays/finder	200	0.36	30952	50		top	false	ESPN play-by-play via sportsdataverse; NBA shot chart (stats.nba.com) for distan		
+impact	GET	/plays/finder/options	/plays/finder/options	200	0.00	2800	30		top	false	ESPN play-by-play via sportsdataverse; NBA shot chart (stats.nba.com) for distan		
+impact	GET	/possessions/league	/possessions/league	200	0.36	124215	30		top	false	ESPN play-by-play via sportsdataverse, cut into possessions by scripts/build_pos		
+impact	GET	/possessions/options	/possessions/options	200	0.00	25762	30		top	false	ESPN play-by-play via sportsdataverse, cut into possessions by scripts/build_pos		
+impact	GET	/possessions/player/{player_id}	/possessions/player/2544	200	0.09	5885	6		top	false	ESPN play-by-play via sportsdataverse, cut into possessions by scripts/build_pos		
+impact	GET	/possessions/team/{abbr}	/possessions/team/LAL	200	0.30	22063	6		top	false	ESPN play-by-play via sportsdataverse, cut into possessions by scripts/build_pos		
+impact	GET	/pregame/availability/game/{game_id}	/pregame/availability/game/0022400062	200	0.01	5581	17		top	false	ESPN play-by-play (who played, minutes) and the stored pre-game odds; scripts/bu		
+impact	GET	/pregame/availability/games	/pregame/availability/games?date=2024-10-22	200	0.00	1028	2		top	false	ESPN play-by-play (who played, minutes) and the stored pre-game odds; scripts/bu		
+impact	GET	/pregame/availability/model	/pregame/availability/model	200	0.01	11911	10		top	false	ESPN play-by-play (who played, minutes) and the stored pre-game odds; scripts/bu		
+impact	GET	/projections	/projections	200	0.03	270586	501		top	false	nba_api (stats.nba.com) + Basketball-Reference (seasons, BPM, birth dates)		
+impact	GET	/projections/backtest	/projections/backtest	200	0.01	287469	34		top	false	nba_api (stats.nba.com) + Basketball-Reference (seasons, BPM, birth dates)		
+impact	GET	/projections/player/{player_id}	/projections/player/2544	200	0.00	15946	34		top	false	nba_api (stats.nba.com) + Basketball-Reference (seasons, BPM, birth dates)		
+impact	GET	/prospects/comp/{player_name}	/prospects/comp/Cooper%20Flagg	200	0.04	2050	5		top	false	CollegeBasketballData.com + nba_api (stats.nba.com)		
+impact	GET	/radar/{player_name}	/radar/LeBron%20James?season=2025	200	0.01	780	11		top	false	nba_api (stats.nba.com)		
+impact	GET	/rapm	/rapm	200	0.03	280652	582		top	false	ESPN play-by-play (pbp_events) rebuilt into five-man stints by scripts/build_lin		
+impact	GET	/rapm/options	/rapm/options	200	0.00	6831	5		top	false	ESPN play-by-play (pbp_events) rebuilt into five-man stints by scripts/build_lin		
+impact	GET	/rapm/validation	/rapm/validation	200	0.00	61926	92		top	false	ESPN play-by-play (pbp_events) rebuilt into five-man stints by scripts/build_lin		
+impact	GET	/referees/crew-tendencies	/referees/crew-tendencies	200	0.09	2792355	5373		top	false	nba_api (stats.nba.com, BoxScoreSummaryV2 + LeagueGameFinder)		
+impact	GET	/referees/tendencies	/referees/tendencies	200	0.01	40144	87		top	false	nba_api (stats.nba.com, BoxScoreSummaryV2 + LeagueGameFinder)		
+impact	GET	/report-card/options	/report-card/options	200	0.02	11002	7		top	false	Rolling-origin re-runs of the platform's models (scripts/build_report_card.py) o		
+impact	GET	/report-card/pair	/report-card/pair?task=impact_next&a=bpm&b=rapm_tracker	200	0.00	1744	4		top	false	Rolling-origin re-runs of the platform's models (scripts/build_report_card.py) o		
+impact	GET	/report-card/task	/report-card/task	200	0.01	18574	14		top	false	Rolling-origin re-runs of the platform's models (scripts/build_report_card.py) o		
+impact	GET	/roles/finder	/roles/finder	200	0.02	24755	25		top	false	nba_api (stats.nba.com) + Basketball-Reference		
+impact	GET	/roles/finder/options	/roles/finder/options	200	0.00	9414	19		top	false	nba_api (stats.nba.com) + Basketball-Reference		
+impact	GET	/rotations/game/{game_id}	/rotations/game/espn_401704628	200	0.01	16213	45		top	false	ESPN play-by-play, rebuilt into stints (build_lineup_stints.py, build_rotations.		
+impact	GET	/rotations/games	/rotations/games?team=LAL	200	0.02	19300	82		top	false	ESPN play-by-play, rebuilt into stints (build_lineup_stints.py, build_rotations.		
+impact	GET	/rotations/options	/rotations/options	200	0.00	1572	30		top	false	ESPN play-by-play, rebuilt into stints (build_lineup_stints.py, build_rotations.		
+impact	GET	/rotations/team	/rotations/team?team=LAL	200	0.03	19637	48		top	false	ESPN play-by-play, rebuilt into stints (build_lineup_stints.py, build_rotations.		
+impact	GET	/schedule/difficulty	/schedule/difficulty	200	0.01	4359	30		top	false	nba_api (stats.nba.com)		
+impact	GET	/schedule/rest-study	/schedule/rest-study	200	0.03	1073	5		top	false	nba_api (stats.nba.com) schedule, ESPN scoreboard final scores		
+impact	GET	/season-sim	/season-sim	200	0.25	25849	15		top	false	ESPN scoreboard final scores (scripts/fetch_game_scores.py, scripts/fetch_postse		
+impact	GET	/season-sim/model	/season-sim/model	200	0.04	37440	112		top	false	ESPN scoreboard final scores (scripts/fetch_game_scores.py, scripts/fetch_postse		
+impact	GET	/season-sim/options	/season-sim/options	200	0.00	5644	16		top	false	ESPN scoreboard final scores (scripts/fetch_game_scores.py, scripts/fetch_postse		
+impact	GET	/shots/league-sample	/shots/league-sample	200	0.16	65913	6000		top	false	stats.nba.com shotchartdetail, bulk-loaded into Postgres		
+impact	GET	/shots/league-zones/{season}	/shots/league-zones/2025	200	0.01	496	5		top	false	stats.nba.com shotchartdetail (league totals per season)		
+impact	GET	/shots/player/{player_name}	/shots/player/LeBron%20James	200	0.02	195621	919		top	false	stats.nba.com shotchartdetail (bulk files, and per player on first view)		
+impact	GET	/shots/player/{player_name}/seasons	/shots/player/LeBron%20James/seasons	200	0.00	460	23		top	false	stats.nba.com shotchartdetail (bulk files, and per player on first view)		
+impact	GET	/shots/player/{player_name}/shot-making	/shots/player/LeBron%20James/shot-making	200	0.00	9696	23		top	false	stats.nba.com shot locations (player_shots), regular season, cross-fitted boosti		
+impact	GET	/shots/player/{player_name}/zone-history	/shots/player/LeBron%20James/zone-history	200	0.10	16058	23		top	false	stats.nba.com shot locations, regular season		
+impact	GET	/shots/player/{player_name}/zones	/shots/player/LeBron%20James/zones?season=2025	200	0.01	557	5		top	false	stats.nba.com shotchartdetail (bulk files, and per player on first view)		
+impact	GET	/shots/quality-map	/shots/quality-map?player=LeBron+James	200	0.01	25151	239		top	false	stats.nba.com shot locations (player_shots), regular season, cross-fitted boosti		
+impact	GET	/shots/quality-map/options	/shots/quality-map/options?player=LeBron+James	200	0.00	1083	23		top	false	stats.nba.com shot locations (player_shots), regular season, cross-fitted boosti		
+impact	GET	/shots/shot-making/leaderboard	/shots/shot-making/leaderboard	200	0.01	20695	50		top	false	stats.nba.com shot locations (player_shots), regular season, cross-fitted boosti		
+impact	GET	/shots/shot-making/model	/shots/shot-making/model	200	0.00	11591	30		top	false	stats.nba.com shot locations (player_shots), regular season, cross-fitted boosti		
+impact	GET	/shots/shot-value	/shots/shot-value	200	0.03	380046	350		top	false	stats.nba.com shot locations (player_shots) and ESPN play-by-play free throws (p		
+impact	GET	/shots/shot-value/options	/shots/shot-value/options	200	0.00	68700	230		top	false	stats.nba.com shot locations (player_shots) and ESPN play-by-play free throws (p		
+impact	GET	/shots/shot-value/player/{player_id}	/shots/shot-value/player/2544	200	0.00	10245	24		top	false	stats.nba.com shot locations (player_shots) and ESPN play-by-play free throws (p		
+impact	GET	/spacing/gravity	/spacing/gravity	200	0.01	61780	379		top	false	nba_api (LeagueDashPlayerPtShot, LeagueDashLineups)		
+impact	GET	/spacing/lineup	/spacing/lineup?season=2025&player_ids=1626157%2C1628384%2C1628404%2C1628969%2C1628973	200	0.00	2058	5		top	false	nba_api (LeagueDashPlayerPtShot, LeagueDashLineups)		
+impact	GET	/splits/situational/leaderboard	/splits/situational/leaderboard	200	0.02	21964	50		top	false	ESPN play-by-play (lines rebuilt from it) and scoreboard (final scores), nba_api		
+impact	GET	/splits/situational/options	/splits/situational/options	200	0.00	23646	44		top	false	ESPN play-by-play (lines rebuilt from it) and scoreboard (final scores), nba_api		
+impact	GET	/splits/situational/player/{player_id}	/splits/situational/player/2544	200	0.00	28903	6		top	false	ESPN play-by-play (lines rebuilt from it) and scoreboard (final scores), nba_api		
+impact	GET	/team-profile/{abbr}	/team-profile/LAL	200	0.02	33850	82		top	false	Stored tables only (Basketball-Reference team summaries, ESPN scores and play-by		
+impact	GET	/teams/compare/{team_a}/{team_b}	/teams/compare/LAL/BOS	200	0.01	4065	8		top	false	Basketball-Reference team ratings, nba_api (stats.nba.com) box scores, ESPN scor		
+impact	GET	/teams/history/{team_abbr}	/teams/history/LAL	200	0.00	16417	66		top	false	nba_api (stats.nba.com)		
+impact	GET	/teams/luck-schedule	/teams/luck-schedule	200	0.01	12676	30		top	false	ESPN scoreboard final scores (scripts/fetch_game_scores.py)		
+impact	GET	/teams/luck-schedule/model	/teams/luck-schedule/model	200	0.00	54062	510		top	false	ESPN scoreboard final scores (scripts/fetch_game_scores.py)		
+impact	GET	/teams/luck-schedule/team/{abbr}	/teams/luck-schedule/team/LAL	200	0.00	7385	17		top	false	ESPN scoreboard final scores (scripts/fetch_game_scores.py)		
+impact	GET	/teams/with-without/{team_abbr}/{season}	/teams/with-without/LAL/2025?player_name=LeBron+James	200	0.01	969			top	false	ESPN final scores + ESPN play-by-play (stored)		
+impact	GET	/trade/impact	/trade/impact?season=2025&team_a=NYK&player_a_id=1628404&team_b=MIA&player_b_id=1629130	200	0.01	11746			top	false	nba_api (stats.nba.com), Kaggle salary datasets		
+impact	GET	/trade/roster/{team_abbr}/{season}	/trade/roster/LAL/2025	200	0.00	3873	15		top	false	nba_api (stats.nba.com) + Basketball-Reference		
+impact	GET	/trade/simulate	/trade/simulate?season=2025&team_a=NYK&player_a_id=1628404&team_b=MIA&player_b_id=1629130	200	0.00	3344			top	false	nba_api (stats.nba.com) + Basketball-Reference; win model scripts/train_win_mode		
+impact	GET	/trade/teams/{season}	/trade/teams/2025	200	0.00	340	30		top	false	nba_api (stats.nba.com) + Basketball-Reference		
+impact	GET	/upsets	/upsets	200	0.02	12763	25		top	false	ESPN play-by-play and final scores via sportsdataverse (scripts/build_play_finde		
+impact	POST	/workbench/aging	/workbench/aging	200	0.00	7022	21		top	false	nba_api (stats.nba.com) + Basketball-Reference (seasons, birth dates)		
+impact	GET	/workbench/catalogue	/workbench/catalogue	200	0.23	198870	24		top	false	nba_api (stats.nba.com), Basketball-Reference, ESPN play-by-play and scoreboard		
+impact	POST	/workbench/context	/workbench/context	200	0.08	1507	18		top	false	nba_api (stats.nba.com) from 2009-10 + Basketball-Reference before and for BPM/V		
+impact	GET	/workbench/entities	/workbench/entities?kind=player&q=LeBron	200	0.08	246	1		top	false	nba_api (stats.nba.com) from 2009-10 + Basketball-Reference		
+impact	POST	/workbench/finder	/workbench/finder	200	0.01	3149	6		top	false	nba_api (stats.nba.com) from 2009-10 + Basketball-Reference before and for BPM/V		
+impact	POST	/workbench/parse	/workbench/parse	200	2.24	630	1		top	false	Google Gemini API (gemini-3.5-flash-lite) fills the finder's boxes; the catalogu		
+impact	GET	/workbench/parse/status	/workbench/parse/status	200	0.01	1017	3		top	false	Google Gemini API (gemini-3.5-flash-lite) fills the finder's boxes; the catalogu		
+impact	POST	/workbench/query	/workbench/query	200	0.10	4000	6		top	false	nba_api (stats.nba.com) from 2009-10 + Basketball-Reference before and for BPM/V		
+impact	POST	/workbench/trend	/workbench/trend	200	0.10	3862	41		top	false	nba_api (stats.nba.com) from 2009-10 + Basketball-Reference before and for BPM/V		

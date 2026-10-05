@@ -1,4 +1,6 @@
 import re
+from functools import lru_cache
+
 from source_badge import make_source
 from wpa_lib import PBP_DEDUP_WHERE
 from wpa_lib import seconds_elapsed as wpa_seconds_elapsed
@@ -39,6 +41,32 @@ def _replay_events(cursor, game_id):
     return _fetch_game_events(cursor, game_id), "nba"
 
 
+@lru_cache(maxsize=32)
+def _replay_list_rows(season):
+    """A season's games with their last score, newest first. Kept per process (round 8 step 8: the
+    last-score scan reads all 3.6M events, ~0.65 s per call); the play-by-play changes only on a rebuild:
+    restart impact_api after one. The query is unchanged, so games of one date keep the order it gives."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            WITH last_events AS (
+                SELECT DISTINCT ON (game_id) game_id, score_home, score_away
+                FROM pbp_events
+                ORDER BY game_id, action_number DESC
+            )
+            SELECT g.game_id, g.game_date, g.home_team, g.away_team, g.home_win,
+                   le.score_home, le.score_away
+            FROM pbp_games g
+            JOIN last_events le ON le.game_id = g.game_id
+            WHERE g.season = %s AND """ + PBP_DEDUP_WHERE + """
+            ORDER BY g.game_date DESC;
+            """,
+            (season,),
+        )
+        return tuple(cursor.fetchall())
+
+
 @router.get("/games/wp-replay/list")
 def get_wp_replay_list(season: int = None, game_id: str = None):
     with get_db() as conn:
@@ -58,23 +86,7 @@ def get_wp_replay_list(season: int = None, game_id: str = None):
             cursor.execute("SELECT MAX(season) FROM pbp_games;")
             season = cursor.fetchone()[0]
         resolved_season = season
-        cursor.execute(
-            """
-            WITH last_events AS (
-                SELECT DISTINCT ON (game_id) game_id, score_home, score_away
-                FROM pbp_events
-                ORDER BY game_id, action_number DESC
-            )
-            SELECT g.game_id, g.game_date, g.home_team, g.away_team, g.home_win,
-                   le.score_home, le.score_away
-            FROM pbp_games g
-            JOIN last_events le ON le.game_id = g.game_id
-            WHERE g.season = %s AND """ + PBP_DEDUP_WHERE + """
-            ORDER BY g.game_date DESC;
-            """,
-            (resolved_season,),
-        )
-        rows = cursor.fetchall()
+    rows = _replay_list_rows(resolved_season)
 
     return {
         "season": resolved_season,

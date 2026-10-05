@@ -54,6 +54,12 @@ SORTS = {
     "oldest": "p.game_no, p.event_id, p.cat",
     "dist": "p.dist DESC NULLS LAST, p.game_no DESC, p.event_id, p.cat",
 }
+# The same orders for the inner, limited query (round 8 step 8). `p.game_no + 0` sorts exactly like p.game_no
+# (smallint -> integer), but no index can hand it over in order, so Postgres stops walking play_finder_games'
+# primary key backwards in a nested loop over every play of the filter (one season: 45-112 s, unfiltered
+# 0.6 s) and sorts the filtered rows instead (35 ms for a season). (event_id, cat) is unique, so every order
+# is total and the page of rows can't change.
+INNER_SORTS = {k: v.replace("p.game_no", "(p.game_no + 0)") for k, v in SORTS.items()}
 PERIODS = {"1": "p.period = 1", "2": "p.period = 2", "3": "p.period = 3", "4": "p.period = 4", "ot": "p.period >= 5"}
 TEAM_SQL = "(CASE WHEN p.is_home THEN gm.home_team ELSE gm.away_team END)"
 OPP_SQL = "(CASE WHEN p.is_home THEN gm.away_team ELSE gm.home_team END)"
@@ -181,6 +187,30 @@ def _elapsed(period, tenths):
     return round(2880 + (period - 5) * 300 + 300 - left, 1)
 
 
+def _key(args):
+    """Bound arguments as a hashable cache key (lists -> tuples)."""
+    return tuple(tuple(a) if isinstance(a, list) else a for a in args)
+
+
+@lru_cache(maxsize=256)
+def _counts(where_sql, args, one_player):
+    """{cat: plays} and the top players for a filter, in one pass (round 8 step 8: two GROUP BYs before;
+    the sums are the same counts). Cached by the filter's SQL and arguments, so paging through results
+    doesn't recount; the table changes only on a rebuild (restart impact_api, like _games)."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(f"SELECT p.cat, p.player_id, COUNT(*) {FROM_SQL} {where_sql} GROUP BY 1, 2",
+                    [list(a) if isinstance(a, tuple) else a for a in args])   # back to lists: Postgres arrays
+        rows = cur.fetchall()
+    by_cat, per_player = {}, {}
+    for code, pid, n in rows:
+        by_cat[code] = by_cat.get(code, 0) + n
+        if pid is not None:
+            per_player[pid] = per_player.get(pid, 0) + n
+    most = [] if one_player or not rows else sorted(per_player.items(), key=lambda x: (-x[1], x[0]))[:TOP_PLAYERS]
+    return by_cat, most
+
+
 @router.get("/plays/finder")
 def play_finder(
     player_id: int | None = Query(None, ge=1),
@@ -271,23 +301,20 @@ def play_finder(
         where.append("p.dist IS NOT NULL")
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
+    by_cat, most = _counts(where_sql, _key(args), bool(player_id))
+    total = sum(by_cat.values())
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute(f"SELECT p.cat, COUNT(*) {FROM_SQL} {where_sql} GROUP BY 1", args)
-        by_cat = dict(cur.fetchall())
-        total = sum(by_cat.values())
-        most = []
-        if not player_id and total:
-            cur.execute(f"""SELECT p.player_id, COUNT(*) n {FROM_SQL} {where_sql}
-                            {'AND' if where else 'WHERE'} p.player_id IS NOT NULL
-                            GROUP BY 1 ORDER BY n DESC, p.player_id LIMIT {TOP_PLAYERS}""", args)
-            most = cur.fetchall()
+        # The page of rows first (play_finder_events + the games it filters on), then the display columns
+        # for just those rows. Every play has its game and its pbp_events row (the build writes them from
+        # those tables; test_round8_speed checks), so joining after the LIMIT drops nothing.
         cur.execute(f"""
             SELECT p.event_id, p.player_id, p.cat, p.period, p.clock, p.score_for, p.score_against, p.dist, p.is_home,
                    gm.game_id, gm.nba_game_id, gm.season, gm.game_date, gm.home_team, gm.away_team,
                    e.description, e.action_type, e.player_name
-            {FROM_SQL} JOIN pbp_events e ON e.id = p.event_id
-            {where_sql} ORDER BY {SORTS[sort]} LIMIT %s OFFSET %s""", args + [limit, offset])
+            FROM (SELECT p.* {FROM_SQL} {where_sql} ORDER BY {INNER_SORTS[sort]} LIMIT %s OFFSET %s) p
+            JOIN play_finder_games gm ON gm.game_no = p.game_no JOIN pbp_events e ON e.id = p.event_id
+            ORDER BY {SORTS[sort]}""", args + [limit, offset])
         rows = cur.fetchall()
 
     names = _names()

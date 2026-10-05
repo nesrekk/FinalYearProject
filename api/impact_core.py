@@ -22,6 +22,7 @@ Endpoints:
 Usage:
     uvicorn impact_api:app --port 8002 --reload
 """
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import hashlib
 import html
@@ -33,6 +34,7 @@ import random
 import re
 import ssl
 import sys
+import threading
 import time
 import unicodedata
 import xml.etree.ElementTree as ET
@@ -357,11 +359,14 @@ def fetch_nba_api_team_stats(season: int):
     if cached and (now - cached["ts"] < _LIVE_CACHE_TTL_SECONDS):
         return cached["data"]
 
-    result = _fetch_nba_api_team_stats_uncached(season)
-    if result is not None:
+    answered, result = _fetch_nba_api_team_stats_uncached(season)
+    # An answer with nothing in it (every GP 0: before opening night) is cached like a full one (round 8
+    # step 8: it was refetched on every /meta/current, ~0.4-0.7 s each); a failure still isn't.
+    if answered:
         _CACHE["team_stats_nba_api"][season] = {"ts": now, "data": result}
     return result
 def _fetch_nba_api_team_stats_uncached(season: int):
+    """(answered, rows or None): answered = stats.nba.com returned a result set."""
     try:
         from nba_api.stats.endpoints import leaguedashteamstats
 
@@ -375,11 +380,11 @@ def _fetch_nba_api_team_stats_uncached(season: int):
         data = endpoint.get_dict()
         result_sets = data.get("resultSets", []) or []
         if not result_sets:
-            return None
+            return False, None
         rs = result_sets[0]
-        return parse_team_stats_rows(rs.get("headers", []) or [], rs.get("rowSet", []) or [])
+        return True, parse_team_stats_rows(rs.get("headers", []) or [], rs.get("rowSet", []) or [])
     except Exception:
-        return None
+        return False, None
 
 
 def parse_team_stats_rows(headers, rows):
@@ -627,7 +632,21 @@ def _has_event_clock(cursor) -> bool:
     cursor.execute("SELECT to_regclass('public.pbp_event_clock');")
     return cursor.fetchone()[0] is not None
 GUESS_THE_GAME_MAX_GUESSES = 3
+_GUESS_THE_GAME_POOL = []
+_GUESS_THE_GAME_POOL_LOCK = threading.Lock()
+
+
 def _guess_the_game_pool(cursor):
+    """Every deduplicated play-by-play game with its last score, by game id. Kept per process after the
+    first read (round 8 step 8: the last-score scan of all 3.6M events took ~0.75 s on every daily puzzle,
+    guess and reveal); the play-by-play changes only on a rebuild: restart impact_api after one."""
+    with _GUESS_THE_GAME_POOL_LOCK:
+        if not _GUESS_THE_GAME_POOL:
+            _GUESS_THE_GAME_POOL.extend(_read_guess_the_game_pool(cursor))
+    return _GUESS_THE_GAME_POOL
+
+
+def _read_guess_the_game_pool(cursor):
     cursor.execute(
         """
         WITH last_events AS (
@@ -887,8 +906,9 @@ def _fetch_current_news_uncached(date_str: Optional[str], limit: int, team: Opti
             f"https://news.google.com/rss/search?q={quote(team)}+NBA&hl=en-US&gl=US&ceid=US:en",
         ))
 
-    items = []
-    for source, feed_url in feeds:
+    def read_feed(source, feed_url):
+        """One feed's items (the ones read before a failure, if it fails part way)."""
+        feed_items = []
         try:
             xml_text = fetch_text(feed_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=25)
             root = ET.fromstring(xml_text)
@@ -911,7 +931,7 @@ def _fetch_current_news_uncached(date_str: Optional[str], limit: int, team: Opti
                 ):
                     continue
 
-                items.append(
+                feed_items.append(
                     {
                         "headline": title,
                         "summary": description[:280] if description else "",
@@ -922,7 +942,15 @@ def _fetch_current_news_uncached(date_str: Optional[str], limit: int, team: Opti
                     }
                 )
         except Exception:
-            continue
+            pass
+        return feed_items
+
+    # The feeds are fetched at the same time and combined in the list's order, so the answer is the one the
+    # one-by-one loop gave (round 8 step 8: 5-6 s one after another, two of the six answer 404 slowly; now the
+    # slowest single feed, ~2 s).
+    with ThreadPoolExecutor(max_workers=len(feeds)) as feed_pool:
+        per_feed = list(feed_pool.map(lambda f: read_feed(*f), feeds))
+    items = [item for feed_items in per_feed for item in feed_items]
 
     # If strict date filter produced nothing, return most recent feed items instead.
     if not items and date_str:

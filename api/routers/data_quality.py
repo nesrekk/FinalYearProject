@@ -17,6 +17,7 @@ data_quality_sensitivity / data_quality_meta (scripts/build_data_quality.py). De
 The overview and the sensitivity tables are cached per process: restart impact_api after rerunning either script.
 """
 
+import threading
 import time
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -156,14 +157,32 @@ def data_quality_overview():
     return {**d, "_source": make_source(TABLES, UPSTREAM)}
 
 
-@lru_cache(maxsize=32)
+# One check runs once at a time: a request arriving while the same check is running waits for it and reads the
+# cached answer (round 8 step 8: the page asks for all 14 at once, twice in development's StrictMode, and the two
+# slow ones ran side by side with themselves).
+_LIVE_LOCKS = {key: threading.Lock() for key in Q.LIVE}
+
+
 def _live(key):
+    with _LIVE_LOCKS[key]:
+        return _live_run(key)
+
+
+@lru_cache(maxsize=32)
+def _live_run(key):
     audit, _, _ = _audit()
     t = time.time()
     with get_db() as conn:
         cur = conn.cursor()
         try:
-            res = Q.compare(Q.LIVE[key](cur), audit)
+            if key in Q.TWO_PASS:   # its two passes on two connections at once (the same queries)
+                with get_db() as conn2:
+                    try:
+                        res = Q.compare(Q.LIVE[key](cur, conn2.cursor()), audit)
+                    finally:
+                        conn2.rollback()
+            else:
+                res = Q.compare(Q.LIVE[key](cur), audit)
         finally:
             conn.rollback()
     return {"values": res, "seconds": round(time.time() - t, 2),

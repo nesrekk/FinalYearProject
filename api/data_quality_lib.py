@@ -19,6 +19,7 @@ scripts/build_data_quality.py and api/routers/data_quality.py:
 Nothing here writes to the database.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from decimal import ROUND_HALF_UP, Decimal
 
 FIRST_SEASON = 2021                 # play-by-play era (2020-21 on): the span of the per-game flags
@@ -316,24 +317,43 @@ def live_teamless_sub(cur):
     return [("teamless_subs", 0, n), ("teamless_games", 0, g), ("nan_team_rows", 0, nan)]
 
 
-def live_score_fields(cur):
+def _both(cur, first, cur2, second):
+    """first(cur) and second(cur2 or cur): on two connections at once when the caller gives a second one (the
+    router, round 8 step 8: each is a full pass over the play-by-play), one after the other otherwise (the build).
+    The same queries either way."""
+    if cur2 is None:
+        return first(cur), second(cur)
+    with ThreadPoolExecutor(max_workers=1) as ex:
+        later = ex.submit(second, cur2)
+        return first(cur), later.result()
+
+
+def live_score_fields(cur, cur2=None):
+    steps, (back, games) = _both(cur, _score_steps, cur2, _score_backwards)
     out = []
-    for season, games, miss in _all(cur, """
+    for season, n_games, miss in steps:
+        out += [("score_steps_games", int(season), n_games), ("score_steps_miss", int(season), miss)]
+    return out + [("score_backwards_games", 0, back), ("espn_games", 0, games)]
+
+
+def _score_steps(cur):
+    return _all(cur, """
             WITH d AS (SELECT e.game_id, greatest(e.score_home - lag(e.score_home) OVER w, 0) up_h,
                               greatest(e.score_away - lag(e.score_away) OVER w, 0) up_a
                        FROM pbp_events e WHERE e.game_id IN (SELECT game_id FROM lineup_stint_games)
                        WINDOW w AS (PARTITION BY e.game_id ORDER BY e.action_number)),
                  t AS (SELECT game_id, sum(up_h) h, sum(up_a) a FROM d GROUP BY game_id)
             SELECT g.season, count(*), count(*) FILTER (WHERE (t.h = g.final_home AND t.a = g.final_away) IS NOT TRUE)
-            FROM t JOIN lineup_stint_games g USING (game_id) GROUP BY g.season ORDER BY 1"""):
-        out += [("score_steps_games", int(season), games), ("score_steps_miss", int(season), miss)]
-    back, games = _one(cur, """
+            FROM t JOIN lineup_stint_games g USING (game_id) GROUP BY g.season ORDER BY 1""")
+
+
+def _score_backwards(cur):
+    return _one(cur, """
         WITH d AS (SELECT e.game_id, e.score_home < lag(e.score_home) OVER w OR e.score_away < lag(e.score_away) OVER w AS down
                    FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id AND g.source = 'espn'
                    WHERE e.score_home IS NOT NULL AND e.score_away IS NOT NULL
                    WINDOW w AS (PARTITION BY e.game_id ORDER BY e.action_number, e.id))
         SELECT count(DISTINCT game_id) FILTER (WHERE down), count(DISTINCT game_id) FROM d""")
-    return out + [("score_backwards_games", 0, back), ("espn_games", 0, games)]
 
 
 def live_last_score(cur):
@@ -345,19 +365,26 @@ def live_last_score(cur):
     return [("last_score_games", 0, n), ("last_score_bad", 0, bad)]
 
 
-def live_clock_offset(cur):
-    (n, g), = [_one(cur, """SELECT count(*), count(DISTINCT e.game_id) FROM pbp_events e
-                            JOIN pbp_games p ON p.game_id = e.game_id AND p.source = 'espn'
-                            WHERE e.period BETWEEN 1 AND 4
-                              AND NOT (e.seconds_remaining BETWEEN 720 * (4 - e.period) AND 720 * (5 - e.period))""")]
+def live_clock_offset(cur, cur2=None):
+    (n, g), (pairs, med, p99, big) = _both(cur, _clock_outside, cur2, _clock_pairs)
+    return [("clock_outside_events", 0, n), ("clock_outside_games", 0, g), ("clock_pairs", 0, pairs),
+            ("clock_median", 0, float(med)), ("clock_p99", 0, float(p99)), ("clock_big_share", 0, float(big))]
+
+
+def _clock_outside(cur):
+    return _one(cur, """SELECT count(*), count(DISTINCT e.game_id) FROM pbp_events e
+                        JOIN pbp_games p ON p.game_id = e.game_id AND p.source = 'espn'
+                        WHERE e.period BETWEEN 1 AND 4
+                          AND NOT (e.seconds_remaining BETWEEN 720 * (4 - e.period) AND 720 * (5 - e.period))""")
+
+
+def _clock_pairs(cur):
     # pbp_event_clock's 'chart' events carry the shot chart's own clock: the same shots the audit compares
-    pairs, med, p99, big = _one(cur, """
+    return _one(cur, """
         SELECT count(*), percentile_disc(0.5) WITHIN GROUP (ORDER BY d), percentile_cont(0.99) WITHIN GROUP (ORDER BY d),
                avg((d > %s)::int::float8)
         FROM (SELECT abs(e.seconds_remaining - c.seconds_remaining) d FROM pbp_event_clock c
               JOIN pbp_events e ON e.id = c.event_id WHERE c.source = 'chart') x""", (CLOCK_BIG,))
-    return [("clock_outside_events", 0, n), ("clock_outside_games", 0, g), ("clock_pairs", 0, pairs),
-            ("clock_median", 0, float(med)), ("clock_p99", 0, float(p99)), ("clock_big_share", 0, float(big))]
 
 
 def live_unreconciled(cur):
@@ -419,6 +446,9 @@ LIVE = {
     "zero_distance": live_zero_distance, "unlocated": live_unlocated, "plus_minus": live_plus_minus,
     "wrong_team": live_wrong_team, "age_convention": live_age_convention,
 }
+# Live checks made of two independent passes over the play-by-play: they take a second cursor (run on two
+# connections at once by the router; the build runs them one after the other).
+TWO_PASS = {"score_fields", "clock_offset"}
 LIVE_NOTES = {
     "clock_offset": "Shot offsets from pbp_event_clock's chart-matched events, which carry the chart's own clock; the audit matches "
                     "the same shots itself. Agreement is at the precision the paper prints (whole seconds, 0.1%).",

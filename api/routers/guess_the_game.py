@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from functools import lru_cache
 from typing import Optional
 from wpa_lib import seconds_elapsed as wpa_seconds_elapsed
 from wpa_lib import win_prob as wpa_win_prob
@@ -27,8 +28,13 @@ def get_guess_the_game_daily(puzzle_date: Optional[str] = None):
     probability curve, with no team names or date — just the shape of how
     the game actually unfolded."""
     _wpa_model_required()
-    resolved_date = _parse_puzzle_date(puzzle_date)
+    return _daily(_parse_puzzle_date(puzzle_date))
 
+
+@lru_cache(maxsize=16)
+def _daily(resolved_date):
+    """One date's puzzle, kept per process (round 8 step 8: ~470 win-probability calls a game, ~0.4 s, for an
+    answer that depends only on the date and the stored play-by-play; restart impact_api after a rebuild)."""
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT to_regclass('public.pbp_games');")
