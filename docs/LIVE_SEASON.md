@@ -90,8 +90,15 @@ The classes:
 | **cache** | 3 | 0 | 65 | 0 |
 
 <!-- live_season:begin -->
+| Live season | Tables | MB now | Rows of the newest season | MB one season adds |
+| **daily** | 39 | 2,855 | 2,437,302 | 353 |
+| **season-to-date** | 36 | 432 | 535,569 | 59 |
+| **season-end** | 47 | 104 | 46,706 | 9 |
+| **frozen** | 73 | 683 | 1,190,340 | 229 |
+| **static** | 10 | 3 | 927 | 0 |
+| **ledger** | 11 | 1 | 0 | 0 |
+| **cache** | 3 | 0 | 65 | 0 |
 | Table | Kind | Producer | Season dim | Paper rows | Live season | Rebuild today | Rows | Last season | MB | MB/season | Note |
-|---|---|---|---|---|---|---|---|---|---|---|---|
 | `aging_curve_summary` | derived | `build_aging_curves.py` | — | whole | **season-end** | whole table | 72 |  | 0.0 |  |  |
 | `aging_curves` | derived | `build_aging_curves.py` | — | whole | **season-end** | whole table | 1,455 |  | 0.3 |  |  |
 | `aging_league_average` | derived | `build_aging_curves.py` | season (int) | capped | **season-end** | whole table | 1,424 | 24 | 0.2 | 0.0 |  |
@@ -118,7 +125,7 @@ The classes:
 | `contract_value` | derived | `build_contract_value.py` | season (int) | capped | **static** | whole table | 6,502 | 431 | 1.2 | 0.1 |  |
 | `contract_value_seasons` | derived | `build_contract_value.py` | season (int) | capped | **static** | whole table | 16 | 1 | 0.0 | 0.0 |  |
 | `dad_validation` | derived | `build_dad_index.py` | season (int) | capped | **season-to-date** | whole table | 9 | 1 | 0.0 | 0.0 |  |
-| `daily_update_runs` | source | `daily_update.py` | season (int) | capped | **daily** | per season + incremental | 1 | 1 | 0.0 | 0.0 | LIVE: one row per daily_update.py run (what was checked, written, left pending, failed); outside the manifest digest |
+| `daily_update_runs` | source | `daily_update.py` | season (int) | capped | **daily** | per season + incremental | 2 | 2 | 0.0 | 0.0 | LIVE: one row per daily_update.py run (what was checked, written, left pending, failed); outside the manifest digest |
 | `data_quality_game_flags` | derived | `build_data_quality.py` | season (int) | capped | **frozen** | whole table | 7,232 | 1,230 | 5.2 | 0.9 |  |
 | `data_quality_meta` | derived | `build_data_quality.py` | — | whole | **frozen** | whole table | 19 |  | 0.1 |  |  |
 | `data_quality_sensitivity` | derived | `build_data_quality.py` | — | whole | **frozen** | whole table | 1,026 |  | 0.4 |  |  |
@@ -166,7 +173,7 @@ The classes:
 | `lineup_stats` | source | `fetch_spacing_data.py` | season (int) | capped | **season-to-date** | per season | 26,000 | 2,000 | 8.3 | 0.6 | LeagueDashLineups top 2,000 lineups a season: weekly is enough |
 | `lineup_stint_games` | derived | `build_lineup_stints.py` | season (int) | capped | **daily** | whole table | 7,232 | 1,230 | 1.5 | 0.3 |  |
 | `lineup_stint_seasons` | derived | `build_lineup_stints.py` | season (int) | capped | **daily** | whole table | 6 | 1 | 0.0 | 0.0 |  |
-| `lineup_stints` | derived | `build_lineup_stints.py` | season (int) | capped | **daily** | whole table | 294,027 | 53,537 | 106.8 | 19.5 | 9-3: delete and rebuild season 2027 only, through the same Game.walk() code; a test proves --season 2026 equals the full rebuild's 2025-26 rows |
+| `lineup_stints` | derived | `build_lineup_stints.py` | season (int) | capped | **daily** | whole table | 294,027 | 53,537 | 106.8 | 19.5 | build_lineup_stints.py --season 2027 deletes and rebuilds that season only, through the same Game.walk() code; api/tests/test_season_rebuild.py proves --season 2026 equals the full build's 2025-26 rows |
 | `luck_model_fit` | derived | `build_luck_schedule.py` | — | whole | **frozen** | whole table | 3 |  | 0.0 |  |  |
 | `luck_schedule_seasons` | derived | `build_luck_schedule.py` | season (int) | capped | **season-to-date** | whole table | 17 | 1 | 0.0 | 0.0 |  |
 | `luck_schedule_validation` | derived | `build_luck_schedule.py` | — | whole | **frozen** | whole table | 19 |  | 0.0 |  |  |
@@ -214,7 +221,7 @@ The classes:
 | `player_first_season` | derived | `build_first_nba_season.py` | — | whole | **season-end** | whole table | 4,417 |  | 0.4 |  | as player_bio: rookies' first season (2027) at the season's end |
 | `player_game_lines` | derived | `build_player_game_lines.py` | season (int) | capped | **daily** | whole table | 154,345 | 26,641 | 39.6 | 6.8 | heaves: since 2025-26 the NBA counts a missed end-of-quarter heave as a team attempt; ESPN logs it ('Heave Jump Shot', ~1,100 a season) and the lines charge the shooter (R8-088) |
 | `player_game_onfloor` | derived | `build_player_game_onfloor.py` | season (int) | capped | **daily** | whole table | 154,334 | 26,641 | 22.4 | 3.9 |  |
-| `player_game_onfloor_meta` | derived | `build_player_game_onfloor.py` | — | whole | **frozen** | whole table | 10 |  | 0.0 |  | checks over every game, no season dimension: 9-3's --season mode must leave it (or add a season column) |
+| `player_game_onfloor_meta` | derived | `build_player_game_onfloor.py` | — | whole | **frozen** | whole table | 10 |  | 0.0 |  | checks over every game, no season dimension: the --season builds leave it as it is (R9-008) |
 | `player_gravity` | derived | `build_gravity_index.py` | season (int) | capped | **season-to-date** | whole table | 5,695 | 582 | 1.3 | 0.1 |  |
 | `player_hustle` | source | `fetch_hustle_stats.py` | season (int) | capped | **season-to-date** | per season | 5,602 | 581 | 1.1 | 0.1 |  |
 | `player_id_map` | source | `load_kaggle_historical_seasons.py` | — | whole | **season-end** | per season | 5,105 |  | 0.6 |  | as player_bio: rookies' Basketball-Reference <-> NBA ids at the season's end |
@@ -298,7 +305,7 @@ The classes:
 | `shot_value_states` | derived | `build_shot_value.py` | season (int) | capped | **season-to-date** | whole table | 13,628 | 2,328 | 1.6 | 0.3 | as shot_value_shots |
 | `shot_value_validation` | derived | `build_shot_value.py` | — | whole | **frozen** | whole table | 260 |  | 0.1 |  |  |
 | `shot_xfg` | derived | `build_shot_making.py` | season (int) | capped | **season-to-date** | whole table | 1,282,300 | 219,160 | 94.7 | 16.2 | 9-4 may score 2026-27 shots with the five fold models refitted on <= 2025-26 (the fit is deterministic: ORDER BY id); the stored 2020-21 to 2025-26 P(make) must not move |
-| `situational_split_league` | derived | `build_situational_splits.py` | season (int) | capped | **daily** | whole table | 308 | 44 | 0.1 | 0.0 | the season 0 (pooled) row is the paper's: 9-3 recomputes only the 2027 row |
+| `situational_split_league` | derived | `build_situational_splits.py` | season (int) | capped | **daily** | whole table | 308 | 44 | 0.1 | 0.0 | the season 0 (pooled) row is the paper's: a --season run writes only its season's row |
 | `stat_stability` | derived | `build_stat_stability.py` | — | whole | **frozen** | whole table | 35 |  | 0.0 |  | the M constants 9-4 uses for early-season reliability warnings: frozen |
 | `stat_stability_curve` | derived | `build_stat_stability.py` | — | whole | **frozen** | whole table | 285 |  | 0.1 |  |  |
 | `stat_year_to_year` | derived | `build_stat_stability.py` | — | whole | **frozen** | whole table | 30 |  | 0.0 |  |  |
@@ -427,6 +434,81 @@ day from the caches 1 s, a second run writes nothing. The first real run (2026-1
 nothing to check and only created the run log. The paper's inputs: the manifest digest, every claim, every figure and
 every macro but the two table counts (`\pnTableCount` 199 → 200, `\pnManTables` 218 → 219: the run log) are unchanged (R9-010).
 
+## 6. Step 3: the daily rebuild of the current season (2026-10-06)
+
+Every season-level build of the daily chain takes **`--season N`** (`scripts/season_mode.py`): it deletes only that
+season's rows of each table it writes and inserts the season's new rows through the same functions as the full build
+(no DDL, no new index, no second implementation), needs the full build's tables (it never creates them), and leaves
+alone every table without a season dimension (the `*_meta` check tables, `best_games_meta`, `leverage_index_grid`:
+R9-008) and every other season's rows. The fourteen, in `rebuild_all.sh` order (`daily_update.REBUILD_STEPS`):
+`build_event_clock.py`, `build_player_game_lines.py`, `build_team_game_totals.py`, `build_lineup_stints.py`,
+`build_player_game_onfloor.py`, `build_player_on_off.py`, `build_possessions.py`, `build_situational_splits.py`,
+`build_rotations.py`, `build_rim_deterrence.py`, `build_assist_network.py`, `build_play_finder.py`,
+`build_best_games.py`, `build_leverage_splits.py`. The shared loaders take the season (`pbp_lineups.load_espn`,
+`match_coordinates`, `chart_matches`, `miss_three_calls`: `season=`, defaults unchanged); the shot chart matched
+within one season gives that season's attempts the same matches as the whole chart (the match is keyed by the NBA
+game id).
+
+Three things the full builds do across seasons, and what the season mode does about them:
+
+- **One seeded random stream** (R9-016): on/off, rim deterrence and the situational splits draw every player-season's
+  bootstrap (and the splits' chance shuffle) from one stream in sorted order, so a row's interval depends on the rows
+  before it. In `--season` mode these three compute every season exactly as the full build does and write only the
+  season's rows: the live season gets the intervals a full build would give it today, the stored seasons keep theirs.
+- **Pooled constants** (R9-017): the deflator's Leverage Index is normalised by league-wide constants pooled over every
+  event. `--season N` computes them from seasons <= `paper_freeze.MAX_PAPER_SEASON`, stops unless they reproduce the
+  stored `leverage_index_grid` to 1e-9, and applies them to the season's events (R9-009's rule for pooled fits).
+- **Sequential ids** (R9-018): `lineup_stints.stint_id` and the Play Finder's `game_no` continue from the season
+  before, which is what the full build gives a season whose games all come after the earlier seasons'.
+
+**The proof** (`api/tests/test_season_rebuild.py`): the fourteen builds run with `--season 2026` in `rebuild_all.sh`
+order into copies of their tables in the schema `zz_season_rebuild` (search_path through PGOPTIONS; the public tables
+are never written), and the 2025-26 rows of every table they write have **the same content hash as the stored full
+build's** (paper_manifest's summed-halves hash over the season's rows, taken from the public tables before any build
+ran); every other season's rows and the five untouched tables hash the same before and after; the public tables are
+untouched. The chain's time is the daily rebuild's worst case (a whole 1,230-game season; a game day adds 5-15 games
+to a season that is rebuilt whole):
+
+| build | `--season 2026` | rows of 2025-26 |
+|---|---|---|
+| `build_event_clock.py` | 13 s | pbp_event_clock 596,049 rows |
+| `build_player_game_lines.py` | 12 s | player_game_lines 26,641 rows |
+| `build_team_game_totals.py` | 1 s | team_game_totals 2,460 rows |
+| `build_lineup_stints.py` | 16 s | lineup_stints 53,537 rows, lineup_stint_games 1,230 rows, lineup_stint_seasons 1 rows, lineup_seasons 23,092 rows, pair_seasons 5,564 rows |
+| `build_player_game_onfloor.py` | 6 s | player_game_onfloor 26,641 rows |
+| `build_player_on_off.py` | 6 s | player_on_off 661 rows, player_on_off_seasons 1 rows |
+| `build_possessions.py` | 27 s | possessions 247,055 rows, possession_games 1,230 rows, possession_seasons 339 rows |
+| `build_situational_splits.py` | 61 s | player_situational_splits 20,878 rows, situational_split_league 44 rows |
+| `build_rotations.py` | 13 s | rotation_closing_games 1,230 rows, rotation_closing_stints 6,617 rows |
+| `build_rim_deterrence.py` | 48 s | rim_deterrence 661 rows, rim_deterrence_seasons 1 rows |
+| `build_assist_network.py` | 5 s | assist_pairs 7,504 rows, player_assisted_share 661 rows, assist_seasons 1 rows |
+| `build_play_finder.py` | 16 s | play_finder_events 569,310 rows, play_finder_games 1,229 rows, play_finder_seasons 1 rows |
+| `build_best_games.py` | 2 s | best_games 1,229 rows |
+| `build_leverage_splits.py` | 19 s | player_leverage_splits 2,173 rows, player_leverage_summary 579 rows, leverage_validation 1 rows |
+| **all fourteen** | **246 s (4.1 min; the schema copies another 27 s, the test 5 min)** | |
+
+On the eight-game 2026-27 preseason (a `--season 2027` trial by hand in a scratch schema holding full copies of the
+tables the builds read whole) the same chain took 160 s: the three every-season builds (splits 61 s, rim 56 s, on/off
+6 s) and the deflator (20 s, every event loaded for its constants) are a game day's fixed cost, the per-game builds
+1-8 s each. Five prints and summaries assumed a season with many games and were made to say n/a or 0 (the lines'
+NBA.com check, on/off's league mean, rim's rule share, the Play Finder's distance-source columns, the deflator's PPG
+check). The situational splits write no 2026-27 row until players have ten games on each side of a split.
+
+**In the daily update:** `daily_update.py` runs the fourteen after its fetch steps when the run stored new play-by-play
+or changed the shot chart (`--rebuild` forces it, `--no-rebuild` skips it, `--rebuild-only` runs nothing else; a dry
+run never rebuilds; only the regular season is rebuilt, never the tests' preseason runs), each as
+`python3 <script> --season N` in its own process (memory freed between builds; output in
+`live_data/<season>/rebuild/<date>_<script>.log`), stopping at the first failure since every build reads the one
+before it; the run row keeps every build's status and seconds (`rebuild_seconds`, `rebuild_steps`; R9-020) and the
+summary line says `rebuild 14 of 14 builds in N s` or why it was skipped. The update restarts nothing: it prints
+`restart impact_api` (the API caches these tables per process). Decided on the way: the lines' heave treatment stays
+as it is for both seasons (R9-007).
+
+**Not in the daily chain** (and why): `build_stat_stability.py`, `build_hot_streak_persistence.py`, `compute_wpa.py`
+and the referee tables are frozen pooled measures (R9-002); `build_projections.py`, `build_rapm.py`,
+`build_shot_value.py`, `build_rating_tracker.py`, `build_team_zone_mix.py` and `build_scouting_reports.py` are step
+9-4's season-to-date models; the paper stage never runs during the season.
+
 ## For the guide
 
 - The paper is frozen on 2025-26 by code: one constant, every paper script reads through it, and the manifest hashes
@@ -439,3 +521,6 @@ every macro but the two table counts (`\pnTableCount` 199 → 200, `\pnManTables
 - One season adds about 410 MB; Layerbase can hold it.
 - Step 2 (2026-10-06): one command, `daily_update.py`, fetches every final since the last run and refreshes the season's
   source tables; the play-by-play mapping equals the old release's rows exactly, tested on the 2026-27 preseason.
+- Step 3 (2026-10-06): the same command then rebuilds the season's fourteen derived tables for that season only, through
+  the full builds' own code; a test proves the mode gives byte-identical rows for 2025-26, and a whole season takes 4
+  minutes, so a game day is well inside the 10-minute target.

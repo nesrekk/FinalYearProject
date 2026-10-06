@@ -125,7 +125,9 @@ step fetch -        ledger_lock.py --verify              # Forecast Ledger: a lo
 step fetch net      ledger_update.py                     # Forecast Ledger nightly: ESPN finals, odds from the tagged code,
                                                          # scores (appends; a rerun of a night adds nothing)
 step fetch nbaapi   fetch_referee_officials.py           # resumable: grows coverage each run
-step fetch net,nbaapi daily_update.py                    # the live season (round 9 step 2): finals, play-by-play, shots, season stats
+step fetch net,nbaapi daily_update.py                    # the live season (round 9 step 2): finals, play-by-play, shots, season stats;
+                                                         # then (step 3) the fourteen season-level builds below marked "--season"
+                                                         # run for that season only (python3 <script> --season 2027: scripts/season_mode.py)
                                                          # since the last run; writes only the live season's rows (daily_update_runs = its log)
 step fetch nbaapi   fetch_spacing_data.py
 step fetch nbaapi   fetch_matchups.py
@@ -193,28 +195,28 @@ step derived -        build_player_roles.py
 step derived -        build_shot_making.py               # ~3 min; also shot_xfg
 # ------------------------------------------------------------------ derived: play-by-play (order from CLAUDE.md)
 step derived -        train_wpa_model.py
-step derived -        build_event_clock.py               # ~1.5 min; read by possessions, rotations, play finder
-step derived -        build_player_game_lines.py
-step derived -        build_team_game_totals.py          # read by build_lineup_stints, build_possessions, build_player_on_off
-step derived -        build_lineup_stints.py
-step derived -        build_player_game_onfloor.py       # ~35 s; reads lineup_stints, lineup_stint_games
-step derived -        build_player_on_off.py             # reads player_game_onfloor, team_game_totals, game_scores
-step derived -        build_possessions.py               # ~3.5 min; reads lineup_stints, team_game_totals
+step derived -        build_event_clock.py               # ~1.5 min; read by possessions, rotations, play finder; --season N rebuilds one season (round 9 step 3)
+step derived -        build_player_game_lines.py     # --season N rebuilds one season (round 9 step 3)
+step derived -        build_team_game_totals.py          # read by build_lineup_stints, build_possessions, build_player_on_off; --season N rebuilds one season (round 9 step 3)
+step derived -        build_lineup_stints.py         # --season N rebuilds one season (round 9 step 3)
+step derived -        build_player_game_onfloor.py       # ~35 s; reads lineup_stints, lineup_stint_games; --season N rebuilds one season (round 9 step 3)
+step derived -        build_player_on_off.py             # reads player_game_onfloor, team_game_totals, game_scores; --season N rebuilds one season (round 9 step 3)
+step derived -        build_possessions.py               # ~3.5 min; reads lineup_stints, team_game_totals; --season N rebuilds one season (round 9 step 3)
 step derived -        build_stat_stability.py
 step derived -        build_hot_streak_persistence.py
-step derived -        build_situational_splits.py
+step derived -        build_situational_splits.py    # --season N rebuilds one season (round 9 step 3)
 step derived -        build_projections.py
 step derived -        build_rapm.py                      # ~5 min
 step derived -        build_shot_value.py                # ~20 min; 30 look-ahead-free shot fits; reads player_game_lines, shot_xfg (folds); imports build_rapm
 step derived -        build_rating_tracker.py            # ~8 min; reads player_rapm (validation); its fit row is read by paper_eval.py
-step derived -        build_rotations.py
-step derived -        build_rim_deterrence.py
-step derived -        build_assist_network.py
-step derived -        build_play_finder.py
-step derived -        build_best_games.py
+step derived -        build_rotations.py             # --season N rebuilds one season (round 9 step 3)
+step derived -        build_rim_deterrence.py        # --season N rebuilds one season (round 9 step 3)
+step derived -        build_assist_network.py        # --season N rebuilds one season (round 9 step 3)
+step derived -        build_play_finder.py           # --season N rebuilds one season (round 9 step 3)
+step derived -        build_best_games.py            # --season N rebuilds one season (round 9 step 3)
 step derived kaggle   build_team_zone_mix.py
 step derived -        compute_wpa.py
-step derived -        build_leverage_splits.py
+step derived -        build_leverage_splits.py       # --season N rebuilds one season (round 9 step 3)
 step derived -        build_scouting_reports.py          # reads player_leverage_splits
 step derived -        build_season_sim.py
 step derived -        build_coaching_decisions.py        # ~4 min; reads possessions, pbp_event_clock, game_pregame_odds

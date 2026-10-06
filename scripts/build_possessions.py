@@ -80,6 +80,11 @@ Tables written (all dropped and rebuilt):
 Usage:
     cd scripts && python3 build_possessions.py              # full build (~3.5 min)
     cd scripts && python3 build_possessions.py --dry-run    # 2024-25 only, into schema zz_poss_dry
+    cd scripts && python3 build_possessions.py --season 2027 # round 9 step 3: only that season's rows of
+                                                            # possessions, possession_games and
+                                                            # possession_seasons are deleted and rebuilt
+                                                            # (same per-game code; possession_meta left
+                                                            # as it is, R9-008); needs the full build's tables
 Rerun after build_lineup_stints.py (it reads lineup_stints and
 team_game_totals) or build_event_clock.py (after a player_shots reload).
 """
@@ -96,6 +101,7 @@ import psycopg2.extras
 
 from db_config import DB_CONFIG
 from pbp_lineups import Game, chart_matches, elapsed, game_clock, load_espn, load_season_names, miss_three_calls
+import season_mode as SM
 import pbp_possessions as PP
 
 TRANSITION_SECONDS = 7.0
@@ -107,7 +113,7 @@ TWIN_SEASON = 2025
 STAT_COLS = ["fga", "fgm", "fg3a", "fg3m", "fta", "ftm", "oreb", "team_oreb", "tov"]
 
 
-def load_reference(conn):
+def load_reference(conn, season=None):
     finals = pd.read_sql_query(
         """SELECT 'espn_' || espn_id AS game_id, game_id AS nba_game_id, team_abbreviation AS team, pts_for, periods
            FROM game_scores WHERE espn_id IS NOT NULL""", conn)
@@ -115,8 +121,9 @@ def load_reference(conn):
     nba_ids = {r.game_id: r.nba_game_id for r in finals.itertuples()}
     totals = pd.read_sql_query("SELECT game_id, team_abbreviation AS team, fga, fta, oreb, tov FROM team_game_totals", conn)
     team_tot = {(r.game_id, r.team): (int(r.fga), int(r.fta), int(r.oreb), int(r.tov)) for r in totals.itertuples()}
+    where = "" if season is None else f" WHERE season = {int(season)}"
     st = pd.read_sql_query(
-        "SELECT game_id, stint_no, action_from, action_to, tracked_ok FROM lineup_stints ORDER BY game_id, stint_no", conn)
+        f"SELECT game_id, stint_no, action_from, action_to, tracked_ok FROM lineup_stints{where} ORDER BY game_id, stint_no", conn)
     stints = {}
     for gid, grp in st.groupby("game_id", sort=False):
         stints[gid] = [(int(r.stint_no), None if pd.isna(r.action_from) else int(r.action_from),
@@ -298,7 +305,7 @@ GAMES_DDL = """CREATE TABLE {schema}possession_games (
 
 # Per season x team x start type, offence and defence, from game_ok games; team 'ALL' and start_type 'all' are totals.
 SEASONS_SQL = """
-    WITH p AS (SELECT * FROM {schema}possessions WHERE game_id IN (SELECT game_id FROM {schema}possession_games WHERE game_ok)),
+    WITH p AS (SELECT * FROM {schema}possessions WHERE game_id IN (SELECT game_id FROM {schema}possession_games WHERE game_ok{where})),
     sides AS (
         SELECT season, offense AS team, 'off' AS side, start_type, game_id, pts, seconds, clock_ok, transition,
                (oreb + team_oreb) > 0 AS had_oreb, second_chance_pts, fga, fg3a, fta, tov FROM p
@@ -344,7 +351,13 @@ POSS_COLS = ["game_id", "poss_no", "season", "period", "offense", "defense", "of
             ["second_chance_pts", "off_tech_pts", "def_tech_pts", "and_one", "empty", "tracked_ok"]
 
 
-def create_tables(cur, schema):
+def create_tables(cur, schema, season=None):
+    """Drop and create the tables; with `season` (--season) delete only that season's rows of the three season tables."""
+    if season is not None:
+        SM.require_tables(cur, [f"{schema}{t}" for t in ("possessions", "possession_games", "possession_seasons")], season)
+        n = sum(SM.delete_season(cur, f"{schema}{t}", season) for t in ("possession_seasons", "possession_games", "possessions"))
+        print(f"--season {season}: {n:,} stored rows of the season deleted")
+        return
     for t in ("possession_seasons", "possession_meta", "possession_games", "possessions"):
         cur.execute(f"DROP TABLE IF EXISTS {schema}{t};")
     stats = ", ".join(f"{k} SMALLINT NOT NULL" for k in STAT_COLS)
@@ -358,19 +371,24 @@ def insert_possessions(cur, schema, rows):
         [tuple(clean(r[c]) for c in POSS_COLS) for r in rows], page_size=10000)
 
 
-def finish_tables(cur, schema, game_rows, meta):
-    cur.execute(f"ALTER TABLE {schema}possessions ADD PRIMARY KEY (game_id, poss_no);")
-    cur.execute(f"CREATE INDEX ON {schema}possessions (season, offense);")
-    cur.execute(f"CREATE INDEX ON {schema}possessions (season, defense);")
-
-    cur.execute(GAMES_DDL.format(schema=schema))
+def finish_tables(cur, schema, game_rows, meta, season=None):
+    where = "" if season is None else f" AND season = {int(season)}"
+    if season is None:
+        cur.execute(f"ALTER TABLE {schema}possessions ADD PRIMARY KEY (game_id, poss_no);")
+        cur.execute(f"CREATE INDEX ON {schema}possessions (season, offense);")
+        cur.execute(f"CREATE INDEX ON {schema}possessions (season, defense);")
+        cur.execute(GAMES_DDL.format(schema=schema))
     gcols = list(game_rows[0].keys())
     psycopg2.extras.execute_values(
         cur, f"INSERT INTO {schema}possession_games ({', '.join(gcols)}) VALUES %s",
         [tuple(clean(r[c]) for c in gcols) for r in game_rows], page_size=2000)
+    if season is not None:
+        cur.execute(f"INSERT INTO {schema}possession_seasons " + SEASONS_SQL.format(schema=schema, where=where))
+        print("possession_meta left as it is (its checks cover every game)")
+        return
     cur.execute(f"CREATE INDEX ON {schema}possession_games (season);")
 
-    cur.execute(f"CREATE TABLE {schema}possession_seasons AS " + SEASONS_SQL.format(schema=schema))
+    cur.execute(f"CREATE TABLE {schema}possession_seasons AS " + SEASONS_SQL.format(schema=schema, where=where))
     cur.execute(f"ALTER TABLE {schema}possession_seasons ADD PRIMARY KEY (season, team, start_type);")
 
     cur.execute(f"CREATE TABLE {schema}possession_meta (key TEXT PRIMARY KEY, value JSONB NOT NULL)")
@@ -436,18 +454,21 @@ def print_checks(cur, schema, conn):
 
 def main():
     dry = "--dry-run" in sys.argv
+    season = SM.parse_season()
+    if dry and season is not None:
+        raise SystemExit("--dry-run and --season don't combine")
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
     season_names, all_names = load_season_names(cur)
-    cur.execute("SELECT to_regclass('public.pbp_event_clock')")
+    cur.execute("SELECT to_regclass('pbp_event_clock')")
     if cur.fetchone()[0] is None:
         sys.exit("pbp_event_clock is missing: run build_event_clock.py first.")
-    final_pts, nba_ids, team_tot, stored_stints = load_reference(conn)
-    games, grouped = load_espn(conn, clock=True)
+    final_pts, nba_ids, team_tot, stored_stints = load_reference(conn, season)
+    games, grouped = load_espn(conn, clock=True, season=season)
     if dry:
         games = games[games.season == TWIN_SEASON]
-    matched = chart_matches(conn, games, grouped, season_names, all_names)
+    matched = chart_matches(conn, games, grouped, season_names, all_names, season=season)
     calls, _ = miss_three_calls(conn, games, grouped, season_names, all_names, matched=matched)
     print(f"{len(games)} games; {matched.nba_shot_id.notna().mean():.2%} of field goals matched to the shot chart "
           f"({time.time() - t0:.0f}s)")
@@ -456,7 +477,7 @@ def main():
     schema = f"{DRY_SCHEMA}." if dry else ""
     if dry:
         cur.execute(f"DROP SCHEMA IF EXISTS {DRY_SCHEMA} CASCADE; CREATE SCHEMA {DRY_SCHEMA};")
-    create_tables(cur, schema)
+    create_tables(cur, schema, season)
     n_poss, game_rows, diag, timing, batch = 0, [], Counter(), [], []
     for i, g in enumerate(games.itertuples(index=False)):
         ev = grouped.get(g.game_id)
@@ -501,7 +522,7 @@ def main():
         "clock_check": clock, "transition_check": trans, "parser_diag": dict(diag),
     }
 
-    finish_tables(cur, schema, game_rows, meta)
+    finish_tables(cur, schema, game_rows, meta, season)
     conn.commit()
     print(f"\nwrote {n_poss:,} possessions, {len(game_rows)} games ({time.time() - t0:.0f}s)")
     print_checks(cur, schema, conn)

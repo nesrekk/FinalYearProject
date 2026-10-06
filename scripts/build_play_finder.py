@@ -81,6 +81,11 @@ Bam Adebayo's 83 on 2026-03-10 (20 field goals, 7 threes, 36 free throws).
 
 Usage:
     cd scripts && python3 build_play_finder.py     (~2 min)
+    cd scripts && python3 build_play_finder.py --season 2027
+        # round 9 step 3: only that season's rows of the three tables are
+        # deleted and rebuilt (the same per-game code; game_no continues from
+        # the season before, as the full build numbers games in date order);
+        # needs the full build's tables.
 Rerun after new play-by-play is loaded, after build_player_game_lines.py
 (they must agree), after build_event_clock.py or after player_shots is
 reloaded (then build_event_clock.py first). Restart impact_api
@@ -102,6 +107,8 @@ import psycopg2
 from db_config import DB_CONFIG
 from pbp_lineups import (ASSIST_RE, BLOCK_RE, DIST_RE, PERIOD_SECONDS, STEAL_RE, Game, game_clock, load_espn,
                          load_season_names, match_coordinates, miss_three_calls)
+
+import season_mode as SM
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 from play_finder import CATS, CODE, SHOT_CODES, is_foul  # noqa: E402
@@ -190,19 +197,19 @@ def game_rows(game, g, game_no, ev, final):
     return rows, fgs, method, ok, diag
 
 
-def collect(conn, cur):
-    cur.execute("SELECT to_regclass('public.pbp_event_clock')")
+def collect(conn, cur, season=None):
+    cur.execute("SELECT to_regclass('pbp_event_clock')")
     if cur.fetchone()[0] is None:
         sys.exit("pbp_event_clock is missing: run build_event_clock.py first.")
     season_names, all_names = load_season_names(cur)
-    games, grouped = load_espn(conn, clock=True)
+    games, grouped = load_espn(conn, clock=True, season=season)
     ref = pd.read_sql_query(
         """SELECT 'espn_' || espn_id AS game_id, game_id AS nba_game_id, team_abbreviation AS team, pts_for, periods
            FROM game_scores WHERE espn_id IS NOT NULL""", conn)
     final = {(r.game_id, r.team): int(r.pts_for) for r in ref.itertuples()}
     nba_id = dict(zip(ref.game_id, ref.nba_game_id))
     periods = dict(zip(ref.game_id, ref.periods))
-    calls, misses = miss_three_calls(conn, games, grouped, season_names, all_names)
+    calls, misses = miss_three_calls(conn, games, grouped, season_names, all_names, season=season)
     flipped = misses[(misses.text_three != misses.nba_three) & misses.game_id.isin(nba_id)]
     retyped = flipped.groupby("season").size()
     print(f"misses where the NBA shot chart's two-or-three call differs from the text's: {len(flipped)} "
@@ -211,7 +218,9 @@ def collect(conn, cur):
     print(f"left out: {len(left_out)} ESPN games with no regular-season result in game_scores (the NBA Cup finals): "
           f"{', '.join(left_out)}")
     rows, fgs, game_list, diag = [], [], [], Counter()
-    game_no = 0
+    # game_no: 1..n in date order; a --season run continues from the season before (what the full build gives it)
+    n_games = sum(1 for g in games.itertuples(index=False) if grouped.get(g.game_id) is not None and g.game_id in nba_id)
+    game_no = 0 if season is None else SM.next_id(cur, "play_finder_games", "game_no", season, n_games) - 1
     for i, g in enumerate(games.itertuples(index=False)):
         ev = grouped.get(g.game_id)
         if ev is None or g.game_id not in nba_id:
@@ -237,12 +246,13 @@ def collect(conn, cur):
     return ev_df, games_df, fg_df, diag, retyped
 
 
-def distances(conn, ev_df, games_df, fg_df):
+def distances(conn, ev_df, games_df, fg_df, season=None):
     """Feet for every shot row (and its assist/block rows): coordinates, else text, else none."""
-    m = match_coordinates(conn, fg_df)
+    m = match_coordinates(conn, fg_df, season=season)
     text = pd.read_sql_query(
         """SELECT e.id AS event_id, e.description FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id
-           WHERE g.source = 'espn' AND (e.description ~ ' (makes|misses) ' OR e.description ~ ' blocks ')""", conn)
+           WHERE g.source = 'espn' AND (e.description ~ ' (makes|misses) ' OR e.description ~ ' blocks ')"""
+        + ("" if season is None else f" AND g.season = {int(season)}"), conn)
     text["text_ft"] = text.description.str.extract(DIST_RE.pattern)[0].astype(float)
     m = m.merge(text[["event_id", "text_ft"]], on="event_id", how="left")
     m["feet"] = np.where(m.coord_ft.notna(), np.round(m.coord_ft), m.text_ft)
@@ -251,18 +261,19 @@ def distances(conn, ev_df, games_df, fg_df):
     shot_rows = ev_df.cat.isin(SHOT_CODES)
     ev_df["dist"] = ev_df["event_id"].map(feet).where(shot_rows).round().astype("Int64")
     season_of = m.merge(games_df[["game_id", "season"]], on="game_id")
-    src = season_of.groupby(["season", "src"]).size().unstack(fill_value=0)
+    # every source column, even one no shot of the season has yet (the first days of a live season)
+    src = season_of.groupby(["season", "src"]).size().unstack(fill_value=0).reindex(columns=["coords", "text", "none"], fill_value=0)
     return ev_df, src
 
 
-def check_lines(conn, ev_df, games_df):
+def check_lines(conn, ev_df, games_df, season=None):
     """Every player-game's counts here against player_game_lines (same parser: must match)."""
     df = ev_df[ev_df.player_id.notna()].merge(games_df[["game_no", "game_id", "season"]], on="game_no")
     for stat, codes in LINE_STATS.items():
         df[stat] = df.cat.isin(codes).astype(int)
     mine = df.groupby(["game_id", "player_id"])[list(LINE_STATS)].sum()
-    lines = pd.read_sql_query("SELECT game_id, player_id, season, " + ", ".join(LINE_STATS) + " FROM player_game_lines",
-                              conn)
+    lines = pd.read_sql_query("SELECT game_id, player_id, season, " + ", ".join(LINE_STATS) + " FROM player_game_lines"
+                              + ("" if season is None else f" WHERE season = {int(season)}"), conn)
     lines = lines[lines.game_id.isin(games_df.game_id)].set_index(["game_id", "player_id"])
     both = lines[list(LINE_STATS)].join(mine, how="outer", rsuffix="_pf").fillna(0)
     both["season"] = both.index.get_level_values(0).map(dict(zip(games_df.game_id, games_df.season)))
@@ -289,12 +300,13 @@ def copy_rows(cur, table, df, cols):
 
 
 def main():
+    season = SM.parse_season()
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
-    ev_df, games_df, fg_df, diag, retyped = collect(conn, cur)
+    ev_df, games_df, fg_df, diag, retyped = collect(conn, cur, season)
     print(f"{len(games_df):,} games, {len(ev_df):,} rows ({time.time() - t0:.0f}s); {dict(diag)}")
-    ev_df, src = distances(conn, ev_df, games_df, fg_df)
+    ev_df, src = distances(conn, ev_df, games_df, fg_df, season)
     print("shot distances by source:\n" + src.to_string())
 
     # Score source: must agree with lineup_stint_games' own per-game choice.
@@ -304,7 +316,7 @@ def main():
     print(f"score source: {games_df.score_source.value_counts().to_dict()}, not reconciled: "
           f"{int((~games_df.score_ok).sum())}; agrees with lineup_stint_games in {agree} of {len(cmp)} games")
 
-    checks = check_lines(conn, ev_df, games_df)
+    checks = check_lines(conn, ev_df, games_df, season)
 
     bam = ev_df.merge(games_df[["game_no", "game_date"]], on="game_no")
     bam = bam[(bam.player_id == 1628389) & (bam.game_date.astype(str) == "2026-03-10")]
@@ -326,25 +338,34 @@ def main():
     seasons["misses_retyped"] = retyped
     seasons = seasons.join(checks).fillna(0).astype(int).reset_index()
 
-    cur.execute("DROP TABLE IF EXISTS play_finder_events, play_finder_games, play_finder_seasons;")
-    cur.execute("""CREATE TABLE play_finder_games (
-        game_no SMALLINT PRIMARY KEY, game_id TEXT NOT NULL UNIQUE, nba_game_id TEXT NOT NULL, season SMALLINT NOT NULL,
-        game_date DATE NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, final_home SMALLINT NOT NULL,
-        final_away SMALLINT NOT NULL, periods SMALLINT NOT NULL, score_source TEXT NOT NULL, score_ok BOOLEAN NOT NULL,
-        plays INTEGER NOT NULL)""")
+    if season is not None:
+        SM.require_tables(cur, ["play_finder_events", "play_finder_games", "play_finder_seasons"], season)
+        n = SM.delete_season(cur, "play_finder_events", season,
+                             "game_no IN (SELECT game_no FROM play_finder_games WHERE season = %s)")
+        n += SM.delete_season(cur, "play_finder_games", season) + SM.delete_season(cur, "play_finder_seasons", season)
+        print(f"--season {season}: {n:,} stored rows of the season deleted")
+    else:
+        cur.execute("DROP TABLE IF EXISTS play_finder_events, play_finder_games, play_finder_seasons;")
+        cur.execute("""CREATE TABLE play_finder_games (
+            game_no SMALLINT PRIMARY KEY, game_id TEXT NOT NULL UNIQUE, nba_game_id TEXT NOT NULL, season SMALLINT NOT NULL,
+            game_date DATE NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, final_home SMALLINT NOT NULL,
+            final_away SMALLINT NOT NULL, periods SMALLINT NOT NULL, score_source TEXT NOT NULL, score_ok BOOLEAN NOT NULL,
+            plays INTEGER NOT NULL)""")
     copy_rows(cur, "play_finder_games", games_df, list(games_df.columns))
-    cur.execute("""CREATE TABLE play_finder_events (
-        event_id INTEGER NOT NULL, player_id INTEGER, game_no SMALLINT NOT NULL, cat SMALLINT NOT NULL,
-        period SMALLINT NOT NULL, clock SMALLINT NOT NULL, score_for SMALLINT NOT NULL, score_against SMALLINT NOT NULL,
-        dist SMALLINT, is_home BOOLEAN NOT NULL)""")
+    if season is None:
+        cur.execute("""CREATE TABLE play_finder_events (
+            event_id INTEGER NOT NULL, player_id INTEGER, game_no SMALLINT NOT NULL, cat SMALLINT NOT NULL,
+            period SMALLINT NOT NULL, clock SMALLINT NOT NULL, score_for SMALLINT NOT NULL, score_against SMALLINT NOT NULL,
+            dist SMALLINT, is_home BOOLEAN NOT NULL)""")
     copy_rows(cur, "play_finder_events", ev_df, COLS)
-    cur.execute("CREATE INDEX play_finder_events_player ON play_finder_events (player_id, game_no) "
-                "WHERE player_id IS NOT NULL;")
-    cur.execute("CREATE INDEX play_finder_events_game ON play_finder_events USING brin (game_no);")
-    cur.execute("""CREATE TABLE play_finder_seasons (
-        season SMALLINT PRIMARY KEY, games INTEGER, games_score_ok INTEGER, rows INTEGER, unidentified_rows INTEGER,
-        shots_coords INTEGER, shots_text INTEGER, shots_no_dist INTEGER, misses_retyped INTEGER, lines_checked INTEGER,
-        lines_differ INTEGER, lines_fg3a_differ INTEGER)""")
+    if season is None:
+        cur.execute("CREATE INDEX play_finder_events_player ON play_finder_events (player_id, game_no) "
+                    "WHERE player_id IS NOT NULL;")
+        cur.execute("CREATE INDEX play_finder_events_game ON play_finder_events USING brin (game_no);")
+        cur.execute("""CREATE TABLE play_finder_seasons (
+            season SMALLINT PRIMARY KEY, games INTEGER, games_score_ok INTEGER, rows INTEGER, unidentified_rows INTEGER,
+            shots_coords INTEGER, shots_text INTEGER, shots_no_dist INTEGER, misses_retyped INTEGER, lines_checked INTEGER,
+            lines_differ INTEGER, lines_fg3a_differ INTEGER)""")
     copy_rows(cur, "play_finder_seasons", seasons, ["season", "games", "games_score_ok", "rows", "unidentified_rows",
                                                     "shots_coords", "shots_text", "shots_no_dist", "misses_retyped",
                                                     "lines_checked", "lines_differ", "lines_fg3a_differ"])

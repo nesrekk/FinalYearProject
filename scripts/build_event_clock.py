@@ -48,6 +48,11 @@ come from substitutions, at dead balls, where ESPN is on time).
 
 Usage:
     cd scripts && python3 build_event_clock.py      (~2.5 min)
+    cd scripts && python3 build_event_clock.py --season 2027
+        # round 9 step 3: only that season's events are deleted and rebuilt
+        # (the same per-game code; the chart matched within the season,
+        # which gives the same matches); pbp_event_clock_meta is left as it
+        # is (its checks cover every game: R9-008). Needs the full build's table.
 Rerun after new ESPN play-by-play or a player_shots reload, then
 build_possessions.py, build_rotations.py, build_play_finder.py and
 build_best_games.py (they read it).
@@ -67,6 +72,7 @@ import psycopg2.extras
 from db_config import DB_CONFIG
 from pbp_lineups import Game, chart_matches, load_espn, load_season_names, period_bounds
 import pbp_possessions as PP
+import season_mode as SM
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -74,10 +80,13 @@ TWIN_SEASON = 2025
 CLUTCH_SECONDS = 300        # wpa_lib's clutch window, for the win-probability check by game phase
 
 
-def chart_clock(conn, matched, through=None):
+def chart_clock(conn, matched, through=None, season=None):
     """{game_id: {action_number: seconds into the period}} by the NBA shot chart's clock (`through`: seasons up to that
-    end year only; the paper's audit passes paper_freeze.MAX_PAPER_SEASON, round 9 step 1)."""
+    end year only; the paper's audit passes paper_freeze.MAX_PAPER_SEASON, round 9 step 1; `season`: that season's
+    chart only, the --season build)."""
     cap = f" AND season <= '{int(through) - 1}-{str(int(through))[-2:]}'" if through else ""
+    if season is not None:
+        cap += f" AND season = '{SM.season_label(season)}'"
     clocks = pd.read_sql_query(
         f"""SELECT id AS nba_shot_id, period AS chart_period, minutes_remaining * 60 + seconds_remaining AS clock
            FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2020-21'{cap}""", conn)
@@ -250,20 +259,30 @@ def copy_rows(cur, rows):
     cur.copy_expert(f"COPY pbp_event_clock ({', '.join(COLS)}) FROM STDIN WITH (FORMAT csv)", buf)
 
 
+SEASON_EVENTS_WHERE = ("event_id IN (SELECT e.id FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id "
+                       "WHERE g.source = 'espn' AND g.season = %s)")
+
+
 def main():
+    season = SM.parse_season()
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
     season_names, all_names = load_season_names(cur)
-    games, grouped = load_espn(conn)
-    matched = chart_matches(conn, games, grouped, season_names, all_names)
-    chart_t = chart_clock(conn, matched)
+    games, grouped = load_espn(conn, season=season)
+    matched = chart_matches(conn, games, grouped, season_names, all_names, season=season)
+    chart_t = chart_clock(conn, matched, season=season)
     del matched
     print(f"{len(games)} games; shot chart clock for {sum(len(v) for v in chart_t.values()):,} field goals "
           f"({time.time() - t0:.0f}s)")
 
-    cur.execute("DROP TABLE IF EXISTS pbp_event_clock; DROP TABLE IF EXISTS pbp_event_clock_meta;")
-    cur.execute(DDL)
+    if season is None:
+        cur.execute("DROP TABLE IF EXISTS pbp_event_clock; DROP TABLE IF EXISTS pbp_event_clock_meta;")
+        cur.execute(DDL)
+    else:
+        SM.require_tables(cur, ["pbp_event_clock"], season)
+        print(f"--season {season}: {SM.delete_season(cur, 'pbp_event_clock', season, SEASON_EVENTS_WHERE):,} "
+              f"stored events of the season deleted")
     summary = []        # (season, period, kind, made, source, anchored, bounded, secs_espn, secs_corr, event_id)
     batch, n = [], 0
     for i, g in enumerate(games.itertuples(index=False)):
@@ -282,7 +301,8 @@ def main():
             print(f"  {i} games ({time.time() - t0:.0f}s)")
     copy_rows(cur, batch)
     n += len(batch)
-    cur.execute("ALTER TABLE pbp_event_clock ADD PRIMARY KEY (event_id);")
+    if season is None:
+        cur.execute("ALTER TABLE pbp_event_clock ADD PRIMARY KEY (event_id);")
     cur.execute("ANALYZE pbp_event_clock;")
     print(f"wrote {n:,} events ({time.time() - t0:.0f}s)")
 
@@ -291,7 +311,7 @@ def main():
     del summary
     df["shift"] = df.secs_corr - df.secs_espn       # seconds_remaining: positive = earlier in the game than ESPN said
     cur.execute("""SELECT COUNT(*) FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id
-                   WHERE g.source = 'espn'""")
+                   WHERE g.source = 'espn'""" + ("" if season is None else f" AND g.season = {int(season)}"))
     espn_events = cur.fetchone()[0]
     by_season = {}
     for season, grp in df.groupby("season"):
@@ -308,6 +328,14 @@ def main():
     print(pd.DataFrame(by_season).T.to_string())
     print(pd.DataFrame(kinds).T.to_string())
     print(f"events covered: {len(df):,} of {espn_events:,} ESPN events")
+    if season is not None:
+        conn.commit()
+        cur.execute("SELECT COUNT(*), pg_size_pretty(pg_total_relation_size('pbp_event_clock')) FROM pbp_event_clock")
+        c, size = cur.fetchone()
+        print(f"  pbp_event_clock: {c:,} rows, {size}; pbp_event_clock_meta left as it is (its checks cover every game)")
+        print(f"done in {time.time() - t0:.0f}s")
+        conn.close()
+        return
 
     check = clock_check(conn, season_names, all_names, chart_t, grouped)
     print("\nAgainst NBA.com's play-by-play (twin games):", check["all"])

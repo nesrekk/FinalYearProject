@@ -61,6 +61,9 @@ at 5:00 plus the closing stretch must equal the final.
 
 Usage:
     cd scripts && python3 build_rotations.py        (~80 s)
+    cd scripts && python3 build_rotations.py --season 2027
+        # round 9 step 3: only that season's rows of both tables are deleted and
+        # rebuilt (the same per-game replay); needs the full build's tables.
 Rerun after build_lineup_stints.py or build_event_clock.py.
 """
 
@@ -75,6 +78,7 @@ import psycopg2.extras
 from db_config import DB_CONFIG
 from pbp_lineups import Game, STINT_STATS, elapsed, game_clock, load_espn, load_season_names, miss_three_calls
 from wpa_lib import CLUTCH_MARGIN, CLUTCH_SECONDS
+import season_mode as SM
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -86,18 +90,22 @@ def poss(s, p):
     return s[p + "fga"] + FT_POSS * s[p + "fta"] - s[p + "oreb"] + s[p + "tov"]
 
 
-def load_games(conn):
+def _where(season):
+    return "" if season is None else f" WHERE season = {int(season)}"
+
+
+def load_games(conn, season=None):
     return pd.read_sql_query(
-        """SELECT game_id, nba_game_id, season, game_date, home_team, away_team, periods, points_method,
+        f"""SELECT game_id, nba_game_id, season, game_date, home_team, away_team, periods, points_method,
                   final_home, final_away, game_ok
-           FROM lineup_stint_games ORDER BY game_date, game_id""", conn)
+           FROM lineup_stint_games{_where(season)} ORDER BY game_date, game_id""", conn)
 
 
-def load_stints(conn):
+def load_stints(conn, season=None):
     """lineup_stints as the check needs it: per game, the stints in order."""
     cols = ["game_id", "stint_no", "period", "start_elapsed", "end_elapsed", "home_ids", "away_ids", "home_pts",
             "away_pts"] + [f"{side}_{k}" for side in ("home", "away") for k in STINT_STATS]
-    df = pd.read_sql_query(f"SELECT {', '.join(cols)} FROM lineup_stints ORDER BY game_id, stint_no", conn)
+    df = pd.read_sql_query(f"SELECT {', '.join(cols)} FROM lineup_stints{_where(season)} ORDER BY game_id, stint_no", conn)
     return {gid: g.to_dict("records") for gid, g in df.groupby("game_id", sort=False)}
 
 
@@ -233,20 +241,21 @@ STINTS_DDL = """CREATE TABLE rotation_closing_stints (
 
 
 def main():
+    season = SM.parse_season()
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
-    cur.execute("SELECT to_regclass('public.pbp_event_clock')")
+    cur.execute("SELECT to_regclass('pbp_event_clock')")
     if cur.fetchone()[0] is None:
         sys.exit("pbp_event_clock is missing: run build_event_clock.py first.")
     season_names, all_names = load_season_names(cur)
-    games = load_games(conn)
-    stored = load_stints(conn)
-    espn_games, grouped = load_espn(conn, clock=True)
+    games = load_games(conn, season)
+    stored = load_stints(conn, season)
+    espn_games, grouped = load_espn(conn, clock=True, season=season)
     print(f"{len(games)} games ({time.time() - t0:.0f}s)")
     # the stints' two-or-three call on missed shots (the shot chart's, since round 8 step 6a), so the glued pieces
     # equal lineup_stints' 3PA too; nothing written here counts threes
-    calls, _ = miss_three_calls(conn, espn_games, grouped, season_names, all_names)
+    calls, _ = miss_three_calls(conn, espn_games, grouped, season_names, all_names, season=season)
 
     closing, rows = [], []
     for i, g in enumerate(games.itertuples(index=False)):
@@ -259,22 +268,29 @@ def main():
         if i % 1500 == 0:
             print(f"  {i} games ({time.time() - t0:.0f}s)")
 
-    cur.execute("DROP TABLE IF EXISTS rotation_closing_stints; DROP TABLE IF EXISTS rotation_closing_games;")
-    cur.execute(GAMES_DDL)
+    if season is None:
+        cur.execute("DROP TABLE IF EXISTS rotation_closing_stints; DROP TABLE IF EXISTS rotation_closing_games;")
+        cur.execute(GAMES_DDL)
+    else:
+        SM.require_tables(cur, ["rotation_closing_games", "rotation_closing_stints"], season)
+        n = SM.delete_season(cur, "rotation_closing_stints", season) + SM.delete_season(cur, "rotation_closing_games", season)
+        print(f"--season {season}: {n:,} stored rows of the season deleted")
     gcols = list(rows[0].keys())
     psycopg2.extras.execute_values(
         cur, f"INSERT INTO rotation_closing_games ({', '.join(gcols)}) VALUES %s",
         [tuple(r[c] for c in gcols) for r in rows], page_size=2000)
-    cur.execute("CREATE INDEX ON rotation_closing_games (season, home_team);")
-    cur.execute("CREATE INDEX ON rotation_closing_games (season, away_team);")
-    cur.execute(STINTS_DDL)
+    if season is None:
+        cur.execute("CREATE INDEX ON rotation_closing_games (season, home_team);")
+        cur.execute("CREATE INDEX ON rotation_closing_games (season, away_team);")
+        cur.execute(STINTS_DDL)
     scols = list(closing[0].keys())
     psycopg2.extras.execute_values(
         cur, f"INSERT INTO rotation_closing_stints ({', '.join(scols)}) VALUES %s",
         [tuple(r[c] for c in scols) for r in closing], page_size=5000)
-    cur.execute("CREATE INDEX ON rotation_closing_stints (game_id);")
-    cur.execute("CREATE INDEX ON rotation_closing_stints (season, home_team);")
-    cur.execute("CREATE INDEX ON rotation_closing_stints (season, away_team);")
+    if season is None:
+        cur.execute("CREATE INDEX ON rotation_closing_stints (game_id);")
+        cur.execute("CREATE INDEX ON rotation_closing_stints (season, home_team);")
+        cur.execute("CREATE INDEX ON rotation_closing_stints (season, away_team);")
     conn.commit()
     print(f"wrote {len(rows)} games, {len(closing)} closing pieces ({time.time() - t0:.0f}s)")
 

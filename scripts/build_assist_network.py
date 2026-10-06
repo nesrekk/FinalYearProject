@@ -58,6 +58,10 @@ Checks printed (and stored in assist_seasons):
 
 Usage:
     cd scripts && python3 build_assist_network.py     (~1 min)
+    cd scripts && python3 build_assist_network.py --season 2027
+        # round 9 step 3: only that season's rows of the three tables are
+        # deleted and rebuilt (the same per-game parse and per-season sums);
+        # needs the full build's tables.
 Rerun after new play-by-play is loaded or build_player_game_lines.py is
 rebuilt (they must agree).
 """
@@ -73,6 +77,7 @@ import psycopg2.extras
 
 from db_config import DB_CONFIG
 from pbp_lineups import ASSIST_RE, Game, load_espn, load_season_names
+import season_mode as SM
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -95,10 +100,10 @@ def shot_kind(action, val):
     return "jumper"
 
 
-def collect_makes(conn, cur):
-    """Every made field goal the parser counts, with the named passer."""
+def collect_makes(conn, cur, season=None):
+    """Every made field goal the parser counts, with the named passer (`season`: that season's games only)."""
     season_names, all_names = load_season_names(cur)
-    games, grouped = load_espn(conn)
+    games, grouped = load_espn(conn, season=season)
     cur.execute(REGULAR_SQL)
     regular = {gid for (gid,) in cur.fetchall()}
     cup_finals = sorted(set(games.game_id) - regular)
@@ -128,10 +133,12 @@ def collect_makes(conn, cur):
 
 
 def main():
+    season = SM.parse_season()
+    season_and = "" if season is None else f" AND season = {int(season)}"
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
-    makes, unmatched = collect_makes(conn, cur)
+    makes, unmatched = collect_makes(conn, cur, season)
     print(f"{len(makes):,} made field goals, {makes.assisted.sum():,} assisted ({time.time() - t0:.0f}s)")
 
     # Data errors: self-assists and a passer from the other team.
@@ -162,7 +169,7 @@ def main():
         f"""SELECT season, team_abbreviation AS team, player_id, SUM(seconds) / 60.0 AS minutes,
                   COUNT(*) FILTER (WHERE seconds > 0) AS games, SUM(ast) AS lines_ast
            FROM player_game_lines WHERE team_abbreviation IS NOT NULL AND team_abbreviation <> 'NaN'
-             AND game_id IN ({REGULAR_SQL}) GROUP BY 1, 2, 3""", conn)
+             AND game_id IN ({REGULAR_SQL}){season_and} GROUP BY 1, 2, 3""", conn)
     own = m[m.scorer > 0].copy()
     agg = {"fgm": ("val", "size")}
     for v in (2, 3):
@@ -203,7 +210,7 @@ def main():
 
     cur.execute(f"""
         WITH l AS (SELECT player_id, season, SUM(ast) ast FROM player_game_lines
-                   WHERE game_id IN ({REGULAR_SQL}) GROUP BY 1, 2)
+                   WHERE game_id IN ({REGULAR_SQL}){season_and} GROUP BY 1, 2)
         SELECT l.season, SUM(l.ast) / SUM(s.ast * s.gp) FROM l JOIN player_season_stats s USING (player_id, season)
         WHERE s.gp >= 20 GROUP BY 1 ORDER BY 1""")
     nba_ratio = {int(s): float(r) for s, r in cur.fetchall()}
@@ -235,8 +242,13 @@ def main():
     print("most common unmatched names:", unmatched.most_common(8))
 
     # ── write ───────────────────────────────────────────────────────
-    cur.execute("DROP TABLE IF EXISTS assist_pairs;")
-    cur.execute("""CREATE TABLE assist_pairs (
+    if season is not None:
+        SM.require_tables(cur, ["assist_pairs", "player_assisted_share", "assist_seasons"], season)
+        n = sum(SM.delete_season(cur, t, season) for t in ("assist_pairs", "player_assisted_share", "assist_seasons"))
+        print(f"--season {season}: {n:,} stored rows of the season deleted")
+    else:
+        cur.execute("DROP TABLE IF EXISTS assist_pairs;")
+        cur.execute("""CREATE TABLE assist_pairs (
         season INTEGER NOT NULL, team_abbreviation TEXT NOT NULL, passer_id BIGINT NOT NULL, scorer_id BIGINT NOT NULL,
         ast INTEGER, games INTEGER, ast2 INTEGER, ast3 INTEGER, pts INTEGER, rim INTEGER, floater INTEGER,
         jumper INTEGER, PRIMARY KEY (season, team_abbreviation, passer_id, scorer_id));""")
@@ -245,14 +257,16 @@ def main():
         [tuple(int(v) if not isinstance(v, str) else v for v in r) for r in
          pairs[["season", "team", "passer", "scorer", "ast", "games", "ast2", "ast3", "pts", "rim", "floater",
                 "jumper"]].itertuples(index=False)], page_size=5000)
-    cur.execute("CREATE INDEX ON assist_pairs (passer_id);")
-    cur.execute("CREATE INDEX ON assist_pairs (scorer_id);")
+    if season is None:
+        cur.execute("CREATE INDEX ON assist_pairs (passer_id);")
+        cur.execute("CREATE INDEX ON assist_pairs (scorer_id);")
 
     cols = ["season", "team", "player_id", "minutes", "games", "fgm", "fgm2", "ast_fgm2", "fgm3", "ast_fgm3",
             "fgm_rim", "ast_rim", "fgm_floater", "ast_floater", "fgm_jumper", "ast_jumper", "ast_unknown_passer",
             "ast", "ast_pts", "ast3_given"]
-    cur.execute("DROP TABLE IF EXISTS player_assisted_share;")
-    cur.execute(f"""CREATE TABLE player_assisted_share (
+    if season is None:
+        cur.execute("DROP TABLE IF EXISTS player_assisted_share;")
+        cur.execute(f"""CREATE TABLE player_assisted_share (
         season INTEGER NOT NULL, team_abbreviation TEXT NOT NULL, player_id BIGINT NOT NULL, minutes DOUBLE PRECISION,
         {', '.join(f'{c} INTEGER' for c in cols[4:])},
         PRIMARY KEY (season, team_abbreviation, player_id));""")
@@ -260,11 +274,13 @@ def main():
         cur, "INSERT INTO player_assisted_share VALUES %s",
         [(int(r[0]), r[1], int(r[2]), float(r[3])) + tuple(int(v) for v in r[4:])
          for r in share[cols].itertuples(index=False)], page_size=5000)
-    cur.execute("CREATE INDEX ON player_assisted_share (player_id);")
+    if season is None:
+        cur.execute("CREATE INDEX ON player_assisted_share (player_id);")
 
     scols = list(seasons.columns)
-    cur.execute("DROP TABLE IF EXISTS assist_seasons;")
-    cur.execute(f"""CREATE TABLE assist_seasons (season INTEGER PRIMARY KEY,
+    if season is None:
+        cur.execute("DROP TABLE IF EXISTS assist_seasons;")
+        cur.execute(f"""CREATE TABLE assist_seasons (season INTEGER PRIMARY KEY,
         {', '.join(f'{c} DOUBLE PRECISION' if c == 'ast_vs_nba' else f'{c} INTEGER' for c in scols if c != 'season')});""")
     psycopg2.extras.execute_values(
         cur, f"INSERT INTO assist_seasons ({', '.join(scols)}) VALUES %s",

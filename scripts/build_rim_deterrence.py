@@ -72,6 +72,12 @@ against each season's biggest drops.
 
 Usage:
     cd scripts && python3 build_rim_deterrence.py     (~2 min)
+    cd scripts && python3 build_rim_deterrence.py --season 2027
+        # round 9 step 3: everything is computed exactly as the full build does,
+        # over every season (the bootstrap draws from one seeded stream in
+        # player-season-team order, so a row's interval depends on the draws
+        # before it), then only that season's rows of both tables are deleted
+        # and inserted; needs the full build's tables.
 Rerun after build_lineup_stints.py (new play-by-play) or after reloading
 player_shots.
 """
@@ -87,6 +93,7 @@ import psycopg2.extras
 
 from db_config import DB_CONFIG
 from pbp_lineups import DIST_RE, PERIOD_SECONDS, Game, load_espn, load_season_names, match_coordinates
+import season_mode as SM
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -356,7 +363,16 @@ def clean(v):
     return v.item() if hasattr(v, "item") else v
 
 
-def write(cur, name, df, pk, extra_index=()):
+def write(cur, name, df, pk, extra_index=(), season=None):
+    if season is not None:
+        SM.require_tables(cur, [name], season)
+        n = SM.delete_season(cur, name, season)
+        df = df[df.season == season]
+        print(f"--season {season}: {name}: {n:,} stored rows of the season deleted, {len(df):,} written")
+        psycopg2.extras.execute_values(
+            cur, f"INSERT INTO {name} ({', '.join(df.columns)}) VALUES %s",
+            [tuple(clean(v) for v in r) for r in df.itertuples(index=False)], page_size=2000)
+        return
     cur.execute(f"DROP TABLE IF EXISTS {name};")
     types = []
     for c in df.columns:
@@ -379,6 +395,7 @@ def write(cur, name, df, pk, extra_index=()):
 
 
 def main():
+    season = SM.parse_season()
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
@@ -388,8 +405,9 @@ def main():
     shots = match_coordinates(conn, shots)
     shots, rule = assign_bands(shots)
     print(f"distance sources: {shots.dist_source.value_counts().to_dict()}")
+    share = f"{rule['rule_right'] / rule['rule_probe']:.1%}" if rule["rule_probe"] else "n/a"
     print(f"no-distance rule on matched shots: {rule['rule_right']:,} of {rule['rule_probe']:,} really 0-3 ft "
-          f"({rule['rule_right'] / rule['rule_probe']:.1%}); parser's 2/3 vs NBA shot type: {rule['three_agree']:.4%} agree")
+          f"({share}); parser's 2/3 vs NBA shot type: {rule['three_agree']:.4%} agree")
 
     m, st, checks = map_to_stints(conn, shots)
     shots = shots.merge(m[["game_id", "action_number", "tracked_ok"]], on=["game_id", "action_number"], how="left")
@@ -406,8 +424,8 @@ def main():
     print(f"{len(players):,} player-season-team rows ({time.time() - t0:.0f}s)")
 
     write(cur, "rim_deterrence", players, ["player_id", "season", "team_abbreviation"],
-          ["season, team_abbreviation", "player_id"])
-    write(cur, "rim_deterrence_seasons", seasons, ["season"])
+          ["season, team_abbreviation", "player_id"], season)
+    write(cur, "rim_deterrence_seasons", seasons, ["season"], season=season)
     conn.commit()
 
     # ── Checks ──

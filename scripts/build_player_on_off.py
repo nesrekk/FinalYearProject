@@ -68,6 +68,13 @@ Usage:
 
 --dry-run computes and prints everything and writes no table (with --csv, the
 player rows go to FILE, to compare with the stored table).
+
+--season 2027 (round 9 step 3) computes everything exactly as the full build
+does, every season, because the bootstrap draws from one seeded stream in
+player-season-team order (a row's interval depends on the draws before it),
+and then deletes and inserts only that season's rows of both tables (no DDL;
+needs the full build's tables). The other seasons' rows stay as the full
+build left them.
 """
 
 import sys
@@ -79,6 +86,7 @@ import psycopg2
 import psycopg2.extras
 
 from db_config import DB_CONFIG
+import season_mode as SM
 
 BOOTSTRAPS = 2000
 SEED = 20260928
@@ -143,6 +151,7 @@ def bootstrap(rng, per_game):
 
 def main():
     dry_run = "--dry-run" in sys.argv[1:]
+    season = SM.parse_season()
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
@@ -219,12 +228,15 @@ def main():
         q = o[o.minutes_on >= QUALIFIED_MINUTES].dropna(subset=["on_off_ci_low"])
         excl = int(((q.on_off_ci_low > 0) | (q.on_off_ci_high < 0)).sum())
         rated = o.dropna(subset=["net_on"])  # a row with no on-court possession has no rating
+        # a season with no rated row yet (the first days of a live season when no game reconciles) has no league mean
+        league_net = round(float(np.average(rated.net_on.to_numpy(), weights=rated.poss_on.to_numpy())), 3) \
+            if len(rated) and rated.poss_on.sum() > 0 else None
         season_rows.append({
             "season": int(season), "games": int(tg.game_id.nunique()), "player_rows": int(len(o)),
             "players": int(o.player_id.nunique()),
             "tracked_share": round(float(tg.tracked_seconds.sum() / (5 * tg.game_seconds.sum())), 4),
-            "league_net_on_weighted": round(float(np.average(rated.net_on.to_numpy(), weights=rated.poss_on.to_numpy())), 3),
-            "league_ortg": round(float(100 * tg.pts_for.sum() / tg.poss.sum()), 2),
+            "league_net_on_weighted": league_net,
+            "league_ortg": round(float(100 * tg.pts_for.sum() / tg.poss.sum()), 2) if tg.poss.sum() > 0 else None,
             "qualified": int(len(q)), "qualified_ci_excludes_zero": excl,
             "qualified_minutes": QUALIFIED_MINUTES, "bootstraps": BOOTSTRAPS,
         })
@@ -235,6 +247,21 @@ def main():
         print("dry run: nothing written")
         if "--csv" in sys.argv:
             out.to_csv(sys.argv[sys.argv.index("--csv") + 1], index=False)
+    elif season is not None:
+        SM.require_tables(cur, ["player_on_off", "player_on_off_seasons"], season)
+        n_del = SM.delete_season(cur, "player_on_off", season) + SM.delete_season(cur, "player_on_off_seasons", season)
+        mine, mine_s = out[out.season == season], seasons[seasons.season == season]
+        ocols, scols = list(out.columns), list(seasons.columns)
+        psycopg2.extras.execute_values(
+            cur, f"INSERT INTO player_on_off ({', '.join(ocols)}) VALUES %s",
+            [tuple(None if (isinstance(v, float) and np.isnan(v)) else (v.item() if hasattr(v, "item") else v) for v in r)
+             for r in mine[ocols].itertuples(index=False)], page_size=2000)
+        psycopg2.extras.execute_values(
+            cur, f"INSERT INTO player_on_off_seasons ({', '.join(scols)}) VALUES %s",
+            [tuple(v.item() if hasattr(v, "item") else v for v in r) for r in mine_s[scols].itertuples(index=False)])
+        conn.commit()
+        print(f"--season {season}: {n_del} stored rows of the season deleted, {len(mine)} player-season-team rows and "
+              f"{len(mine_s)} season row written; other seasons untouched ({time.time() - t0:.0f}s)")
     else:
 
         cur.execute("DROP TABLE IF EXISTS player_on_off;")

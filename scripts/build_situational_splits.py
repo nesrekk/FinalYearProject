@@ -46,6 +46,13 @@ Tables written (dropped and rebuilt):
 
 Usage:
     cd scripts && python3 build_situational_splits.py
+    cd scripts && python3 build_situational_splits.py --season 2027
+        # round 9 step 3: everything is computed exactly as the full build does,
+        # over every season (the chance baseline shuffles every season's games
+        # from one seeded stream, and the league rows' bootstrap draws from it
+        # in order), then only that season's rows of both tables are deleted
+        # and inserted; the pooled season-0 row and the other seasons' rows stay
+        # as the full build left them. Needs the full build's tables.
 """
 
 import sys
@@ -62,6 +69,7 @@ from stats_lib import wls_cluster
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 from situational_splits import LINES_SQL, MIN_GAMES, SPLITS, STATS, STORE_GAMES, add_columns  # noqa: E402
+import season_mode as SM  # noqa: E402
 
 BOOT = 2000
 PERMS = 50
@@ -178,6 +186,7 @@ def chance_outside(sub, stat):
 
 
 def main():
+    only = SM.parse_season()
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     lines = add_columns(pd.read_sql(LINES_SQL, conn))
@@ -279,8 +288,16 @@ def main():
     P["ci_low"], P["ci_high"] = P["diff"] - Z95 * P.se, P["diff"] + Z95 * P.se
 
     cur = conn.cursor()
-    cur.execute("DROP TABLE IF EXISTS player_situational_splits;")
-    cur.execute("""CREATE TABLE player_situational_splits (
+    if only is not None:
+        SM.require_tables(cur, ["player_situational_splits", "situational_split_league"], only)
+        n_del = SM.delete_season(cur, "player_situational_splits", only) + SM.delete_season(cur, "situational_split_league", only)
+        P, L = P[P.season == only].copy(), L[L.season == only].copy()
+        print(f"--season {only}: {n_del:,} stored rows of the season deleted; writing {len(P):,} player rows and "
+              f"{len(L)} league rows of that season (the season-0 row and the other seasons untouched)")
+    else:
+        cur.execute("DROP TABLE IF EXISTS player_situational_splits;")
+    if only is None:
+        cur.execute("""CREATE TABLE player_situational_splits (
         player_id BIGINT, season INT, split TEXT, stat TEXT, teams TEXT,
         games_a INT, games_b INT, minutes_a DOUBLE PRECISION, minutes_b DOUBLE PRECISION,
         den_a DOUBLE PRECISION, den_b DOUBLE PRECISION, value_a DOUBLE PRECISION, value_b DOUBLE PRECISION,
@@ -300,21 +317,27 @@ def main():
     psycopg2.extras.execute_values(
         cur, f"INSERT INTO player_situational_splits ({', '.join(cols)}) VALUES %s",
         [tuple(clean(v) for v in r) for r in P[cols].itertuples(index=False)], page_size=5000)
-    cur.execute("CREATE INDEX ON player_situational_splits (season, split, stat)")
+    if only is None:
+        cur.execute("CREATE INDEX ON player_situational_splits (season, split, stat)")
 
     lcols = list(L.columns)
-    cur.execute("DROP TABLE IF EXISTS situational_split_league;")
-    cur.execute(f"""CREATE TABLE situational_split_league (
+    if only is None:
+        cur.execute("DROP TABLE IF EXISTS situational_split_league;")
+        cur.execute(f"""CREATE TABLE situational_split_league (
         season INT, split TEXT, stat TEXT, players INT,
         {', '.join(f'{c} DOUBLE PRECISION' for c in lcols if c not in ('season', 'split', 'stat', 'players', 'games_a', 'games_b', 'outside_95', 'outside_high', 'outside_low', 'yoy_n'))},
         games_a INT, games_b INT, outside_95 INT, outside_high INT, outside_low INT, yoy_n INT,
         PRIMARY KEY (season, split, stat))""")
-    psycopg2.extras.execute_values(
-        cur, f"INSERT INTO situational_split_league ({', '.join(lcols)}) VALUES %s",
-        [tuple(clean(v) for v in r) for r in L[lcols].itertuples(index=False)])
+    if len(L):
+        psycopg2.extras.execute_values(
+            cur, f"INSERT INTO situational_split_league ({', '.join(lcols)}) VALUES %s",
+            [tuple(clean(v) for v in r) for r in L[lcols].itertuples(index=False)])
     conn.commit()
-    print(f"Wrote {len(P):,} player rows ({int(P.qualified.sum()):,} qualified), {len(L)} league rows "
+    print(f"Wrote {len(P):,} player rows ({int(P.qualified.sum()) if len(P) else 0:,} qualified), {len(L)} league rows "
           f"({time.time() - t0:.0f}s)")
+    if only is not None:
+        print(f"Done in {time.time() - t0:.0f}s")
+        return
 
     # Checks the README quotes.
     pooled = L[L.season == 0].set_index(["split", "stat"])

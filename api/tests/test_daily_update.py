@@ -64,7 +64,9 @@ SERIAL = {"pbp_events": "id", "player_shots": "id"}
 CACHE = os.path.join(tempfile.gettempdir(), "nba_hub_daily_update_test")   # reruns reuse the fetched answers
 # 2025-26 games with stored release rows: regular (BOS-ORL), two overtimes (OKC-HOU), a then-unmatched name (DAL-CHI), IND-DET
 RELEASE_GAMES = ["401811041", "401809243", "401811048", "401811043"]
-PRESEASON = ["--season-types", "preseason", "--from-date", "2026-10-02", "--date", "2026-10-05", "--sleep", "0.6"]
+# --no-rebuild: the season rebuild (round 9 step 3) never runs for the preseason anyway; said explicitly, since the builds
+# would follow the schema's search_path into the public tables
+PRESEASON = ["--season-types", "preseason", "--from-date", "2026-10-02", "--date", "2026-10-05", "--sleep", "0.6", "--no-rebuild"]
 EVENT_COLS = ["period", "seconds_remaining", "score_home", "score_away", "team_id", "team_tricode", "action_type", "description"]
 
 

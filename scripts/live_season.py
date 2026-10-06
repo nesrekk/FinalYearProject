@@ -126,13 +126,13 @@ NOTES = {
                   "the 2026-27 lines identify rookies through player_season_stats' 2027 rows, not this fallback",
     "player_id_map": "as player_bio: rookies' Basketball-Reference <-> NBA ids at the season's end",
     "player_first_season": "as player_bio: rookies' first season (2027) at the season's end",
-    "player_game_onfloor_meta": "checks over every game, no season dimension: 9-3's --season mode must leave it (or add a season column)",
+    "player_game_onfloor_meta": "checks over every game, no season dimension: the --season builds leave it as it is (R9-008)",
     "possession_meta": "as player_game_onfloor_meta",
-    "lineup_stints": "9-3: delete and rebuild season 2027 only, through the same Game.walk() code; a test proves --season 2026 "
-                     "equals the full rebuild's 2025-26 rows",
+    "lineup_stints": "build_lineup_stints.py --season 2027 deletes and rebuilds that season only, through the same Game.walk() "
+                     "code; api/tests/test_season_rebuild.py proves --season 2026 equals the full build's 2025-26 rows",
     "player_game_lines": "heaves: since 2025-26 the NBA counts a missed end-of-quarter heave as a team attempt; ESPN logs it "
                          "('Heave Jump Shot', ~1,100 a season) and the lines charge the shooter (R8-088)",
-    "situational_split_league": "the season 0 (pooled) row is the paper's: 9-3 recomputes only the 2027 row",
+    "situational_split_league": "the season 0 (pooled) row is the paper's: a --season run writes only its season's row",
     "coaching_decisions": "the league-wide tests (BH families) pool every season: rebuild at the season's end",
     "player_wpa_totals": "career totals with no season dimension: the Clutch WPA page cannot take 2026-27 until a season column is added "
                          "(R9-002); paper_beliefs recomputes and checks against this table",

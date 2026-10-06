@@ -42,6 +42,11 @@ rebuild, a player_shots reload) or a change to the win-probability model.
 
 Usage:
     cd scripts && python3 build_best_games.py
+    cd scripts && python3 build_best_games.py --season 2027
+        # round 9 step 3: only that season's rows are deleted and rebuilt (the
+        # same per-game replay on that season's Play Finder rows);
+        # best_games_meta (weights, rank agreement over every game) is left as
+        # it is (R9-008). Needs the full build's table.
 """
 
 import io
@@ -58,6 +63,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from best_games import LEAD_CHANGE_W, MARGIN_W, OVERTIME_W, excitement  # noqa: E402
 from compute_wpa import compute_win_probs  # noqa: E402
 from db_config import DB_CONFIG  # noqa: E402
+import season_mode as SM  # noqa: E402
 from wpa_lib import load_model  # noqa: E402
 
 END = 10 ** 9   # event id of the closing point, after every real event
@@ -76,13 +82,15 @@ def lead_changes(signs):
     return int((v[1:] != v[:-1]).sum()) if len(v) > 1 else 0
 
 
-def load(conn):
-    games = pd.read_sql_query("SELECT * FROM play_finder_games ORDER BY game_no", conn).set_index("game_no")
+def load(conn, season=None):
+    where = "" if season is None else f" WHERE season = {int(season)}"
+    games = pd.read_sql_query(f"SELECT * FROM play_finder_games{where} ORDER BY game_no", conn).set_index("game_no")
+    ev_where = "" if season is None else f" WHERE game_no IN (SELECT game_no FROM play_finder_games{where})"
     ev = pd.read_sql_query(
-        """SELECT game_no, event_id, MIN(period) AS period, MIN(clock) AS clock,
+        f"""SELECT game_no, event_id, MIN(period) AS period, MIN(clock) AS clock,
                   MAX(CASE WHEN is_home THEN score_for ELSE score_against END) AS sh,
                   MAX(CASE WHEN is_home THEN score_against ELSE score_for END) AS sa
-           FROM play_finder_events GROUP BY game_no, event_id""", conn)
+           FROM play_finder_events{ev_where} GROUP BY game_no, event_id""", conn)
     return games, ev
 
 
@@ -139,13 +147,14 @@ def per_game(games, pts):
 
 
 def main():
+    season = SM.parse_season()
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
-    cur.execute("SELECT to_regclass('public.play_finder_events')")
+    cur.execute("SELECT to_regclass('play_finder_events')")
     if cur.fetchone()[0] is None:
         sys.exit("play_finder_events is missing: run build_play_finder.py first.")
-    games, ev = load(conn)
+    games, ev = load(conn, season)
     print(f"{len(games):,} games, {len(ev):,} distinct plays ({time.time() - t0:.0f}s)")
     res = per_game(games, series(games, ev))
 
@@ -182,6 +191,18 @@ def main():
         ("games_ranked", len(ok), "games with score_ok (the only ones the API ranks)"),
     ], columns=["name", "value", "note"])
 
+    if season is not None:
+        SM.require_tables(cur, ["best_games"], season)
+        print(f"--season {season}: {SM.delete_season(cur, 'best_games', season):,} stored rows of the season deleted; "
+              "best_games_meta left as it is (its rank agreement covers every game)")
+        copy_rows(cur, "best_games", out, ["game_id", "nba_game_id"] + cols)
+        conn.commit()
+        cur.execute("ANALYZE best_games;")
+        conn.commit()
+        cur.execute("SELECT COUNT(*) FROM best_games WHERE season = %s", (season,))
+        print(f"best_games: {cur.fetchone()[0]:,} rows of the season; done in {time.time() - t0:.0f}s")
+        conn.close()
+        return
     cur.execute("DROP TABLE IF EXISTS best_games, best_games_meta;")
     cur.execute("""CREATE TABLE best_games (
         game_id TEXT PRIMARY KEY, nba_game_id TEXT NOT NULL UNIQUE, season SMALLINT NOT NULL, game_date DATE NOT NULL,

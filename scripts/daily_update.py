@@ -17,6 +17,8 @@ Ledger's hour (docs/LEDGER_RUNBOOK.md; the ledger's own ledger_update.py is a se
     python3 daily_update.py --season-types preseason --from-date 2026-10-02    # the preseason: the tests only (below)
     options: --season N (end year, default 2027)  --sleep S (between shot-chart calls, default 1.0)
              --refresh-shots (re-fetch every chart even if nothing is missing)  --force-shots (allow a large shot deletion)
+             --no-rebuild (fetch only)  --rebuild (rebuild the season's tables even when nothing new was fetched)
+             --rebuild-only (no fetch: just the season rebuild, e.g. after a build script changed)
 
 What a run does, in order (each step in its own transaction; a step that fails is logged and the rest still run):
   1. ESPN scoreboard, one request per US date from --from-date to today: which games are final, by season type
@@ -46,7 +48,15 @@ What a run does, in order (each step in its own transaction; a step that fails i
      the stored conventions (shot_zone_basic NULL: zones come from api/shots_lib.classify_zone() on the coordinates,
      as for every bulk row). A merge that would delete more than max(50, 10%) of the type's stored shots, or a chart
      that answers nothing for a type with stored shots, stops instead (--force-shots overrides the first).
-  9. One row in daily_update_runs (listed in paper_manifest.LIVE: outside the paper's digest) and one summary line.
+  9. The season rebuild (round 9 step 3), when the run stored new play-by-play or changed the shot chart (or
+     --rebuild): the fourteen season-level builds of rebuild_all.sh's derived stage, in its order, each as
+     `python3 <script> --season N` in its own process (scripts/season_mode.py: only that season's rows of each table
+     are deleted and rebuilt, through the same code as the full build; the tables without a season dimension are
+     left alone), stopping at the first failure since every build reads the one before it. Each build's output goes
+     to live_data/<season>/rebuild/<date>_<script>.log; the run row keeps every step's status and seconds. Only the
+     regular season is rebuilt (never the preseason runs of the tests). The update restarts nothing itself: it prints
+     "restart impact_api" (the API caches these tables per process).
+ 10. One row in daily_update_runs (listed in paper_manifest.LIVE: outside the paper's digest) and one summary line.
 
 Idempotent: a second run on the same day writes nothing new (stored games are skipped, upserts repeat their values,
 the chart pairs every shot). Resumable: every answer is cached under live_data/<season>/ (gitignored; delete it to
@@ -112,8 +122,16 @@ DEFAULT_KINDS = "regular,playoffs,playin"
 BOX_KINDS = ("regular", "preseason")     # the one kind whose games fill fatigue / box / scores / officials / stats / pbp
 NOT_PLAYED = ("STATUS_POSTPONED", "STATUS_CANCELED", "STATUS_CANCELLED", "STATUS_SUSPENDED", "STATUS_FORFEIT")
 STEPS = ("scoreboard", "nba_games", "game_scores", "postseason", "season_stats", "pbp", "officials", "shots")
+# Round 9 step 3: the season-level builds the update runs for the live season after the fetch, in rebuild_all.sh
+# order, each as `python3 <script> --season N` (scripts/season_mode.py; the rebuild phase itself is still to be wired
+# in: the list is the order api/tests/test_season_rebuild.py proves against rebuild_all.sh).
+REBUILD_STEPS = ["build_event_clock.py", "build_player_game_lines.py", "build_team_game_totals.py", "build_lineup_stints.py",
+                 "build_player_game_onfloor.py", "build_player_on_off.py", "build_possessions.py", "build_situational_splits.py",
+                 "build_rotations.py", "build_rim_deterrence.py", "build_assist_network.py", "build_play_finder.py",
+                 "build_best_games.py", "build_leverage_splits.py"]
 NEEDS = {"game_scores": ("scoreboard", "nba_games"), "postseason": ("scoreboard",), "season_stats": (),
-         "pbp": ("scoreboard", "season_stats"), "officials": ("nba_games",), "shots": ("scoreboard", "nba_games"), "nba_games": ()}
+         "pbp": ("scoreboard", "season_stats"), "officials": ("nba_games",), "shots": ("scoreboard", "nba_games"), "nba_games": (),
+         "rebuild": ()}
 
 RUN_LOG_DDL = """CREATE TABLE IF NOT EXISTS daily_update_runs (
     season INTEGER NOT NULL, run_id TEXT PRIMARY KEY, started_at TIMESTAMPTZ, finished_at TIMESTAMPTZ, today_et DATE,
@@ -121,7 +139,10 @@ RUN_LOG_DDL = """CREATE TABLE IF NOT EXISTS daily_update_runs (
     pbp_games_new INTEGER, pbp_events_new INTEGER, pbp_pending INTEGER, pbp_unmatched_events INTEGER, pbp_unmatched_names TEXT,
     game_scores_rows INTEGER, fatigue_rows INTEGER, box_rows INTEGER, officials_games INTEGER,
     shots_inserted INTEGER, shots_deleted INTEGER, shot_kinds TEXT, season_stats_players INTEGER,
-    failed_steps TEXT, status TEXT, summary TEXT, code_commit TEXT)"""
+    failed_steps TEXT, status TEXT, summary TEXT, code_commit TEXT, rebuild_seconds REAL, rebuild_steps TEXT)"""
+# the two rebuild columns were added in round 9 step 3: a run log created by step 2 gains them here
+RUN_LOG_ALTER = """ALTER TABLE daily_update_runs ADD COLUMN IF NOT EXISTS rebuild_seconds REAL,
+    ADD COLUMN IF NOT EXISTS rebuild_steps TEXT"""
 
 FATIGUE_INSERT = """INSERT INTO team_game_fatigue (game_id, team_abbreviation, season, game_date, is_home, opponent, win, plus_minus,
     rest_days, is_b2b, games_last_7_days, travel_miles_since_last, timezones_crossed_since_last) VALUES %s"""
@@ -619,11 +640,59 @@ class Run:
                 coverage[kind]["short_of_box"] = sorted(g for g, n in got.items() if n < box_fga.get(g, 0))
         return out
 
-    # ── 9. run log + summary ──────────────────────────────────────────────────
+    # ── 9. the season rebuild ─────────────────────────────────────────────────
+
+    def rebuild_wanted(self):
+        """(run it?, why): --rebuild always, --no-rebuild / --dry-run never, else when this run stored new play-by-play
+        or changed the shot chart; only for the regular season (the preseason runs of the tests never rebuild)."""
+        a = self.args
+        if a.no_rebuild:
+            return False, "--no-rebuild"
+        if a.dry_run:
+            return False, "dry run (the builds commit in their own processes)"
+        if self.box_kind != "regular":
+            return False, "only the regular season is rebuilt"
+        if a.rebuild or a.rebuild_only:
+            return True, "--rebuild"
+        pb, sh = self.counts.get("pbp", {}), self.counts.get("shots", {})
+        new = pb.get("new_games", 0) + sh.get("inserted", 0) + sh.get("deleted", 0)
+        if "pbp" in self.errors or "shots" in self.errors:
+            return False, "the play-by-play or shot step failed: nothing rebuilt until it succeeds"
+        return (new > 0), ("new play-by-play or shots" if new else "nothing new was fetched")
+
+    def step_rebuild(self):
+        wanted, why = self.rebuild_wanted()
+        if not wanted:
+            log(f"   rebuild skipped: {why}")
+            return {"ran": False, "why": why}
+        log(f"   rebuilding season {self.season}'s tables ({why}): {len(REBUILD_STEPS)} builds, logs in {self.cache / 'rebuild'}")
+        env = {**os.environ, "OMP_NUM_THREADS": os.environ.get("OMP_NUM_THREADS", "4")}   # PGOPTIONS inherited, like the fetch
+        steps = []
+        for script in REBUILD_STEPS:
+            path = self.cache / "rebuild" / f"{self.today}_{script[:-3]}.log"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            t0 = time.time()
+            with open(path, "w") as f:
+                r = subprocess.run([sys.executable, script, "--season", str(self.season)], cwd=ROOT / "scripts", env=env,
+                                   stdout=f, stderr=subprocess.STDOUT)
+            secs = round(time.time() - t0, 1)
+            ok = r.returncode == 0
+            steps.append({"script": script, "status": "ok" if ok else "failed", "seconds": secs})
+            log(f"   {script}: {'ok' if ok else f'FAILED (exit {r.returncode})'} ({secs:.0f}s)")
+            if not ok:
+                tail = " ".join(open(path).read().strip().splitlines()[-3:])[-400:]
+                self.errors["rebuild"] = f"{script} exited {r.returncode} after {secs:.0f}s ({path}): {tail}"
+                steps += [{"script": s, "status": "not run", "seconds": 0.0} for s in REBUILD_STEPS[len(steps):]]
+                break
+        return {"ran": True, "why": why, "steps": steps, "seconds": round(sum(s["seconds"] for s in steps), 1),
+                "ok": sum(s["status"] == "ok" for s in steps)}
+
+    # ── 10. run log + summary ─────────────────────────────────────────────────
 
     def summary_line(self):
         c, e = self.counts, self.errors
         sb, pb, gs, ng, of, sh, ss = (c.get(k, {}) for k in ("scoreboard", "pbp", "game_scores", "nba_games", "officials", "shots", "season_stats"))
+        rb = c.get("rebuild", {})
         parts = [f"daily_update {self.today} ({self.mode}, {','.join(self.kinds)}):"]
         if sb:
             parts.append(f"{sb['dates']} dates {sb['from']}..{self.today} (complete through {sb['through']}), {sb['finals']} finals;")
@@ -640,6 +709,9 @@ class Run:
             parts.append(f"shots +{sh['inserted']:,}/-{sh['deleted']:,} ({','.join(sh['fetched_kinds']) or 'nothing to fetch'});")
         if ss:
             parts.append(f"season stats {ss['players']} players;")
+        if rb:
+            parts.append(f"rebuild {rb['ok']} of {len(REBUILD_STEPS)} builds in {rb['seconds']:.0f}s;" if rb.get("ran")
+                         else f"rebuild skipped ({rb['why']});")
         parts.append(f"{time.time() - self.t0:.0f}s")
         if e:
             parts.append("FAILED: " + "; ".join(f"{k} ({v})" for k, v in e.items()))
@@ -648,11 +720,12 @@ class Run:
     def write_run_log(self, status, summary):
         c = self.counts
         sb, pb, gs, ng, of, sh, ss = (c.get(k, {}) for k in ("scoreboard", "pbp", "game_scores", "nba_games", "officials", "shots", "season_stats"))
+        rb = c.get("rebuild", {})
         self.cur.execute("""INSERT INTO daily_update_runs (season, run_id, started_at, finished_at, today_et, mode, season_types,
             from_date, through_date, dates_checked, events, finals, pbp_games_new, pbp_events_new, pbp_pending, pbp_unmatched_events,
             pbp_unmatched_names, game_scores_rows, fatigue_rows, box_rows, officials_games, shots_inserted, shots_deleted, shot_kinds,
-            season_stats_players, failed_steps, status, summary, code_commit)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            season_stats_players, failed_steps, status, summary, code_commit, rebuild_seconds, rebuild_steps)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                          (self.season, self.run_id, self.started, datetime.now(timezone.utc), self.today, self.mode,
                           self.args.season_types, getattr(self, "from_date", None), self.through, len(self.dates),
                           sb.get("events"), sb.get("finals"), pb.get("new_games"), pb.get("events"),
@@ -660,7 +733,8 @@ class Run:
                           ", ".join(pb.get("names_without_id", [])) if pb else None, gs.get("rows"), ng.get("fatigue_rows"),
                           ng.get("box_rows"), of.get("games"), sh.get("inserted"), sh.get("deleted"),
                           ",".join(sh.get("fetched_kinds", [])) if sh else None, ss.get("players"),
-                          ", ".join(self.errors) or None, status, summary, git_commit()))
+                          ", ".join(self.errors) or None, status, summary, git_commit(),
+                          rb.get("seconds") if rb.get("ran") else None, json.dumps(rb.get("steps")) if rb.get("ran") else None))
         self.conn.commit()
 
 
@@ -675,16 +749,24 @@ def main():
     ap.add_argument("--sleep", type=float, default=1.0, help="seconds between shot-chart calls")
     ap.add_argument("--refresh-shots", action="store_true", help="fetch every season type's chart even if nothing is missing")
     ap.add_argument("--force-shots", action="store_true", help="allow a merge that deletes many stored shots")
+    ap.add_argument("--no-rebuild", action="store_true", help="fetch only: don't rebuild the season's derived tables")
+    ap.add_argument("--rebuild", action="store_true", help="rebuild the season's derived tables even if nothing new was fetched")
+    ap.add_argument("--rebuild-only", action="store_true", help="no fetch: only the season rebuild")
     args = ap.parse_args()
     run = Run(args)
+    if args.rebuild_only:
+        run.mode = "rebuild"
     log(f"run {run.run_id}: season {run.season} {run.kinds}, today {run.today} ({run.mode}), cache {run.cache}")
     run.cur.execute(RUN_LOG_DDL)
+    run.cur.execute(RUN_LOG_ALTER)
     if not args.dry_run:
         run.conn.commit()
-    for name in STEPS:
+    for name in STEPS if not args.rebuild_only else ():
         run.step(name, getattr(run, f"step_{name}"))
         if name == "scoreboard" and name in run.errors:
             break
+    if args.rebuild_only or "scoreboard" not in run.errors:
+        run.step("rebuild", run.step_rebuild)
     status = "ok" if not run.errors else "failed"
     summary = run.summary_line()
     if args.dry_run:
@@ -694,6 +776,8 @@ def main():
         run.write_run_log(status, summary)
     run.conn.close()
     print(summary, flush=True)
+    if run.counts.get("rebuild", {}).get("ran"):
+        print("restart impact_api: it caches these tables per process", flush=True)
     return 0 if status == "ok" else 1
 
 

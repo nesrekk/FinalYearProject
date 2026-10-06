@@ -63,7 +63,20 @@ error) for players with >= 40 real games.
 
 Usage:
     cd scripts && python3 build_leverage_splits.py [--clock espn] [--dry-run]
+    cd scripts && python3 build_leverage_splits.py --season 2027
+        # round 9 step 3: the pooled constants (the scoring-outcome mix and the
+        # league mean swing that normalise LI, the 3PA rule's accuracy) are
+        # computed over the events of seasons up to api/paper_freeze.py's
+        # MAX_PAPER_SEASON (2025-26), checked against the stored
+        # leverage_index_grid (which they must reproduce), and applied to that
+        # season's events; only that season's rows of player_leverage_splits,
+        # player_leverage_summary and leverage_validation are deleted and
+        # rebuilt; the grid is left as it is (R9-008, R9-009). Needs the full
+        # build's tables.
 """
+
+import os
+import sys
 
 import numpy as np
 import pandas as pd
@@ -71,7 +84,13 @@ import psycopg2
 import psycopg2.extras
 
 from db_config import DB_CONFIG
+import season_mode as SM
 from wpa_lib import CLUTCH_MARGIN, CLUTCH_SECONDS, load_model
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "api"))
+from paper_freeze import MAX_PAPER_SEASON  # noqa: E402
+
+FIT_THROUGH = MAX_PAPER_SEASON      # the --season mode's pooled constants come from the seasons up to this one
 
 GARBAGE_WP = 0.99
 GARBAGE_MARGIN_2H = 18
@@ -97,12 +116,14 @@ NBA_CUP_FINALS = {
 }
 
 
-def load_events(conn, clock="corrected"):
+def load_events(conn, clock="corrected", season=None):
     """clock='corrected' (default since 2026-10-06): seconds remaining from pbp_event_clock
     (build_event_clock.py), like Clutch WPA; 'espn' = ESPN's own stamps (made shots a median
     14 s late), kept for the comparison in --dry-run. Every ESPN event has a pbp_event_clock row;
-    one without (none today) keeps its own time."""
+    one without (none today) keeps its own time. `season` (the --season mode): the seasons up to
+    FIT_THROUGH (the pooled constants' events) plus that season."""
     secs = "COALESCE(k.seconds_remaining, e.seconds_remaining)" if clock == "corrected" else "e.seconds_remaining"
+    only = "" if season is None else f" AND (g.season <= {int(FIT_THROUGH)} OR g.season = {int(season)})"
     query = f"""
         SELECT e.game_id, e.action_number, e.id, e.period, {secs} AS seconds_remaining,
                e.score_home, e.score_away, e.team_tricode, e.person_id, e.player_name,
@@ -110,7 +131,7 @@ def load_events(conn, clock="corrected"):
         FROM pbp_events e
         JOIN pbp_games g ON g.game_id = e.game_id
         LEFT JOIN pbp_event_clock k ON k.event_id = e.id
-        WHERE g.source = 'espn' AND g.game_id <> ALL(%s)
+        WHERE g.source = 'espn' AND g.game_id <> ALL(%s){only}
         ORDER BY g.game_date, e.game_id, e.action_number, e.id;
     """
     with conn.cursor() as cur:
@@ -127,7 +148,9 @@ def win_probs(model, scaler, secs, margin):
     return model.predict_proba(X)[:, 1]
 
 
-def classify(df):
+def classify(df, fit=None):
+    """`fit`: a boolean mask of the events the 3PA rule's accuracy is measured on (the --season mode's pooled
+    seasons); None = every event."""
     at = df["action_type"].fillna("")
     desc = df["description"].fillna("")
     low = desc.str.lower()
@@ -164,6 +187,8 @@ def classify(df):
     # Real accuracy of the text/distance 3PA rule, measured on real made
     # shots where the real score change gives the true answer.
     truth = is_fgm & real_delta_ok
+    if fit is not None:
+        truth = truth & fit
     three_rule_accuracy = float(((text_three == (own_delta == 3))[truth]).mean())
     return df, three_rule_accuracy
 
@@ -179,30 +204,35 @@ def expected_swing(model, scaler, secs, margin_before, outcome_probs):
     return base, total
 
 
-def compute(conn, clock="corrected"):
-    """Everything the build writes, computed without writing: (df, grid, splits, summary, validation, accuracy)."""
+def compute(conn, clock="corrected", only=None):
+    """Everything the build writes, computed without writing: (df, grid, splits, summary, validation, accuracy).
+    With `only` (the --season mode's season) the pooled constants come from the events of seasons <= FIT_THROUGH and
+    are applied to every loaded event, that season's included."""
     model, scaler = load_model()
     cur = conn.cursor()
 
     print(f"Loading real ESPN play-by-play (one bulk query; clock = {clock})...")
-    df = load_events(conn, clock)
+    df = load_events(conn, clock, only)
     print(f"  {len(df):,} real events, {df['game_id'].nunique():,} real games, "
           f"seasons {df['season'].min()}-{df['season'].max()}")
+    fit = None if only is None else (df["season"] <= FIT_THROUGH).to_numpy()
+    if fit is not None:
+        print(f"  --season {only}: pooled constants from the {int(fit.sum()):,} events of seasons <= {FIT_THROUGH}")
 
-    df, three_rule_accuracy = classify(df)
+    df, three_rule_accuracy = classify(df, fit)
     print(f"  3PA text/distance rule accuracy on real made shots: {three_rule_accuracy:.4f}")
 
     df["margin"] = (df["score_home"] - df["score_away"]).astype(float)
     df["margin_before"] = df.groupby("game_id")["margin"].shift(1).fillna(0.0)
     change = (df["margin"] - df["margin_before"]).clip(-3, 3).astype(int)
-    outcome_probs = change.value_counts(normalize=True).to_dict()
+    outcome_probs = (change if fit is None else change[fit]).value_counts(normalize=True).to_dict()
     print("  Real per-event scoring-outcome mix (home-perspective margin change): "
           + ", ".join(f"{k:+d}: {v:.4f}" for k, v in sorted(outcome_probs.items())))
 
     secs = df["seconds_remaining"].astype(float).values
     wp_before, swing = expected_swing(model, scaler, secs, df["margin_before"].values, outcome_probs)
     df["wp_before"] = wp_before
-    league_mean_swing = float(swing.mean())
+    league_mean_swing = float(swing.mean() if fit is None else swing[fit].mean())
     df["li"] = swing / league_mean_swing
     print(f"  Real event-weighted mean LI: {df['li'].mean():.4f}")
 
@@ -216,6 +246,18 @@ def compute(conn, clock="corrected"):
     _, lat_swing = expected_swing(model, scaler, lat[:, 2], lat[:, 1], outcome_probs)
     grid = pd.DataFrame({"tbin": lat[:, 0].astype(int), "mbin": lat[:, 1].astype(int),
                          "mean_swing": lat_swing, "li": lat_swing / league_mean_swing})
+    if only is not None:
+        # the frozen constants must give back the stored grid exactly, or the live season would be priced on a
+        # different scale from the seasons already stored
+        stored = pd.read_sql("SELECT time_bin AS tbin, margin_before AS mbin, expected_swing, li AS li_stored "
+                             "FROM leverage_index_grid", conn)
+        m = grid.merge(stored, on=["tbin", "mbin"], how="outer", indicator=True)
+        gap = float(np.nanmax(np.concatenate([np.abs(m.expected_swing - m.mean_swing).to_numpy(float),
+                                              np.abs(m.li_stored - m.li).to_numpy(float), [0.0]])))
+        if len(stored) != len(grid) or (m._merge != "both").any() or gap > 1e-9:
+            raise SystemExit(f"--season {only}: the pooled constants from seasons <= {FIT_THROUGH} don't reproduce the stored "
+                             f"leverage_index_grid (max gap {gap:.2e}, {len(stored)} vs {len(grid)} rows): run the full build")
+        print(f"  leverage_index_grid reproduced from the frozen constants (max gap {gap:.1e})")
 
     abs_mb = df["margin_before"].abs()
     garbage = (df["wp_before"] > GARBAGE_WP) | (df["wp_before"] < 1 - GARBAGE_WP) | (
@@ -345,9 +387,10 @@ def main():
     ap = argparse.ArgumentParser(description="Garbage-Time Deflator")
     ap.add_argument("--clock", choices=("corrected", "espn"), default="corrected")
     ap.add_argument("--dry-run", action="store_true", help="compute and compare with the stored tables; write nothing")
+    ap.add_argument("--season", type=int, help="rebuild only this season's rows (end year) on the frozen pooled constants")
     args = ap.parse_args()
     conn = psycopg2.connect(**DB_CONFIG)
-    res = compute(conn, args.clock)
+    res = compute(conn, args.clock, args.season)
     if args.dry_run:
         compare(conn, res)
         conn.close()
@@ -355,8 +398,18 @@ def main():
     df, grid, splits, summary, validation, three_rule_accuracy = res
     cur = conn.cursor()
 
+    if args.season is not None:
+        season = args.season
+        SM.require_tables(cur, ["player_leverage_splits", "player_leverage_summary", "leverage_validation"], season)
+        n = sum(SM.delete_season(cur, t, season) for t in ("player_leverage_splits", "player_leverage_summary", "leverage_validation"))
+        splits, summary = splits[splits.season == season], summary[summary.season == season]
+        validation = {s: v for s, v in validation.items() if int(s) == season}
+        print(f"--season {season}: {n:,} stored rows of the season deleted; writing {len(splits):,} split rows, "
+              f"{len(summary):,} summary rows and {len(validation)} validation row (leverage_index_grid left as it is)")
+
     # ---- write tables ----
-    cur.execute("""
+    if args.season is None:
+        cur.execute("""
         DROP TABLE IF EXISTS leverage_index_grid;
         CREATE TABLE leverage_index_grid (
             time_bin INTEGER NOT NULL,
@@ -412,10 +465,9 @@ def main():
             three_rule_accuracy DOUBLE PRECISION
         );
     """)
-
-    psycopg2.extras.execute_values(cur, "INSERT INTO leverage_index_grid VALUES %s", [
-        (int(r.tbin), int(r.mbin), float(r.mean_swing), float(r.li)) for _, r in grid.iterrows()
-    ])
+        psycopg2.extras.execute_values(cur, "INSERT INTO leverage_index_grid VALUES %s", [
+            (int(r.tbin), int(r.mbin), float(r.mean_swing), float(r.li)) for _, r in grid.iterrows()
+        ])
     psycopg2.extras.execute_values(cur, "INSERT INTO player_leverage_splits VALUES %s", [
         (int(r.season), int(r.person_id), r.bucket, int(r.pts), int(r.fgm), int(r.fga), int(r.fg3m),
          int(r.fg3a), int(r.ftm), int(r.fta), int(r.reb), int(r.ast), int(r.tov), float(r.lw_pts))
@@ -444,12 +496,17 @@ def main():
 
     print("\nPer-season real validation:")
     for s, v in sorted(validation.items()):
+        # early in a live season nobody has 40 games: no PPG comparison yet
+        ppg = f"PPG r={v['ppg_r']:.4f} MAE={v['ppg_mae']:.3f}" if v["ppg_r"] is not None and v["ppg_mae"] is not None else "PPG r=n/a"
         print(f"  {s}: games={v['n_games']} pts attributed={v['pts_attributed'] / v['pts_total']:.3f} "
               f"assists matched={v['assists_matched'] / max(v['assists_parsed'], 1):.3f} "
-              f"PPG r={v['ppg_r']:.4f} MAE={v['ppg_mae']:.3f} (n={v['n_players_compared']}) "
+              f"{ppg} (n={v['n_players_compared']}) "
               f"clutch overridden by garbage={v['clutch_overridden']}/{v['clutch_events']} "
               f"buckets={ {k: round(x, 3) for k, x in v['bucket_event_share'].items()} }")
 
+    if not len(summary):
+        conn.close()
+        return
     latest = int(summary["season"].max())
     q = summary[(summary["season"] == latest) & summary["qualified"]]
     print(f"\n{latest} top garbage-time share (qualified):")

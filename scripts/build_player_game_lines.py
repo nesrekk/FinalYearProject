@@ -62,6 +62,10 @@ Checked against player_season_stats (NBA.com season totals, players with
 
 Usage:
     cd scripts && python3 build_player_game_lines.py
+    cd scripts && python3 build_player_game_lines.py --season 2027
+        # round 9 step 3: only that season's rows are deleted and rebuilt, through
+        # the same per-game code (the name index is the same one the full build
+        # uses, every season's); needs the full build's table.
 """
 
 from collections import Counter
@@ -71,6 +75,7 @@ import psycopg2.extras
 
 from db_config import DB_CONFIG
 from pbp_lineups import Game, load_espn, load_season_names, miss_three_calls, points_method
+import season_mode as SM
 
 OWN = ["pts", "fgm", "fga", "fg3m", "fg3a", "ftm", "fta", "oreb", "dreb", "ast", "stl", "blk", "tov"]
 ON = ["tm_fgm", "tm_fga", "tm_fta", "tm_oreb", "tm_dreb", "tm_tov", "tm_pts",
@@ -84,13 +89,14 @@ def final_scores(cur):
 
 
 def main():
+    season = SM.parse_season()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
     season_names, all_names = load_season_names(cur)
     finals = final_scores(cur)
-    games, grouped = load_espn(conn)
+    games, grouped = load_espn(conn, season=season)
     print(f"{len(games)} games, {sum(len(v) for v in grouped.values())} events")
-    calls, misses = miss_three_calls(conn, games, grouped, season_names, all_names)
+    calls, misses = miss_three_calls(conn, games, grouped, season_names, all_names, season=season)
     flipped = misses[misses.text_three != misses.nba_three]
     print(f"NBA shot chart's call on {len(misses):,} missed shots; differs from the text's on {len(flipped):,} "
           f"({int((flipped.nba_three).sum()):,} threes the text calls twos, {int((~flipped.nba_three).sum()):,} the other way)")
@@ -128,14 +134,19 @@ def main():
     if bad_team:
         raise SystemExit(f"{len(bad_team)} rows with no team, e.g. {bad_team[:3]}")
     cols = ["player_id", "game_id", "season", "game_date", "team_abbreviation", "seconds"] + OWN + ON
-    cur.execute("DROP TABLE IF EXISTS player_game_lines;")
-    cur.execute(f"""CREATE TABLE player_game_lines (
-        player_id BIGINT NOT NULL, game_id TEXT NOT NULL, season INTEGER NOT NULL, game_date DATE,
-        team_abbreviation TEXT NOT NULL, seconds DOUBLE PRECISION,
-        {', '.join(f'{c} INTEGER' for c in OWN + ON)},
-        PRIMARY KEY (player_id, game_id));""")
+    if season is None:
+        cur.execute("DROP TABLE IF EXISTS player_game_lines;")
+        cur.execute(f"""CREATE TABLE player_game_lines (
+            player_id BIGINT NOT NULL, game_id TEXT NOT NULL, season INTEGER NOT NULL, game_date DATE,
+            team_abbreviation TEXT NOT NULL, seconds DOUBLE PRECISION,
+            {', '.join(f'{c} INTEGER' for c in OWN + ON)},
+            PRIMARY KEY (player_id, game_id));""")
+    else:
+        SM.require_tables(cur, ["player_game_lines"], season)
+        print(f"--season {season}: {SM.delete_season(cur, 'player_game_lines', season):,} stored rows of the season deleted")
     psycopg2.extras.execute_values(cur, f"INSERT INTO player_game_lines ({', '.join(cols)}) VALUES %s", out, page_size=5000)
-    cur.execute("CREATE INDEX ON player_game_lines (season, player_id);")
+    if season is None:
+        cur.execute("CREATE INDEX ON player_game_lines (season, player_id);")
     conn.commit()
     print(f"{len(out)} player-game rows; lineup periods needing a fill/trim: {fixes} of ~{periods * 2} team-periods")
     print(f"on-court points per game (points_method): {dict(methods)}")
@@ -148,12 +159,13 @@ def main():
     for k, n in sorted(unmatched.items(), key=lambda x: (-x[1], x[0][0], x[0][1] or "", x[0][2])):
         print(f"  {k}: {n}")
 
-    # Check against NBA.com season totals (players with 20+ games).
-    cur.execute("""
+    # Check against NBA.com season totals (players with 20+ games; in --season mode that season only).
+    season_where = "" if season is None else f" WHERE season = {int(season)}"
+    cur.execute(f"""
         WITH l AS (SELECT player_id, season, COUNT(*) FILTER (WHERE seconds > 0) gp, SUM(seconds)/60 mins,
                           SUM(pts) pts, SUM(fga) fga, SUM(fg3a) fg3a, SUM(fta) fta, SUM(oreb) oreb, SUM(dreb) dreb,
                           SUM(ast) ast, SUM(stl) stl, SUM(blk) blk, SUM(tov) tov
-                   FROM player_game_lines GROUP BY 1, 2)
+                   FROM player_game_lines{season_where} GROUP BY 1, 2)
         SELECT COUNT(*),
                SUM(l.gp)/SUM(s.gp), SUM(l.mins)/SUM(s.min*s.gp), SUM(l.pts)/SUM(s.pts*s.gp),
                SUM(l.fga)/SUM(s.fga*s.gp), SUM(l.fg3a)/SUM(s.fg3a*s.gp), SUM(l.fta)/SUM(s.fta*s.gp),
@@ -164,7 +176,8 @@ def main():
     labels = ["player-seasons", "gp", "min", "pts", "fga", "fg3a", "fta", "oreb", "dreb", "ast", "stl", "blk", "tov",
               "mean |min error|"]
     for k, v in zip(labels, cur.fetchone()):
-        print(f"  {k:>16}: {float(v):.4f}" if k != "player-seasons" else f"  {k:>16}: {v}")
+        # early in a season nobody has 20 games yet: the sums are NULL
+        print(f"  {k:>16}: {v}" if k == "player-seasons" else f"  {k:>16}: {'n/a' if v is None else f'{float(v):.4f}'}")
     conn.close()
 
 

@@ -82,6 +82,11 @@ Usage:
         # after the build: compares N random games (fixed seed) with ESPN's
         # box score +/- (site.api.espn.com summary; network); prints only,
         # writes nothing. Box scores are cached in DIR ($TMPDIR by default).
+    cd scripts && python3 build_player_game_onfloor.py --season 2027
+        # round 9 step 3: only that season's rows are deleted and rebuilt (the
+        # same replay and checks, on that season's games and stints);
+        # player_game_onfloor_meta is left as it is (its checks cover every
+        # game: R9-008). Needs the full build's table.
 Rerun after build_lineup_stints.py.
 """
 
@@ -99,6 +104,7 @@ import psycopg2.extras
 
 from db_config import DB_CONFIG
 from pbp_lineups import Game, is_foul_anchor, load_espn, load_season_names, norm
+import season_mode as SM
 
 ESPN_SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={}"
 ESPN_SEED = 7
@@ -199,31 +205,36 @@ def replay(g, ev, season_names, all_names, method, game_ok):
     return rows, five
 
 
-def load_games(cur):
+def _season_where(season, prefix=""):
+    return "" if season is None else f" WHERE {prefix}season = {int(season)}"
+
+
+def load_games(cur, season=None):
     cur.execute("""SELECT game_id, points_method, game_ok, home_team, away_team, final_home, final_away
-                   FROM lineup_stint_games""")
+                   FROM lineup_stint_games""" + _season_where(season))
     return {r[0]: r[1:] for r in cur.fetchall()}
 
 
-def stint_sums(cur):
+def stint_sums(cur, season=None):
     """Per (game, player): seconds, stints, points for and against from lineup_stints."""
-    cur.execute("""
+    w = _season_where(season, "s.")
+    cur.execute(f"""
         WITH sides AS (
             SELECT s.game_id, u.pid, s.seconds, s.home_pts AS pf, s.away_pts AS pa
-            FROM lineup_stints s, unnest(s.home_ids) u(pid)
+            FROM lineup_stints s, unnest(s.home_ids) u(pid){w}
             UNION ALL
             SELECT s.game_id, u.pid, s.seconds, s.away_pts, s.home_pts
-            FROM lineup_stints s, unnest(s.away_ids) u(pid))
+            FROM lineup_stints s, unnest(s.away_ids) u(pid){w})
         SELECT game_id, pid, sum(seconds::numeric)::float8, count(*), sum(pf), sum(pa) FROM sides GROUP BY 1, 2""")
     return {(r[0], int(r[1])): r[2:] for r in cur.fetchall()}
 
 
-def build(conn):
+def build(conn, season=None):
     t0 = time.time()
     cur = conn.cursor()
     season_names, all_names = load_season_names(cur)
-    meta_games = load_games(cur)
-    games, grouped = load_espn(conn)
+    meta_games = load_games(cur, season)
+    games, grouped = load_espn(conn, season=season)
     print(f"{len(games)} games loaded ({time.time() - t0:.0f}s)")
 
     out, five_by_game = [], {}
@@ -244,10 +255,10 @@ def build(conn):
     return out, five_by_game, meta_games
 
 
-def checks(cur, out, five_by_game, meta_games):
+def checks(cur, out, five_by_game, meta_games, season=None):
     res = {}
     # 1. Same lineups and points as lineup_stints (both credit free throws at the foul since round 8 step 6a).
-    stints = stint_sums(cur)
+    stints = stint_sums(cur, season)
     ours = {(r[1], r[0]): r for r in out}
     missing = {k for k in set(stints) - set(ours) if stints[k][0] > 0 or stints[k][2] or stints[k][3]}
     # A player on the floor only for a foul (in and out at the same clock, e.g. a take foul) is credited the free
@@ -289,7 +300,7 @@ def checks(cur, out, five_by_game, meta_games):
         raise SystemExit(f"a side with five all game doesn't add up to 5 x the margin: {dict(full)}")
 
     # 3. Same rows as player_game_lines.
-    cur.execute("SELECT player_id, game_id FROM player_game_lines")
+    cur.execute("SELECT player_id, game_id FROM player_game_lines" + _season_where(season))
     lines = {(int(p), g) for p, g in cur.fetchall()}
     mine = {(r[0], r[1]) for r in out}
     res["rows_vs_player_game_lines"] = {"lines": len(lines), "ours": len(mine), "only_in_lines": len(lines - mine),
@@ -305,14 +316,21 @@ def checks(cur, out, five_by_game, meta_games):
     return res
 
 
-def write(cur, out, res):
-    cur.execute("DROP TABLE IF EXISTS player_game_onfloor; DROP TABLE IF EXISTS player_game_onfloor_meta;")
-    cur.execute(DDL)
+def write(cur, out, res, season=None):
+    if season is None:
+        cur.execute("DROP TABLE IF EXISTS player_game_onfloor; DROP TABLE IF EXISTS player_game_onfloor_meta;")
+        cur.execute(DDL)
+    else:
+        SM.require_tables(cur, ["player_game_onfloor"], season)
+        print(f"--season {season}: {SM.delete_season(cur, 'player_game_onfloor', season):,} stored rows of the season deleted")
     psycopg2.extras.execute_values(
         cur, """INSERT INTO player_game_onfloor (player_id, game_id, season, team, seconds, tracked_seconds,
                 pts_for, pts_against, plus_minus, game_ok) VALUES %s""",
         [(r[0], r[1], r[2], r[3], round(r[4], 1), round(r[5], 1), r[6], r[7], r[8], r[9]) for r in out],
         page_size=5000)
+    if season is not None:
+        print("player_game_onfloor_meta left as it is (its checks cover every game)")
+        return
     rules = {
         "free_throws": ("credited to the lineups at the last earlier event that is a foul or names a player, "
                         "other than a substitution or another free throw (the official box score's convention)"),
@@ -415,14 +433,15 @@ def main():
         espn_check(conn, n, cache)
         return
     t0 = time.time()
-    out, five_by_game, meta_games = build(conn)
+    season = SM.parse_season()
+    out, five_by_game, meta_games = build(conn, season)
     cur = conn.cursor()
-    res = checks(cur, out, five_by_game, meta_games)
+    res = checks(cur, out, five_by_game, meta_games, season)
     print(json.dumps(res, indent=1))
     if "--dry-run" in sys.argv:
         print(f"dry run: nothing written ({time.time() - t0:.0f}s)")
         return
-    write(cur, out, res)
+    write(cur, out, res, season)
     conn.commit()
     cur.execute("SELECT pg_total_relation_size('player_game_onfloor')")
     print(f"player_game_onfloor {cur.fetchone()[0] / 1e6:.1f} MB; done in {time.time() - t0:.0f}s")

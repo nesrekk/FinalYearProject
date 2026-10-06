@@ -719,7 +719,7 @@ def bio_fallback(cur, names, unique, through=None):
     return out
 
 
-def load_espn(conn, clock=False, game_ids=None, through=None):
+def load_espn(conn, clock=False, game_ids=None, through=None, season=None):
     """Every ESPN game (regular season 2020-21 on) and its events, grouped by
     game in the order the parser expects (action_number, then id). With
     `clock`, each event also carries pbp_event_clock's corrected time
@@ -729,12 +729,16 @@ def load_espn(conn, clock=False, game_ids=None, through=None):
     (optional list) loads only those games (build_coaching_decisions.py
     parses a few hundred); `through` (an end year) only the seasons up to it
     (the paper's scripts pass paper_freeze.MAX_PAPER_SEASON, round 9 step 1);
-    omitted = every game, as before."""
+    `season` (an end year) only that season's games (the builds' --season
+    mode, round 9 step 3: one season's games in the same order the full load
+    gives them); omitted = every game, as before."""
     only, params = "", None
     if game_ids is not None:
         only, params = " AND g.game_id = ANY(%(ids)s)", {"ids": list(game_ids)}
     if through is not None:
         only += f" AND g.season <= {int(through)}"
+    if season is not None:
+        only += f" AND g.season = {int(season)}"
     games = pd.read_sql_query(
         "SELECT game_id, season, game_date, home_team, away_team FROM pbp_games g WHERE source = 'espn'" + only +
         " ORDER BY game_date, game_id;", conn, params=params)
@@ -753,14 +757,20 @@ def load_espn(conn, clock=False, game_ids=None, through=None):
     return games, grouped
 
 
-def match_coordinates(conn, shots, through=None):
+def match_coordinates(conn, shots, through=None, season=None):
     """Attach the NBA shot chart's coordinates (coord_ft, shot_type) and row id
     (nba_shot_id) to each ESPN attempt matched by order within (game, shooter,
     period) with identical make/miss sequences; NaN where unmatched. `through`
     (an end year) reads only the seasons up to it (the paper's scripts pass
-    paper_freeze.MAX_PAPER_SEASON, round 9 step 1)."""
+    paper_freeze.MAX_PAPER_SEASON, round 9 step 1); `season` (an end year)
+    only that season's chart and game links (the --season builds, round 9 step
+    3: the match is keyed by the NBA game id, so one season's shots give the
+    same matches for that season's attempts as the whole chart does)."""
     cap_int = f" AND season <= {int(through)}" if through else ""
     cap_text = f" AND season <= '{int(through) - 1}-{str(int(through))[-2:]}'" if through else ""
+    if season is not None:
+        cap_int += f" AND season = {int(season)}"
+        cap_text += f" AND season = '{int(season) - 1}-{str(int(season))[-2:]}'"
     link = pd.read_sql_query(
         f"SELECT DISTINCT 'espn_' || espn_id AS game_id, game_id AS nba_id FROM game_scores WHERE espn_id IS NOT NULL{cap_int}", conn)
     shots = shots.merge(link, on="game_id", how="left")
@@ -792,10 +802,11 @@ def match_coordinates(conn, shots, through=None):
     return shots
 
 
-def chart_matches(conn, games, grouped, season_names, all_names, through=None):
+def chart_matches(conn, games, grouped, season_names, all_names, through=None, season=None):
     """Every ESPN field-goal attempt (game_id, season, action_number, pid, period, made, text_three) with the
     NBA shot chart row it matches (match_coordinates(): coord_ft, shot_type, nba_shot_id; NaN where
-    unmatched). One parse of every game (the shooter ids the lines use). `through` as in match_coordinates()."""
+    unmatched). One parse of every game (the shooter ids the lines use). `through` and `season` as in
+    match_coordinates()."""
     rows = []
     for g in games.itertuples(index=False):
         ev = grouped.get(g.game_id)
@@ -808,16 +819,17 @@ def chart_matches(conn, games, grouped, season_names, all_names, through=None):
                 rows.append((g.game_id, int(g.season), e["action_number"], e["pid"], e["period"], bool(e["made"]),
                              e["val"] == 3))
     shots = pd.DataFrame(rows, columns=["game_id", "season", "action_number", "pid", "period", "made", "text_three"])
-    return match_coordinates(conn, shots, through)
+    return match_coordinates(conn, shots, through, season)
 
 
-def miss_three_calls(conn, games, grouped, season_names, all_names, matched=None):
+def miss_three_calls(conn, games, grouped, season_names, all_names, matched=None, season=None):
     """The NBA shot chart's two-or-three call for every missed field goal it
     can be matched to: ({game_id: {action_number: is_three}}, a DataFrame of
     those misses with the text's call `text_three` and the chart's `nba_three`).
     `matched` is chart_matches()'s output when the caller already has it
-    (build_possessions.py also reads the chart's clock from it)."""
-    m = chart_matches(conn, games, grouped, season_names, all_names) if matched is None else matched
+    (build_possessions.py also reads the chart's clock from it); `season`
+    restricts the chart read to one season (chart_matches())."""
+    m = chart_matches(conn, games, grouped, season_names, all_names, season=season) if matched is None else matched
     misses = m[~m.made & m.shot_type.notna()].copy()
     misses["nba_three"] = misses.shot_type.str.startswith("3")
     calls = {}

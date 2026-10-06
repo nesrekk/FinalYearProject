@@ -107,6 +107,13 @@ Usage:
                                                             # sizes scaled up
     cd scripts && python3 build_lineup_stints.py --aggregates-only  # lineup_seasons and
                                                             # pair_seasons from the stored stints
+    cd scripts && python3 build_lineup_stints.py --season 2027      # round 9 step 3: only that
+                                                            # season's rows of the five tables are
+                                                            # deleted and rebuilt (same per-game
+                                                            # code; stint_id continues from the
+                                                            # season before, as the full build
+                                                            # numbers games in date order); needs
+                                                            # the full build's tables
 Rerun after build_player_game_lines.py (new play-by-play) or
 fetch_game_scores.py.
 """
@@ -123,6 +130,7 @@ import psycopg2.extras
 from db_config import DB_CONFIG
 from pbp_lineups import (Game, STINT_STATS, elapsed, game_seconds, load_espn, load_season_names, miss_three_calls,
                          points_method)
+import season_mode as SM
 
 FT_POSS = 0.44
 STAT_COLS = ["pts"] + STINT_STATS   # per side, prefixed home_/away_
@@ -291,11 +299,11 @@ SIDES_SQL = """
         SELECT season, home_team AS team, home_ids AS ids, game_id, seconds, home_pts AS pts_for, away_pts AS pts_against,
                home_poss AS poss_for, away_poss AS poss_against, home_fga AS fga, home_fgm AS fgm, home_fg3a AS fg3a,
                home_fg3m AS fg3m, home_fta AS fta, home_ftm AS ftm, home_oreb AS oreb, home_dreb AS dreb, home_tov AS tov
-        FROM {schema}lineup_stints WHERE tracked_ok
+        FROM {schema}lineup_stints WHERE tracked_ok{where}
         UNION ALL
         SELECT season, away_team, away_ids, game_id, seconds, away_pts, home_pts, away_poss, home_poss,
                away_fga, away_fgm, away_fg3a, away_fg3m, away_fta, away_ftm, away_oreb, away_dreb, away_tov
-        FROM {schema}lineup_stints WHERE tracked_ok)
+        FROM {schema}lineup_stints WHERE tracked_ok{where})
 """
 
 LINEUPS_SQL = SIDES_SQL + """
@@ -341,11 +349,21 @@ def clean(v):
     return v.item() if hasattr(v, "item") else v
 
 
-def write_tables(cur, schema, stint_rows, game_rows, season_rows):
-    for t in ("pair_seasons", "lineup_seasons", "lineup_stint_seasons", "lineup_stint_games", "lineup_stints"):
-        cur.execute(f"DROP TABLE IF EXISTS {schema}{t};")
-    stats = ", ".join(f"{side}_{k} SMALLINT NOT NULL" for side in ("home", "away") for k in STAT_COLS)
-    cur.execute(STINT_DDL.format(schema=schema, stats=stats))
+TABLES = ("pair_seasons", "lineup_seasons", "lineup_stint_seasons", "lineup_stint_games", "lineup_stints")
+
+
+def write_tables(cur, schema, stint_rows, game_rows, season_rows, season=None):
+    """The five tables, dropped and rebuilt; with `season` (the --season mode) only that season's rows are deleted and
+    inserted, through the same statements, with no DDL."""
+    if season is not None:
+        SM.require_tables(cur, [f"{schema}{t}" for t in TABLES], season)
+        for t in TABLES:
+            SM.delete_season(cur, f"{schema}{t}", season)
+    else:
+        for t in TABLES:
+            cur.execute(f"DROP TABLE IF EXISTS {schema}{t};")
+        stats = ", ".join(f"{side}_{k} SMALLINT NOT NULL" for side in ("home", "away") for k in STAT_COLS)
+        cur.execute(STINT_DDL.format(schema=schema, stats=stats))
     scols = ["stint_id", "game_id", "nba_game_id", "season", "home_team", "away_team", "period", "stint_no",
              "start_elapsed", "end_elapsed", "seconds", "home_ids", "away_ids", "n_home", "n_away",
              "action_from", "action_to", "foul_ft_actions", "home_score", "away_score"] + \
@@ -353,37 +371,45 @@ def write_tables(cur, schema, stint_rows, game_rows, season_rows):
     psycopg2.extras.execute_values(
         cur, f"INSERT INTO {schema}lineup_stints ({', '.join(scols)}) VALUES %s",
         [tuple(clean(r[c]) for c in scols) for r in stint_rows], page_size=5000)
-    cur.execute(f"CREATE INDEX ON {schema}lineup_stints (game_id, stint_no);")
-    cur.execute(f"CREATE INDEX ON {schema}lineup_stints (season, home_team);")
-    cur.execute(f"CREATE INDEX ON {schema}lineup_stints (season, away_team);")
-    cur.execute(f"CREATE INDEX ON {schema}lineup_stints USING GIN (home_ids);")
-    cur.execute(f"CREATE INDEX ON {schema}lineup_stints USING GIN (away_ids);")
-
-    cur.execute(GAMES_DDL.format(schema=schema))
+    if season is None:
+        cur.execute(f"CREATE INDEX ON {schema}lineup_stints (game_id, stint_no);")
+        cur.execute(f"CREATE INDEX ON {schema}lineup_stints (season, home_team);")
+        cur.execute(f"CREATE INDEX ON {schema}lineup_stints (season, away_team);")
+        cur.execute(f"CREATE INDEX ON {schema}lineup_stints USING GIN (home_ids);")
+        cur.execute(f"CREATE INDEX ON {schema}lineup_stints USING GIN (away_ids);")
+        cur.execute(GAMES_DDL.format(schema=schema))
     gcols = list(game_rows[0].keys())
     psycopg2.extras.execute_values(
         cur, f"INSERT INTO {schema}lineup_stint_games ({', '.join(gcols)}) VALUES %s",
         [tuple(clean(r[c]) for c in gcols) for r in game_rows], page_size=2000)
-    cur.execute(f"CREATE INDEX ON {schema}lineup_stint_games (season, home_team);")
-    cur.execute(f"CREATE INDEX ON {schema}lineup_stint_games (season, away_team);")
-
-    cur.execute(SEASONS_DDL.format(schema=schema))
+    if season is None:
+        cur.execute(f"CREATE INDEX ON {schema}lineup_stint_games (season, home_team);")
+        cur.execute(f"CREATE INDEX ON {schema}lineup_stint_games (season, away_team);")
+        cur.execute(SEASONS_DDL.format(schema=schema))
     ccols = list(season_rows[0].keys())
     psycopg2.extras.execute_values(
         cur, f"INSERT INTO {schema}lineup_stint_seasons ({', '.join(ccols)}) VALUES %s",
         [tuple(clean(r[c]) for c in ccols) for r in season_rows])
 
-    write_aggregates(cur, schema)
+    write_aggregates(cur, schema, season)
 
 
-def write_aggregates(cur, schema):
-    """lineup_seasons and pair_seasons from the stints in {schema}lineup_stints (also --aggregates-only)."""
+def write_aggregates(cur, schema, season=None):
+    """lineup_seasons and pair_seasons from the stints in {schema}lineup_stints (also --aggregates-only); with `season`
+    only that season's rows, deleted and inserted from that season's stints (the same GROUP BY season sums)."""
+    where = "" if season is None else f" AND season = {int(season)}"
+    if season is not None:
+        for t in ("pair_seasons", "lineup_seasons"):
+            SM.delete_season(cur, f"{schema}{t}", season)
+        cur.execute(f"INSERT INTO {schema}lineup_seasons " + LINEUPS_SQL.format(schema=schema, where=where))
+        cur.execute(f"INSERT INTO {schema}pair_seasons " + PAIRS_SQL.format(schema=schema, where=where))
+        return
     for t in ("pair_seasons", "lineup_seasons"):
         cur.execute(f"DROP TABLE IF EXISTS {schema}{t};")
-    cur.execute(f"CREATE TABLE {schema}lineup_seasons AS " + LINEUPS_SQL.format(schema=schema))
+    cur.execute(f"CREATE TABLE {schema}lineup_seasons AS " + LINEUPS_SQL.format(schema=schema, where=where))
     cur.execute(f"CREATE INDEX ON {schema}lineup_seasons (season, team_abbreviation);")
     cur.execute(f"CREATE INDEX ON {schema}lineup_seasons USING GIN (player_ids);")
-    cur.execute(f"CREATE TABLE {schema}pair_seasons AS " + PAIRS_SQL.format(schema=schema))
+    cur.execute(f"CREATE TABLE {schema}pair_seasons AS " + PAIRS_SQL.format(schema=schema, where=where))
     cur.execute(f"ALTER TABLE {schema}pair_seasons ADD PRIMARY KEY (season, team_abbreviation, player_a, player_b);")
     cur.execute(f"CREATE INDEX ON {schema}pair_seasons (season, player_a);")
     cur.execute(f"CREATE INDEX ON {schema}pair_seasons (season, player_b);")
@@ -469,12 +495,15 @@ def print_checks(cur, schema, conn):
 
 def main():
     dry = "--dry-run" in sys.argv
+    season = SM.parse_season()
+    if dry and season is not None:
+        raise SystemExit("--dry-run and --season don't combine")
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
     if "--aggregates-only" in sys.argv:
         # Rebuild lineup_seasons / pair_seasons from the stored stints (nothing else is read or written).
-        write_aggregates(cur, "")
+        write_aggregates(cur, "", season)
         conn.commit()
         for t in ("lineup_seasons", "pair_seasons"):
             cur.execute(f"SELECT COUNT(*), pg_size_pretty(pg_total_relation_size('{t}')) FROM {t}")
@@ -483,12 +512,12 @@ def main():
         return
     season_names, all_names = load_season_names(cur)
     final_pts, nba_ids, periods, team_tot = load_reference(conn)
-    games, grouped = load_espn(conn)
+    games, grouped = load_espn(conn, season=season)
     if dry:
         games = games[games.season == games.season.max()]
     print(f"{len(games)} games, {sum(len(grouped[g]) for g in games.game_id if g in grouped)} events "
           f"({time.time() - t0:.0f}s)")
-    calls, _ = miss_three_calls(conn, games, grouped, season_names, all_names)
+    calls, _ = miss_three_calls(conn, games, grouped, season_names, all_names, season=season)
     print(f"NBA shot chart's two-or-three call on {sum(len(v) for v in calls.values()):,} missed shots "
           f"({time.time() - t0:.0f}s)")
 
@@ -500,22 +529,26 @@ def main():
         rows, game_row, um, stints = build_game(g, ev, season_names, all_names, final_pts, nba_ids, periods, team_tot,
                                                 calls.get(g.game_id))
         player_sums(rows, stints, sums)
-        for r in rows:
-            r["stint_id"] = len(stint_rows) + 1
-            stint_rows.append(r)
+        stint_rows.extend(rows)
         game_rows.append(game_row)
         unmatched.update(um)
         if i % 1000 == 0:
             print(f"  {i} games, {len(stint_rows)} stints ({time.time() - t0:.0f}s)")
+    # stint_id: sequential in game (date) order; a --season run continues from the season before it, which is what
+    # the full build gives that season (its games all come after the earlier seasons').
+    first = 1 if season is None else SM.next_id(cur, "lineup_stints", "stint_id", season, len(stint_rows))
+    for i, r in enumerate(stint_rows):
+        r["stint_id"] = first + i
     season_rows = season_summary(game_rows, stint_rows)
-    print(f"{len(game_rows)} games, {len(stint_rows)} stints; most common unmatched names: {unmatched.most_common(8)}")
+    print(f"{len(game_rows)} games, {len(stint_rows)} stints (ids from {first}); most common unmatched names: "
+          f"{unmatched.most_common(8)}")
     print(f"free throws credited at the foul to an earlier stint: {sum(r['fts_at_foul'] for r in game_rows):,}")
     check_against_lines(conn, sums, [r["game_id"] for r in game_rows])
 
     schema = f"{DRY_SCHEMA}." if dry else ""
     if dry:
         cur.execute(f"DROP SCHEMA IF EXISTS {DRY_SCHEMA} CASCADE; CREATE SCHEMA {DRY_SCHEMA};")
-    write_tables(cur, schema, stint_rows, game_rows, season_rows)
+    write_tables(cur, schema, stint_rows, game_rows, season_rows, season)
     conn.commit()
     print(f"wrote {len(stint_rows)} stints, {len(game_rows)} games ({time.time() - t0:.0f}s)")
     print_checks(cur, schema, conn)

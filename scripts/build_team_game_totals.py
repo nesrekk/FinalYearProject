@@ -25,6 +25,9 @@ Table written (dropped and rebuilt): team_game_totals.
 
 Usage:
     cd scripts && python3 build_team_game_totals.py      (~10 s; after build_player_game_lines.py)
+    cd scripts && python3 build_team_game_totals.py --season 2027
+        # round 9 step 3: only that season's rows are deleted and rebuilt (the
+        # same SQL over that season's games); needs the full build's table.
 """
 
 import time
@@ -35,6 +38,7 @@ import psycopg2
 import psycopg2.extras
 
 from db_config import DB_CONFIG
+import season_mode as SM
 
 FT_POSS = 0.44
 
@@ -51,7 +55,7 @@ WITH ev AS (
     SELECT e.game_id, g.season, g.game_date, g.home_team, g.away_team, e.team_tricode AS team,
            e.action_type, COALESCE(e.description, '') AS description, e.period, e.score_home, e.score_away
     FROM pbp_events e JOIN pbp_games g USING (game_id)
-    WHERE g.source = 'espn'
+    WHERE g.source = 'espn'{{season_where}}
 ),
 per_team AS (
     SELECT game_id, season, game_date, home_team, away_team, team,
@@ -81,13 +85,14 @@ def poss(fga, fta, oreb, tov):
     return fga + FT_POSS * fta - oreb + tov
 
 
-def team_totals(conn):
+def team_totals(conn, season=None):
     """Team-game totals from the play-by-play, joined with the lines' own
-    offensive-rebound and tracked-seconds sums."""
-    t = pd.read_sql_query(TEAM_TOTALS_SQL, conn)
+    offensive-rebound and tracked-seconds sums (`season`: that season's games only)."""
+    where = "" if season is None else f" AND g.season = {int(season)}"
+    t = pd.read_sql_query(TEAM_TOTALS_SQL.format(season_where=where), conn)
     lines_by_team = pd.read_sql_query(
-        """SELECT game_id, team_abbreviation AS team, SUM(oreb) AS oreb, SUM(seconds) AS tracked_seconds
-           FROM player_game_lines GROUP BY 1, 2""", conn)
+        "SELECT game_id, team_abbreviation AS team, SUM(oreb) AS oreb, SUM(seconds) AS tracked_seconds "
+        "FROM player_game_lines" + ("" if season is None else f" WHERE season = {int(season)}") + " GROUP BY 1, 2", conn)
     t = t.merge(lines_by_team, on=["game_id", "team"], how="left")
     t["oreb"] = t["oreb"].fillna(0).astype(int)
     t["tracked_seconds"] = t["tracked_seconds"].fillna(0.0)
@@ -104,18 +109,23 @@ def team_totals(conn):
 
 
 def main():
+    season = SM.parse_season()
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
-    teams = team_totals(conn)
-    cur.execute("DROP TABLE IF EXISTS team_game_totals;")
-    cur.execute("""CREATE TABLE team_game_totals (
-        game_id TEXT NOT NULL, season INTEGER NOT NULL, game_date DATE, team_abbreviation TEXT NOT NULL,
-        opponent TEXT, is_home BOOLEAN, win BOOLEAN, pts_for INTEGER, pts_against INTEGER,
-        fga INTEGER, fta INTEGER, oreb INTEGER, tov INTEGER,
-        opp_fga INTEGER, opp_fta INTEGER, opp_oreb INTEGER, opp_tov INTEGER,
-        poss DOUBLE PRECISION, game_seconds INTEGER, tracked_seconds DOUBLE PRECISION, tracked_share DOUBLE PRECISION,
-        PRIMARY KEY (game_id, team_abbreviation));""")
+    teams = team_totals(conn, season)
+    if season is None:
+        cur.execute("DROP TABLE IF EXISTS team_game_totals;")
+        cur.execute("""CREATE TABLE team_game_totals (
+            game_id TEXT NOT NULL, season INTEGER NOT NULL, game_date DATE, team_abbreviation TEXT NOT NULL,
+            opponent TEXT, is_home BOOLEAN, win BOOLEAN, pts_for INTEGER, pts_against INTEGER,
+            fga INTEGER, fta INTEGER, oreb INTEGER, tov INTEGER,
+            opp_fga INTEGER, opp_fta INTEGER, opp_oreb INTEGER, opp_tov INTEGER,
+            poss DOUBLE PRECISION, game_seconds INTEGER, tracked_seconds DOUBLE PRECISION, tracked_share DOUBLE PRECISION,
+            PRIMARY KEY (game_id, team_abbreviation));""")
+    else:
+        SM.require_tables(cur, ["team_game_totals"], season)
+        print(f"--season {season}: {SM.delete_season(cur, 'team_game_totals', season)} stored rows of the season deleted")
     tcols = ["game_id", "season", "game_date", "team", "opponent", "is_home", "win", "pts_for", "pts_against",
              "fga", "fta", "oreb", "tov", "opp_fga", "opp_fta", "opp_oreb", "opp_tov", "poss", "game_seconds",
              "tracked_seconds", "tracked_share"]
@@ -124,7 +134,8 @@ def main():
     psycopg2.extras.execute_values(
         cur, f"INSERT INTO team_game_totals ({', '.join(c if c != 'team' else 'team_abbreviation' for c in tcols)}) VALUES %s",
         trecs, page_size=2000)
-    cur.execute("CREATE INDEX ON team_game_totals (season, team_abbreviation);")
+    if season is None:
+        cur.execute("CREATE INDEX ON team_game_totals (season, team_abbreviation);")
     conn.commit()
     print(f"wrote {len(teams)} team-games, {teams.game_id.nunique()} games ({time.time() - t0:.0f}s)")
     conn.close()

@@ -20,6 +20,11 @@ the `\pnLgAsOf` pin in the follow-up).
 logged R9-011 to R9-015** (R9-011 for step 5, R9-012 a season-end decision, R9-013 to R9-015 observations the daily update
 handles). Open for later steps: R9-002, R9-007, R9-008, R9-009, R9-011, R9-012.
 
+**Round 9 step 3 (2026-10-06): 20 entries in all; step 3 decided R9-007 and R9-008 and logged R9-016 to R9-020** (what
+building the `--season` mode found: three builds draw every season's intervals from one seeded stream, the deflator's
+pooled constants, the sequential ids, the day's cost, the run log's two new columns). Open for later steps: R9-002, R9-009,
+R9-011, R9-012.
+
 ## Step 1: design and guards (2026-10-06)
 
 ### R9-001 · Four paper-stage files still read every season
@@ -56,12 +61,12 @@ handles). Open for later steps: R9-002, R9-007, R9-008, R9-009, R9-011, R9-012.
 - **Found by:** step 1's measurements. **Fix:** never pass custom headers; fetch shots per team (fetch_season_shots.py's path, 90 calls a season), not per game.
 
 ### R9-007 · End-of-quarter heaves in the 2026-27 lines (R8-088)
-- **Severity:** wrong number · **Step:** 3 · **Status:** open
+- **Severity:** wrong number · **Step:** 3 · **Status:** decided (step 3, 2026-10-06): the lines' treatment is kept as it is for both seasons (the shooter is charged, as ESPN logs it), so 2026-27 is built by exactly the code 2025-26 was and the two seasons read alike; changing it means rebuilding 2025-26's lines and their chain, which moves paper numbers (the `chart_heaves*` audit class): the owner's call, outside round 9
 - **Where:** since 2025-26 the NBA counts a missed end-of-quarter heave as a team attempt; ESPN logs it (`action_type` 'Heave Jump Shot', about 1,100 a season) and `build_player_game_lines.py` charges the shooter (round 8.5 step C's R8-088 in `docs/qa/ROUND8_ISSUES.md`).
 - **Found by:** the round 8.5 step C chat (relayed to step 1). **For 9-3:** decide the lines' treatment before the first 2026-27 rebuild and apply it to 2025-26 and 2026-27 alike (a change to 2025-26 is a paper change: owner's call).
 
 ### R9-008 · Check tables without a season dimension in a per-season rebuild
-- **Severity:** design · **Step:** 3 · **Status:** open
+- **Severity:** design · **Step:** 3 · **Status:** decided (step 3, 2026-10-06): a `--season` run never touches `pbp_event_clock_meta`, `player_game_onfloor_meta`, `possession_meta`, `best_games_meta` or `leverage_index_grid` (no season column added: the paper hashes them whole), writes only its season's row of `lineup_stint_seasons`, `possession_seasons`, `rim_deterrence_seasons`, `assist_seasons`, `play_finder_seasons`, `player_on_off_seasons`, `leverage_validation` and `situational_split_league` (the season-0 row stays), and says so in its output; `api/tests/test_season_rebuild.py` hashes the five untouched tables before and after the chain
 - **Where:** `player_game_onfloor_meta`, `possession_meta`, `pbp_event_clock_meta`, `best_games_meta`, `lineup_stint_seasons`' pooled checks, `situational_split_league`'s season 0 row: the full builds write checks over every game; a `--season 2027` run must not rewrite them over a changed row set (the paper reads several).
 - **Found by:** step 1's classification. **Fix (9-3):** the `--season` mode leaves the meta tables as they are (or adds a `season` column and writes only its own season's row).
 
@@ -100,3 +105,28 @@ handles). Open for later steps: R9-002, R9-007, R9-008, R9-009, R9-011, R9-012.
 ### R9-015 · What the preseason run measured (for the runbook, 9-7)
 - **Severity:** design · **Step:** 2 · **Status:** decided (recorded)
 - **Where:** the 2026-27 preseason through 2026-10-05 (eight finals), run at 05:37 ET on 2026-10-06: every feed had every game final by the previous evening (ESPN scoreboard and summaries, LeagueGameFinder 16 rows, LeagueDashPlayerStats 263 players, V3 officials for 7 of 8 games (one game lists none), the chart for all 8 games, one short, R9-013). A live run took 92 s (the chart 60 s of it: 30 calls at 1.5 s plus a 0.6 s pause); the same day again from the caches 1 s; nothing is written twice. The same-day lag after a game night (how soon after a final each feed answers) is still unmeasured: opening night.
+
+## Step 3: the daily rebuild of the current season (2026-10-06)
+
+### R9-016 · Three builds draw every season's intervals from one seeded random stream
+- **Severity:** design · **Step:** 3 · **Status:** decided (2026-10-06): in `--season` mode these three compute every season exactly as the full build does and write only the season's rows
+- **Where:** `build_player_on_off.py` (`np.random.default_rng(SEED)` once, the bootstrap drawn per player-season-team in sorted order), `build_rim_deterrence.py` (the same, in `player_rows()`), `build_situational_splits.py` (a module-level `RNG`: the league rows' bootstrap in loop order and the chance baseline's shuffle over every season's games at once). A row's interval therefore depends on the draws made for the rows before it, across seasons.
+- **Reproduce:** compute 2025-26 alone and compare `player_on_off.on_off_ci_low` with the stored value: different digits.
+- **Found by:** step 3, designing the `--season` mode. **Why not re-seed per unit:** that changes every stored interval of 2020-21 to 2025-26 (the paper reads these tables: a manifest change the round forbids). **What it means:** a `--season 2027` run costs the full build's time for these three and gives 2027 the intervals a full build would give it today; the earlier seasons keep the intervals the 2026-10-06 build gave them. The point estimates don't depend on the stream. Re-seeding per unit is the right fix at the next deliberate paper rebuild (owner's call).
+
+### R9-017 · The deflator's pooled constants
+- **Severity:** design · **Step:** 3 · **Status:** decided (2026-10-06): fitted on seasons <= `paper_freeze.MAX_PAPER_SEASON`, checked, applied to the live season
+- **Where:** `build_leverage_splits.py` normalises every event's Leverage Index by two league-wide constants (the per-event scoring-outcome mix and the mean expected swing) and measures the 3PA text rule's accuracy on every event: pooled over every season in the full build (R9-009's class). A full run with 2026-27 events would move them at the fourth decimal and re-price every stored season; a `--season` run that used the growing set would price October's games differently each day.
+- **Found by:** step 3. **Rule:** `--season N` computes the constants from the events of seasons <= 2025-26 (`FIT_THROUGH`), stops unless they reproduce the stored `leverage_index_grid` to 1e-9, and applies them to the season's events; the grid is never rewritten. A later full build (season end) refits them with the paper's rebuild.
+
+### R9-018 · Two tables number their rows across seasons
+- **Severity:** design · **Step:** 3 · **Status:** decided (2026-10-06)
+- **Where:** `lineup_stints.stint_id` and `play_finder_games.game_no` (also in `play_finder_events`) are 1..n over every game in date order. `season_mode.next_id()` gives a `--season` run the ids one past the greatest id of an earlier season (what the full build gives that season, since its games all come after the earlier seasons') and stops when a later season's ids are in the way; checked on 2025-26 (`stint_id` 240,491.., `game_no` 6,001..). Nothing joins on `stint_id` across tables (`possessions` uses `stint_no` within the game).
+
+### R9-019 · What a day's rebuild costs
+- **Severity:** design · **Step:** 3 · **Status:** decided (recorded; the real week, 9-7, re-measures it on game days)
+- **Where:** `api/tests/test_season_rebuild.py` runs the fourteen builds with `--season 2026` (a whole 1,230-game season, the worst case: a day adds 5-15 games to a season that is rebuilt whole) and prints each one's seconds; `docs/LIVE_SEASON.md` section 6 has the measured times. The three R9-016 builds and the deflator (which loads every event for its constants) are most of it.
+
+### R9-020 · The run log gained two columns
+- **Severity:** design · **Step:** 3 · **Status:** decided (2026-10-06)
+- **Where:** `daily_update_runs.rebuild_seconds`, `rebuild_steps` (JSON: each build's status and seconds), added by `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` on every run. The table is in `paper_manifest.LIVE`: outside the digest and the staleness check, so `paper-inputs` is unchanged except the table's own schema line in `paper/manifest.json` (not a paper file; R9-010's two table-count macros don't move again).
