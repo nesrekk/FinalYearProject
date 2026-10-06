@@ -74,11 +74,13 @@ TWIN_SEASON = 2025
 CLUTCH_SECONDS = 300        # wpa_lib's clutch window, for the win-probability check by game phase
 
 
-def chart_clock(conn, matched):
-    """{game_id: {action_number: seconds into the period}} by the NBA shot chart's clock."""
+def chart_clock(conn, matched, through=None):
+    """{game_id: {action_number: seconds into the period}} by the NBA shot chart's clock (`through`: seasons up to that
+    end year only; the paper's audit passes paper_freeze.MAX_PAPER_SEASON, round 9 step 1)."""
+    cap = f" AND season <= '{int(through) - 1}-{str(int(through))[-2:]}'" if through else ""
     clocks = pd.read_sql_query(
-        """SELECT id AS nba_shot_id, period AS chart_period, minutes_remaining * 60 + seconds_remaining AS clock
-           FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2020-21'""", conn)
+        f"""SELECT id AS nba_shot_id, period AS chart_period, minutes_remaining * 60 + seconds_remaining AS clock
+           FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2020-21'{cap}""", conn)
     m = matched[matched.nba_shot_id.notna()][["game_id", "action_number", "period", "nba_shot_id"]].copy()
     m["nba_shot_id"] = m.nba_shot_id.astype("int64")
     m = m.merge(clocks, on="nba_shot_id")
@@ -90,16 +92,19 @@ def chart_clock(conn, matched):
     return out
 
 
-def clock_check(conn, season_names, all_names, chart_t, grouped):
+def clock_check(conn, season_names, all_names, chart_t, grouped, through=None):
     """ESPN's lag and the corrected clock's error against NBA.com's play-by-play of the same games (the nba_api
-    twins), by event class, on all twin games and on the odd / even halves separately."""
+    twins), by event class, on all twin games and on the odd / even halves separately. `through`: twins of seasons
+    up to that end year only (the paper's audit passes paper_freeze.MAX_PAPER_SEASON, round 9 step 1)."""
+    cap = f" AND n.season <= {int(through)}" if through else ""
+    cap_g = f" AND g.season <= {int(through)}" if through else ""
     link = pd.read_sql_query(
-        """SELECT DISTINCT n.game_id AS nba, 'espn_' || s.espn_id AS espn, g.home_team
+        f"""SELECT DISTINCT n.game_id AS nba, 'espn_' || s.espn_id AS espn, g.home_team
            FROM pbp_games n JOIN game_scores s ON s.game_id = n.game_id JOIN pbp_games g ON g.game_id = 'espn_' || s.espn_id
-           WHERE n.source = 'nba_api' AND s.espn_id IS NOT NULL ORDER BY 1""", conn)
+           WHERE n.source = 'nba_api' AND s.espn_id IS NOT NULL{cap} ORDER BY 1""", conn)
     nba = pd.read_sql_query(
-        """SELECT e.game_id, e.period, e.seconds_remaining, e.person_id, e.action_type
-           FROM pbp_events e JOIN pbp_games g USING (game_id) WHERE g.source = 'nba_api' AND e.person_id IS NOT NULL
+        f"""SELECT e.game_id, e.period, e.seconds_remaining, e.person_id, e.action_type
+           FROM pbp_events e JOIN pbp_games g USING (game_id) WHERE g.source = 'nba_api' AND e.person_id IS NOT NULL{cap_g}
            AND e.action_type IN ('Made Shot', 'Missed Shot', 'Free Throw', 'Rebound', 'Turnover')
            ORDER BY e.game_id, e.action_number, e.id""", conn)
     keymap = {"Made Shot": "fg", "Missed Shot": "fg", "Free Throw": "ft", "Rebound": "reb", "Turnover": "tov"}

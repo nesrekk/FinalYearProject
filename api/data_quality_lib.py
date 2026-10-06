@@ -22,6 +22,8 @@ Nothing here writes to the database.
 from concurrent.futures import ThreadPoolExecutor
 from decimal import ROUND_HALF_UP, Decimal
 
+from paper_freeze import F  # the paper's rows: seasons to 2025-26 (round 9 step 1); the live checks must equal the audit
+
 FIRST_SEASON = 2021                 # play-by-play era (2020-21 on): the span of the per-game flags
 STALE_SCORE_SHARE = 0.10            # paper_numbers.py's: a season "has stale score fields" when 10%+ of its games miss
 MAX_DROP_SHARE = 0.5                # a class that touches more than half the scope's games is not dropped on its own
@@ -290,33 +292,33 @@ def _all(cur, sql, args=None):
 
 
 def live_twin_copies(cur):
-    rows, games = _one(cur, """SELECT count(*), count(DISTINCT game_id) FROM pbp_events
-                               WHERE game_id IN (SELECT game_id FROM pbp_games WHERE source = 'nba_api')""")
+    rows, games = _one(cur, f"""SELECT count(*), count(DISTINCT game_id) FROM {F('pbp_events')}
+                               WHERE game_id IN (SELECT game_id FROM {F('pbp_games')} WHERE source = 'nba_api')""")
     return [("twin_rows", 0, rows), ("twin_games", 0, games)]
 
 
 def live_cup_finals(cur):
-    (n,) = _one(cur, """SELECT count(*) FROM pbp_games g WHERE g.source = 'espn'
-                        AND EXISTS (SELECT 1 FROM pbp_events e WHERE e.game_id = g.game_id)
-                        AND NOT EXISTS (SELECT 1 FROM game_scores s WHERE 'espn_' || s.espn_id = g.game_id)""")
+    (n,) = _one(cur, f"""SELECT count(*) FROM {F('pbp_games', 'g')} WHERE g.source = 'espn'
+                        AND EXISTS (SELECT 1 FROM {F('pbp_events', 'e')} WHERE e.game_id = g.game_id)
+                        AND NOT EXISTS (SELECT 1 FROM {F('game_scores', 's')} WHERE 'espn_' || s.espn_id = g.game_id)""")
     return [("cup_games", 0, n)]
 
 
 def live_unidentified(cur):
-    named, noid = _one(cur, """SELECT count(*), count(*) FILTER (WHERE e.person_id IS NULL) FROM pbp_events e
-                               JOIN pbp_games g ON g.game_id = e.game_id AND g.source = 'espn'
+    named, noid = _one(cur, f"""SELECT count(*), count(*) FILTER (WHERE e.person_id IS NULL) FROM {F('pbp_events', 'e')}
+                               JOIN {F('pbp_games', 'g')} ON g.game_id = e.game_id AND g.source = 'espn'
                                WHERE e.player_name IS NOT NULL AND e.player_name <> ''""")
     out = [("unid_events", 0, noid), ("unid_events_share", 0, noid / named if named else None)]
     out += [("unid_minutes_share", int(s), float(v)) for s, v in _all(
-        cur, "SELECT season, bad_lineup_minutes / minutes FROM lineup_stint_seasons ORDER BY 1")]
+        cur, f"SELECT season, bad_lineup_minutes / minutes FROM {F('lineup_stint_seasons')} ORDER BY 1")]
     return out
 
 
 def live_teamless_sub(cur):
-    n, g = _one(cur, """SELECT count(*), count(DISTINCT e.game_id) FROM pbp_events e
-                        JOIN pbp_games p ON p.game_id = e.game_id AND p.source = 'espn'
+    n, g = _one(cur, f"""SELECT count(*), count(DISTINCT e.game_id) FROM {F('pbp_events', 'e')}
+                        JOIN {F('pbp_games', 'p')} ON p.game_id = e.game_id AND p.source = 'espn'
                         WHERE e.action_type = 'Substitution' AND e.team_tricode IS NULL""")
-    (nan,) = _one(cur, "SELECT count(*) FROM player_game_lines WHERE team_abbreviation IS NULL OR team_abbreviation = 'NaN'")
+    (nan,) = _one(cur, f"SELECT count(*) FROM {F('player_game_lines')} WHERE team_abbreviation IS NULL OR team_abbreviation = 'NaN'")
     return [("teamless_subs", 0, n), ("teamless_games", 0, g), ("nan_team_rows", 0, nan)]
 
 
@@ -340,29 +342,29 @@ def live_score_fields(cur, cur2=None):
 
 
 def _score_steps(cur):
-    return _all(cur, """
+    return _all(cur, f"""
             WITH d AS (SELECT e.game_id, greatest(e.score_home - lag(e.score_home) OVER w, 0) up_h,
                               greatest(e.score_away - lag(e.score_away) OVER w, 0) up_a
-                       FROM pbp_events e WHERE e.game_id IN (SELECT game_id FROM lineup_stint_games)
+                       FROM {F('pbp_events', 'e')} WHERE e.game_id IN (SELECT game_id FROM {F('lineup_stint_games')})
                        WINDOW w AS (PARTITION BY e.game_id ORDER BY e.action_number)),
                  t AS (SELECT game_id, sum(up_h) h, sum(up_a) a FROM d GROUP BY game_id)
             SELECT g.season, count(*), count(*) FILTER (WHERE (t.h = g.final_home AND t.a = g.final_away) IS NOT TRUE)
-            FROM t JOIN lineup_stint_games g USING (game_id) GROUP BY g.season ORDER BY 1""")
+            FROM t JOIN {F('lineup_stint_games', 'g')} USING (game_id) GROUP BY g.season ORDER BY 1""")
 
 
 def _score_backwards(cur):
-    return _one(cur, """
+    return _one(cur, f"""
         WITH d AS (SELECT e.game_id, e.score_home < lag(e.score_home) OVER w OR e.score_away < lag(e.score_away) OVER w AS down
-                   FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id AND g.source = 'espn'
+                   FROM {F('pbp_events', 'e')} JOIN {F('pbp_games', 'g')} ON g.game_id = e.game_id AND g.source = 'espn'
                    WHERE e.score_home IS NOT NULL AND e.score_away IS NOT NULL
                    WINDOW w AS (PARTITION BY e.game_id ORDER BY e.action_number, e.id))
         SELECT count(DISTINCT game_id) FILTER (WHERE down), count(DISTINCT game_id) FROM d""")
 
 
 def live_last_score(cur):
-    n, bad = _one(cur, """SELECT count(*), count(*) FILTER (WHERE bad) FROM (
+    n, bad = _one(cur, f"""SELECT count(*), count(*) FILTER (WHERE bad) FROM (
                               SELECT t.game_id, bool_or(t.pts_for <> s.pts_for OR t.pts_against <> s.pts_against) bad
-                              FROM team_game_totals t JOIN game_scores s
+                              FROM {F('team_game_totals', 't')} JOIN {F('game_scores', 's')}
                                 ON s.espn_id IS NOT NULL AND 'espn_' || s.espn_id = t.game_id AND s.team_abbreviation = t.team_abbreviation
                               GROUP BY t.game_id) x""")
     return [("last_score_games", 0, n), ("last_score_bad", 0, bad)]
@@ -375,37 +377,37 @@ def live_clock_offset(cur, cur2=None):
 
 
 def _clock_outside(cur):
-    return _one(cur, """SELECT count(*), count(DISTINCT e.game_id) FROM pbp_events e
-                        JOIN pbp_games p ON p.game_id = e.game_id AND p.source = 'espn'
+    return _one(cur, f"""SELECT count(*), count(DISTINCT e.game_id) FROM {F('pbp_events', 'e')}
+                        JOIN {F('pbp_games', 'p')} ON p.game_id = e.game_id AND p.source = 'espn'
                         WHERE e.period BETWEEN 1 AND 4
                           AND NOT (e.seconds_remaining BETWEEN 720 * (4 - e.period) AND 720 * (5 - e.period))""")
 
 
 def _clock_pairs(cur):
     # pbp_event_clock's 'chart' events carry the shot chart's own clock: the same shots the audit compares
-    return _one(cur, """
+    return _one(cur, f"""
         SELECT count(*), percentile_disc(0.5) WITHIN GROUP (ORDER BY d), percentile_cont(0.99) WITHIN GROUP (ORDER BY d),
                avg((d > %s)::int::float8)
-        FROM (SELECT abs(e.seconds_remaining - c.seconds_remaining) d FROM pbp_event_clock c
-              JOIN pbp_events e ON e.id = c.event_id WHERE c.source = 'chart') x""", (CLOCK_BIG,))
+        FROM (SELECT abs(e.seconds_remaining - c.seconds_remaining) d FROM {F('pbp_event_clock', 'c')}
+              JOIN {F('pbp_events', 'e')} ON e.id = c.event_id WHERE c.source = 'chart') x""", (CLOCK_BIG,))
 
 
 def live_unreconciled(cur):
-    (n,) = _one(cur, "SELECT count(*) FILTER (WHERE NOT game_ok) FROM lineup_stint_games")
+    (n,) = _one(cur, f"SELECT count(*) FILTER (WHERE NOT game_ok) FROM {F('lineup_stint_games')}")
     return [("unrec_games", 0, n)]
 
 
 def live_chart_gaps(cur):
-    (n,) = _one(cur, """SELECT count(*) FROM lineup_stint_games g WHERE g.game_ok AND g.nba_game_id IS NOT NULL
-                        AND NOT EXISTS (SELECT 1 FROM player_shots s WHERE s.game_id = g.nba_game_id)""")
+    (n,) = _one(cur, f"""SELECT count(*) FROM {F('lineup_stint_games', 'g')} WHERE g.game_ok AND g.nba_game_id IS NOT NULL
+                        AND NOT EXISTS (SELECT 1 FROM {F('player_shots', 's')} WHERE s.game_id = g.nba_game_id)""")
     return [("chart_missing_games", 0, n)]
 
 
 def _shots_by_season(cur):
-    return _all(cur, """SELECT int4(left(season, 4)) + 1, count(*), count(*) FILTER (WHERE loc_x = 0 AND loc_y = 0),
+    return _all(cur, f"""SELECT int4(left(season, 4)) + 1, count(*), count(*) FILTER (WHERE loc_x = 0 AND loc_y = 0),
                                count(*) FILTER (WHERE shot_type LIKE '3%%'),
                                count(*) FILTER (WHERE shot_type LIKE '3%%' AND shot_distance = 0)
-                        FROM player_shots WHERE game_id LIKE '002%%' GROUP BY 1 ORDER BY 1""")
+                        FROM {F('player_shots')} WHERE game_id LIKE '002%%' GROUP BY 1 ORDER BY 1""")
 
 
 def live_zero_distance(cur):
@@ -417,27 +419,27 @@ def live_unlocated(cur):
 
 
 def live_plus_minus(cur):
-    games, bad, point, sign = _one(cur, """
+    games, bad, point, sign = _one(cur, f"""
         SELECT count(DISTINCT f.game_id), count(DISTINCT f.game_id) FILTER (WHERE abs(f.plus_minus - (s.pts_for - s.pts_against)) > 1e-6),
                count(DISTINCT f.game_id) FILTER (WHERE abs(f.plus_minus - (s.pts_for - s.pts_against)) >= 1),
                count(DISTINCT f.game_id) FILTER (WHERE f.plus_minus <> 0 AND (f.plus_minus > 0) <> f.win)
-        FROM team_game_fatigue f JOIN game_scores s ON s.game_id = f.game_id AND s.team_abbreviation = f.team_abbreviation""")
+        FROM {F('team_game_fatigue', 'f')} JOIN {F('game_scores', 's')} ON s.game_id = f.game_id AND s.team_abbreviation = f.team_abbreviation""")
     return [("pm_games", 0, games), ("pm_bad", 0, bad), ("pm_point", 0, point), ("pm_sign", 0, sign)]
 
 
 def live_wrong_team(cur):
-    rows = _all(cur, """SELECT s.season, count(*) FILTER (WHERE NOT EXISTS (
-                                SELECT 1 FROM player_game_lines l WHERE l.player_id = s.player_id AND l.season = s.season
+    rows = _all(cur, f"""SELECT s.season, count(*) FILTER (WHERE NOT EXISTS (
+                                SELECT 1 FROM {F('player_game_lines', 'l')} WHERE l.player_id = s.player_id AND l.season = s.season
                                 AND l.team_abbreviation = s.team_abbreviation))
-                        FROM player_season_stats s
-                        WHERE EXISTS (SELECT 1 FROM player_game_lines l WHERE l.player_id = s.player_id AND l.season = s.season)
+                        FROM {F('player_season_stats', 's')}
+                        WHERE EXISTS (SELECT 1 FROM {F('player_game_lines', 'l')} WHERE l.player_id = s.player_id AND l.season = s.season)
                         GROUP BY 1 ORDER BY 1""")
     return [("wrong_team_rows", int(s), n) for s, n in rows] + [("wrong_team_rows", 0, sum(n for _, n in rows))]
 
 
 def live_age_convention(cur):
-    (share,) = _one(cur, """SELECT avg((s.age = date_part('year', age(make_date(s.season, 2, 1), b.birth_date)) + 1)::int::float8)
-                            FROM player_season_stats s JOIN player_bio b ON b.player_id = s.player_id
+    (share,) = _one(cur, f"""SELECT avg((s.age = date_part('year', age(make_date(s.season, 2, 1), b.birth_date)) + 1)::int::float8)
+                            FROM {F('player_season_stats', 's')} JOIN player_bio b ON b.player_id = s.player_id
                             WHERE s.season >= 2010 AND s.age IS NOT NULL AND b.birth_date IS NOT NULL""")
     return [("age_older", 0, share)]
 

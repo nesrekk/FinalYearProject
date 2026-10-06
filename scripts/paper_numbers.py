@@ -77,6 +77,7 @@ from db_config import DB_CONFIG
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "api"))
 import season_sim_lib  # noqa: E402  (pure numpy/pandas, no database or DDL at import)
+from paper_freeze import F  # noqa: E402  (the paper's rows: seasons to 2025-26, round 9 step 1)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PAPER_DIR = os.path.join(ROOT, "paper")
@@ -222,34 +223,34 @@ def as_json(v):
 
 def data_and_pipeline(cur, N):
     N.start("Data and pipeline (Section: Data and Pipeline, abstract)")
-    espn, espn_games = one(cur, "SELECT count(*), count(DISTINCT game_id) FROM pbp_events WHERE game_id LIKE 'espn\\_%'")
+    espn, espn_games = one(cur, f"SELECT count(*), count(DISTINCT game_id) FROM {F('pbp_events')} WHERE game_id LIKE 'espn\\_%'")
     N.add("EspnEventsMillion", millions(espn, 2), f"pbp_events rows with an ESPN game id ({espn:,}; nba_api twin rows excluded)")
     N.add("EspnEventsMillionShort", millions(espn, 1), "same count, one decimal (abstract)")
-    shots = one(cur, "SELECT count(*) FROM player_shots")[0]
+    shots = one(cur, f"SELECT count(*) FROM {F('player_shots')}")[0]
     N.add("ShotsMillion", millions(shots, 2), f"count(*) player_shots ({shots:,}; all seasons and game types)")
     N.add("ShotsMillionShort", millions(shots, 1), "same count, one decimal (abstract)")
-    gs = one(cur, "SELECT count(*) FROM game_scores")[0]
+    gs = one(cur, f"SELECT count(*) FROM {F('game_scores')}")[0]
     N.add("GameScoreRows", integer(gs), "count(*) game_scores (team-game rows)")
 
-    n, s0, s1 = one(cur, "SELECT count(*), min(season), max(season) FROM lineup_stints")
+    n, s0, s1 = one(cur, f"SELECT count(*), min(season), max(season) FROM {F('lineup_stints')}")
     N.add("Stints", integer(n), "count(*) lineup_stints")
     N.add("StintFirstSeason", season(s0), "min(season) lineup_stints")
     N.add("StintLastSeason", season(s1), "max(season) lineup_stints")
-    games, ok = one(cur, "SELECT count(*), sum(game_ok::int) FROM lineup_stint_games")
+    games, ok = one(cur, f"SELECT count(*), sum(game_ok::int) FROM {F('lineup_stint_games')}")
     N.raw["games"] = (games, ok)
     N.claim(games == espn_games, f"every ESPN game is parsed ({games} stint games vs {espn_games} ESPN games)")
     N.add("GamesParsed", integer(games), "count(*) lineup_stint_games")
     N.add("GamesReconciled", integer(ok), "sum(game_ok) lineup_stint_games (final score, length, team totals)")
 
     # Crediting every positive step of ESPN's score fields: share of games whose sum != the real final.
-    stale = rows(cur, """
+    stale = rows(cur, f"""
         WITH s AS (SELECT e.game_id,
                           e.score_home - lag(e.score_home) OVER w dh, e.score_away - lag(e.score_away) OVER w da
-                   FROM pbp_events e JOIN lineup_stint_games g ON g.game_id = e.game_id
+                   FROM {F('pbp_events', 'e')} JOIN {F('lineup_stint_games', 'g')} ON g.game_id = e.game_id
                    WINDOW w AS (PARTITION BY e.game_id ORDER BY e.action_number))
         SELECT g.season, count(*), sum(((t.ph = g.final_home) AND (t.pa = g.final_away))::int)
         FROM (SELECT game_id, sum(greatest(dh, 0)) ph, sum(greatest(da, 0)) pa FROM s GROUP BY 1) t
-        JOIN lineup_stint_games g USING (game_id) GROUP BY 1 ORDER BY 1""")
+        JOIN {F('lineup_stint_games', 'g')} USING (game_id) GROUP BY 1 ORDER BY 1""")
     N.raw["stale"] = {s: (g, g - k) for s, g, k in stale}
     bad = [(s, g, g - k) for s, g, k in stale if (g - k) / g >= STALE_SCORE_SHARE]
     seasons_bad = [s for s, _, _ in bad]
@@ -263,7 +264,7 @@ def data_and_pipeline(cur, N):
           "games in those seasons where crediting every positive score step misses the real final (pbp_events vs lineup_stint_games.final_*)")
 
     # Minutes with an unidentified player on court, per season before the last.
-    un = rows(cur, "SELECT season, bad_lineup_minutes / minutes FROM lineup_stint_seasons WHERE season < %s ORDER BY 1", (s1,))
+    un = rows(cur, f"SELECT season, bad_lineup_minutes / minutes FROM {F('lineup_stint_seasons')} WHERE season < %s ORDER BY 1", (s1,))
     # Two decimals since round 8 step 6a: the parser finds most of ESPN's no-id players by exact name, season and team
     # (pbp_lineups.load_season_names, player_bio), so what is left is a few hundredths of a per cent (it was 2-6%).
     N.add("UnidMinutesPctMin", pct(min(v for _, v in un), 2),
@@ -271,8 +272,8 @@ def data_and_pipeline(cur, N):
     N.add("UnidMinutesPctMax", pct(max(v for _, v in un), 2), "max of the same")
     N.claim(max(v for _, v in un) < 0.005,
             "Data / Table audit: after the exact-name match only a fraction of a per cent of minutes a season lack five identified players a side")
-    names = rows(cur, """SELECT g.season, count(DISTINCT e.player_name) FROM pbp_events e
-                         JOIN lineup_stint_games g ON g.game_id = e.game_id
+    names = rows(cur, f"""SELECT g.season, count(DISTINCT e.player_name) FROM {F('pbp_events', 'e')}
+                         JOIN {F('lineup_stint_games', 'g')} ON g.game_id = e.game_id
                          WHERE e.person_id IS NULL AND coalesce(e.player_name, '') <> '' AND g.season < %s
                          GROUP BY 1""", (s1,))
     N.add("UnidNamesMin", integer(min(v for _, v in names)),
@@ -280,26 +281,26 @@ def data_and_pipeline(cur, N):
     N.add("UnidNamesMax", integer(max(v for _, v in names)), "max of the same")
 
     # Parsed season totals against NBA.com's (player_season_stats per-game x games).
-    ratios = rows(cur, """SELECT s.season, SUM(l.pts)::float / SUM(s.pts * s.gp), SUM(l.oreb + l.dreb)::float / SUM(s.reb * s.gp),
+    ratios = rows(cur, f"""SELECT s.season, SUM(l.pts)::float / SUM(s.pts * s.gp), SUM(l.oreb + l.dreb)::float / SUM(s.reb * s.gp),
                   SUM(l.ast)::float / SUM(s.ast * s.gp), SUM(l.stl)::float / SUM(s.stl * s.gp),
                   SUM(l.fg3a)::float / SUM(s.fg3a * s.gp)
            FROM (SELECT player_id, season, SUM(pts) pts, SUM(oreb) oreb, SUM(dreb) dreb, SUM(ast) ast, SUM(stl) stl,
-                        SUM(fg3a) fg3a FROM player_game_lines GROUP BY 1, 2) l
-           JOIN player_season_stats s USING (player_id, season) GROUP BY 1""")
+                        SUM(fg3a) fg3a FROM {F('player_game_lines')} GROUP BY 1, 2) l
+           JOIN {F('player_season_stats', 's')} USING (player_id, season) GROUP BY 1""")
     N.add("LinesMaxDevPct", ceil_pct(max(abs(r - 1) for row in ratios for r in row[1:]), 2),
           "max |ratio - 1| over seasons of player_game_lines season totals (pts, reb, ast, stl, 3PA) / "
           "player_season_stats per-game x gp, rounded up (test_known_facts)")
-    three = rows(cur, """WITH l AS (SELECT player_id, season, SUM(fg3a) f FROM player_game_lines GROUP BY 1, 2)
+    three = rows(cur, f"""WITH l AS (SELECT player_id, season, SUM(fg3a) f FROM {F('player_game_lines')} GROUP BY 1, 2)
                          SELECT s.season, SUM(l.f)::float / SUM(s.fg3a * s.gp) FROM l
-                         JOIN player_season_stats s USING (player_id, season) WHERE s.gp >= %s GROUP BY 1""",
+                         JOIN {F('player_season_stats', 's')} USING (player_id, season) WHERE s.gp >= %s GROUP BY 1""",
                  (THREE_PA_MIN_GAMES,))
     N.add("ThreePaMaxDevPct", ceil_pct(max(abs(r - 1) for _, r in three), 2),
           f"max |ratio - 1| over seasons of 3PA, players with {THREE_PA_MIN_GAMES}+ games, rounded up (test_smoke)")
     N.add("ThreePaMinGames", integer(THREE_PA_MIN_GAMES), "the floor of that check (paper_numbers.THREE_PA_MIN_GAMES)")
-    ast = rows(cur, """SELECT COALESCE(a.n, 0), COALESCE(l.n, 0)
-           FROM (SELECT season, team_abbreviation, passer_id pid, SUM(ast) n FROM assist_pairs GROUP BY 1, 2, 3) a
-           FULL JOIN (SELECT season, team_abbreviation, player_id pid, SUM(ast) n FROM player_game_lines
-                      WHERE game_id IN (SELECT 'espn_' || espn_id FROM game_scores) GROUP BY 1, 2, 3) l
+    ast = rows(cur, f"""SELECT COALESCE(a.n, 0), COALESCE(l.n, 0)
+           FROM (SELECT season, team_abbreviation, passer_id pid, SUM(ast) n FROM {F('assist_pairs')} GROUP BY 1, 2, 3) a
+           FULL JOIN (SELECT season, team_abbreviation, player_id pid, SUM(ast) n FROM {F('player_game_lines')}
+                      WHERE game_id IN (SELECT 'espn_' || espn_id FROM {F('game_scores')}) GROUP BY 1, 2, 3) l
                 USING (season, team_abbreviation, pid)
            WHERE a.n IS DISTINCT FROM l.n AND COALESCE(l.n, 0) > 0""")
     N.claim(all(l - a == 1 for a, l in ast), "every assist-network mismatch is exactly one assist (Data section)")
@@ -314,16 +315,16 @@ def data_and_pipeline(cur, N):
 
 def rapm(cur, N):
     N.start("RAPM (Methods, Table: rapm, abstract)")
-    single = rows(cur, "SELECT DISTINCT lambda FROM rapm_fits WHERE version = 'single'")
+    single = rows(cur, f"SELECT DISTINCT lambda FROM {F('rapm_fits')} WHERE version = 'single'")
     N.claim(len(single) == 1, "Methods: 'it lands at 3,000 in every season' (one lambda for every single-season fit)")
     N.add("RapmLambda", integer(single[0][0]), "rapm_fits.lambda, version single (the same in every season)")
-    folds = rows(cur, "SELECT DISTINCT cv_folds FROM rapm_fits")
+    folds = rows(cur, f"SELECT DISTINCT cv_folds FROM {F('rapm_fits')}")
     N.claim(len(folds) == 1, "one cv_folds value for every RAPM fit")
     N.add("RapmFolds", word(folds[0][0]), "rapm_fits.cv_folds")
-    boots = rows(cur, "SELECT DISTINCT bootstraps FROM rapm_fits")
+    boots = rows(cur, f"SELECT DISTINCT bootstraps FROM {F('rapm_fits')}")
     N.claim(len(boots) == 1, "one bootstrap count for every RAPM fit")
     N.add("RapmBootstraps", integer(boots[0][0]), "rapm_fits.bootstraps")
-    window = rows(cur, "SELECT DISTINCT seasons_to - seasons_from + 1 FROM rapm_fits WHERE version = 'multi'")
+    window = rows(cur, f"SELECT DISTINCT seasons_to - seasons_from + 1 FROM {F('rapm_fits')} WHERE version = 'multi'")
     N.claim(len(window) == 1, "one window length for the multi-season RAPM")
     N.add("RapmMultiSeasons", word(window[0][0]), "rapm_fits.seasons_to - seasons_from + 1, version multi")
 
@@ -359,7 +360,7 @@ def shot_quality(cur, N):
     N.add("XfgYtyHighMaking", dec(yty[hi]["shot_making"], 2), f"notes.year_to_year['{hi}'].shot_making")
     N.claim(yty[lo]["quality"] > yty[lo]["shot_making"], "abstract: shot-making less persistent than shot quality")
 
-    z, n = one(cur, """SELECT sum((shot_distance = 0)::int), count(*) FROM player_shots
+    z, n = one(cur, f"""SELECT sum((shot_distance = 0)::int), count(*) FROM {F('player_shots')}
                        WHERE game_id LIKE '002%%' AND shot_type LIKE '3%%'""")
     N.add("ZeroDistThreesPct", pct(z / n, 0),
           f"regular-season three-point attempts in player_shots with shot_distance = 0 ({z:,} of {n:,})")
@@ -451,7 +452,7 @@ def protocol(cur, N):
     N.add("EvNextTunePairs", word(len(range(int(src_pairs[:4]), int(src_pairs[-7:-3]) + 1))), "number of tune next-season pairs (scored seasons in the pooled row)")
     pre_span = pick("pregame", "tune", "baseline", "log_loss")[2]
     N.add("EvPregameHistoryFirst", season(pre_span.split(" to ")[0]), "paper_eval_metrics pregame tune pooled seasons (first)")
-    xfg_first = one(cur, "SELECT min(season) FROM player_shots WHERE game_id LIKE '002%%'")[0]
+    xfg_first = one(cur, f"SELECT min(season) FROM {F('player_shots')} WHERE game_id LIKE '002%%'")[0]
     N.add("EvXfgHistoryFirst", season(xfg_first), "min(season) of regular-season player_shots (the shot model's first training season)")
 
     # -- impact: hyperparameters and the three tests -------------------------------
@@ -463,7 +464,7 @@ def protocol(cur, N):
     N.add("EvPriorFreeScale", dec(free["prior_scale"], 2), "same: prior scale of the whole-grid minimum")
     N.add("EvBpmScale", dec(ch[("impact", "bpm_scaled", "scale")][0], 2), "paper_eval_choices impact.bpm_scaled.scale (tune)")
     N.add("EvOnoffScale", dec(ch[("impact", "onoff_scaled", "scale")][0], 2), "paper_eval_choices impact.onoff_scaled.scale (tune)")
-    lam_app = one(cur, "SELECT DISTINCT lambda FROM rapm_fits WHERE version = 'single'")[0]
+    lam_app = one(cur, f"SELECT DISTINCT lambda FROM {F('rapm_fits')} WHERE version = 'single'")[0]
     N.claim(float(ch[("impact", "rapm_single", "lambda")][0]) == lam_app,
             "Methods: the protocol's lambda for one-season RAPM equals the platform's cross-validated one")
 
@@ -749,7 +750,7 @@ def tests(cur, N):
     for method, me in (("model", "Model"), ("record", "Record")):
         interval(f"EvSimTest{me}CoverPct", "sim_wins", "test", "cover80", method, 1, variant="halfway", scale=100)
     # Results: "the gap comes mostly from teams the simulator favoured at the midpoint that then missed the playoffs"
-    units = rows(cur, """SELECT m.pred, r.pred, m.actual FROM paper_eval_predictions m JOIN paper_eval_predictions r
+    units = rows(cur, f"""SELECT m.pred, r.pred, m.actual FROM {F('paper_eval_predictions', 'm')} JOIN {F('paper_eval_predictions', 'r')}
                          ON r.task = m.task AND r.phase = m.phase AND r.variant = m.variant AND r.unit_id = m.unit_id AND r.model = 'record'
                          WHERE m.task = 'sim_playoffs' AND m.phase = 'test' AND m.model = 'model' AND m.variant = 'halfway'""")
 
@@ -769,7 +770,7 @@ def tests(cur, N):
 def xrapm(cur, N):
     """Round 5 step 4: expected-points RAPM (scripts/paper_xrapm.py's tables, the xrapm_* models of paper_eval / paper_tests)."""
     N.start("Expected-points RAPM (Methods: xrapm; Results: xrapm; Tables rapm, tests) -- paper_xrapm_*, paper_eval_*, paper_eval_tests")
-    meta = {(k, se): v for k, se, v in rows(cur, "SELECT key, season, value FROM paper_xrapm_meta WHERE value IS NOT NULL")}
+    meta = {(k, se): v for k, se, v in rows(cur, f"SELECT key, season, value FROM {F('paper_xrapm_meta')} WHERE value IS NOT NULL")}
     seasons = sorted({se for _, se in meta if se > 0})
     N.claim(len(seasons) == 6, "Methods: expected points for every stint of the six seasons")
     N.add("XrFgaMatchedPct", pct(meta[("matched_share", 0)], 1), "paper_xrapm_meta matched_share (all seasons): tracked attempts priced by the shot chart")
@@ -793,7 +794,7 @@ def xrapm(cur, N):
     N.add("XrSdXptsMin", dec(min(meta[("sd_xpts100", se)] for se in seasons), 0), "paper_xrapm_meta sd_xpts100, smallest season")
     N.add("XrSdXptsMax", dec(max(meta[("sd_xpts100", se)] for se in seasons), 0), "the same, largest season")
     N.claim(all(meta[("sd_xpts100", se)] < meta[("sd_pts100", se)] for se in seasons), "Results: the expected-points target has less spread in every season")
-    fits = {(v, se): (lam, r, sdx, sdr) for v, se, lam, r, sdx, sdr in rows(cur, "SELECT version, season, lambda, r_with_rapm, sd_xrapm, sd_rapm FROM paper_xrapm_fits")}
+    fits = {(v, se): (lam, r, sdx, sdr) for v, se, lam, r, sdx, sdr in rows(cur, f"SELECT version, season, lambda, r_with_rapm, sd_xrapm, sd_rapm FROM {F('paper_xrapm_fits')}")}
     lams = sorted({int(fits[("single", se)][0]) for se in seasons})
     N.add("XrCvLambdaMin", integer(lams[0]), "paper_xrapm_fits single.lambda (5-fold game-grouped CV on the expected-points target), smallest")
     N.add("XrCvLambdaMax", integer(lams[-1]), "the same, largest")
@@ -806,8 +807,8 @@ def xrapm(cur, N):
         N.add(f"XrSdRatio{V}Max", dec(max(ratio), 2), "the same, largest season")
     N.claim(all(fits[(v, se)][2] < fits[(v, se)][3] for v in ("single", "prior") for se in seasons),
             "Results: expected-points ratings are less spread out than actual-points ones in every season and version")
-    missing = rows(cur, """WITH charted AS (SELECT DISTINCT game_id FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2020-21')
-                          SELECT season, count(*) FROM lineup_stint_games
+    missing = rows(cur, f"""WITH charted AS (SELECT DISTINCT game_id FROM {F('player_shots')} WHERE game_id LIKE '002%%' AND season >= '2020-21')
+                          SELECT season, count(*) FROM {F('lineup_stint_games')}
                           WHERE game_ok AND nba_game_id IS NOT NULL AND nba_game_id NOT IN (SELECT game_id FROM charted) GROUP BY 1""")
     # Round 8.5 step C re-fetched the 2025-26 chart from stats.nba.com: the four games of 2025-11-19/20 the bulk file
     # lacked are in, so no reconciled game is missing. The lowest season's gap is ESPN's end-of-quarter heaves, which
@@ -817,8 +818,8 @@ def xrapm(cur, N):
     # the rating change tracks shot-making: the expected-points target removes shooting skill, not only luck
     mk = {}
     for v in ("single", "prior"):
-        b = rows(cur, """SELECT m.shot_making, p.rapm, p.xrapm FROM paper_xrapm_players p
-                         JOIN player_shot_making m ON m.player_id = p.player_id AND m.season = p.season
+        b = rows(cur, f"""SELECT m.shot_making, p.rapm, p.xrapm FROM {F('paper_xrapm_players', 'p')}
+                         JOIN {F('player_shot_making', 'm')} ON m.player_id = p.player_id AND m.season = p.season
                          WHERE p.version = %s AND p.qualified AND p.rapm IS NOT NULL AND m.fga >= 200""", (v,))
         sm, ra, xa = (list(c) for c in zip(*b))
         d = [x - r for x, r in zip(xa, ra)]
@@ -952,8 +953,8 @@ def data_audit(cur, N):
     """The data-quality audit (paper_data_audit, written by scripts/paper_data_audit.py): Data quality subsection,
     Table audit (paper/tables/data_audit.tex), and the wrong-player / missed-three / tag-text counts of the Data section."""
     N.start("Data-quality audit (Section: Data quality, Table: audit; scripts/paper_data_audit.py)")
-    A = {(k, s): (v, note) for k, s, v, note in rows(cur, "SELECT key, season, value, note FROM paper_data_audit")}
-    for key, macro, fmt, v, note in rows(cur, """SELECT key, macro, fmt, value, note FROM paper_data_audit
+    A = {(k, s): (v, note) for k, s, v, note in rows(cur, f"SELECT key, season, value, note FROM {F('paper_data_audit')}")}
+    for key, macro, fmt, v, note in rows(cur, f"""SELECT key, macro, fmt, value, note FROM {F('paper_data_audit')}
                                               WHERE macro IS NOT NULL ORDER BY macro"""):
         if fmt not in AUDIT_FORMATS:
             raise ValueError(f"paper_data_audit {key}: unknown format {fmt!r}")
@@ -969,7 +970,7 @@ def data_audit(cur, N):
             "Table audit: the failed games split into score, rebound count and the Cup finals with no final")
     N.claim(all(a("score_steps_games", se) == g and a("score_steps_miss", se) == m for se, (g, m) in N.raw["stale"].items()),
             "the audit's stale-score counts equal the Data section's (rerun paper_data_audit.py)")
-    xr = dict(rows(cur, "SELECT season, value FROM paper_xrapm_meta WHERE key = 'matched_share' AND season > 0"))
+    xr = dict(rows(cur, f"SELECT season, value FROM {F('paper_xrapm_meta')} WHERE key = 'matched_share' AND season > 0"))
     N.claim(min(xr, key=xr.get) == a("chart_match_min_season"),
             "the audit's lowest chart-match season is the xRAPM section's (Methods, Expected-points RAPM)")
     N.claim(a("chart_missing_games") == N.raw["chart_missing"], "the audit's missing chart games equal the xRAPM section's")
@@ -985,12 +986,12 @@ def data_audit(cur, N):
     # their team; before it, one player-game per such game gained minutes and one line had team 'NaN' (class 'disclosed').
     N.claim(a("teamless_player_games") == 0 and a("teamless_lines_higher") == 0 and a("nan_team_rows") == 0,
             "Table audit: no team-less substitution leaves a game line with extra minutes or without a team (handling: repaired)")
-    off_unrec = one(cur, """
+    off_unrec = one(cur, f"""
         WITH l AS (SELECT game_id, team_abbreviation t, sum(seconds::numeric) secs, sum((tm_pts - op_pts)::numeric) onc
-                   FROM player_game_lines GROUP BY 1, 2),
+                   FROM {F('player_game_lines')} GROUP BY 1, 2),
              g AS (SELECT 'espn_' || espn_id game_id, team_abbreviation t, pts_for - pts_against m, periods gp
-                   FROM game_scores WHERE espn_id IS NOT NULL)
-        SELECT count(*) FROM l JOIN g USING (game_id, t) JOIN lineup_stint_games s ON s.game_id = l.game_id
+                   FROM {F('game_scores')} WHERE espn_id IS NOT NULL)
+        SELECT count(*) FROM l JOIN g USING (game_id, t) JOIN {F('lineup_stint_games', 's')} ON s.game_id = l.game_id
         WHERE abs(secs - 5 * (2880 + 300 * greatest(gp - 4, 0))) < 1 AND onc <> 5 * m AND NOT s.game_ok""")[0]
     N.claim(a("oncourt_off") == off_unrec,
             "Table audit: the game lines' on-court margin misses five times the final only in games whose play-by-play does not reconcile")
@@ -1142,7 +1143,7 @@ def beliefs(cur, N):
     N.add("BlLuckP", pval(r[8]), "paper_beliefs_summary agg_p, luck")
     N.add("BlLuckPairs", integer(r[10]), "paper_beliefs_summary agg_n, luck (franchise-season pairs)")
     N.add("BlLuckBetweenP", pval(meta["luck_between_var_p"]), "paper_beliefs_meta luck_between_var_p")
-    surv = rows(cur, """SELECT unit_name, stat, p_value FROM paper_beliefs WHERE key = 'luck:luck_per82' AND bh_reject
+    surv = rows(cur, f"""SELECT unit_name, stat, p_value FROM {F('paper_beliefs')} WHERE key = 'luck:luck_per82' AND bh_reject
                         ORDER BY p_value""")
     N.add("BlLuckSurvivors", integer(len(surv)), "paper_beliefs: franchises with bh_reject, luck")
     if surv:
@@ -1163,7 +1164,7 @@ def beliefs(cur, N):
     N.add("BlCrewN", integer(S["referee:crew:fouls"][0]), "paper_beliefs_summary n_units, referee:crew:fouls")
     N.add("BlRefGames", integer(meta["referee_games"]), "paper_beliefs_meta referee_games")
     N.add("BlRefFloor", integer(S["referee:official:fouls"][13]), "paper_beliefs_summary floor, referee:official:*")
-    top = rows(cur, """SELECT unit_name, stat, n_obs FROM paper_beliefs WHERE key = 'referee:official:fouls' AND bh_reject
+    top = rows(cur, f"""SELECT unit_name, stat, n_obs FROM {F('paper_beliefs')} WHERE key = 'referee:official:fouls' AND bh_reject
                        ORDER BY abs(stat) DESC LIMIT 1""")
     if top:
         N.add("BlRefTopName", top[0][0], "paper_beliefs unit_name: the surviving official with the largest fouls difference")
@@ -1265,9 +1266,9 @@ def ablations(cur, N):
     N.add("AbNoWeightRelLo", dec(rel["test"][1], 2), "paper_ablation_tests ci_lo, same row")
     N.add("AbNoWeightRelHi", dec(rel["test"][2], 2), "paper_ablation_tests ci_hi, same row")
     # The home term: what it does to the ratings and to the prediction.
-    r_home = one(cur, """SELECT min(r) FROM (
-                           SELECT a.base, corr(a.pred, f.pred) AS r FROM paper_ablation_predictions a
-                           JOIN paper_ablation_predictions f ON f.task = a.task AND f.base = a.base AND f.ablation = 'full'
+    r_home = one(cur, f"""SELECT min(r) FROM (
+                           SELECT a.base, corr(a.pred, f.pred) AS r FROM {F('paper_ablation_predictions', 'a')}
+                           JOIN {F('paper_ablation_predictions', 'f')} ON f.task = a.task AND f.base = a.base AND f.ablation = 'full'
                                 AND f.phase = a.phase AND f.season = a.season AND f.unit_id = a.unit_id
                            WHERE a.task = 'impact_reliability' AND a.ablation = 'no_home' GROUP BY a.base) x""")[0]
     N.add("AbNoHomeRatingR", dec(r_home, 3, ROUND_FLOOR), "min over rapm_single/rapm_prior of corr(rating without the home column, full rating), "
@@ -1447,8 +1448,8 @@ def possessions_clock(cur, N):
     (scripts/build_event_clock.py; its accuracy is the audit's clock_lag class) and the Possession Explorer's results."""
     N.start("Possessions and the corrected clock (Data: possessions; round 6 steps 3, 3b, 4) -- possessions, possession_*, "
             "pbp_event_clock_meta, data_quality_sensitivity")
-    n_poss, = one(cur, "SELECT count(*) FROM possessions")
-    games, ok = one(cur, "SELECT count(*), count(*) FILTER (WHERE game_ok) FROM possession_games")
+    n_poss, = one(cur, f"SELECT count(*) FROM {F('possessions')}")
+    games, ok = one(cur, f"SELECT count(*), count(*) FILTER (WHERE game_ok) FROM {F('possession_games')}")
     N.add("PoPossessions", integer(n_poss), "count(*) possessions")
     N.add("PoGamesOk", integer(ok), "possession_games.game_ok (points, FGA, FTA, OREB and TOV add up to the final and the box)")
     N.claim((games, ok) == N.raw["games"], "Data: the possessions reconcile in exactly the games the stints do")
@@ -1464,14 +1465,14 @@ def possessions_clock(cur, N):
     N.add("PoDrebPlateauPpp", dec(dr[int(sec) + 2], 2), f"the same at {int(sec) + 2} s (the plateau the early premium fades to)")
     N.claim(max(dr) == max(dr[:int(sec)]) and dr[int(sec) + 2] < min(dr[1:int(sec)]),
             "Data: after a defensive rebound the early-shot premium peaks inside the transition window and has faded two seconds after it")
-    timed, trans, tpts = one(cur, """SELECT sum(timed_poss)::float8, sum(trans_poss)::float8, sum(trans_pts)::float8 FROM possession_seasons
+    timed, trans, tpts = one(cur, f"""SELECT sum(timed_poss)::float8, sum(trans_poss)::float8, sum(trans_pts)::float8 FROM {F('possession_seasons')}
                                      WHERE team = 'ALL' AND start_type = 'all'""")
     N.add("PoTransSharePct", pct(trans / timed, 1), "possession_seasons ALL/all: sum(trans_poss) / sum(timed_poss), every season")
     P = Pairs(cur, N, "data_quality_sensitivity", "result = 'possessions' AND drop_set = 'none'")
     st = P.diff("PoDStealMade", "possessions", "all", "ppp", "steal", "made_fg", 2, p=False)
     P.value("PoPppSteal", "possessions", "all", "ppp", "steal", 2)
     P.value("PoPppMade", "possessions", "all", "ppp", "made_fg", 2)
-    pts, poss = one(cur, "SELECT sum(pts)::float8, sum(poss)::float8 FROM possession_seasons WHERE team = 'ALL' AND start_type = 'dreb'")
+    pts, poss = one(cur, f"SELECT sum(pts)::float8, sum(poss)::float8 FROM {F('possession_seasons')} WHERE team = 'ALL' AND start_type = 'dreb'")
     N.add("PoPppDreb", dec(pts / poss, 2), "possession_seasons ALL/dreb: points per possession after a defensive rebound, every season")
     tr = P.diff("PoDTransSettled", "possessions", "all", "ppp", "transition", "settled", 2, p=False)
     P.value("PoPppTrans", "possessions", "all", "ppp", "transition", 2)
@@ -1484,12 +1485,12 @@ def possessions_clock(cur, N):
     # How much of the between-team spread is beyond chance, and how well it repeats: the computation of
     # api/routers/possessions._signal() (not imported: importing the app runs its DDL), with its rounding of ppp and
     # its standard error to four decimals, so the page and the paper print the same numbers.
-    var = {(s, t): float(v) for s, t, v in rows(cur, """
-        SELECT p.season, COALESCE(p.start_type, 'all'), VAR_SAMP(p.pts) FROM possessions p
-        JOIN possession_games g USING (game_id) WHERE g.game_ok
+    var = {(s, t): float(v) for s, t, v in rows(cur, f"""
+        SELECT p.season, COALESCE(p.start_type, 'all'), VAR_SAMP(p.pts) FROM {F('possessions', 'p')}
+        JOIN {F('possession_games', 'g')} USING (game_id) WHERE g.game_ok
         GROUP BY GROUPING SETS ((p.season, p.start_type), (p.season))""") if v is not None}
     teamrows = {(s, t, k): (poss, pts) for s, t, k, poss, pts in rows(
-        cur, "SELECT season, team, start_type, poss, pts FROM possession_seasons WHERE team <> 'ALL'")}
+        cur, f"SELECT season, team, start_type, poss, pts FROM {F('possession_seasons')} WHERE team <> 'ALL'")}
     seasons = sorted({s for s, _t, _k in teamrows})
     teams = sorted({t for _s, t, _k in teamrows})
     sig = {}
@@ -1521,7 +1522,7 @@ def possessions_clock(cur, N):
     N.add("PoWpLastMinEceCorr", dec(wp["last_minute"]["ece_corrected"], 4), "wp_check.last_minute.ece_corrected")
     N.claim(all(w["log_loss_corrected"] < w["log_loss_espn"] for k, w in wp.items() if isinstance(w, dict) and "log_loss_espn" in w),
             "Data: the win-probability model, fitted on ESPN's times, scores better on the corrected clock in every phase checked (not refitted)")
-    A = {k: v for k, v in rows(cur, "SELECT key, value FROM paper_data_audit WHERE season = 0 AND key LIKE 'lag%%'")}
+    A = {k: v for k, v in rows(cur, f"SELECT key, value FROM {F('paper_data_audit')} WHERE season = 0 AND key LIKE 'lag%%'")}
     N.claim(all(A[f"lag_{c}_median_odd"] == A[f"lag_{c}_median_even"] for c in ("fg_made", "ft_later_made", "reb", "tov_steal", "tov_dead", "fg_miss")),
             "Data: ESPN's lag by event class is the same on the two halves of the twin games")
 
@@ -1531,8 +1532,8 @@ def data_quality_effect(cur, N):
     way the Data Quality page counts them (api/routers/data_quality._call/_verdict): a cell is one pair in one phase,
     metric and scope of one drop set; its call is which side is lower with the interval excluding zero, or none."""
     N.start("Data quality, downstream (Section: Data quality; round 6 step 11) -- data_quality_game_flags, data_quality_sensitivity")
-    lv = dict(rows(cur, "SELECT level, count(*) FROM data_quality_game_flags GROUP BY 1"))
-    cg = one(cur, "SELECT count(*) FROM data_quality_game_flags WHERE level = 'flagged' AND 'chart_gaps' = ANY(classes)")[0]
+    lv = dict(rows(cur, f"SELECT level, count(*) FROM {F('data_quality_game_flags')} GROUP BY 1"))
+    cg = one(cur, f"SELECT count(*) FROM {F('data_quality_game_flags')} WHERE level = 'flagged' AND 'chart_gaps' = ANY(classes)")[0]
     N.claim(cg > lv.get("flagged", 0) / 2, "Data quality: the flagged games are mostly games where the shot chart misses attempts")
     for k, K in (("flagged", "Flagged"), ("excluded", "Excluded"), ("worked_around", "Worked"), ("clean", "Clean")):
         N.add(f"DqsGames{K}", integer(lv.get(k, 0)), f"data_quality_game_flags level = {k}")
@@ -1602,7 +1603,7 @@ def rating_tracker(cur, N):
     N.add("TrScale", dec(f["prior_scale"], 2), "rating_tracker_fit.prior_scale (BPM's scale in the measurement)")
     N.add("TrPhi", dec(f["phi"], 2), "rating_tracker_fit.phi (carry-over of last season's rating)")
     N.add("TrPlayers", integer(f["players"]), "rating_tracker_fit.players (state dimension / 2)")
-    lo, hi = one(cur, """SELECT min(r), max(r) FROM (SELECT season, corr(rapm, bpm) r FROM player_rating_tracker
+    lo, hi = one(cur, f"""SELECT min(r), max(r) FROM (SELECT season, corr(rapm, bpm) r FROM {F('player_rating_tracker')}
                          WHERE kind = 'filtered' AND qualified GROUP BY season) x""")
     N.add("TrBpmCorrMin", dec(lo, 2), "player_rating_tracker filtered, qualified: corr(rating, BPM) by season, smallest")
     N.add("TrBpmCorrMax", dec(hi, 2), "the same, largest")
@@ -1722,8 +1723,8 @@ def shot_value(cur, N):
             "Shot value: skill repeats year to year (r > 0.9); what a player makes beyond it does not (|r| < 0.1)")
     cs = {}
     for v in ("sa_single", "lf_single"):
-        b = rows(cur, """SELECT s.skill_pts / s.fga, s.above_pts / s.fga, p.xrapm - p.rapm FROM paper_xrapm_players p
-                         JOIN shot_value_added s ON s.player_id = p.player_id AND s.season = p.season
+        b = rows(cur, f"""SELECT s.skill_pts / s.fga, s.above_pts / s.fga, p.xrapm - p.rapm FROM {F('paper_xrapm_players', 'p')}
+                         JOIN {F('shot_value_added', 's')} ON s.player_id = p.player_id AND s.season = p.season
                          WHERE p.version = %s AND p.qualified AND p.rapm IS NOT NULL AND s.fga >= 200
                          ORDER BY p.season, p.player_id""", (v,))
         sk, ab, dl = (list(c) for c in zip(*b))
@@ -1740,7 +1741,7 @@ def lineup_predictor(cur, N):
     """Round 6 step 9: the Lineup Predictor (scripts/build_lineup_predictor.py): share of the real spread of new lineups'
     net ratings explained, on lineups first used after game 20."""
     N.start("Lineup Predictor (Section: lineups; round 6 step 9) -- lineup_predictor_units, _tests, _fit")
-    n, s0, s1 = one(cur, "SELECT count(*), min(season), max(season) FROM lineup_predictor_units")
+    n, s0, s1 = one(cur, f"SELECT count(*), min(season), max(season) FROM {F('lineup_predictor_units')}")
     N.add("LpUnits", integer(n), "count(*) lineup_predictor_units (five x team x season)")
     N.add("LpFirstSeason", season(s0), "min(season) lineup_predictor_units")
     fit = {k: (v, d) for k, v, d in rows(cur, "SELECT name, value, detail FROM lineup_predictor_fit WHERE fit_on = '' AND model = ''")}
@@ -1825,8 +1826,10 @@ def ledger(cur, N):
         N.add(f"LgHcD{K}Lo", dec(r["ci_lo"], d), f"ledger_meta.hindcast.{k}.ci_lo (cluster bootstrap by season)")
         N.add(f"LgHcD{K}Hi", dec(r["ci_hi"], d), f"ledger_meta.hindcast.{k}.ci_hi")
         N.claim(r["ci_hi"] < 0, f"Ledger: the roster-aware forecast beats the as-is one on {k} in the hindcast, outside the interval")
-    last_run, = one(cur, "SELECT max(started_at) FROM ledger_runs")
-    N.add("LgAsOf", last_run.astimezone(timezone.utc).strftime("%Y-%m-%d"), "max(ledger_runs.started_at), UTC date")
+    # Pinned to the lock (round 9 step 1, R8-086): the nightly log (ledger_runs) is outside the paper's inputs, so its last
+    # run can't date the paper. Round 9 step 6 rewrites the forward-test sentence from ledger_tests once games are scored.
+    N.add("LgAsOf", locked.astimezone(timezone.utc).strftime("%Y-%m-%d"),
+          "ledger_lock.locked_at (UTC date): the forward-test sentence is as of the lock, not of the last nightly run")
     import ledger_live as LL       # the page's own scoring query (api/ledger_live.py: pandas only, no model code)
     scored = int(LL.common(LL.scored(cur.connection, sea)).espn_id.nunique())
     N.add("LgScored", integer(scored), "ledger_live.common(scored()): games final and scored under every version, as of LgAsOf")
@@ -1904,9 +1907,9 @@ def report_card(cur, N):
             "Abstract: the true BPM - RAPM + prior difference varies between seasons (tau) by about as much as the protocol's gaps")
     tb = put("RcTrackerBpm", "impact_next", "game_rmse", "rapm_tracker", "bpm", 2, p=True)
     N.claim(tb["ci_lo"] < 0 < tb["ci_hi"] and tb["a_better"] == tb["k"] - 1, "Season by season: the tracker is ahead of BPM in all but one season, the pooled difference inside its interval")
-    lost = [se for se, d in rows(cur, """SELECT season, diff FROM report_card_tests WHERE task = 'impact_next' AND metric = 'game_rmse'
+    lost = [se for se, d in rows(cur, f"""SELECT season, diff FROM {F('report_card_tests')} WHERE task = 'impact_next' AND metric = 'game_rmse'
                                           AND variant = '' AND model_a = 'bpm' AND model_b = 'rapm_tracker'""") if d < 0]
-    test_end = one(cur, "SELECT max(season) FROM paper_eval_predictions WHERE phase = 'test'")[0]
+    test_end = one(cur, f"SELECT max(season) FROM {F('paper_eval_predictions')} WHERE phase = 'test'")[0]
     N.claim(lost == [test_end], "Season by season: the one season the tracker loses to BPM by game margins is the protocol's test season")
     tp = put("RcTrackerPrior", "impact_next", "game_rmse", "rapm_tracker", "rapm_prior", 2)
     ps = put("RcPriorSingle", "impact_next", "game_rmse", "rapm_prior", "rapm_single", 2)
@@ -1939,7 +1942,7 @@ def coaching(cur, N):
         N.add(f"Co{K}N", integer(S[key]["units"]), f"coaching_decision_summary {key} units (franchises)")
         N.add(f"Co{K}Kfdr", word(S[key]["survivors"]), f"coaching_decision_summary {key} survivors")
     cols = ("family", "key", "n_treated", "n_control", "stat", "ci_lo", "ci_hi", "treated_mean", "control_mean", "p", "survives")
-    T = {(r[0], r[1]): dict(zip(cols, r)) for r in rows(cur, f"SELECT {', '.join(cols)} FROM coaching_decision_tests WHERE level = 'league'")}
+    T = {(r[0], r[1]): dict(zip(cols, r)) for r in rows(cur, f"SELECT {', '.join(cols)} FROM {F('coaching_decision_tests')} WHERE level = 'league'")}
 
     def put(name, fam, key, d, scale=1, p=False, n=False):
         r = T[(fam, key)]

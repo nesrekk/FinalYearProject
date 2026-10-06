@@ -121,6 +121,7 @@ build_lineup_stints.py, build_player_game_lines.py, or a player_shots reload.
 """
 
 import os
+import sys
 import time
 import warnings
 from collections import defaultdict
@@ -136,6 +137,9 @@ from fetch_pbp_espn import NAME_MATCH_FLOOR, _normalize_name
 from pbp_lineups import PERIOD_SECONDS, Game, chart_matches, load_espn, load_season_names, match_coordinates
 from repair_espn_player_ids import find as find_wrong_ids
 from repair_espn_player_ids import fold
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "api"))
+from paper_freeze import F, MAX_PAPER_SEASON  # noqa: E402  (the paper's rows: seasons to 2025-26, round 9 step 1)
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -175,15 +179,15 @@ def q(cur, sql, args=None):
 # ── Play-by-play: feed-level checks in SQL ───────────────────────────────────
 
 def feed_checks(cur, A):
-    (rows, games), = q(cur, """SELECT count(*), count(DISTINCT e.game_id) FROM pbp_events e
-                               JOIN pbp_games g USING (game_id) WHERE g.source = 'nba_api'""")
-    (twin_same, neutral), = q(cur, """
-        SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM pbp_games e WHERE e.source = 'espn' AND e.game_date = n.game_date
+    (rows, games), = q(cur, f"""SELECT count(*), count(DISTINCT e.game_id) FROM {F('pbp_events', 'e')}
+                               JOIN {F('pbp_games', 'g')} USING (game_id) WHERE g.source = 'nba_api'""")
+    (twin_same, neutral), = q(cur, f"""
+        SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM {F('pbp_games', 'e')} WHERE e.source = 'espn' AND e.game_date = n.game_date
                      AND ((e.home_team = n.home_team AND e.away_team = n.away_team)
                           OR (e.home_team = n.away_team AND e.away_team = n.home_team)))),
-               count(*) FILTER (WHERE n.home_team IS NULL AND EXISTS (SELECT 1 FROM pbp_games e WHERE e.source = 'espn'
+               count(*) FILTER (WHERE n.home_team IS NULL AND EXISTS (SELECT 1 FROM {F('pbp_games', 'e')} WHERE e.source = 'espn'
                      AND e.game_date = n.game_date AND n.away_team IN (e.home_team, e.away_team)))
-        FROM pbp_games n WHERE n.source = 'nba_api'""")
+        FROM {F('pbp_games', 'n')} WHERE n.source = 'nba_api'""")
     A.put("twin_rows", rows, "pbp_events rows of nba_api games", macro="DqTwinRows", fmt="integer")
     A.put("twin_games", games, "nba_api games in pbp_games", macro="DqTwinGames", fmt="integer")
     A.put("twin_same_teams", twin_same, "nba_api games with an ESPN game on the same date and the same two teams",
@@ -191,33 +195,33 @@ def feed_checks(cur, A):
     A.put("twin_neutral", neutral, "nba_api games with no home team whose date and away team match an ESPN game",
           macro="DqTwinNeutral", fmt="word")
 
-    cup = q(cur, """SELECT g.game_id, count(e.id) FROM pbp_games g JOIN pbp_events e USING (game_id)
+    cup = q(cur, f"""SELECT g.game_id, count(e.id) FROM {F('pbp_games', 'g')} JOIN {F('pbp_events', 'e')} USING (game_id)
                     WHERE g.source = 'espn' AND g.game_id NOT IN
-                          (SELECT 'espn_' || espn_id FROM game_scores WHERE espn_id IS NOT NULL) GROUP BY 1""")
+                          (SELECT 'espn_' || espn_id FROM {F('game_scores')} WHERE espn_id IS NOT NULL) GROUP BY 1""")
     A.put("cup_games", len(cup), "ESPN regular-season games with no game_scores (NBA scoreboard) row: "
           + ", ".join(g for g, _ in cup), macro="DqCupGames", fmt="word")
     A.put("cup_events", sum(n for _, n in cup), "their pbp_events rows")
 
     # Unidentified players: named events without an id, per season.
-    for season, named, noid, names in q(cur, """
+    for season, named, noid, names in q(cur, f"""
             SELECT g.season, count(*), count(*) FILTER (WHERE e.person_id IS NULL),
                    count(DISTINCT e.player_name) FILTER (WHERE e.person_id IS NULL)
-            FROM pbp_events e JOIN pbp_games g USING (game_id)
+            FROM {F('pbp_events', 'e')} JOIN {F('pbp_games', 'g')} USING (game_id)
             WHERE g.source = 'espn' AND coalesce(e.player_name, '') <> '' GROUP BY 1 ORDER BY 1"""):
         A.put("unid_named_events", named, "ESPN events with a player name", season)
         A.put("unid_events", noid, "of those, events with no person_id", season)
         A.put("unid_names", names, "distinct player names with no person_id", season)
-    (named, noid), = q(cur, """SELECT count(*), count(*) FILTER (WHERE e.person_id IS NULL)
-                              FROM pbp_events e JOIN pbp_games g USING (game_id)
+    (named, noid), = q(cur, f"""SELECT count(*), count(*) FILTER (WHERE e.person_id IS NULL)
+                              FROM {F('pbp_events', 'e')} JOIN {F('pbp_games', 'g')} USING (game_id)
                               WHERE g.source = 'espn' AND coalesce(e.player_name, '') <> ''""")
     A.put("unid_named_events", named, "ESPN events with a player name, all seasons")
     A.put("unid_events", noid, "of those, events with no person_id, all seasons", macro="DqUnidEvents", fmt="integer")
     A.put("unid_events_share", noid / named, "their share", macro="DqUnidEventsPct", fmt="pct1")
-    for season, share in q(cur, "SELECT season, bad_lineup_minutes / minutes FROM lineup_stint_seasons ORDER BY 1"):
+    for season, share in q(cur, f"SELECT season, bad_lineup_minutes / minutes FROM {F('lineup_stint_seasons')} ORDER BY 1"):
         A.put("unid_minutes_share", share, "lineup_stint_seasons.bad_lineup_minutes / minutes", season)
 
     # Events stamped outside their own period's clock (ESPN's seconds_remaining counts down regulation from 2880).
-    (n, g), = q(cur, """SELECT count(*), count(DISTINCT e.game_id) FROM pbp_events e JOIN pbp_games p USING (game_id)
+    (n, g), = q(cur, f"""SELECT count(*), count(DISTINCT e.game_id) FROM {F('pbp_events', 'e')} JOIN {F('pbp_games', 'p')} USING (game_id)
                         WHERE p.source = 'espn' AND e.period <= 4
                           AND (e.seconds_remaining < %s * (4 - e.period) OR e.seconds_remaining > %s * (5 - e.period))""",
                     (PERIOD_SECONDS, PERIOD_SECONDS))
@@ -227,19 +231,19 @@ def feed_checks(cur, A):
 
     # Substitutions with no team, and what they do to the game lines. Seconds are summed as numeric: a float sum's
     # last digits depend on the order Postgres adds the rows in, and this table must be identical run to run.
-    (subs, sub_games), = q(cur, """SELECT count(*), count(DISTINCT e.game_id) FROM pbp_events e JOIN pbp_games g USING (game_id)
+    (subs, sub_games), = q(cur, f"""SELECT count(*), count(DISTINCT e.game_id) FROM {F('pbp_events', 'e')} JOIN {F('pbp_games', 'g')} USING (game_id)
                                    WHERE g.source = 'espn' AND e.action_type = 'Substitution' AND e.team_tricode IS NULL""")
     A.put("teamless_subs", subs, "ESPN substitution events with no team", macro="DqTeamlessSubs", fmt="word")
     A.put("teamless_games", sub_games, "games holding them", macro="DqTeamlessGames", fmt="word")
-    (pg, higher, games, in_teamless, lo, hi), = q(cur, """
+    (pg, higher, games, in_teamless, lo, hi), = q(cur, f"""
         WITH s AS (SELECT game_id, pid, SUM(seconds::numeric) secs FROM (
-                       SELECT game_id, unnest(home_ids) pid, seconds FROM lineup_stints
-                       UNION ALL SELECT game_id, unnest(away_ids), seconds FROM lineup_stints) x GROUP BY 1, 2),
+                       SELECT game_id, unnest(home_ids) pid, seconds FROM {F('lineup_stints')}
+                       UNION ALL SELECT game_id, unnest(away_ids), seconds FROM {F('lineup_stints')}) x GROUP BY 1, 2),
              d AS (SELECT s.game_id, round(l.seconds::numeric - s.secs, 1) extra FROM s
-                   JOIN player_game_lines l ON l.game_id = s.game_id AND l.player_id = s.pid
+                   JOIN {F('player_game_lines', 'l')} ON l.game_id = s.game_id AND l.player_id = s.pid
                    WHERE abs(s.secs - l.seconds) > 0.2)
         SELECT count(*), count(*) FILTER (WHERE extra > 0), count(DISTINCT game_id),
-               count(*) FILTER (WHERE game_id IN (SELECT game_id FROM pbp_events WHERE action_type = 'Substitution'
+               count(*) FILTER (WHERE game_id IN (SELECT game_id FROM {F('pbp_events')} WHERE action_type = 'Substitution'
                                                   AND team_tricode IS NULL)),
                min(extra), max(extra) FROM d""")
     A.put("teamless_player_games", pg, "player-games where player_game_lines seconds differ from the stints' by > 0.2 s",
@@ -251,39 +255,39 @@ def feed_checks(cur, A):
     # naming both players to their team), so no game line differs from the stints and these are NULL: stored, not printed.
     A.put("teamless_extra_min", lo, "smallest excess (seconds)", macro=None if lo is None else "DqTeamlessExtraMin", fmt="int_round")
     A.put("teamless_extra_max", hi, "largest excess (seconds)", macro=None if hi is None else "DqTeamlessExtraMax", fmt="int_round")
-    nan = q(cur, """SELECT l.game_id FROM player_game_lines l WHERE l.team_abbreviation = 'NaN' OR l.team_abbreviation IS NULL""")
+    nan = q(cur, f"""SELECT l.game_id FROM {F('player_game_lines', 'l')} WHERE l.team_abbreviation = 'NaN' OR l.team_abbreviation IS NULL""")
     A.put("nan_team_rows", len(nan), "player_game_lines rows with team 'NaN'", macro="DqNanTeamRows", fmt="word")
-    A.put("nan_team_in_sub_games", sum(1 for (g,) in nan if q(cur, """SELECT 1 FROM pbp_events WHERE game_id = %s
+    A.put("nan_team_in_sub_games", sum(1 for (g,) in nan if q(cur, f"""SELECT 1 FROM {F('pbp_events')} WHERE game_id = %s
               AND action_type = 'Substitution' AND team_tricode IS NULL""", (g,))),
           "of those, in a game with a team-less substitution")
 
 
 def score_checks(cur, A):
     # Crediting every positive step of the score fields, against the real final (lineup_stint_games.final_*).
-    for season, games, ok in q(cur, """
+    for season, games, ok in q(cur, f"""
             WITH s AS (SELECT e.game_id,
                               e.score_home - lag(e.score_home) OVER w dh, e.score_away - lag(e.score_away) OVER w da
-                       FROM pbp_events e JOIN lineup_stint_games g ON g.game_id = e.game_id
+                       FROM {F('pbp_events', 'e')} JOIN {F('lineup_stint_games', 'g')} ON g.game_id = e.game_id
                        WINDOW w AS (PARTITION BY e.game_id ORDER BY e.action_number))
             SELECT g.season, count(*), sum(((t.ph = g.final_home) AND (t.pa = g.final_away))::int)
             FROM (SELECT game_id, sum(greatest(dh, 0)) ph, sum(greatest(da, 0)) pa FROM s GROUP BY 1) t
-            JOIN lineup_stint_games g USING (game_id) GROUP BY 1 ORDER BY 1"""):
+            JOIN {F('lineup_stint_games', 'g')} USING (game_id) GROUP BY 1 ORDER BY 1"""):
         A.put("score_steps_games", games, "games with a real final", season)
         A.put("score_steps_miss", games - ok, "games where the summed positive score steps miss the real final", season)
-    (back, games), = q(cur, """
+    (back, games), = q(cur, f"""
         WITH s AS (SELECT e.game_id, e.score_home - lag(e.score_home) OVER w dh, e.score_away - lag(e.score_away) OVER w da
-                   FROM pbp_events e JOIN pbp_games g USING (game_id)
+                   FROM {F('pbp_events', 'e')} JOIN {F('pbp_games', 'g')} USING (game_id)
                    WHERE g.source = 'espn' AND e.score_home IS NOT NULL AND e.score_away IS NOT NULL
                    WINDOW w AS (PARTITION BY e.game_id ORDER BY e.action_number, e.id))
         SELECT count(DISTINCT game_id) FILTER (WHERE dh < 0 OR da < 0), count(DISTINCT game_id) FROM s""")
     A.put("score_backwards_games", back, "ESPN games where a score field decreases from one event to the next",
           macro="DqScoreBackwardGames", fmt="integer")
     A.put("espn_games", games, "ESPN games", macro="DqEspnGames", fmt="integer")
-    (tg, full, five), = q(cur, """
+    (tg, full, five), = q(cur, f"""
         WITH l AS (SELECT game_id, team_abbreviation t, sum(seconds::numeric) secs, sum((tm_pts - op_pts)::numeric) onc
-                   FROM player_game_lines GROUP BY 1, 2),
+                   FROM {F('player_game_lines')} GROUP BY 1, 2),
              g AS (SELECT 'espn_' || espn_id game_id, team_abbreviation t, pts_for - pts_against m, periods
-                   FROM game_scores WHERE espn_id IS NOT NULL)
+                   FROM {F('game_scores')} WHERE espn_id IS NOT NULL)
         SELECT count(*), count(*) FILTER (WHERE abs(secs - 5 * (2880 + 300 * greatest(periods - 4, 0))) < %s),
                count(*) FILTER (WHERE abs(secs - 5 * (2880 + 300 * greatest(periods - 4, 0))) < %s AND onc = 5 * m)
         FROM l JOIN g USING (game_id, t)""", (FULL_MINUTES_TOL, FULL_MINUTES_TOL))
@@ -295,9 +299,9 @@ def score_checks(cur, A):
           macro="DqOnCourtOff", fmt="integer")
     A.put("oncourt_off_share", 1 - five / full, "share of full-minute team-games whose on-court margin is not 5 x the final")
 
-    (n, bad), = q(cur, """SELECT count(DISTINCT t.game_id), count(DISTINCT t.game_id) FILTER (
+    (n, bad), = q(cur, f"""SELECT count(DISTINCT t.game_id), count(DISTINCT t.game_id) FILTER (
                               WHERE t.pts_for <> g.pts_for OR t.pts_against <> g.pts_against)
-                          FROM team_game_totals t JOIN game_scores g
+                          FROM {F('team_game_totals', 't')} JOIN {F('game_scores', 'g')}
                             ON g.espn_id IS NOT NULL AND t.game_id = 'espn_' || g.espn_id AND g.team_abbreviation = t.team_abbreviation""")
     A.put("last_score_games", n, "games in both team_game_totals (last play-by-play score) and game_scores",
           macro="DqLastScoreDenom", fmt="integer")
@@ -305,23 +309,23 @@ def score_checks(cur, A):
           macro="DqLastScoreGames", fmt="integer")
 
     kinds = defaultdict(int)
-    for reason, in q(cur, "SELECT reason FROM lineup_stint_games WHERE NOT game_ok"):
+    for reason, in q(cur, f"SELECT reason FROM {F('lineup_stint_games')} WHERE NOT game_ok"):
         kinds["cup" if reason.startswith("not in game_scores") else "score" if reason.startswith("points") else "totals"] += 1
     A.put("unrec_cup", kinds["cup"], "failed games with no real final (not in game_scores)", macro="DqUnrecCup", fmt="word")
     A.put("unrec_score", kinds["score"], "failed games whose stint points miss the real final", macro="DqUnrecScore", fmt="word")
     A.put("unrec_totals", kinds["totals"], "failed games whose points match but team totals (FGA/FTA/OREB/TOV) differ",
           macro="DqUnrecTotals", fmt="word")
-    (games, ok), = q(cur, "SELECT count(*), sum(game_ok::int) FROM lineup_stint_games")
+    (games, ok), = q(cur, f"SELECT count(*), sum(game_ok::int) FROM {F('lineup_stint_games')}")
     A.put("unrec_games", games - ok, "lineup_stint_games with game_ok false", macro="DqUnrecGames", fmt="word")
 
 
 def table_checks(cur, A):
-    (games, bad, point, nonzero, sign, s0, s1), = q(cur, """
+    (games, bad, point, nonzero, sign, s0, s1), = q(cur, f"""
         WITH j AS (SELECT f.game_id, f.season, f.plus_minus pm, g.pts_for - g.pts_against m, f.win
-                   FROM team_game_fatigue f JOIN game_scores g ON g.game_id = f.game_id AND g.team_abbreviation = f.team_abbreviation)
+                   FROM {F('team_game_fatigue', 'f')} JOIN {F('game_scores', 'g')} ON g.game_id = f.game_id AND g.team_abbreviation = f.team_abbreviation)
         SELECT count(DISTINCT game_id), count(DISTINCT game_id) FILTER (WHERE abs(pm - m) > 1e-6),
                count(DISTINCT game_id) FILTER (WHERE abs(pm - m) >= 1),
-               (SELECT count(*) FROM (SELECT game_id FROM team_game_fatigue GROUP BY 1 HAVING abs(sum(plus_minus)) > 1e-6) x),
+               (SELECT count(*) FROM (SELECT game_id FROM {F('team_game_fatigue')} GROUP BY 1 HAVING abs(sum(plus_minus)) > 1e-6) x),
                count(DISTINCT game_id) FILTER (WHERE pm <> 0 AND (pm > 0) <> win), min(season), max(season) FROM j""")
     A.put("pm_games", games, "games in team_game_fatigue joined to game_scores", macro="DqPlusMinusDenom", fmt="integer")
     A.put("pm_bad", bad, "games where plus_minus differs from the final margin", macro="DqPlusMinusGames", fmt="integer")
@@ -331,37 +335,37 @@ def table_checks(cur, A):
     A.put("pm_first_season", s0, "first season", macro="DqPlusMinusFirstSeason", fmt="season")
 
     total = 0
-    for season, n in q(cur, """WITH l AS (SELECT player_id, season, array_agg(DISTINCT team_abbreviation) teams
-                                          FROM player_game_lines GROUP BY 1, 2)
+    for season, n in q(cur, f"""WITH l AS (SELECT player_id, season, array_agg(DISTINCT team_abbreviation) teams
+                                          FROM {F('player_game_lines')} GROUP BY 1, 2)
                                SELECT s.season, count(*) FILTER (WHERE NOT (s.team_abbreviation = ANY (l.teams)))
-                               FROM player_season_stats s JOIN l USING (player_id, season) GROUP BY 1 ORDER BY 1"""):
+                               FROM {F('player_season_stats', 's')} JOIN l USING (player_id, season) GROUP BY 1 ORDER BY 1"""):
         A.put("wrong_team_rows", n, "player_season_stats rows whose team is none of the player's game-line teams", season)
         total += n
     A.put("wrong_team_rows", total, "the same, all seasons", macro="DqWrongTeamRows", fmt="integer")
 
-    (n, older, same), = q(cur, """
+    (n, older, same), = q(cur, f"""
         WITH a AS (SELECT s.age, extract(year FROM age(make_date(s.season, 2, 1), b.birth_date))::int feb1
-                   FROM player_season_stats s JOIN player_bio b USING (player_id)
+                   FROM {F('player_season_stats', 's')} JOIN player_bio b USING (player_id)
                    WHERE s.season >= %s AND b.birth_date IS NOT NULL AND s.age IS NOT NULL)
         SELECT count(*), count(*) FILTER (WHERE age = feb1 + 1), count(*) FILTER (WHERE age = feb1) FROM a""", (AGE_FIRST_SEASON,))
     A.put("age_rows", n, "player-seasons 2009-10 on with an age and a birth date")
     A.put("age_first_season", AGE_FIRST_SEASON, "first season checked (NBA.com ages from 2009-10)", macro="DqAgeFirstSeason", fmt="season")
     A.put("age_older", older / n, "share whose NBA.com age is one year above the age on 1 February", macro="DqAgeOlderPct", fmt="pct0")
     A.put("age_same", same / n, "share equal to it")
-    for season, share in q(cur, """
+    for season, share in q(cur, f"""
             WITH a AS (SELECT s.season, s.age, extract(year FROM age(make_date(s.season, 2, 1), b.birth_date))::int feb1
-                       FROM player_season_stats s JOIN player_bio b USING (player_id)
+                       FROM {F('player_season_stats', 's')} JOIN player_bio b USING (player_id)
                        WHERE s.season >= %s AND b.birth_date IS NOT NULL AND s.age IS NOT NULL)
             SELECT season, avg((age = feb1 + 1)::int) FROM a GROUP BY 1""", (AGE_FIRST_SEASON,)):
         A.put("age_older", share, "the same, per season", season)
 
 
 def chart_checks(cur, A):
-    for season, threes, zero, shots, origin in q(cur, """
+    for season, threes, zero, shots, origin in q(cur, f"""
             SELECT int4(left(season, 4)) + 1, count(*) FILTER (WHERE shot_type LIKE '3%%'),
                    count(*) FILTER (WHERE shot_type LIKE '3%%' AND shot_distance = 0), count(*),
                    count(*) FILTER (WHERE loc_x = 0 AND loc_y = 0)
-            FROM player_shots WHERE game_id LIKE '002%%' GROUP BY 1 ORDER BY 1"""):
+            FROM {F('player_shots')} WHERE game_id LIKE '002%%' GROUP BY 1 ORDER BY 1"""):
         A.put("zero_dist_threes", zero / threes, "regular-season threes with shot_distance = 0", season)
         A.put("origin_shots", origin / shots, "regular-season shots at (0, 0)", season)
     seasons = sorted(s for k, s in A.rows if k == "zero_dist_threes")
@@ -388,14 +392,14 @@ def chart_checks(cur, A):
 
 def identity_checks(conn, cur, A):
     ev = pd.read_sql_query(
-        """SELECT e.id, e.game_id, g.season, e.team_tricode, e.person_id, e.player_name, e.description
-           FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id
+        f"""SELECT e.id, e.game_id, g.season, e.team_tricode, e.person_id, e.player_name, e.description
+           FROM {F('pbp_events', 'e')} JOIN {F('pbp_games', 'g')} ON g.game_id = e.game_id
            WHERE g.source = 'espn' AND e.person_id IS NOT NULL ORDER BY e.game_id, e.action_number, e.id""", conn)
     ev["person_id"] = ev.person_id.astype("int64")
 
     # 1. Replay the fetch's original matcher (season exact, else season fuzzy >= floor) on the stored names.
     names = defaultdict(dict)
-    for season, pid, name in q(cur, "SELECT DISTINCT season, player_id, player_name FROM player_season_stats WHERE season >= 2021"):
+    for season, pid, name in q(cur, f"SELECT DISTINCT season, player_id, player_name FROM {F('player_season_stats')} WHERE season >= 2021"):
         names[season][_normalize_name(name)] = int(pid)
     keys = ev.groupby(["season", "player_name", "person_id"]).size().reset_index(name="n")
     wrong = []
@@ -414,7 +418,7 @@ def identity_checks(conn, cur, A):
           + "; ".join(f"{n} ({s})" for s, n, _ in wrong), macro="WrongPlayerEvents", fmt="integer")
     A.put("wrong_player_games", ev[hit].game_id.nunique(), "games they are in", macro="WrongPlayerGames", fmt="word")
     A.put("wrong_player_players", len(wrong), "players", macro="DqWrongPlayerPlayers", fmt="word")
-    left = find_wrong_ids(conn)
+    left = find_wrong_ids(conn, through=MAX_PAPER_SEASON)
     A.put("wrong_player_left", len(left), "events repair_espn_player_ids.find() would still change (0 = repaired)")
 
     # 2. Single events whose text lacks the tagged name although his other events of the game carry it.
@@ -443,8 +447,8 @@ def identity_checks(conn, cur, A):
 
 def shot_checks(conn, cur, A):
     """One parse of every ESPN game: the text's two/three call on every attempt, ESPN's clock, then the match."""
-    season_names, all_names = load_season_names(cur)
-    games, grouped = load_espn(conn)
+    season_names, all_names = load_season_names(cur, through=MAX_PAPER_SEASON)
+    games, grouped = load_espn(conn, through=MAX_PAPER_SEASON)      # the paper's seasons only (round 9 step 1)
     rows = []
     for i, g in enumerate(games.itertuples(index=False)):
         ev = grouped.get(g.game_id)
@@ -461,7 +465,7 @@ def shot_checks(conn, cur, A):
             log(f"  {i} of {len(games)} games parsed")
     del grouped
     shots = pd.DataFrame(rows, columns=["game_id", "season", "action_number", "pid", "period", "made", "text_three", "secs"])
-    m = match_coordinates(conn, shots)
+    m = match_coordinates(conn, shots, through=MAX_PAPER_SEASON)
     m["matched"] = m.nba_shot_id.notna()
     known = m[m.pid.notna()]
     for season, g in m.groupby("season"):
@@ -476,8 +480,8 @@ def shot_checks(conn, cur, A):
     A.put("chart_match_min_season", by.idxmin(), "that season", macro="DqChartMatchMinSeason", fmt="season")
     A.put("chart_match_other_min", by.drop(by.idxmin()).min(), "lowest among the other seasons",
           macro="DqChartMatchOtherMinPct", fmt="pct1")
-    (missing,), = q(cur, """WITH charted AS (SELECT DISTINCT game_id FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2020-21')
-                            SELECT count(*) FROM lineup_stint_games WHERE game_ok AND nba_game_id IS NOT NULL
+    (missing,), = q(cur, f"""WITH charted AS (SELECT DISTINCT game_id FROM {F('player_shots')} WHERE game_id LIKE '002%%' AND season >= '2020-21')
+                            SELECT count(*) FROM {F('lineup_stint_games')} WHERE game_ok AND nba_game_id IS NOT NULL
                             AND nba_game_id NOT IN (SELECT game_id FROM charted)""")
     A.put("chart_missing_games", missing, "reconciled games whose NBA id has no player_shots row",
           macro="DqChartMissingGames", fmt="word")
@@ -485,8 +489,8 @@ def shot_checks(conn, cur, A):
     # the backcourt) as a team attempt, not the shooter's (ESPN, 2025-09-10); ESPN's play-by-play logs it ("misses
     # heave jump shot", action type 'Heave Jump Shot', in every period) and the chart leaves almost all of them out
     # (round 8.5 step C, R8-088).
-    hv = pd.read_sql_query("""SELECT e.game_id, e.action_number, TRUE AS heave FROM pbp_events e
-                              JOIN pbp_games g ON g.game_id = e.game_id
+    hv = pd.read_sql_query(f"""SELECT e.game_id, e.action_number, TRUE AS heave FROM {F('pbp_events', 'e')}
+                              JOIN {F('pbp_games', 'g')} ON g.game_id = e.game_id
                               WHERE g.source = 'espn' AND e.action_type = 'Heave Jump Shot'""", conn)
     # A heave is on the play-by-play but not the chart, so the shooter's make/miss sequence for that period no longer
     # agrees and match_coordinates() drops every attempt of the period, not just the heave.
@@ -526,7 +530,7 @@ def shot_checks(conn, cur, A):
           "matched made shots whose value from the score step differs from the chart's call", macro="DqMadeDisagree", fmt="integer")
     A.put("made_matched", len(made), "matched made shots")
 
-    clock = pd.DataFrame(q(cur, """SELECT id, minutes_remaining * 60 + seconds_remaining FROM player_shots
+    clock = pd.DataFrame(q(cur, f"""SELECT id, minutes_remaining * 60 + seconds_remaining FROM {F('player_shots')}
                                     WHERE game_id LIKE '002%%' AND season >= '2020-21'"""), columns=["nba_shot_id", "nba_clock"])
     mm = mm.merge(clock, on="nba_shot_id", how="left")
     espn = np.where(mm.period <= 4, mm.secs - PERIOD_SECONDS * (4 - mm.period), mm.secs)
@@ -556,16 +560,17 @@ def clock_lag_checks(conn, cur, A):
     own clock_check() on a fresh parse and shot match of those games. It must equal pbp_event_clock_meta's stored check
     (the corrected clock it describes is the stored one)."""
     import build_event_clock as EC      # imported here: only this check needs it
-    twins = [r[0] for r in q(cur, """SELECT DISTINCT 'espn_' || s.espn_id FROM pbp_games n JOIN game_scores s ON s.game_id = n.game_id
-                                     JOIN pbp_games g ON g.game_id = 'espn_' || s.espn_id
+    twins = [r[0] for r in q(cur, f"""SELECT DISTINCT 'espn_' || s.espn_id FROM {F('pbp_games', 'n')} JOIN {F('game_scores', 's')} ON s.game_id = n.game_id
+                                     JOIN {F('pbp_games', 'g')} ON g.game_id = 'espn_' || s.espn_id
                                      WHERE n.source = 'nba_api' AND s.espn_id IS NOT NULL ORDER BY 1""")]
-    seasons = q(cur, "SELECT DISTINCT season FROM pbp_games WHERE game_id = ANY(%s)", (twins,))
+    seasons = q(cur, f"SELECT DISTINCT season FROM {F('pbp_games')} WHERE game_id = ANY(%s)", (twins,))
     if seasons != [(EC.TWIN_SEASON,)]:
         raise SystemExit(f"clock_lag: the twin games are not all of {EC.TWIN_SEASON} ({seasons})")
-    season_names, all_names = load_season_names(cur)
-    games, grouped = load_espn(conn, game_ids=twins)
-    chart_t = EC.chart_clock(conn, chart_matches(conn, games, grouped, season_names, all_names))
-    chk = EC.clock_check(conn, season_names, all_names, chart_t, grouped)
+    season_names, all_names = load_season_names(cur, through=MAX_PAPER_SEASON)
+    games, grouped = load_espn(conn, game_ids=twins, through=MAX_PAPER_SEASON)
+    chart_t = EC.chart_clock(conn, chart_matches(conn, games, grouped, season_names, all_names, through=MAX_PAPER_SEASON),
+                             through=MAX_PAPER_SEASON)
+    chk = EC.clock_check(conn, season_names, all_names, chart_t, grouped, through=MAX_PAPER_SEASON)
     (stored,), = q(cur, "SELECT value FROM pbp_event_clock_meta WHERE key = 'clock_check'")
     stored = stored if isinstance(stored, dict) else __import__("json").loads(stored)
     if stored != __import__("json").loads(__import__("json").dumps(chk)):

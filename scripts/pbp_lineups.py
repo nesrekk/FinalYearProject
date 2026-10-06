@@ -676,20 +676,23 @@ class Game:
         return out, diag
 
 
-def load_season_names(cur):
+def load_season_names(cur, through=None):
     """(season -> name -> team -> id from player_season_stats, NameIndex: name -> id for names only one player had
-    there since 2010, whose `bio` holds the player_bio fallback, bio_fallback())."""
-    cur.execute("SELECT season, player_id, player_name, team_abbreviation FROM player_season_stats WHERE season >= 2010;")
+    there since 2010, whose `bio` holds the player_bio fallback, bio_fallback()). `through` (an end year) keeps the
+    seasons up to it: the paper's scripts pass paper_freeze.MAX_PAPER_SEASON (round 9 step 1); the builds read every
+    season."""
+    cap = f" AND season <= {int(through)}" if through else ""
+    cur.execute(f"SELECT season, player_id, player_name, team_abbreviation FROM player_season_stats WHERE season >= 2010{cap};")
     names = defaultdict(lambda: defaultdict(dict))
     ids = defaultdict(set)
     for season, pid, name, team in cur.fetchall():
         names[season][norm(name)][team] = int(pid)
         ids[norm(name)].add(int(pid))
     unique = {n: next(iter(p)) for n, p in ids.items() if len(p) == 1}
-    return names, NameIndex(unique, bio=bio_fallback(cur, names, unique))
+    return names, NameIndex(unique, bio=bio_fallback(cur, names, unique, through))
 
 
-def bio_fallback(cur, names, unique):
+def bio_fallback(cur, names, unique, through=None):
     """{(season, name): (id, teams)} for the names Game.pid() can't match through player_season_stats: a normalised
     player_bio name that exactly one player active that season has (first_season <= season <= last_season), and not
     a name player_season_stats already answers (that season's, or one player's since 2010). `teams` = his teams
@@ -698,10 +701,12 @@ def bio_fallback(cur, names, unique):
     out)."""
     cur.execute("SELECT player_id, player_name, first_season, last_season FROM player_bio WHERE last_season >= 2010;")
     active = defaultdict(set)
+    last_season = int(through) if through else None
     for pid, name, first, last in cur.fetchall():
-        for season in range(max(int(first), 2010), int(last) + 1):
+        for season in range(max(int(first), 2010), min(int(last), last_season or int(last)) + 1):
             active[(season, norm(name))].add(int(pid))
-    cur.execute("SELECT season, player_id, team FROM player_team_stints WHERE season >= 2010;")
+    cap = f" AND season <= {int(through)}" if through else ""
+    cur.execute(f"SELECT season, player_id, team FROM player_team_stints WHERE season >= 2010{cap};")
     teams = defaultdict(set)
     for season, pid, team in cur.fetchall():
         teams[(int(season), int(pid))].add(team)
@@ -714,7 +719,7 @@ def bio_fallback(cur, names, unique):
     return out
 
 
-def load_espn(conn, clock=False, game_ids=None):
+def load_espn(conn, clock=False, game_ids=None, through=None):
     """Every ESPN game (regular season 2020-21 on) and its events, grouped by
     game in the order the parser expects (action_number, then id). With
     `clock`, each event also carries pbp_event_clock's corrected time
@@ -722,10 +727,14 @@ def load_espn(conn, clock=False, game_ids=None):
     `clock_source`; game_clock()
     turns one game's into the `Game(..., clock=)` argument. `game_ids`
     (optional list) loads only those games (build_coaching_decisions.py
-    parses a few hundred); omitted = every game, as before."""
+    parses a few hundred); `through` (an end year) only the seasons up to it
+    (the paper's scripts pass paper_freeze.MAX_PAPER_SEASON, round 9 step 1);
+    omitted = every game, as before."""
     only, params = "", None
     if game_ids is not None:
         only, params = " AND g.game_id = ANY(%(ids)s)", {"ids": list(game_ids)}
+    if through is not None:
+        only += f" AND g.season <= {int(through)}"
     games = pd.read_sql_query(
         "SELECT game_id, season, game_date, home_team, away_team FROM pbp_games g WHERE source = 'espn'" + only +
         " ORDER BY game_date, game_id;", conn, params=params)
@@ -744,17 +753,21 @@ def load_espn(conn, clock=False, game_ids=None):
     return games, grouped
 
 
-def match_coordinates(conn, shots):
+def match_coordinates(conn, shots, through=None):
     """Attach the NBA shot chart's coordinates (coord_ft, shot_type) and row id
     (nba_shot_id) to each ESPN attempt matched by order within (game, shooter,
-    period) with identical make/miss sequences; NaN where unmatched."""
+    period) with identical make/miss sequences; NaN where unmatched. `through`
+    (an end year) reads only the seasons up to it (the paper's scripts pass
+    paper_freeze.MAX_PAPER_SEASON, round 9 step 1)."""
+    cap_int = f" AND season <= {int(through)}" if through else ""
+    cap_text = f" AND season <= '{int(through) - 1}-{str(int(through))[-2:]}'" if through else ""
     link = pd.read_sql_query(
-        "SELECT DISTINCT 'espn_' || espn_id AS game_id, game_id AS nba_id FROM game_scores WHERE espn_id IS NOT NULL", conn)
+        f"SELECT DISTINCT 'espn_' || espn_id AS game_id, game_id AS nba_id FROM game_scores WHERE espn_id IS NOT NULL{cap_int}", conn)
     shots = shots.merge(link, on="game_id", how="left")
     nba = pd.read_sql_query(
-        """SELECT id, game_id AS nba_id, player_id AS pid, period, minutes_remaining * 60 + seconds_remaining AS clock,
+        f"""SELECT id, game_id AS nba_id, player_id AS pid, period, minutes_remaining * 60 + seconds_remaining AS clock,
                   shot_made_flag = 1 AS made, loc_x, loc_y, shot_type
-           FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2020-21'""", conn)
+           FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2020-21'{cap_text}""", conn)
     keys = ["nba_id", "pid", "period"]
     s = shots[shots.nba_id.notna() & shots.pid.notna()].copy()
     s["pid"] = s["pid"].astype(int)
@@ -779,10 +792,10 @@ def match_coordinates(conn, shots):
     return shots
 
 
-def chart_matches(conn, games, grouped, season_names, all_names):
+def chart_matches(conn, games, grouped, season_names, all_names, through=None):
     """Every ESPN field-goal attempt (game_id, season, action_number, pid, period, made, text_three) with the
     NBA shot chart row it matches (match_coordinates(): coord_ft, shot_type, nba_shot_id; NaN where
-    unmatched). One parse of every game (the shooter ids the lines use)."""
+    unmatched). One parse of every game (the shooter ids the lines use). `through` as in match_coordinates()."""
     rows = []
     for g in games.itertuples(index=False):
         ev = grouped.get(g.game_id)
@@ -795,7 +808,7 @@ def chart_matches(conn, games, grouped, season_names, all_names):
                 rows.append((g.game_id, int(g.season), e["action_number"], e["pid"], e["period"], bool(e["made"]),
                              e["val"] == 3))
     shots = pd.DataFrame(rows, columns=["game_id", "season", "action_number", "pid", "period", "made", "text_three"])
-    return match_coordinates(conn, shots)
+    return match_coordinates(conn, shots, through)
 
 
 def miss_three_calls(conn, games, grouped, season_names, all_names, matched=None):

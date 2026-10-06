@@ -328,18 +328,22 @@ loaders those scripts call take the bound as an argument, their defaults unchang
 `build_rapm.load_rows(conn, through=)` / `load_bpm`, `compute_wpa.load_events(conn, through=)` (and `events_sql()`),
 `build_hot_streak_persistence.load(conn, through=)`, `situational_splits.lines_sql(through)` (`LINES_SQL` is
 `lines_sql()`), `season_sim_lib.GAMES_REST_SQL`'s `{where}` slot, `pbp_lineups.load_espn(game_ids=)`.
-**Pending (R9-001):** `paper_numbers.py`, `paper_data_audit.py`, `build_data_quality.py` and
-`api/data_quality_lib.py` still read whole; they were open in the round 8.5 step C chat when this landed and get the
-same treatment right after its commit (their tests are strict xfails until then). `\pnLgAsOf` (the ledger's
-"as of" date, which every `ledger_update.py` run moves) is pinned in the same change.
+The last four, `paper_numbers.py`, `paper_data_audit.py`, `build_data_quality.py` and `api/data_quality_lib.py`
+(174 sites), were capped right after the round 8.5 step C commit (R9-001), together with the shared loaders the audit
+calls (`pbp_lineups.load_season_names` / `load_espn` / `match_coordinates` / `chart_matches`,
+`repair_espn_player_ids.find` / `unique_names`, `build_event_clock.chart_clock` / `clock_check`, all with an optional
+`through=` and unchanged defaults). `\pnLgAsOf` (the ledger's "as of" date, which every `ledger_update.py` run used to
+move) is the lock date now. Checked: `paper_numbers.build()`, every audit check and every Data Quality live check
+recorded with a cursor, 0 unbounded reads in 170 statements; every macro value unchanged.
 
 **The manifest.** `paper_manifest.py` records each table's `paper_rows` predicate, counts and hashes the paper's
 rows only, lists the five live ledger tables (`LIVE`) without digesting them, and `stale_reasons()` compares
 capped counts. On 2026-10-06 the capped and plain hashes agree for every table (no table holds 2026-27 rows except the
 lock and `player_projections`' target season), so the digest changes once, by definition only (the live tables leave
-it), when this lands.
+it), when this lands: `e8f6204b932c41bb` after the round 8.5 step C rebuild, the same from the step C chat's run and
+from this step's rerun after the cap (1,362 macros, every claim passes, 14 file hashes).
 
-**The tests** (`api/tests/test_paper_frozen.py`, 25 tests incl. 5 pending xfails, ~1 min):
+**The tests** (`api/tests/test_paper_frozen.py`, 25 tests, ~1.5 min):
 
 - the constant equals the protocol's `paper_eval.TEST`; the predicate rules as documented;
 - every table with a season dimension has a predicate, the lock has none, and for each of the 131 capped tables one

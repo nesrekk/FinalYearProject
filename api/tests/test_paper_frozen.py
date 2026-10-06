@@ -15,9 +15,8 @@ paper's rows of each table; scripts/paper_manifest.py hashes only those rows. Th
     freeze (this also covers the shared loaders they call with `through=`);
   * the manifest's digest leaves the live ledger log out and its hashes apply the predicates.
 
-Four files are still read whole (docs/qa/ROUND9_ISSUES.md R9-001: they were open in the round 8.5 step C
-chat when this landed): their static and dynamic checks are strict xfails here, so capping them turns the
-xfail into a failure that says to drop the marker.
+All fourteen paper-stage files are capped (the last four, paper_numbers / paper_data_audit / build_data_quality /
+api/data_quality_lib, right after the round 8.5 step C commit: docs/qa/ROUND9_ISSUES.md R9-001).
 
     /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pytest api/tests/test_paper_frozen.py
 """
@@ -60,11 +59,8 @@ CAPPED_FILES = [
     "scripts/paper_xrapm.py", "scripts/paper_eval.py", "scripts/paper_tests.py", "scripts/build_pregame_availability.py",
     "scripts/build_lineup_predictor.py", "scripts/build_report_card.py", "scripts/paper_beliefs.py",
     "scripts/paper_ablations.py", "scripts/paper_figures.py", "scripts/paper_manifest.py",
+    "scripts/paper_numbers.py", "scripts/paper_data_audit.py", "scripts/build_data_quality.py", "api/data_quality_lib.py",
 ]
-PENDING = pytest.mark.xfail(strict=True, reason="R9-001: capped after round 8.5 step C commits (the file was open there); "
-                                                "once it is, remove this marker")
-PENDING_FILES = ["scripts/paper_numbers.py", "scripts/paper_data_audit.py", "scripts/build_data_quality.py",
-                 "api/data_quality_lib.py"]
 
 WRITE_KEYWORDS = ("DELETE", "INTO", "UPDATE", "TABLE", "EXISTS")
 FAKE_ESPN_GAME, FAKE_NBA_GAME, FAKE_ESPN_ID, FAKE_INT_ID = "espn_402700001", "0022600001", "402700001", 999999999
@@ -299,7 +295,7 @@ def _capped_tables(catalogue):
 
 
 @needs_db
-@pytest.mark.parametrize("rel", CAPPED_FILES + [pytest.param(p, marks=PENDING) for p in PENDING_FILES])
+@pytest.mark.parametrize("rel", CAPPED_FILES)
 def test_paper_stage_scripts_read_capped_tables_through_F(rel, catalogue):
     with open(os.path.join(_ROOT, rel)) as f:
         src = f.read()
@@ -423,9 +419,10 @@ def test_the_dynamic_check_catches_an_unbounded_read(catalogue):
 
 
 @needs_db
-@PENDING
 def test_paper_numbers_and_the_audit_bound_every_capped_table(catalogue):
-    """paper_numbers.build() and paper_data_audit's SQL checks, recorded (R9-001: pending the cap of those files)."""
+    """paper_numbers.build() (every macro's query) and paper_data_audit's SQL checks, recorded (~30 s). The audit's
+    heavier parse-based checks (identity, shot, clock lag) and the Data Quality page's live checks were verified
+    the same way by hand when the cap landed (R9-001); they go through the same shared loaders with `through=`."""
     import paper_data_audit as DA
     import paper_numbers as PN
 
@@ -434,7 +431,9 @@ def test_paper_numbers_and_the_audit_bound_every_capped_table(catalogue):
         A = DA.Audit()
         cur = c.cursor()
         DA.feed_checks(cur, A)
+        DA.score_checks(cur, A)
         DA.table_checks(cur, A)
+        DA.chart_checks(cur, A)
 
     sqls = _record(run)
     bad = _unbounded_reads(sqls, catalogue)

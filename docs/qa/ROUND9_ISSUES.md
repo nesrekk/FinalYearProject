@@ -12,13 +12,14 @@ updates it in its own commit. **Never delete an entry; mark it.**
 - **Step:** the round-9 step expected to take it (1 design and guards, 2 daily fetch, 3 daily rebuild, 4 season-to-date
   models, 5 current-season app mode, 6 ledger + weekly report, 7 the real week, 8 close-out).
 
-**Round 9 step 1 (2026-10-06): 9 entries, 0 fixed, 9 open.** Step 1 also fixed round 8's R8-086 (the manifest's
-digest; the `\pnLgAsOf` pin travels with R9-001).
+**Round 9 step 1 (2026-10-06): 9 entries, 1 fixed (R9-001, in the step's follow-up commit), 8 open** (R9-002 to R9-009:
+decisions for steps 2-4, each entry says which). Step 1 also fixed round 8's R8-086 (the manifest's digest in a7ff2ea,
+the `\pnLgAsOf` pin in the follow-up).
 
 ## Step 1: design and guards (2026-10-06)
 
 ### R9-001 · Four paper-stage files still read every season
-- **Severity:** wrong number (the paper would move with the live season) · **Step:** 1 (follow-up right after the round 8.5 step C commit) · **Status:** open
+- **Severity:** wrong number (the paper would move with the live season) · **Step:** 1 (follow-up right after the round 8.5 step C commit) · **Status:** fixed in the round 9 step 1 follow-up commit (2026-10-06): the four files wrapped (174 sites), the shared loaders they call take `through=` (`pbp_lineups.load_season_names` / `load_espn` / `match_coordinates` / `chart_matches`, `repair_espn_player_ids.find` / `unique_names`, `build_event_clock.chart_clock` / `clock_check`; defaults unchanged, checked equal on today's data), `\pnLgAsOf` = the lock date; `paper_numbers.build()`, every audit check and every Data Quality live check recorded with 0 unbounded reads in 170 statements; every macro value unchanged; `paper-inputs` digest `e8f6204b932c41bb`
 - **Where:** `scripts/paper_numbers.py` (~35 reads of season-bearing tables: counts of shots, events, stints, the lines, `rapm_fits`, `possessions`, `player_rating_tracker`, ...), `scripts/paper_data_audit.py` (~40, all of the audit's feed and table checks), `scripts/build_data_quality.py` (~20) and `api/data_quality_lib.py` (~25, the Data Quality page's live checks, which must equal the audit). Also `paper_numbers.py` `ledger()`'s `\pnLgAsOf` = `max(ledger_runs.started_at)`, which every `ledger_update.py` run moves (the second half of R8-086).
 - **Reproduce:** `api/tests/test_paper_frozen.py`'s strict xfails `test_paper_stage_scripts_read_capped_tables_through_F[<file>]` and `test_paper_numbers_and_the_audit_bound_every_capped_table`: they fail (as expected) because these files name `pbp_events`, `lineup_stints`, `player_shots`, ... without `paper_freeze.F()`.
 - **Found by:** step 1's audit of every paper-stage read. The other nine paper-stage scripts were capped in step 1's commit; these four were open in the round 8.5 step C chat (its heave measurements and chart claims) at the time, so editing them would have collided. **Fix:** the same mechanical `F()` wrapping plus `\pnLgAsOf` = the lock date (or the date of the last run before the freeze), then drop the `PENDING` markers in the test.

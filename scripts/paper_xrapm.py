@@ -127,7 +127,7 @@ from db_config import DB_CONFIG
 from pbp_lineups import Game, load_espn, load_season_names, match_coordinates
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "api"))
-from paper_freeze import F, MAX_PAPER_SEASON, paper_game_ids  # noqa: E402  (the paper's rows: seasons to 2025-26)
+from paper_freeze import F, MAX_PAPER_SEASON  # noqa: E402  (the paper's rows: seasons to 2025-26, round 9 step 1)
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -154,8 +154,8 @@ def collect_events(conn, cur):
     """Field-goal and free-throw attempts with the side they belong to: game,
     season, action_number, kind, side, shooter, period, made, the parser's value
     (1 for a free throw)."""
-    season_names, all_names = load_season_names(cur)
-    games, grouped = load_espn(conn, game_ids=paper_game_ids(conn))     # the paper's seasons only (round 9 step 1)
+    season_names, all_names = load_season_names(cur, through=MAX_PAPER_SEASON)
+    games, grouped = load_espn(conn, through=MAX_PAPER_SEASON)       # the paper's seasons only (round 9 step 1)
     rows = []
     for i, g in enumerate(games.itertuples(index=False)):
         ev = grouped.get(g.game_id)
@@ -221,7 +221,7 @@ def price_field_goals(conn, fg):
     """P(make) and value per field-goal attempt: the chart's where matched, the
     stated fallback otherwise. Adds p_make, value, source ('chart', 'shooter',
     'league')."""
-    fg = match_coordinates(conn, fg)
+    fg = match_coordinates(conn, fg, through=MAX_PAPER_SEASON)
     xfg = pd.read_sql_query(f"SELECT shot_id, p_make FROM {F('shot_xfg')}", conn)
     fg = fg.merge(xfg, left_on="nba_shot_id", right_on="shot_id", how="left").drop(columns=["shot_id"])
     chart = fg.p_make.notna()

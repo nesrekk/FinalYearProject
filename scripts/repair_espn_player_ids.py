@@ -52,9 +52,11 @@ def fold(s):
     return re.sub(r"\s+", " ", re.sub(r"[.'`]", "", s)).strip()
 
 
-def unique_names(cur):
-    """Folded name -> (id, name) for names only one player in player_season_stats has had."""
-    cur.execute("SELECT DISTINCT player_id, player_name FROM player_season_stats WHERE player_name IS NOT NULL;")
+def unique_names(cur, through=None):
+    """Folded name -> (id, name) for names only one player in player_season_stats has had (`through`: seasons up to
+    that end year only; the paper's audit passes paper_freeze.MAX_PAPER_SEASON, round 9 step 1)."""
+    cap = f" AND season <= {int(through)}" if through else ""
+    cur.execute(f"SELECT DISTINCT player_id, player_name FROM player_season_stats WHERE player_name IS NOT NULL{cap};")
     ids, shown = defaultdict(set), {}
     for pid, name in cur.fetchall():
         ids[fold(name)].add(int(pid))
@@ -62,16 +64,18 @@ def unique_names(cur):
     return {n: (next(iter(p)), shown[n]) for n, p in ids.items() if len(p) == 1}
 
 
-def find(conn):
-    """One row per event to fix: id, game_id, team, old/new person_id and name."""
+def find(conn, through=None):
+    """One row per event to fix: id, game_id, team, old/new person_id and name (`through`: games of seasons up to that
+    end year only; the repair itself reads every season)."""
+    cap = f" AND g.season <= {int(through)}" if through else ""
     ev = pd.read_sql_query(
-        """SELECT e.id, e.game_id, e.team_tricode, e.person_id, e.player_name, e.description
+        f"""SELECT e.id, e.game_id, e.team_tricode, e.person_id, e.player_name, e.description
            FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id
-           WHERE g.source = 'espn' AND e.person_id IS NOT NULL;""", conn)
+           WHERE g.source = 'espn' AND e.person_id IS NOT NULL{cap};""", conn)
     ev["pn"] = ev.player_name.map(fold)
     ev["dn"] = ev.description.map(fold)
     ev["hit"] = [p in d for p, d in zip(ev.pn, ev.dn)]
-    names = unique_names(conn.cursor())
+    names = unique_names(conn.cursor(), through)
     fixes = []
     for (gid, team, pid), g in ev.groupby(["game_id", "team_tricode", "person_id"]):
         if g.hit.any():

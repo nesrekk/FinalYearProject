@@ -126,6 +126,7 @@ from db_config import DB_CONFIG
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 import data_quality_lib as Q  # noqa: E402
+from paper_freeze import F  # noqa: E402  (the paper's rows: seasons to 2025-26, round 9 step 1)
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 T0 = time.time()
@@ -171,7 +172,7 @@ def remeasure(conn):
 
 def check_audit(conn, A, meta):
     cur = conn.cursor()
-    cur.execute("SELECT key, season, value, fmt FROM paper_data_audit")
+    cur.execute(f"SELECT key, season, value, fmt FROM {F('paper_data_audit')}")
     stored = {(k, s): (v, f) for k, s, v, f in cur.fetchall()}
     fresh = {k: v[0] for k, v in A.rows.items()}
     diff = sorted(set(stored) ^ set(fresh))
@@ -200,43 +201,43 @@ def check_audit(conn, A, meta):
 
 # ── 2. Per-game flags ────────────────────────────────────────────────────────
 
-FLAG_SQL = """
+FLAG_SQL = f"""
 WITH g AS (SELECT s.game_id, s.nba_game_id, s.season, s.game_date, s.home_team, s.away_team, s.game_ok, s.reason,
                   coalesce(s.bad_lineup_seconds, 0) untracked_seconds, s.stint_seconds, p.home_team pb_home, p.away_team pb_away
-           FROM lineup_stint_games s JOIN pbp_games p ON p.game_id = s.game_id),
+           FROM {F('lineup_stint_games', 's')} JOIN {F('pbp_games', 'p')} ON p.game_id = s.game_id),
 ev AS (SELECT e.game_id,
               count(*) FILTER (WHERE e.person_id IS NULL AND coalesce(e.player_name, '') <> '') unid_events,
               count(*) FILTER (WHERE e.action_type = 'Substitution' AND e.team_tricode IS NULL) teamless_subs,
               count(*) FILTER (WHERE e.period <= 4 AND (e.seconds_remaining < %(ps)s * (4 - e.period)
                                                          OR e.seconds_remaining > %(ps)s * (5 - e.period))) clock_outside_events
-       FROM pbp_events e WHERE e.game_id IN (SELECT game_id FROM g) GROUP BY 1),
+       FROM {F('pbp_events', 'e')} WHERE e.game_id IN (SELECT game_id FROM g) GROUP BY 1),
 st AS (SELECT e.game_id, e.score_home - lag(e.score_home) OVER w dh, e.score_away - lag(e.score_away) OVER w da
-       FROM pbp_events e WHERE e.game_id IN (SELECT game_id FROM g)
+       FROM {F('pbp_events', 'e')} WHERE e.game_id IN (SELECT game_id FROM g)
        WINDOW w AS (PARTITION BY e.game_id ORDER BY e.action_number)),
 sb AS (SELECT e.game_id, e.score_home - lag(e.score_home) OVER w dh, e.score_away - lag(e.score_away) OVER w da
-       FROM pbp_events e WHERE e.game_id IN (SELECT game_id FROM g) AND e.score_home IS NOT NULL AND e.score_away IS NOT NULL
+       FROM {F('pbp_events', 'e')} WHERE e.game_id IN (SELECT game_id FROM g) AND e.score_home IS NOT NULL AND e.score_away IS NOT NULL
        WINDOW w AS (PARTITION BY e.game_id ORDER BY e.action_number, e.id)),
 steps AS (SELECT game_id, sum(greatest(dh, 0)) ph, sum(greatest(da, 0)) pa FROM st GROUP BY 1),
 back AS (SELECT game_id, bool_or(dh < 0 OR da < 0) backward FROM sb GROUP BY 1),
 lx AS (SELECT s.game_id, count(*) FILTER (WHERE l.seconds::numeric - s.secs > 0.2) excess
        FROM (SELECT game_id, pid, SUM(seconds::numeric) secs FROM (
-                 SELECT game_id, unnest(home_ids) pid, seconds FROM lineup_stints
-                 UNION ALL SELECT game_id, unnest(away_ids), seconds FROM lineup_stints) x GROUP BY 1, 2) s
-       JOIN player_game_lines l ON l.game_id = s.game_id AND l.player_id = s.pid GROUP BY 1),
+                 SELECT game_id, unnest(home_ids) pid, seconds FROM {F('lineup_stints')}
+                 UNION ALL SELECT game_id, unnest(away_ids), seconds FROM {F('lineup_stints')}) x GROUP BY 1, 2) s
+       JOIN {F('player_game_lines', 'l')} ON l.game_id = s.game_id AND l.player_id = s.pid GROUP BY 1),
 ls AS (SELECT t.game_id, bool_or(t.pts_for <> c.pts_for OR t.pts_against <> c.pts_against) off
-       FROM team_game_totals t JOIN game_scores c ON c.espn_id IS NOT NULL AND t.game_id = 'espn_' || c.espn_id
+       FROM {F('team_game_totals', 't')} JOIN {F('game_scores', 'c')} ON c.espn_id IS NOT NULL AND t.game_id = 'espn_' || c.espn_id
                                                   AND c.team_abbreviation = t.team_abbreviation GROUP BY 1),
 sh AS (SELECT game_id, count(*) shots, count(*) FILTER (WHERE shot_type LIKE '3%%' AND shot_distance = 0) zero_dist_threes
-       FROM player_shots WHERE game_id IN (SELECT nba_game_id FROM g) GROUP BY 1),
+       FROM {F('player_shots')} WHERE game_id IN (SELECT nba_game_id FROM g) GROUP BY 1),
 pm AS (SELECT f.game_id, bool_or(abs(f.plus_minus - (c.pts_for - c.pts_against)) > 1e-6) off
-       FROM team_game_fatigue f JOIN game_scores c ON c.game_id = f.game_id AND c.team_abbreviation = f.team_abbreviation
+       FROM {F('team_game_fatigue', 'f')} JOIN {F('game_scores', 'c')} ON c.game_id = f.game_id AND c.team_abbreviation = f.team_abbreviation
        WHERE f.game_id IN (SELECT nba_game_id FROM g) GROUP BY 1)
 SELECT g.game_id, g.nba_game_id, g.season, g.game_date, g.home_team, g.away_team,
-       EXISTS (SELECT 1 FROM pbp_games n WHERE n.source = 'nba_api' AND n.game_date = g.game_date
+       EXISTS (SELECT 1 FROM {F('pbp_games', 'n')} WHERE n.source = 'nba_api' AND n.game_date = g.game_date
                AND ((n.home_team = g.pb_home AND n.away_team = g.pb_away) OR (n.home_team = g.pb_away AND n.away_team = g.pb_home)
                     OR (n.home_team IS NULL AND n.away_team IN (g.pb_home, g.pb_away)))
-               AND EXISTS (SELECT 1 FROM pbp_events x WHERE x.game_id = n.game_id)) twin,
-       NOT EXISTS (SELECT 1 FROM game_scores c WHERE c.espn_id IS NOT NULL AND 'espn_' || c.espn_id = g.game_id) cup_final,
+               AND EXISTS (SELECT 1 FROM {F('pbp_events', 'x')} WHERE x.game_id = n.game_id)) twin,
+       NOT EXISTS (SELECT 1 FROM {F('game_scores', 'c')} WHERE c.espn_id IS NOT NULL AND 'espn_' || c.espn_id = g.game_id) cup_final,
        coalesce(ev.unid_events, 0) unid_events, g.untracked_seconds, g.untracked_seconds / nullif(g.stint_seconds, 0) untracked_share,
        coalesce(ev.teamless_subs, 0) teamless_subs, coalesce(lx.excess, 0) lines_excess_players,
        (steps.ph = gs.final_home AND steps.pa = gs.final_away) IS NOT TRUE score_stale, coalesce(back.backward, false) score_backward,
@@ -245,7 +246,7 @@ SELECT g.game_id, g.nba_game_id, g.season, g.game_date, g.home_team, g.away_team
        g.nba_game_id IS NOT NULL AND sh.game_id IS NULL chart_missing,
        coalesce(sh.zero_dist_threes, 0) zero_dist_threes,
        coalesce(pm.off, false) pm_off
-FROM g JOIN lineup_stint_games gs USING (game_id)
+FROM g JOIN {F('lineup_stint_games', 'gs')} USING (game_id)
 LEFT JOIN ev USING (game_id) LEFT JOIN steps USING (game_id) LEFT JOIN back USING (game_id) LEFT JOIN lx USING (game_id)
 LEFT JOIN ls USING (game_id) LEFT JOIN sh ON sh.game_id = g.nba_game_id LEFT JOIN pm ON pm.game_id = g.nba_game_id
 ORDER BY g.game_id
@@ -304,16 +305,16 @@ def write_flags(conn, f):
     cur.execute("CREATE INDEX ON data_quality_game_flags (season)")
     cur.execute("CREATE INDEX ON data_quality_game_flags (nba_game_id)")
     conn.commit()
-    cur.execute("SELECT level, count(*) FROM data_quality_game_flags GROUP BY 1")
+    cur.execute(f"SELECT level, count(*) FROM {F('data_quality_game_flags')} GROUP BY 1")
     levels = dict(cur.fetchall())
-    cur.execute("SELECT c, count(*) FROM data_quality_game_flags, unnest(classes) c GROUP BY 1")
+    cur.execute(f"SELECT c, count(*) FROM {F('data_quality_game_flags')}, unnest(classes) c GROUP BY 1")
     per_class = dict(cur.fetchall())
     log(f"flags: {len(rows)} games; levels {levels}; classes {per_class}")
     return levels, per_class
 
 
 def flag_rows(conn):
-    df = pd.read_sql_query("SELECT game_id, nba_game_id, season, classes, level FROM data_quality_game_flags", conn)
+    df = pd.read_sql_query(f"SELECT game_id, nba_game_id, season, classes, level FROM {F('data_quality_game_flags')}", conn)
     by_espn = {r.game_id: {"classes": set(r.classes), "quality": r.level} for r in df.itertuples(index=False)}
     nba_to_espn = {r.nba_game_id: r.game_id for r in df.itertuples(index=False) if r.nba_game_id}
     season_of = {r.game_id: int(r.season) for r in df.itertuples(index=False)}
@@ -402,7 +403,7 @@ def impact_stage(conn, store, flags, season_of, meta):
     res = Q.RESULTS["impact"]
     rows_all, _, _ = R.load_rows(conn)
     bpm = R.load_bpm(conn)
-    dates = dict(pd.read_sql_query("SELECT game_id, game_date FROM lineup_stint_games", conn).itertuples(index=False))
+    dates = dict(pd.read_sql_query(f"SELECT game_id, game_date FROM {F('lineup_stint_games')}", conn).itertuples(index=False))
     ch = pd.read_sql("""SELECT model, parameter, value FROM paper_eval_choices
                         WHERE task = 'impact' AND model IN ('rapm_single', 'rapm_prior') AND parameter IN ('lambda', 'prior_scale')""", conn)
     cv = {(r.model, r.parameter): float(r.value) for r in ch.itertuples(index=False)}
@@ -445,7 +446,7 @@ def impact_stage(conn, store, flags, season_of, meta):
     t = time.time()
     full = predict(*fits(rows_all))
     log(f"impact: full-data fits in {time.time() - t:.1f}s")
-    pe = pd.read_sql("""SELECT model, season, unit_id, pred, actual FROM paper_eval_predictions
+    pe = pd.read_sql(f"""SELECT model, season, unit_id, pred, actual FROM {F('paper_eval_predictions')}
                         WHERE task = 'impact_next' AND model IN %s""", conn, params=(IMPACT_MODELS,))
     dev = {}
     for m in IMPACT_MODELS:
@@ -484,12 +485,12 @@ def impact_stage(conn, store, flags, season_of, meta):
 
 def possessions_stage(conn, store, flags, season_of, meta):
     res = Q.RESULTS["possessions"]
-    p = pd.read_sql_query("""SELECT p.game_id, p.start_type, p.pts, p.transition FROM possessions p
-                             JOIN possession_games g ON g.game_id = p.game_id WHERE g.game_ok""", conn)
-    s0, s1 = pd.read_sql_query("SELECT min(season), max(season) FROM possession_games WHERE game_ok", conn).iloc[0].tolist()
+    p = pd.read_sql_query(f"""SELECT p.game_id, p.start_type, p.pts, p.transition FROM {F('possessions', 'p')}
+                             JOIN {F('possession_games', 'g')} ON g.game_id = p.game_id WHERE g.game_ok""", conn)
+    s0, s1 = pd.read_sql_query(f"SELECT min(season), max(season) FROM {F('possession_games')} WHERE game_ok", conn).iloc[0].tolist()
     span = PE.span(range(int(s0), int(s1) + 1))
     # the league rows of possession_seasons are these sums
-    ps = pd.read_sql_query("SELECT start_type, poss, pts, timed_poss, trans_poss, trans_pts FROM possession_seasons WHERE team = 'ALL'", conn)
+    ps = pd.read_sql_query(f"SELECT start_type, poss, pts, timed_poss, trans_poss, trans_pts FROM {F('possession_seasons')} WHERE team = 'ALL'", conn)
     tot = ps.groupby("start_type")[["poss", "pts", "timed_poss", "trans_poss", "trans_pts"]].sum()
     mine = p.groupby("start_type").agg(poss=("pts", "size"), pts=("pts", "sum"))
     for st in ("steal", "made_fg"):
@@ -562,8 +563,8 @@ def possessions_stage(conn, store, flags, season_of, meta):
 
 def availability_stage(conn, store, flags, season_of, nba_to_espn, meta):
     res = Q.RESULTS["availability"]
-    E = pd.read_sql_query("""SELECT game_id, season, game_date, home_won, p_eval_base, p_eval_bpm, p_eval_rapm
-                             FROM pregame_availability_odds WHERE p_eval_base IS NOT NULL""", conn)
+    E = pd.read_sql_query(f"""SELECT game_id, season, game_date, home_won, p_eval_base, p_eval_bpm, p_eval_rapm
+                             FROM {F('pregame_availability_odds')} WHERE p_eval_base IS NOT NULL""", conn)
     E["espn"] = E.game_id.map(nba_to_espn)
     meta["availability_unmapped_games"] = int(E.espn.isna().sum())
     colof = {"prior_rest": "p_eval_base", "avail_bpm": "p_eval_bpm", "avail_rapm": "p_eval_rapm"}
