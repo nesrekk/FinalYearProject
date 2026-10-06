@@ -222,7 +222,8 @@ export function scan(doc, win, opts = {}) {
   // (WCAG 1.4.11). An element passes if any of its paints (stroke or fill) reads: a hollow dot is its stroke.
   // Skipped: layers under 40% opacity (faded on purpose: gridlines, bands, background population), paints
   // the colour of the background (knockouts, separators), heat-map cells (20+ same-size <rect>s: a colour
-  // scale read against its legend), shapes as big as the chart, anything without a visible box.
+  // scale read against its legend; also the inline-filled regions of an <svg data-colormap>), shapes as big
+  // as the chart, anything without a visible box.
   const markSeen = new Map();
   const cellSizes = new WeakMap();
   const isHeatCell = (el, svg) => {
@@ -242,6 +243,9 @@ export function scan(doc, win, opts = {}) {
     const r = el.getBoundingClientRect(), sr = svg.getBoundingClientRect();
     if (r.width * r.height > 0.5 * sr.width * sr.height) continue;
     if (isHeatCell(el, svg)) continue;
+    // A choropleth's region fills (an <svg data-colormap>, e.g. the profile's shot-zone map: values printed
+    // beside it) are a colour scale too; its lines and outlines are still checked.
+    if (svg.hasAttribute('data-colormap') && el.style.fill) continue;
     const cs = win.getComputedStyle(el);
     const op = opacityOf(el, win);
     const strokeW = parseFloat(cs.strokeWidth) || 0;

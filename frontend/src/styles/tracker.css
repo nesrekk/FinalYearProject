@@ -2,7 +2,7 @@
    RAPM page's tracker version (RatingTrackerBlock.jsx, Rapm.jsx). Paper/Ink
    tokens only; the chart's colours resolve through CSS so chart export keeps them. */
 .rt-chart { margin-bottom: var(--space-3); }
-.rt-band { fill: var(--brand); opacity: 0.16; stroke: none; }
+.rt-band { fill: var(--chart-brand); opacity: 0.16; stroke: none; }
 .rt-line { fill: none; stroke: var(--brand-text); stroke-width: 2; }
 .rt-bpm { fill: none; stroke: var(--text-3); stroke-width: 1.25; stroke-dasharray: 4 3; }
 .rt-whisker { stroke: var(--text-2); stroke-width: 1.25; }
@@ -10,7 +10,7 @@
 .rt-dot--short { opacity: 0.45; }
 .rt-legend span { position: relative; padding-left: 18px; }
 .rt-legend span::before { content: ''; position: absolute; left: 0; top: 50%; width: 12px; height: 0; border-top: 2px solid var(--text-3); transform: translateY(-50%); }
-.rt-legend--band::before { border-top: 8px solid var(--brand); opacity: 0.35; }
+.rt-legend--band::before { border-top: 8px solid var(--chart-brand); opacity: 0.35; }
 .rt-legend--dot::before { width: 8px; height: 8px; border: 1.75px solid var(--text); border-radius: 50%; background: var(--surface); }
 .rt-legend--bpm::before { border-top-style: dashed; }
 .rt-params { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-2) var(--space-3); margin: var(--space-2) 0 var(--space-3); }

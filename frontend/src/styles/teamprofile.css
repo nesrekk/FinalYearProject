@@ -29,8 +29,8 @@ a.team-link:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px
 
 /* Charts */
 .tp-mid { stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 4 3; }
-.tp-bar { fill: var(--text-3); opacity: 0.55; }
-.tp-bar--po { fill: var(--brand); opacity: 0.7; }
+.tp-bar { fill: var(--text-3); opacity: 0.8; } /* 0.55 / 0.7 were 2.3-2.6:1 (round 8.5 B) */
+.tp-bar--po { fill: var(--chart-brand); opacity: 0.9; }
 .tp-bar--on { opacity: 1; stroke: var(--text); stroke-width: 1.5; }
 .tp-hbar { cursor: pointer; }
 .tp-hbar:hover .tp-bar { opacity: 1; }

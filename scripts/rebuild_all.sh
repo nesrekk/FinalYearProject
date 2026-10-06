@@ -168,7 +168,7 @@ step derived -        calibrate_award_chances.py
 step derived -        train_win_model.py
 step derived -        cluster_players.py
 step derived -        cluster_playtypes.py
-step derived nbaapi   train_pair_synergy.py              # fetches two-man lineups live
+step derived nbaapi   train_pair_synergy.py              # fetches two-man lineups live; Pair Synergy retired from the app 2026-10-06, kept for pair_synergy_validation (in the paper manifest)
 step derived -        build_similarity_engine.py
 step derived -        build_league_adjusted_similarity.py
 step derived -        precompute_league_similarity.py

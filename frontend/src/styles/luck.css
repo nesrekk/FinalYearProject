@@ -57,7 +57,7 @@
 /* Scatter: expected vs. actual win% */
 .lk-diag { stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .lk-dot { fill: var(--text-3); opacity: 0.35; }
-.lk-dot--on { fill: var(--brand); opacity: 0.95; stroke: var(--surface); stroke-width: 1; }
+.lk-dot--on { fill: var(--chart-brand); opacity: 0.95; stroke: var(--surface); stroke-width: 1; }
 .lk-dot--team { stroke: var(--text); stroke-width: 2; }
 .lk-dot-label { fill: var(--text); font-size: 11px; font-weight: 700; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
 .lk-key { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: var(--space-2) 0 0; font-size: 0.82rem; color: var(--text-2); }

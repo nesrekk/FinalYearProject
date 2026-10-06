@@ -92,7 +92,7 @@
 }
 
 .cb-chart .cb-dot {
-  fill: var(--brand);
+  fill: var(--chart-brand);
   stroke: var(--line);
   stroke-width: 2;
 }
@@ -103,7 +103,7 @@
 }
 
 .cb-chart .cb-point--hi {
-  fill: var(--brand);
+  fill: var(--chart-brand);
   fill-opacity: 1;
   stroke: var(--line);
   stroke-width: 1.5;

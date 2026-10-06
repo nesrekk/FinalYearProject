@@ -280,22 +280,6 @@ def test_impact_with_without_star():
     assert data["with_player"]["win_pct"] is not None
 
 
-def test_impact_pair_synergy():
-    from impact_api import app
-    resp = TestClient(app).get(
-        "/players/pair-synergy",
-        params={"player_a": "Nikola Jokic", "player_b": "Jamal Murray"},
-    )
-    assert resp.status_code in (200, 503)  # 503 if the model hasn't been trained yet
-    if resp.status_code == 200:
-        data = resp.json()
-        assert "predicted_synergy" in data
-        assert "predicted_pair_net_rating" in data
-        # These two have shared real minutes on DEN every season on file.
-        assert data["observed"] is not None
-        assert data["observed"]["min"] > 0
-
-
 def test_impact_rest_study():
     from impact_api import app
     resp = TestClient(app).get("/schedule/rest-study")

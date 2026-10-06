@@ -5,19 +5,19 @@
 .an-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); }
 .an-svg { display: block; width: 100%; height: auto; overflow: visible; }
 .an-bg { fill: transparent; }
-.an-edge { fill: none; stroke: var(--brand); opacity: 0.55; stroke-linecap: round; pointer-events: none; }
-.an-edge--out { stroke: var(--brand); opacity: 0.95; }
+.an-edge { fill: none; stroke: var(--chart-brand); opacity: 0.85; stroke-linecap: round; pointer-events: none; }
+.an-edge--out { stroke: var(--chart-brand); opacity: 0.95; }
 .an-edge--in { stroke: var(--text-2); opacity: 0.85; }
 .an-edge--dim { stroke: var(--text-3); opacity: 0.1; }
 .an-arrow { stroke: none; }
-.an-arrow--out { fill: var(--brand); }
+.an-arrow--out { fill: var(--chart-brand); }
 .an-arrow--in { fill: var(--text-2); }
 .an-arrow--dim { fill: var(--text-3); }
 .an-hit { fill: none; stroke: transparent; cursor: pointer; }
 .an-node { cursor: pointer; outline: none; }
 .an-node-hit { fill: transparent; }
-.an-node-dot { fill: var(--surface); stroke: var(--brand); stroke-width: 2.5; }
-.an-node--lit .an-node-dot { fill: var(--brand); stroke: var(--text); }
+.an-node-dot { fill: var(--surface); stroke: var(--chart-brand); stroke-width: 2.5; }
+.an-node--lit .an-node-dot { fill: var(--chart-brand); stroke: var(--text); }
 .an-node:focus-visible .an-node-dot { stroke: var(--text); stroke-width: 3.5; }
 .an-node--dim { opacity: 0.35; }
 .an-label { fill: var(--text); font-size: 12px; font-weight: 600; }
@@ -35,7 +35,7 @@
   background: var(--brand);
 }
 .an-legend .an-legend--in::before { background: var(--text-2); }
-.an-legend .an-legend--size::before { width: 9px; height: 9px; vertical-align: 0; border-radius: 50%; background: transparent; border: 2px solid var(--brand); }
+.an-legend .an-legend--size::before { width: 9px; height: 9px; vertical-align: 0; border-radius: 50%; background: transparent; border: 2px solid var(--chart-brand); }
 
 .an-controls { align-items: flex-end; }
 .an-player {

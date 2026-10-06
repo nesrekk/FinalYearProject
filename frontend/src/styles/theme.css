@@ -922,7 +922,7 @@ select,
 .rx-grid { stroke: var(--hairline); stroke-width: 1; }
 .rx-tick { fill: var(--text-2); font-family: var(--font-mono); font-size: 11px; }
 .rx-axis { fill: var(--text); font-size: 12px; font-weight: 700; }
-.rx-points circle { fill: var(--brand); fill-opacity: 0.35; }
+.rx-points circle { fill: var(--chart-brand); fill-opacity: 0.35; }
 .rx-fit { stroke: var(--text); stroke-width: 2.5; }
 .rx-hover { fill: none; stroke: var(--text); stroke-width: 2; }
 .rx-tooltip {
@@ -978,16 +978,17 @@ select,
 .bd-chip input { accent-color: var(--brand); margin: 0; }
 .bd-chip--on { color: var(--text); border-color: var(--brand); font-weight: 600; }
 
-/* Shot mix over a career (common/ShotMixHistory.jsx). Zone colours are the
-   first five slots of the dataviz reference palette, validated on the Paper
-   and Ink surfaces (adjacent CVD ΔE ≥ 8.4); three light steps sit under 3:1
-   on Paper, so the legend, hover panel and table carry the values. */
+/* Shot mix over a career (common/ShotMixHistory.jsx). Ink: the first five
+   slots of the dataviz reference palette (adjacent CVD ΔE ≥ 8.4). Paper: the
+   series tokens in the same hue order, since three of the palette's light
+   steps were 2.0-2.7:1 there (R8-071); these are 3.8-6.3:1 on every Paper
+   background. */
 .sm-root {
-  --zone-1: #2a78d6;
-  --zone-2: #eb6834;
-  --zone-3: #1baf7a;
-  --zone-4: #eda100;
-  --zone-5: #e87ba4;
+  --zone-1: var(--series-1);
+  --zone-2: var(--series-0);
+  --zone-3: var(--series-2);
+  --zone-4: var(--series-4);
+  --zone-5: var(--series-6);
 }
 :root[data-theme='dark'] .sm-root {
   --zone-1: #3987e5;
@@ -1262,7 +1263,7 @@ select,
 .era-line { fill: none; stroke: var(--text); stroke-width: 2; }
 .era-line--est { stroke: var(--text-2); stroke-dasharray: 5 4; }
 .era-mark circle { stroke: var(--surface); stroke-width: 2; }
-.era-mark--source circle { fill: var(--brand); }
+.era-mark--source circle { fill: var(--chart-brand); }
 .era-mark--target circle { fill: var(--text); }
 .era-mark-label { fill: var(--text); font-size: 12px; font-weight: 700; }
 .era-chart-key { margin: var(--space-2) 0 var(--space-4); color: var(--text-2); font-size: 0.8rem; }

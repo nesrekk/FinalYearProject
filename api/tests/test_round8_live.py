@@ -4,8 +4,8 @@ test_round8_live.py
 Round 8 step 4 (docs/qa/ROUND8_ISSUES.md): the live pages no longer depend on stats.nba.com.
 Live Scores, the box score and the standings read ESPN's public API with a 3 s timeout, stored
 results come first, and every route says which season and source it shows. With/Without a Star
-reads stored data from 2020-21, Pair Synergy's observed pair comes from pair_seasons, the live
-player search is gone, and a page view can no longer write player_shots.
+reads stored data from 2020-21 (Pair Synergy, whose observed pair came from pair_seasons, was retired
+in round 8.5 step B), the live player search is gone, and a page view can no longer write player_shots.
 
 Most checks run against the local database with the outside call replaced (monkeypatched), so
 they pass offline. The few that read ESPN for real are skipped when ESPN isn't reachable within
@@ -102,7 +102,6 @@ def test_dead_fallbacks_and_live_search_are_gone():
     key nobody set; the live player search and profile asked stats.nba.com for names the rest of the
     app couldn't resolve anyway (R8-017)."""
     import impact_core
-    import routers.pair_synergy
     import routers.players_search_profile
     import routers.with_without_star
     code = [line for line in inspect.getsource(impact_core).splitlines() if not line.strip().startswith("#")]
@@ -110,8 +109,6 @@ def test_dead_fallbacks_and_live_search_are_gone():
     assert "liveData" not in src and "balldontlie" not in src.lower()
     assert "scoreboardv2" not in src and "boxscoretraditionalv2" not in src
     assert "nba_api" not in inspect.getsource(routers.players_search_profile)
-    assert "nba_api" not in inspect.getsource(routers.pair_synergy)
-    assert "_fetch_lineup_stats_season" not in inspect.getsource(routers.pair_synergy)
 
 
 # ─── /games/by-date and /games/boxscore ───────────────────────────────────────
@@ -347,26 +344,6 @@ def test_with_without_before_2020_21_says_when_the_source_is_unreachable(client,
     monkeypatch.setattr(ww, "_fetch_team_game_log", down)
     r = client.get("/teams/with-without/GSW/2016", params={"player_name": "Stephen Curry"})
     assert r.status_code == 503 and "2020-21" in r.json()["detail"] and "3 s" in r.json()["detail"]
-
-
-# ─── Pair Synergy ─────────────────────────────────────────────────────────────
-
-@needs_db
-def test_pair_synergy_observed_comes_from_pair_seasons(client, cur):
-    body = client.get("/players/pair-synergy", params={"player_a": "Nikola Jokic", "player_b": "Jamal Murray"}).json()
-    season = body["season"]
-    cur.execute(
-        """SELECT team_abbreviation, minutes, net_rating FROM pair_seasons
-           WHERE season = %s AND player_a = 203999 AND player_b = 1627750 ORDER BY minutes DESC LIMIT 1;""",
-        (season,),
-    )
-    team, minutes, net = cur.fetchone()
-    assert body["observed_source"] == "pair_seasons"
-    assert body["observed"]["team_abbreviation"] == team and body["observed"]["min"] == round(float(minutes), 1)
-    assert body["observed"]["net_rating"] == round(float(net), 2)
-    assert "pair_seasons" in body["_source"]["tables"]
-    earlier = client.get("/players/pair-synergy", params={"player_a": "Nikola Jokic", "player_b": "Jamal Murray", "season": 2020}).json()
-    assert earlier["observed"] is None and earlier["observed_source"] == "none" and "2020-21" in earlier["methodology"]
 
 
 # ─── The routes that still need stats.nba.com say so ──────────────────────────

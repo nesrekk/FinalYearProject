@@ -1,3 +1,5 @@
+from typing import Optional
+
 from source_badge import make_source
 
 from fastapi import APIRouter, HTTPException
@@ -89,8 +91,14 @@ def get_referee_tendencies(min_games: int = REFEREE_MIN_GAMES_DEFAULT, sort: str
 
 
 @router.get("/referees/crew-tendencies")
-def get_referee_crew_tendencies(min_games: int = REFEREE_CREW_MIN_GAMES_DEFAULT, sort: str = "n_games"):
+def get_referee_crew_tendencies(min_games: int = REFEREE_CREW_MIN_GAMES_DEFAULT, sort: str = "n_games",
+                                limit: Optional[int] = None, offset: int = 0):
+    # limit/offset page through the crews (R8-012: all 5,373 at once was 2.8 MB and a 490k-character
+    # page; the page asks for 100 at a time). No limit = every matching crew, as before.
     min_games = max(1, min_games)
+    offset = max(0, offset)
+    if limit is not None:
+        limit = min(max(1, limit), 1000)
     sort_columns = {
         "n_games": "n_games DESC",
         "fouls_diff_pct": "ABS(fouls_diff_pct) DESC",
@@ -98,7 +106,8 @@ def get_referee_crew_tendencies(min_games: int = REFEREE_CREW_MIN_GAMES_DEFAULT,
         "pace_diff_pct": "ABS(pace_diff_pct) DESC",
         "name": "official_names ASC",
     }
-    order_clause = sort_columns.get(sort, sort_columns["n_games"])
+    # crew_key breaks ties, so pages never repeat or skip a crew.
+    order_clause = sort_columns.get(sort, sort_columns["n_games"]) + ", crew_key"
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -116,10 +125,13 @@ def get_referee_crew_tendencies(min_games: int = REFEREE_CREW_MIN_GAMES_DEFAULT,
                        avg_pace, league_avg_pace, pace_diff_pct, small_n_warning
                 FROM referee_crew_tendencies
                 WHERE n_games >= %s
-                ORDER BY {order_clause};""",
-            (min_games,),
+                ORDER BY {order_clause}
+                LIMIT %s OFFSET %s;""",
+            (min_games, limit, offset),
         )
         rows = cursor.fetchall()
+        cursor.execute("SELECT COUNT(*) FROM referee_crew_tendencies WHERE n_games >= %s;", (min_games,))
+        total_matching = cursor.fetchone()[0]
 
         cursor.execute(
             "SELECT COUNT(*), MIN(season_min), MAX(season_max), SUM(CASE WHEN n_games > 1 THEN 1 ELSE 0 END) "
@@ -144,6 +156,9 @@ def get_referee_crew_tendencies(min_games: int = REFEREE_CREW_MIN_GAMES_DEFAULT,
     return {
         "min_games": min_games,
         "sort": sort,
+        "limit": limit,
+        "offset": offset,
+        "total_matching": total_matching,
         "crews": crews,
         "season_span": {"min": span_min, "max": span_max},
         "total_crews_tracked": total_crews,

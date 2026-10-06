@@ -275,15 +275,6 @@ export async function fetchCompareProfile(playerName, season, playerId) {
     return response.data;
 }
 
-export async function fetchPairSynergy(playerA, playerB, season, idA, idB) {
-    const response = await axios.get(
-        `${IMPACT_BASE}/players/pair-synergy`,
-        { params: { player_a: playerA, player_b: playerB, ...(season ? { season } : {}),
-            ...(idA ? { player_a_id: idA } : {}), ...(idB ? { player_b_id: idB } : {}) } }
-    );
-    return response.data;
-}
-
 // ─── Games: Guess the Player ───────────────────────────────────
 export async function fetchGuessDaily(season) {
     const response = await axios.get(
@@ -775,10 +766,10 @@ export async function fetchRefereeTendencies(minGames = 10, sort = 'n_games') {
     return response.data;
 }
 
-export async function fetchRefereeCrewTendencies(minGames = 1, sort = 'n_games') {
+export async function fetchRefereeCrewTendencies(minGames = 1, sort = 'n_games', limit, offset = 0) {
     const response = await axios.get(
         `${IMPACT_BASE}/referees/crew-tendencies`,
-        { params: { min_games: minGames, sort } }
+        { params: { min_games: minGames, sort, ...(limit ? { limit, offset } : {}) } }
     );
     return response.data;
 }

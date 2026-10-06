@@ -125,7 +125,7 @@ function prep({ main, ctx, members, entityKey }) {
     };
     const colorOf = (row) => {
         const m = memberOf.get(row[entityKey]);
-        return m ? seriesVar(m.color) : 'var(--brand)';
+        return m ? seriesVar(m.color) : 'var(--chart-brand)';
     };
     const noisy = (row, keys) => keys.some((k) => k && row.reliability?.[k]?.noisy);
     return { memberOf, colOf: (k) => colOf(main, k) || colOf(ctx, k), nameOf, colorOf, noisy };
@@ -173,7 +173,7 @@ function scatter(o) {
     const facetKey = (row) => (enc.facet === 'member' ? p.nameOf(row) : enc.facet ? categoryText(enc.facet, row[enc.facet]) : null);
     const point = (row, grey) => ({
         x: row[enc.x], y: row[enc.y], s: cs ? row[enc.size] : null, c: byStat ? row[enc.color] : null,
-        fill: grey ? CONTEXT : enc.color === 'none' ? 'var(--brand)' : p.colorOf(row),
+        fill: grey ? CONTEXT : enc.color === 'none' ? 'var(--chart-brand)' : p.colorOf(row),
         noisy: p.noisy(row, keys), f: facetKey(row), mine: grey && p.memberOf.has(row[o.entityKey]),
         xlo: row.ci?.[enc.x]?.[0], xhi: row.ci?.[enc.x]?.[1], ylo: row.ci?.[enc.y]?.[0], yhi: row.ci?.[enc.y]?.[1],
         t: [grey ? null : p.nameOf(row) || null, rowSub(row) || null,
@@ -382,7 +382,7 @@ function agingChart(o) {
     const seasons = [];
     const paths = [];
     for (const p of a.players) {
-        const color = colorOf.get(p.player_id) || 'var(--brand)';
+        const color = colorOf.get(p.player_id) || 'var(--chart-brand)';
         for (const x of p.seasons) {
             if (x.age == null || !isNum(x.vs_league)) continue;
             seasons.push({ x: x.age, y: x.vs_league, id: p.player_id, color, q: x.qualified,
@@ -411,7 +411,7 @@ function agingChart(o) {
         color: { type: 'identity' },
         marks,
     };
-    const legend = a.players.map((p) => ({ label: p.player_name, color: colorOf.get(p.player_id) || 'var(--brand)', shape: 'line' }));
+    const legend = a.players.map((p) => ({ label: p.player_name, color: colorOf.get(p.player_id) || 'var(--chart-brand)', shape: 'line' }));
     legend.push({ label: 'typical player (curve), 95% range', color: CONTEXT, shape: 'band' });
     legend.push({ label: 'dashed: the curve moved to his level', color: 'currentColor', shape: 'line', dash: '5 3' });
     if (seasons.some((d) => !d.q)) legend.push({ label: `not on the curve (under ${sm.min_minutes} minutes${sm.min_attempts ? ` or ${sm.min_attempts} attempts` : ''})`, color: 'currentColor', shape: 'hollow' });
@@ -481,7 +481,7 @@ function histogram(o) {
     const rows = (main?.rows || []).filter((r) => isNum(r[enc.x]));
     const pts = rows.map((r) => ({ x: r[enc.x], color: p.colorOf(r), noisy: p.noisy(r, [enc.x]),
         t: [p.nameOf(r), rowSub(r), `${cx.label}: ${formatValue(cx.format, r[enc.x])}`, nLine(r, enc.x, cx)].filter(Boolean).join('\n') }));
-    const greyFill = o.members.length ? CONTEXT : 'var(--brand)';
+    const greyFill = o.members.length ? CONTEXT : 'var(--chart-brand)';
     if (bins.length) {
         marks.push(Plot.rectY(bins, { x1: 'x1', x2: 'x2', y: 'y', fill: greyFill, fillOpacity: o.members.length ? 0.7 : 0.85, insetLeft: 0.5, insetRight: 0.5 }));
         if (pts.length) {

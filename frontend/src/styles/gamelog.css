@@ -10,7 +10,7 @@
 .gl-gap { display: block; margin-top: var(--space-2); }
 .gl-chart { margin: var(--space-2) 0 var(--space-4); }
 .gl-dots circle { fill: var(--text-3); fill-opacity: 0.8; } /* 0.8: >= 3.3:1 on every Paper/Ink surface (R8-071; 0.55 was 2.2-2.6:1) */
-.gl-roll { fill: none; stroke: var(--brand); stroke-width: 2.5; stroke-linejoin: round; }
+.gl-roll { fill: none; stroke: var(--chart-brand); stroke-width: 2.5; stroke-linejoin: round; }
 .gl-avg { stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 4 4; }
 .gl-opp { display: inline-flex; align-items: center; gap: 6px; }
 .gl-table td { font-variant-numeric: tabular-nums; }

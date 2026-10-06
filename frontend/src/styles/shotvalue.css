@@ -29,7 +29,7 @@
 .sv-grid { stroke: var(--hairline); stroke-width: 1; }
 .sv-zero { stroke: var(--text-2); stroke-width: 1.25; }
 .sv-tick { fill: var(--text-2); font-family: var(--font-mono); font-size: 10px; }
-.sv-band { fill: var(--brand); opacity: 0.16; stroke: none; }
+.sv-band { fill: var(--chart-brand); opacity: 0.16; stroke: none; }
 .sv-line { fill: none; stroke: var(--brand-text); stroke-width: 2; }
 .sv-dot { fill: var(--surface); stroke: var(--brand-text); stroke-width: 1.75; }
 .sv-dot-post { fill: var(--text-2); stroke: none; }

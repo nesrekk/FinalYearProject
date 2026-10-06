@@ -40,24 +40,18 @@ const HOOP = { cx: toSvgX(0), cy: toSvgY(0), r: 7.5 * COURT_SCALE };
 // Cold (well below league avg) -> neutral -> hot (well above league avg),
 // centered on the ZONE'S OWN league-average so "red" always means "better
 // than league at this specific zone," not an absolute FG% threshold that
-// would make every zone near the rim look artificially hot.
+// would make every zone near the rim look artificially hot. Tints are the
+// theme's series tokens mixed into the court (R8-071: fixed rgba washes were
+// 1.3-1.5:1 against the court in both themes); a zone 15+ points off the
+// league reaches the full token, >= 3:1 on the court in Paper and Ink.
+// data-colormap tells frontend/qa/page_scan.js the zone fills are a colour
+// scale (values printed in the table beside it), not marks to read alone.
 function heatColor(playerPct, leaguePct) {
-    if (playerPct == null || leaguePct == null) return 'rgba(148,163,184,0.18)';
+    if (playerPct == null || leaguePct == null) return 'color-mix(in srgb, var(--text-3) 18%, var(--surface-2))';
     const diff = playerPct - leaguePct; // -1..+1 range in practice much smaller
     const t = Math.max(-1, Math.min(1, diff / 0.15)); // +-15pp saturates the scale
-    if (t >= 0) {
-        // neutral slate -> hot amber/red
-        const r = Math.round(100 + t * 155);
-        const g = Math.round(116 - t * 60);
-        const b = Math.round(139 - t * 100);
-        return `rgba(${r},${g},${b},0.55)`;
-    }
-    // neutral slate -> cold blue
-    const at = -t;
-    const r = Math.round(100 - at * 70);
-    const g = Math.round(116 - at * 20);
-    const b = Math.round(139 + at * 100);
-    return `rgba(${r},${g},${b},0.55)`;
+    const weight = Math.round(15 + Math.abs(t) * 85);
+    return `color-mix(in srgb, var(${t >= 0 ? '--series-8' : '--series-1'}) ${weight}%, var(--surface-2))`;
 }
 
 export default function ZoneCourtMap({ zones, leagueZones, size = 280, playerName }) {
@@ -70,15 +64,15 @@ export default function ZoneCourtMap({ zones, leagueZones, size = 280, playerNam
     return (
         <div>
             <ChartExport svgRef={svgRef} name={playerName ? `${playerName} shot zones` : 'shot zones'} />
-            <svg ref={svgRef} viewBox="0 0 500 460" style={{ width: '100%', maxWidth: size, height: 'auto', display: 'block', color: 'var(--text)' }} role="img" aria-label="Half-court shot chart colored by zone, showing this player's field goal percentage in each court zone relative to league average — red zones are hotter than league average, blue zones are colder">
+            <svg ref={svgRef} data-colormap="" viewBox="0 0 500 460" style={{ width: '100%', maxWidth: size, height: 'auto', display: 'block', color: 'var(--text)' }} role="img" aria-label="Half-court shot chart colored by zone, showing this player's field goal percentage in each court zone relative to league average — red zones are hotter than league average, blue zones are colder">
             <rect x={FULL_RECT.x} y={FULL_RECT.y} width={FULL_RECT.width} height={FULL_RECT.height} fill="var(--surface-2)" rx="6" />
             {/* Above the Break 3 wash covers the whole court; everything below layers on top */}
-            <rect x={FULL_RECT.x} y={FULL_RECT.y} width={FULL_RECT.width} height={FULL_RECT.height} fill={colorFor('Above the Break 3')} />
-            <path d={INSIDE_ARC_PATH} fill={colorFor('Mid-Range')} />
-            <rect {...PAINT_RECT} fill={colorFor('In The Paint (Non-RA)')} />
-            <path d={RESTRICTED_AREA_PATH} fill={colorFor('Restricted Area')} />
-            <rect {...CORNER_LEFT} fill={colorFor('Corner 3')} />
-            <rect {...CORNER_RIGHT} fill={colorFor('Corner 3')} />
+            <rect x={FULL_RECT.x} y={FULL_RECT.y} width={FULL_RECT.width} height={FULL_RECT.height} style={{ fill: colorFor('Above the Break 3') }} />
+            <path d={INSIDE_ARC_PATH} style={{ fill: colorFor('Mid-Range') }} />
+            <rect {...PAINT_RECT} style={{ fill: colorFor('In The Paint (Non-RA)') }} />
+            <path d={RESTRICTED_AREA_PATH} style={{ fill: colorFor('Restricted Area') }} />
+            <rect {...CORNER_LEFT} style={{ fill: colorFor('Corner 3') }} />
+            <rect {...CORNER_RIGHT} style={{ fill: colorFor('Corner 3') }} />
 
             {/* Court lines on top for legibility */}
             <path d={THREE_ARC} fill="none" stroke="currentColor" strokeOpacity="0.55" strokeWidth="1.5" />
@@ -86,7 +80,7 @@ export default function ZoneCourtMap({ zones, leagueZones, size = 280, playerNam
             <line x1={CORNER_RIGHT.x} y1={toSvgY(-47.5)} x2={CORNER_RIGHT.x} y2={toSvgY(92.5)} stroke="currentColor" strokeOpacity="0.55" strokeWidth="1.5" />
             <rect x={PAINT_RECT.x} y={PAINT_RECT.y} width={PAINT_RECT.width} height={PAINT_RECT.height} fill="none" stroke="currentColor" strokeOpacity="0.55" strokeWidth="1.5" />
             <line x1={BACKBOARD.x1} y1={BACKBOARD.y} x2={BACKBOARD.x2} y2={BACKBOARD.y} stroke="currentColor" strokeOpacity="0.85" strokeWidth="2" />
-            <circle cx={HOOP.cx} cy={HOOP.cy} r={HOOP.r} fill="none" stroke="var(--brand)" strokeWidth="2" />
+            <circle cx={HOOP.cx} cy={HOOP.cy} r={HOOP.r} fill="none" stroke="currentColor" strokeOpacity="0.85" strokeWidth="2" />
         </svg>
         </div>
     );

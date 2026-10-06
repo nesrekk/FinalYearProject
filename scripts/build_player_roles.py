@@ -2,7 +2,7 @@
 build_player_roles.py
 ======================
 Player Roles: a finer set of player archetypes than cluster_players.py's
-six (which Pair Synergy's trained model and Trivia depend on, so they stay
+six (which Trivia depends on, as Pair Synergy did until 2026-10-06, so they stay
 as they are and are shown here as each role's "family").
 
 Why finer groups needed different inputs: the six archetypes were clustered

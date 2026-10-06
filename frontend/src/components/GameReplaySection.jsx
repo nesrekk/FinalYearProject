@@ -295,9 +295,9 @@ export default function GameReplaySection() {
                         {moment && (
                             <g style={{ pointerEvents: 'none' }}>
                                 <line x1={chartX(moment.seconds_elapsed)} y1={PAD_T} x2={chartX(moment.seconds_elapsed)} y2={CHART_H - PAD_B}
-                                    stroke="var(--brand)" strokeWidth="1.5" strokeDasharray="3 3" />
+                                    stroke="var(--chart-brand)" strokeWidth="1.5" strokeDasharray="3 3" />
                                 <circle cx={chartX(moment.seconds_elapsed)} cy={chartY(moment.home_wp)} r={8}
-                                    fill="none" stroke="var(--brand)" strokeWidth="2.5" />
+                                    fill="none" stroke="var(--chart-brand)" strokeWidth="2.5" />
                             </g>
                         )}
 

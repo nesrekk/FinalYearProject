@@ -6,6 +6,7 @@ import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
 import SegmentedControl from './ui/SegmentedControl';
 import { plain, shownSign, signed } from '../utils/format';
+import '../styles/gamelog.css';
 
 const MODE_OPTIONS = [
     { value: 'official', label: 'By Official' },
@@ -21,6 +22,9 @@ const SORT_OPTIONS = [
 ];
 
 const CREW_MIN_GAMES_OPTIONS = [1, 2, 3, 4];
+// Crews come 100 at a time (R8-012: all 5,373 crews at once was a 2.8 MB answer and a page too
+// long to use). The view opens on crews that worked 2+ games together (514); 1 shows all of them.
+const CREW_PAGE = 100;
 
 function DiffCell({ diffPct, ciLow, ciHigh }) {
     if (diffPct == null) return <td>—</td>;
@@ -43,7 +47,8 @@ export default function RefereeTendenciesSection() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
     const [minGames, setMinGames] = useState(10);
-    const [crewMinGames, setCrewMinGames] = useState(1);
+    const [crewMinGames, setCrewMinGames] = useState(2);
+    const [crewOffset, setCrewOffset] = useState(0);
     const [sort, setSort] = useState('n_games');
 
     useEffect(() => {
@@ -52,7 +57,7 @@ export default function RefereeTendenciesSection() {
             if (!active) return;
             setLoading(true);
             const fetcher = mode === 'crew'
-                ? fetchRefereeCrewTendencies(crewMinGames, sort)
+                ? fetchRefereeCrewTendencies(crewMinGames, sort, CREW_PAGE, crewOffset)
                 : fetchRefereeTendencies(minGames, sort);
             fetcher
                 .then((d) => { if (active) { setData(d); setError(''); } })
@@ -60,7 +65,7 @@ export default function RefereeTendenciesSection() {
                 .finally(() => { if (active) setLoading(false); });
         });
         return () => { active = false; };
-    }, [mode, minGames, crewMinGames, sort]);
+    }, [mode, minGames, crewMinGames, sort, crewOffset]);
 
     const rows = mode === 'crew' ? data?.crews : data?.officials;
 
@@ -131,7 +136,7 @@ export default function RefereeTendenciesSection() {
                     ) : (
                         <label className="page-subtitle">
                             Min. games together:{' '}
-                            <select value={crewMinGames} onChange={(e) => setCrewMinGames(Number(e.target.value))}>
+                            <select value={crewMinGames} onChange={(e) => { setCrewMinGames(Number(e.target.value)); setCrewOffset(0); }}>
                                 {CREW_MIN_GAMES_OPTIONS.map((n) => (
                                     <option key={n} value={n}>{n}</option>
                                 ))}
@@ -140,7 +145,7 @@ export default function RefereeTendenciesSection() {
                     )}
                     <label className="page-subtitle">
                         Sort by:{' '}
-                        <select value={sort} onChange={(e) => setSort(e.target.value)}>
+                        <select value={sort} onChange={(e) => { setSort(e.target.value); setCrewOffset(0); }}>
                             {SORT_OPTIONS.map((o) => (
                                 <option key={o.value} value={o.value}>{o.label}</option>
                             ))}
@@ -198,6 +203,24 @@ export default function RefereeTendenciesSection() {
                                 </p>
                             )}
                         </div>
+                        {mode === 'crew' && data.total_matching > 0 && (
+                            <div className="gf-pager">
+                                {data.total_matching > CREW_PAGE && (
+                                    <button type="button" className="action-btn" disabled={crewOffset === 0}
+                                        onClick={() => setCrewOffset(Math.max(0, crewOffset - CREW_PAGE))}>← Previous</button>
+                                )}
+                                <span aria-live="polite">
+                                    {(data.offset + 1).toLocaleString()}–{(data.offset + (rows?.length ?? 0)).toLocaleString()} of {data.total_matching.toLocaleString()} crews
+                                </span>
+                                {data.total_matching > CREW_PAGE && (
+                                    <>
+                                        <button type="button" className="action-btn" disabled={crewOffset + CREW_PAGE >= data.total_matching}
+                                            onClick={() => setCrewOffset(crewOffset + CREW_PAGE)}>Next →</button>
+                                        <span>(Export saves the rows on this page.)</span>
+                                    </>
+                                )}
+                            </div>
+                        )}
                     </>
                 )}
             </div>

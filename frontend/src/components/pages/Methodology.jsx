@@ -226,6 +226,7 @@ export default function Methodology({ onNavigate }) {
             <section id="meth-issues" className="meth-section">
                 <h2 className="section-heading">Open issues</h2>
                 <p className="page-subtitle">Problems found and not fixed yet. Each is removed from this list in the change that fixes it.</p>
+                {OPEN_ISSUES.length === 0 && <p className="page-subtitle">None right now.</p>}
                 <div className="meth-grid">
                     {OPEN_ISSUES.map((o) => (
                         <article key={o.title} className="meth-card meth-issue">

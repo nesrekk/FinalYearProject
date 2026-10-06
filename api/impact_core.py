@@ -161,21 +161,6 @@ def predict_win_pct(net_rating, ts_pct):
         return None
     X = WIN_SCALER.transform([[net_rating, ts_pct]])
     return float(WIN_MODEL.predict(X)[0])
-_PAIR_SYNERGY_MODEL_CANDIDATES = [
-    os.path.join(_SCRIPT_DIR, "pair_synergy_model.pkl"),
-    os.path.join(_SCRIPT_DIR, "..", "scripts", "pair_synergy_model.pkl"),
-]
-_PAIR_SYNERGY_SCALER_CANDIDATES = [
-    os.path.join(_SCRIPT_DIR, "pair_synergy_scaler.pkl"),
-    os.path.join(_SCRIPT_DIR, "..", "scripts", "pair_synergy_scaler.pkl"),
-]
-PAIR_SYNERGY_MODEL = _load_first_existing(_PAIR_SYNERGY_MODEL_CANDIDATES)
-PAIR_SYNERGY_SCALER = _load_first_existing(_PAIR_SYNERGY_SCALER_CANDIDATES)
-PAIR_SYNERGY_ARCHETYPES = [
-    "3-and-D Wing", "Bench Role Player", "Elite Two-Way Big",
-    "Playmaker", "Primary Scorer", "Rim Protector",
-]
-PAIR_SYNERGY_NUMERIC_FEATURES = ["usg_pct", "tpar", "ast_pct", "reb_pct", "dbpm"]
 _SCRIPTS_DIR = os.path.join(_SCRIPT_DIR, "..", "scripts")
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
@@ -677,48 +662,6 @@ def _downsample_points(points, target: int = 100):
     if indices[-1] != len(points) - 1:
         indices.append(len(points) - 1)
     return [points[i] for i in indices]
-def _player_synergy_features(cursor, player_id: int, season: int):
-    # dbpm_repro, not dbpm: the trained Pair Synergy model was fitted on this
-    # project's own BPM reproduction (build_bpm_vorp.py); the main dbpm column
-    # now holds Basketball-Reference's published values, on a different scale.
-    cursor.execute(
-        """SELECT p.net_rating, p.min, p.gp, p.usg_pct, p.fg3a, p.fga,
-                  p.ast_pct, p.reb_pct, p.dbpm_repro, c.archetype
-           FROM player_season_stats p
-           LEFT JOIN player_clusters c ON c.player_id = p.player_id AND c.season = p.season
-           WHERE p.player_id = %s AND p.season = %s;""",
-        (player_id, season),
-    )
-    row = cursor.fetchone()
-    if not row:
-        return None
-    net, mn, gp, usg, fg3a, fga, ast, reb, dbpm, archetype = row
-    if archetype is None or net is None or mn is None or not gp:
-        return None
-    tpar = (fg3a / fga) if fga else None
-    raw = {"usg_pct": usg, "tpar": tpar, "ast_pct": ast, "reb_pct": reb, "dbpm": dbpm}
-    if any(v is None for v in raw.values()):
-        return None
-
-    cursor.execute(
-        """SELECT p.usg_pct, (p.fg3a::float / NULLIF(p.fga, 0)) AS tpar, p.ast_pct, p.reb_pct, p.dbpm_repro
-           FROM player_season_stats p WHERE p.season = %s;""",
-        (season,),
-    )
-    pool = cursor.fetchall()
-    z = []
-    for i, key in enumerate(PAIR_SYNERGY_NUMERIC_FEATURES):
-        vals = [r[i] for r in pool if r[i] is not None]
-        if not vals:
-            return None
-        m = sum(vals) / len(vals)
-        sd = (sum((v - m) ** 2 for v in vals) / len(vals)) ** 0.5 or 1.0
-        z.append((raw[key] - m) / sd)
-
-    onehot = [1.0 if archetype == a else 0.0 for a in PAIR_SYNERGY_ARCHETYPES]
-    return {
-        "vec": z + onehot, "net_rating": net, "min": mn * gp, "archetype": archetype,
-    }
 def _pub_time_matches_target(
     date_obj: Optional[datetime], target_date: date, should_filter: bool
 ) -> bool:

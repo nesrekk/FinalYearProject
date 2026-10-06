@@ -21,10 +21,10 @@
   margin-right: 6px;
   vertical-align: -1px;
 }
-.pc-legend .pc-legend--dot::before { width: 9px; height: 9px; border-radius: 50%; background: var(--brand); }
+.pc-legend .pc-legend--dot::before { width: 9px; height: 9px; border-radius: 50%; background: var(--chart-brand); }
 .pc-legend .pc-legend--tick::before { width: 2px; height: 12px; background: var(--text); vertical-align: -2px; }
 .pc-legend .pc-legend--line::before { width: 0; height: 12px; border-left: 2px dashed var(--text-2); vertical-align: -2px; }
-.pc-legend .pc-legend--band::before { width: 14px; height: 10px; background: color-mix(in srgb, var(--brand) 16%, transparent); }
+.pc-legend .pc-legend--band::before { width: 14px; height: 10px; background: color-mix(in srgb, var(--chart-brand) 16%, transparent); }
 
 .pc-row-bg { fill: transparent; }
 .pc-row:nth-child(even) .pc-row-bg { fill: color-mix(in srgb, var(--text) 2.5%, transparent); }
@@ -36,14 +36,14 @@
 .pc-ci { stroke: var(--text-3); stroke-width: 2; stroke-linecap: round; }
 .pc-reftick { stroke: var(--text); stroke-width: 2; }
 .pc-refline { stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 5 4; }
-.pc-dot { fill: var(--brand); stroke: var(--surface); stroke-width: 1.2; }
+.pc-dot { fill: var(--chart-brand); stroke: var(--surface); stroke-width: 1.2; }
 .pc-dot--good { fill: var(--positive); }
 .pc-dot--bad { fill: var(--negative); }
 .pc-row--hl .pc-dot { stroke: var(--text); stroke-width: 1.6; }
 
 .pc-band { fill: color-mix(in srgb, var(--brand) 12%, transparent); }
-.pc-curve { fill: none; stroke: var(--brand); stroke-width: 2.2; }
-.pc-curve-dot { fill: var(--brand); stroke: var(--surface); stroke-width: 1; }
+.pc-curve { fill: none; stroke: var(--chart-brand); stroke-width: 2.2; }
+.pc-curve-dot { fill: var(--chart-brand); stroke: var(--surface); stroke-width: 1; }
 .pc-curve-dot--hot { stroke: var(--text); stroke-width: 2; }
 
 /* ── Page ── */

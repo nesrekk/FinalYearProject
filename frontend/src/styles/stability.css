@@ -30,7 +30,7 @@
 .ss-picked-line { margin: var(--space-3) 0 0; color: var(--text); line-height: 1.55; }
 .ss-legend { margin: var(--space-2) 0 var(--space-4); font-size: 0.8rem; color: var(--text-2); line-height: 1.5; }
 .ss-half { stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 4 4; }
-.ss-typical { stroke: var(--brand); stroke-width: 1.5; stroke-dasharray: 2 3; }
+.ss-typical { stroke: var(--chart-brand); stroke-width: 1.5; stroke-dasharray: 2 3; }
 .ss-mark {
   fill: var(--text-2);
   font-family: var(--font-mono);
@@ -41,7 +41,7 @@
   stroke-linejoin: round;
 }
 .ss-fit { fill: none; }
-.ss-points circle { fill: var(--brand); stroke: var(--line); stroke-width: 1; }
+.ss-points circle { fill: var(--chart-brand); stroke: var(--line); stroke-width: 1; }
 .ss-points circle.ss-thin { fill: var(--surface); }
 .ss-table .ss-group th {
   text-align: left;

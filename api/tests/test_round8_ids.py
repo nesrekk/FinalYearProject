@@ -158,14 +158,6 @@ def test_season_routes_pick_by_id(client, namesakes, path, params):
             assert _ok_for(r, pid), (url, pid, r.text[:200])
 
 
-def test_pair_synergy_takes_both_ids(client, namesakes):
-    newer, older = namesakes["brandon williams"][0][0], namesakes["brandon williams"][1][0]
-    r = client.get("/players/pair-synergy", params={"player_a": "Brandon Williams", "player_b": "Brandon Williams",
-                                                    "player_a_id": newer, "player_b_id": older, "season": 2023})
-    # Two different players now (the same name twice used to be "pick two different players").
-    assert r.status_code != 400 or "different" not in r.text
-
-
 def test_similarity_routes_pick_by_id(sim_client, namesakes):
     for pid, _, s1 in namesakes["brandon williams"]:
         for url, params in [(f"/clusters/player/brandon williams", {}),

@@ -1,6 +1,13 @@
 """
 train_pair_synergy.py
 =======================
+RETIRED FROM THE APP (2026-10-06, round 8.5 step B, R8-032; the owner's call): no route
+or page reads this model any more (Player Comparison points to Pair Chemistry, which shows
+what pairs actually did from the play-by-play stints). It was fitted on the old in-house
+defensive BPM (dbpm_repro) and its season-grouped CV R² was 0.015. The script stays only
+because it produces pair_synergy_validation, which is in the paper manifest (dropping the
+table would change the manifest digest); its .pkl outputs are no longer committed.
+
 Trains a real ridge regression model predicting a real 2-man lineup
 pair's "synergy": their real observed net rating (nba_api's
 LeagueDashLineups, group_quantity=2) minus the minutes-weighted average

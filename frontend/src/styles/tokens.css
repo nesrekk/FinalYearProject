@@ -45,6 +45,10 @@
   --series-8: #b91c1c;
   --series-9: #4d7c0f;
   --brand-gradient: linear-gradient(90deg, #a93a0a, #a93a0a);
+  /* Brand orange for chart marks (dots, lines, bars, their legend keys; R8-059): --brand (#ff5b14)
+     is 2.4-2.9:1 on the Paper backgrounds, this is 3.1-3.8:1. Buttons, badges and fills behind text
+     keep --brand. Ink keeps --brand (5.3-6.3:1). */
+  --chart-brand: #e04a0d;
 
   /* ── Depth: hard offset "sticker" shadows ──────── */
   --shadow-card: 4px 4px 0 var(--line);
@@ -143,6 +147,7 @@
   --series-7: #d6d3d1;
   --series-8: #f87171;
   --series-9: #a3e635;
+  --chart-brand: var(--brand);
   --tab-active-text: var(--accent);
 }
 
@@ -176,6 +181,7 @@
     --series-7: #d6d3d1;
     --series-8: #f87171;
     --series-9: #a3e635;
+    --chart-brand: var(--brand);
     --tab-active-text: var(--accent);
   }
 }

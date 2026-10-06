@@ -151,8 +151,8 @@ def root():
 # ─── Player Archetypes (roles) ──────────────────────────────────────────────
 # Reads scripts/build_player_roles.py's 10 roles (K-Means on rate stats and
 # shot locations; see that script). The six broader archetypes from
-# scripts/cluster_players.py stay in player_clusters for Pair Synergy and
-# Trivia, and come back here as each player's "family".
+# scripts/cluster_players.py stay in player_clusters for Trivia
+# (Pair Synergy, which also used them, was retired 2026-10-06), and come back here as each player's "family".
 
 @app.get("/clusters/archetypes")
 def get_archetypes():

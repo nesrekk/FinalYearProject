@@ -12,6 +12,8 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
+**Round 8.5 (2026-10-06, Step B): 87 entries: 82 fixed, 1 won't fix, 4 open** (R8-010, R8-028, R8-082, R8-086). Step B fixed R8-012, R8-032 (retired), R8-059, R8-071 and one it found (R8-087).
+
 **Round 8.5 (2026-10-06, Step A): 86 entries: 77 fixed, 1 won't fix, 8 open** (R8-086 added, for round 9 step 1).
 
 **Final counts (2026-10-06, Step 10, round 8 closed): 85 entries: 77 fixed, 1 won't fix, 7 open.** By severity: 8 broken (8 fixed), 27 wrong number (25 fixed, 2 open: R8-028, R8-032), 8 slow (6 fixed, 1 won't fix: R8-013, 1 open: R8-012), 42 looks wrong (38 fixed, 4 open: R8-010, R8-059, R8-071, R8-082). Every open one is an owner's call or waits for data (each entry says which). Step 10 closed R8-014 (every route without `_source` accounted for) and found no new app defect; the round's one-page summary for the guide is at the end of the Step 10 section.
@@ -664,6 +666,19 @@ Code: `api/ledger_live.live_tables_exist()` now checks `to_regclass('ledger_game
 (same answer under the default search_path; it lets the update run on a `zz_` copy). Nothing frozen touched: the three
 tagged files' blob ids still equal the tag's. Found: R8-086 (every real ledger run changes the paper's inputs).
 
+## Round 8.5 Step B: quick fixes (2026-10-06)
+
+Chart contrast (R8-059, R8-071), referee crews paging (R8-012), Pair Synergy retired (R8-032, the owner's answer in the chat: retire). No table changed (`pair_synergy_validation` kept: see R8-032); `paper-inputs` not affected (no paper input read or written).
+
+| Check | Result |
+|---|---|
+| Page sweep, `frontend/qa/page_scan.js` | 27 views × 1280/375 × Paper/Ink (Player Comparison filled, Referees By Official + By Crew page 2, Methodology, two profiles, and every page with a brand-orange chart: Aging, Assists, Projections, RAPM + tracker, Rotations, Simulator, Ledger, Stat Stability, Era, Possessions, Report Card, Data Quality › Does it matter, Coaching, team page DEN, Regression, Shot value, Rim, Luck, College → NBA, Game Replay): **clean** after the fixes except the known segmented-control false positive on Referees (the active pill is a sibling layer) |
+| Crew route | full answers equal the saved pre-change answers for 15 parameter sets; pages concatenate to them; one page 54 kB |
+| Comparison → Pair Chemistry | Jokić / Murray 2024-25 opens `?page=analytics&season=2025&team=DEN#pairs` (DEN 2024-25, 50-32) |
+| Tests | full suite, eslint 0, vite build (see the commit) |
+
+**For the guide:** Brand-orange chart marks now use a darker chart-only orange that reads at 3:1 on every light background; the profile's shot-zone map and shot-mix bars use the theme's tested colours. The referee crews table pages 100 crews at a time and opens on crews that worked together more than once (54 kB, was 2.8 MB). Pair Synergy, a model that explained 1.5% of how pairs did and was fitted on a replaced stat, is retired; Player Comparison points to Pair Chemistry's measured pair results instead. Round 8 has 4 open issues left, all waiting on data or round 9.
+
 ## Constraints (not defects)
 
 - **Layerbase:** 3,487 of 5,000 MB used (2026-10-06, after the Step 10 sync and slimming; was 4,203). Six paper-only tables stay local (`api/local_only.py`); any sync needs the owner's OK.
@@ -754,12 +769,13 @@ tagged files' blob ids still equal the tag's. Found: R8-086 (every real ledger r
 - **Step 8:** the six feeds were read one after another (ESPN 0.7 s, NBA.com 404 in 0.6 s, Google 0.3 s, Yahoo 1.9 s, CBS 0.2 s, Sports Illustrated 404 in 2.2 s). `impact_core._fetch_current_news_uncached` now reads them at the same time and joins them in the list's order, so the answer is the loop's (checked on the recorded feeds with scrambled finishing order: identical; `test_news_feeds_combine_in_list_order`). Cold 5.93 → 2.17 s in the crawl (what's left is the slowest feed). The two dead feeds (NBA.com, SI: 404 since at least 2026-10-06) add nothing and cost nothing extra now; left in the list.
 
 ### R8-012 · `/referees/crew-tendencies` sends 2.8 MB
-- **Severity:** slow · **Step:** 8 · **Status:** open
+- **Severity:** slow · **Step:** 8 → 8.5-B · **Status:** fixed in the Round 8.5 Step B commit
 - **Where:** Analytics › Referee Tendencies, By Crew. Also large: `/defense/rim-deterrence` 510 kB, `/shots/shot-value` 380 kB, `/games/higher-lower/pool` 332 kB.
 - **Reproduce:** crawl `bytes` column.
 - **Found by:** crawl. 5,373 crews, most of which worked one game together; the page could page through them or filter on the server.
 - **Step 2c (browser):** Referee Tendencies › By Crew renders every crew at once: 490,899 characters of page text at 1280 px (the By Official view is 9,127). Paging or a server-side filter would fix both the payload and the page.
 - **Step 8 (left open):** the route itself takes 0.09 s; the cost is the page drawing 5,373 rows, because By Crew opens on "1+ games together" (4,859 of the crews worked one game). Gzip would shrink the transfer, not the rendering. Paging, or opening on 2+ games (514 crews), changes what the page shows: a page decision (Step 9/10 or the owner), not a speed fix that keeps every answer the same.
+- **Round 8.5 Step B:** `/referees/crew-tendencies` takes `limit` (1-1,000) and `offset`, orders ties by `crew_key` (so pages never repeat or skip a crew) and returns `total_matching`; no `limit` = every crew, as before. The By Crew view opens on crews with 2+ games together (514) and shows 100 a page with Previous/Next ("1–100 of 514 crews"; Export saves the page). Numbers unchanged: for min games 1/2/3 × all five sorts, the full answer equals the saved pre-change answer crew for crew, and the 100-row pages concatenated equal the full answer in order. One page: 54 kB (was 2.8 MB for all 5,373); page text at 1280 px 14.9k characters (was 490,899). Tests: `test_crew_pages_split_the_full_answer`, `test_crew_page_is_small`, `test_crew_view_opens_on_repeat_crews_and_pages`.
 
 ### R8-013 · The landing page's 3D court chunk is 532 kB
 - **Severity:** slow · **Step:** 8 · **Status:** won't fix (measured: it doesn't delay the first paint)
@@ -882,11 +898,13 @@ tagged files' blob ids still equal the tag's. Found: R8-086 (every real ledger r
 
 - **Step 4:** stored dates answer from `game_scores` / `postseason_games` without any network (2025-01-02: 6 games in 0.04 s; 2025-06-05: Finals game 1 as "Playoffs"); other past dates (preseason) from ESPN. Test `test_by_date_reads_stored_results_first`.
 ### R8-032 · Pair Synergy's model still uses the old in-house defensive BPM
-- **Severity:** wrong number · **Step:** 7 (owner's call: a retrain) · **Status:** open
+- **Severity:** wrong number · **Step:** 7 (owner's call: a retrain) → 8.5-B · **Status:** fixed (retired) in the Round 8.5 Step B commit
 - **Where:** Pair Synergy reads `dbpm_repro` until retrained. Methodology open issue "Some models can't be retrained right now" says stats.nba.com is unreachable, which is no longer true (R8-006).
 - **Found by:** known gap (CLAUDE.md Open items, Methodology).
 
 - **Step 7 (left open):** the retrain changes Pair Synergy's model and needs the owner's OK; the Methodology wording about stats.nba.com was already corrected in Step 4.
+- **Round 8.5 Step B (the owner chose to retire it, 2026-10-06):** the route `/players/pair-synergy`, `routers/pair_synergy.py`, the model loading and `_player_synergy_features` in `impact_core.py`, `fetchPairSynergy` and the two committed `.pkl` files are gone. Player Comparison's Fit Analysis keeps its percentile flags and links to Pair Chemistry (`?page=analytics&season=&team=#pairs`, the team when both players' rows name the same one), which shows what pairs actually did from the stints. Why (Methodology › Pair Chemistry limits): fitted on the old in-house defensive BPM, and its season-grouped CV R² was 0.015 over 23,381 pairs. The Methodology open issue is removed (none left; the page says "None right now"). **Kept on purpose:** `pair_synergy_validation` and its producer `train_pair_synergy.py` (in the paper manifest: dropping the table changes the manifest digest, which round 8.5/9 keep fixed; drop both with the next deliberate paper rebuild), and the `dbpm_repro` column (same reason; nothing reads it now). Tests: `test_pair_synergy_route_is_gone`, `test_comparison_points_to_pair_chemistry`, `test_retired_model_keeps_its_manifest_table`; the three Pair Synergy tests in `test_smoke.py`, `test_round8_ids.py`, `test_round8_live.py` were removed with the route.
+
 ### R8-033 · Muted text on the page rails was just under 4.5:1 in Paper
 - **Severity:** looks wrong · **Step:** 2a · **Status:** fixed in the Step 2a commit
 - **Where:** `--text-3` (#6b6458) on `--surface-2` (#e8e1d3): the rail items of Player Stats, Stat Leaders and Hall of Fame (and anything else muted on a `--surface-2` panel).
@@ -1023,9 +1041,10 @@ tagged files' blob ids still equal the tag's. Found: R8-086 (every real ledger r
 - **Found by:** saving a view in the browser and reading the Saved page. **Fix:** the tab list moved to `components/analytics/analyticsTabs.js` (small, so the shell can import it); titles read "Analytics › Rim Deterrence (season: 2026)" and report sources "Analytics › Rim Deterrence". Views saved before keep their old title (editable on the Saved page). Test: `test_saved_titles_name_the_analytics_tool`.
 
 ### R8-059 · Brand-orange chart marks are 2.8-2.9:1 on Paper
-- **Severity:** looks wrong · **Step:** 10 (owner's call) · **Status:** open
+- **Severity:** looks wrong · **Step:** 10 (owner's call) → 8.5-B · **Status:** fixed in the Round 8.5 Step B commit
 - **Where:** charts that draw data in `--brand` (#ff5b14): Rim Deterrence's on-court bars, Luck & Schedule's team dots, College → NBA's highlighted picks, Model Report Card's dots, Data Quality's "does it matter" dot (2.81-2.93:1 on Paper's `--surface`; fine in Ink). About 100 places use `var(--brand)` as a fill, most of them buttons and badges with dark text (fine).
 - **Found by:** the scanner's new chart-mark check. Each of these charts also prints the value as text, so nothing is lost; still under WCAG 1.4.11's 3:1. A chart-only Paper orange (e.g. #e04a0d, 3.1-3.8:1 on the three Paper backgrounds) would fix it without touching buttons: a brand decision, so the owner's.
+- **Round 8.5 Step B:** new token `--chart-brand` (tokens.css): Paper #e04a0d (3.13 / 3.46 / 3.84:1 on `--surface-2` / `--bg` / `--surface`), Ink = `--brand` (5.3-6.3:1). Every SVG `fill`/`stroke` in `var(--brand)` in the stylesheets (43 in 18 files) and the legend keys that stand for those marks (10) use it, plus Game Replay's line, the Workbench's fallback mark colour; text colours and buttons/badges (`--brand` under dark text) don't change. Left in `--brand`: kit.css's decorative tool-preview icon. Test: `test_chart_brand_reads_on_every_background`, `test_no_chart_mark_draws_in_plain_brand`.
 
 ### R8-060 · Data Quality's first load waits 3-4 s on two live checks
 - **Severity:** slow · **Step:** 8 · **Status:** fixed in the Step 8 commit (3.3 → 2.3 s; what's left is the check itself)
@@ -1093,11 +1112,13 @@ tagged files' blob ids still equal the tag's. Found: R8-086 (every real ledger r
 - **Found by:** Step 5's page scan. Fix: `--text` on the tint (Ink unchanged in look, passes).
 
 ### R8-071 · Profile charts: Game Log per-game dots and shot-zone tints under 3:1
-- **Severity:** looks wrong · **Step:** 7 (or owner's call, like R8-059) · **Status:** open (the dots fixed in the Step 7 commit)
+- **Severity:** looks wrong · **Step:** 7 (or owner's call, like R8-059) → 8.5-B · **Status:** fixed (the dots in the Step 7 commit, the rest in the Round 8.5 Step B commit)
 - **Where:** player profile (e.g. `?page=player&id=1630217`): the Game Log rolling chart's per-game dots (`--text-3` at 55% opacity, 2.3:1 Paper / 2.5:1 Ink; they are context for the rolling line), its brand-orange line (2.9:1, = R8-059), and the shot-zone map's tinted cells (1.3-1.5:1 against the court).
 - **Found by:** Step 5's page scan with the `marks` check, which step 2a's sweep of the profile predated. Not caused by Step 5.
 
 - **Step 7:** the per-game dots now 0.8 opacity (3.3:1 or more on every Paper/Ink surface; was 2.2-2.6:1). Left for the owner with R8-059: the orange rolling line (2.9:1), the shot-zone tints (1.3-1.5:1 against the court; area fills whose numbers are printed), and, found in the same scan, the profile's shot-mix bars (`.sm-chart`, green/amber/pink 2.0-2.7:1 in Paper; stacked segments).
+- **Round 8.5 Step B:** the rolling line is `--chart-brand` (R8-059). The shot-zone map (`common/ZoneCourtMap.jsx`) mixes `--series-8` (above the league) / `--series-1` (below) into the court colour by how far the zone is from the league (15% near it, the full token at ±15 points; full tokens are ≥ 3:1 on the court in Paper and Ink) instead of fixed rgba washes at 55%; the hoop is drawn in the court-line colour (the orange ring was 1.9-2.1:1 on a hot zone). The scanner measured each zone against the largest zone (the above-the-break wash), i.e. a colour scale against itself: the map's `<svg>` carries `data-colormap` and `page_scan.js` skips its inline-filled regions like heat-map cells (its lines and outlines are still checked; the values are in the table beside it). Shot mix (`.sm-root`): Paper uses `--series-1/0/2/4/6` in the old hue order (3.8-6.3:1 on every Paper background; was 2.0-2.7:1 for three of them); Ink unchanged. Test: `test_shot_zone_map_and_shot_mix_use_tokens`.
+
 ### R8-072 · ESPN's text spells some players differently from its own player_name field, so their substitutions out weren't applied
 - **Severity:** wrong number · **Step:** 6a · **Status:** fixed in the Step 6a commit
 - **Where:** `player_game_lines` minutes and the stints' lineups in the games concerned: e.g. DET-IND 2024-10-23, where the rows carry player_name "Ronald Holland II" (with his id) and the text "Ron Holland II", so "Tim Hardaway Jr. enters the game for Ron Holland II" removed nobody (Holland 31.9 minutes instead of 14.9; his two steals credited to no one); POR's last five games of 2022-23, where ESPN writes "Jeenathan Williams" for Nate Williams (48 minutes on 2023-04-09).
@@ -1181,3 +1202,7 @@ tagged files' blob ids still equal the tag's. Found: R8-086 (every real ledger r
 - **Reproduce:** run `ledger_update.py` (not a dry run), then `scripts/rebuild_all.sh paper-inputs`: `numbers.tex` changes in `\pnLgAsOf` (on a new date) and `\pnManDigest`, plus `paper/manifest.json`/`.tsv` and `SHA256SUMS`. Once the first game is scored, the claim `LgScored == 0` stops the run on purpose (round 9 step 6).
 - **Found by:** Round 8.5 Step A, reading what the daily runs touch. Round 9's rule "paper-inputs byte-identical through the round" can't hold unless step 1 decides: e.g. leave the LIVE tables out of the printed digest (or print a frozen-tables digest) and pin `LgAsOf` to the paper's freeze date, or accept these two macros changing and say so.
 
+### R8-087 · Three charts' faded marks under 3:1: Assist Network edges, Projections' history bars, the team page's season bars
+- **Severity:** looks wrong · **Step:** 8.5-B · **Status:** fixed in the Round 8.5 Step B commit
+- **Where:** `.an-edge` (Assist Network, opacity 0.55: 2.1:1 Paper / 2.6:1 Ink), `.pj-bar` (Projections, `--text-2` at 0.55: 2.8:1 Paper), `.tp-bar` / `.tp-bar--po` (team page's season history, 0.55 / 0.7: 2.3-2.6:1).
+- **Found by:** Round 8.5 Step B's sweep of every page that draws brand-orange marks (23 views × 1280/375 × Paper/Ink). In both themes, so not caused by the token change. **Fix:** opacity 0.85 (edges), 0.7 (projection bars), 0.8 / 0.9 (team bars): each ≥ 3:1 on its background; the sweep then passes on all three pages in all four views.

@@ -63,7 +63,6 @@ from routers import (
     news,
     on_off,
     pair_chemistry,
-    pair_synergy,
     play_finder,
     player_comparison,
     player_impact,
@@ -116,7 +115,7 @@ app.add_middleware(
 
 for _router_module in (
     root, playoff_forecaster, draft_prospects, length_study, heliocentricity,
-    clutch_wpa, wp_replay, guess_the_game, lineup_chemistry, pair_synergy,
+    clutch_wpa, wp_replay, guess_the_game, lineup_chemistry,
     with_without_star, schedule_fatigue, playtype_hustle, matchup_finder,
     referee_tendencies, shot_charts, radar, player_comparison, guess_the_player,
     higher_lower, blurred_player, trivia, trend_analysis, trade_analyzer,

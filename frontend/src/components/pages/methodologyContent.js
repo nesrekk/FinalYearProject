@@ -203,7 +203,7 @@ export const SECTIONS = [
                 method: 'Basketball-Reference\'s published values, loaded for every season; 2009-10 onward is linked to NBA ids through the project\'s id map (7,273 of 7,279 rows; the 6 unlinked are left empty).',
                 checked: 'Games played agree within one game on every linked row, an independent check of the id link.',
                 limits: [
-                    'Until 2026-09-27 the app used its own BPM reproduction, which ran hot (2025-26 SGA at 22.0 vs the published 11.7). It is kept only as an input to Pair Synergy, whose trained model was fitted on it.',
+                    'Until 2026-09-27 the app used its own BPM reproduction, which ran hot (2025-26 SGA at 22.0 vs the published 11.7). Its values stay in the table (dbpm_repro), read by nothing since Pair Synergy was retired on 2026-10-06.',
                     'Box-score based: defence away from the ball is only partly captured.',
                 ],
             },
@@ -522,7 +522,7 @@ export const SECTIONS = [
                 answers: 'How did a team do with each pair of its players on the floor together?',
                 method: 'From 2020-21 on, every play-by-play stint containing both players, summed (pair_seasons): minutes and possessions added up, points per 100 possessions on each end. Before that, every stored five-man lineup containing both players (lineup_stats), with ratings weighted by possessions. Colours compare each pair with the team over the same minutes; pairs under a shared-minutes floor (default 100) are greyed out.',
                 checked: 'The 2023-24 Nuggets (57-25) from stints: Jokić and Murray shared 1,424 tracked minutes at +15.8, and every minute of the team\'s 82 games is tracked (97% before 2026-10-05, when 110 minutes in 22 games had a player with no id in the feed). The 2015-16 Warriors from the stored lineups: Curry and Green are the most-shared pair (2,179 stored minutes, +19.8) and the top three pairs with 500+ shared minutes all include Iguodala; no player\'s stored minutes exceed their season minutes. Checked on 2026-09-28; the Nuggets re-read 2026-10-05.',
-                limits: ['Before 2020-21 only the league\'s 2,000 most-used lineups a season are stored: 31-89% of a team\'s minutes (median 65%), with bench units missing most, so a team\'s figure over these lineups runs above its real net rating. From 2020-21 the page lists the games excluded and the minutes left out instead.', 'Descriptive: not adjusted for opponents or for the other three players on the floor.'],
+                limits: ['Before 2020-21 only the league\'s 2,000 most-used lineups a season are stored: 31-89% of a team\'s minutes (median 65%), with bench units missing most, so a team\'s figure over these lineups runs above its real net rating. From 2020-21 the page lists the games excluded and the minutes left out instead.', 'Descriptive: not adjusted for opponents or for the other three players on the floor.', 'Player Comparison used to show a model\'s guess at a pair\'s chemistry ("Pair Synergy": a ridge regression on the two players\' usage, 3PA rate, assist and rebound rates, defensive BPM and archetype). It was retired on 2026-10-06: it was fitted on the project\'s old in-house defensive BPM, which the app replaced with Basketball-Reference\'s published values on 2026-09-27, and its season-grouped cross-validated R² was 0.015 over 23,381 pairs, so it explained almost none of how real pairs did. Comparison now points here, to what the two actually did together.'],
             },
             {
                 id: 'onoff',
@@ -654,8 +654,4 @@ export const SECTIONS = [
 
 // Problems found and not yet fixed. Remove an entry in the commit that fixes it.
 export const OPEN_ISSUES = [
-    {
-        title: 'Pair Synergy still uses the old in-house defensive BPM',
-        body: 'Its model was trained on this project\'s own BPM reproduction (dbpm_repro) and hasn\'t been retrained on Basketball-Reference\'s published values, so it keeps reading the old column. stats.nba.com, which the retrain needs for two-man lineups, was unreachable from the build machine from 2026-09-26 and answers again through nba_api since 2026-10-05 (plain curl still times out); the retrain is a planned, deliberate step.',
-    },
 ];

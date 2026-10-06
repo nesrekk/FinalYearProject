@@ -12,8 +12,8 @@
 .av-mark--base { fill: var(--surface); stroke: var(--text-2); }
 .av-range.av-mark--actual { stroke: var(--text); }
 .av-mark--actual { fill: var(--text); stroke: var(--surface); }
-.av-range.av-mark--whatif { stroke: var(--brand); }
-.av-mark--whatif { fill: var(--brand); stroke: var(--surface); }
+.av-range.av-mark--whatif { stroke: var(--chart-brand); }
+.av-mark--whatif { fill: var(--chart-brand); stroke: var(--surface); }
 .av-teams { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); margin: var(--space-4) 0; }
 @media (min-width: 1360px) {
   .av-teams { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }

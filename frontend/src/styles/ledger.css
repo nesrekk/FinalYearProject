@@ -55,11 +55,11 @@
 .lg-chart svg { max-width: 780px; }
 .lg-range { stroke-width: 2; stroke-linecap: round; }
 .lg-range--asis { stroke: var(--text-3); }
-.lg-range--roster { stroke: var(--brand); }
+.lg-range--roster { stroke: var(--chart-brand); }
 .lg-dot--asis { fill: var(--surface); stroke: var(--text); stroke-width: 1.5; }
-.lg-dot--roster { fill: var(--brand); stroke: var(--text); stroke-width: 1; }
+.lg-dot--roster { fill: var(--chart-brand); stroke: var(--text); stroke-width: 1; }
 .lg-legend span.lg-legend--asis::before { background: var(--surface); border: 1.5px solid var(--text); }
-.lg-legend span.lg-legend--roster::before { background: var(--brand); }
+.lg-legend span.lg-legend--roster::before { background: var(--chart-brand); }
 .lg-views { margin-top: var(--space-5); }
 .lg-grid { align-items: start; }
 .lg-muted td { color: var(--text-3); }
@@ -71,22 +71,22 @@
 /* Live scoring tab (pages/ForecastLedgerLive.jsx): one style per version, told apart by dash as well as colour. */
 .lg-tabs { margin: var(--space-3) 0 var(--space-2); }
 .lg-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.lg-line.lg-v--roster { stroke: var(--brand); stroke-width: 2.5; }
+.lg-line.lg-v--roster { stroke: var(--chart-brand); stroke-width: 2.5; }
 .lg-line.lg-v--as_is { stroke: var(--text); }
 .lg-line.lg-v--record { stroke: var(--text-3); stroke-dasharray: 6 4; }
-.lg-line.lg-v--roster_pre { stroke: var(--brand); stroke-dasharray: 2 3; }
+.lg-line.lg-v--roster_pre { stroke: var(--chart-brand); stroke-dasharray: 2 3; }
 .lg-line.lg-v--as_is_pre { stroke: var(--text); stroke-dasharray: 2 3; }
 .lg-coin { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 3 3; }
 .lg-ci { stroke: var(--text-2); stroke-width: 1.5; }
 .lg-caldot { stroke: var(--text); stroke-width: 1; fill: var(--surface); }
-.lg-caldot.lg-v--roster, .lg-caldot.lg-v--roster_pre { fill: var(--brand); }
+.lg-caldot.lg-v--roster, .lg-caldot.lg-v--roster_pre { fill: var(--chart-brand); }
 .lg-caldot.lg-v--as_is, .lg-caldot.lg-v--as_is_pre { fill: var(--text-2); }
 .lg-cal svg { max-width: 420px; }
 .lg-legend span.lg-key::before { border-radius: 0; height: 3px; width: 18px; }
-.lg-legend span.lg-key.lg-v--roster::before { background: var(--brand); }
+.lg-legend span.lg-key.lg-v--roster::before { background: var(--chart-brand); }
 .lg-legend span.lg-key.lg-v--as_is::before { background: var(--text); }
 .lg-legend span.lg-key.lg-v--record::before { background: repeating-linear-gradient(90deg, var(--text-3) 0 6px, transparent 6px 10px); }
-.lg-legend span.lg-key.lg-v--roster_pre::before { background: repeating-linear-gradient(90deg, var(--brand) 0 2px, transparent 2px 5px); }
+.lg-legend span.lg-key.lg-v--roster_pre::before { background: repeating-linear-gradient(90deg, var(--chart-brand) 0 2px, transparent 2px 5px); }
 .lg-legend span.lg-key.lg-v--as_is_pre::before { background: repeating-linear-gradient(90deg, var(--text) 0 2px, transparent 2px 5px); }
 .lg-swatch { display: inline-block; width: 14px; height: 3px; margin-right: 8px; vertical-align: middle; background: var(--text); }
 .lg-swatch.lg-v--roster { background: var(--brand); }

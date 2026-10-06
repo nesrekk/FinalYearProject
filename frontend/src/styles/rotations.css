@@ -13,11 +13,11 @@
 .rot-sep { stroke: var(--hairline); stroke-width: 1; }
 .rot-row-line { stroke: var(--hairline); stroke-width: 1; }
 .rot-quarter { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.8; }
-.rot-cell { fill: var(--brand); }
+.rot-cell { fill: var(--chart-brand); }
 .rot-cell--unknown { fill: var(--text-3); }
 .rot-hot { fill: none; stroke: var(--text); stroke-width: 2; pointer-events: none; }
 .rot-bar { fill: var(--text-3); }
-.rot-bar--mine { fill: var(--brand); }
+.rot-bar--mine { fill: var(--chart-brand); }
 .rot-bar--unknown { fill: none; stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 2 2; }
 .rot-margin--pos { fill: var(--positive); opacity: 0.75; }
 .rot-margin--neg { fill: var(--negative); opacity: 0.75; }

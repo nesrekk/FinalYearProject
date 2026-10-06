@@ -20,7 +20,7 @@ left holding the reproduction, so the two scales are never mixed.
 
 Before overwriting, the reproduction is copied to bpm_repro/obpm_repro/
 dbpm_repro/vorp_repro if those are still empty (Pair Synergy's trained model
-uses dbpm_repro).
+used dbpm_repro until it was retired on 2026-10-06; nothing reads it now).
 
 Usage (after build_bpm_vorp.py and load_kaggle_historical_seasons.py):
     cd scripts && python3 load_bref_bpm_vorp.py
