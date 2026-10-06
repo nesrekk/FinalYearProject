@@ -12,6 +12,8 @@ an entry; mark it.**
   9 usability, 10 close-out).
 - A fix needs a test where one can be written, and says old → new for any number it moves.
 
+**Round 8.5 (2026-10-06, Step A): 86 entries: 77 fixed, 1 won't fix, 8 open** (R8-086 added, for round 9 step 1).
+
 **Final counts (2026-10-06, Step 10, round 8 closed): 85 entries: 77 fixed, 1 won't fix, 7 open.** By severity: 8 broken (8 fixed), 27 wrong number (25 fixed, 2 open: R8-028, R8-032), 8 slow (6 fixed, 1 won't fix: R8-013, 1 open: R8-012), 42 looks wrong (38 fixed, 4 open: R8-010, R8-059, R8-071, R8-082). Every open one is an owner's call or waits for data (each entry says which). Step 10 closed R8-014 (every route without `_source` accounted for) and found no new app defect; the round's one-page summary for the guide is at the end of the Step 10 section.
 
 Counts (2026-10-06, after Step 8): **85 entries**, 8 open, 76 fixed, 1 won't fix: 8 broken, 27 wrong number,
@@ -642,6 +644,26 @@ BPM reversal, on/off worse than zero, xRAPM's negative result, pre-game and simu
 
 **Next.** Step 9 after the usability sessions; round 9 (live 2026-27 season from 2026-10-20, own-team data).
 
+## Round 8.5 Step A: Forecast Ledger opening-night check (2026-10-06)
+
+Round 8.5 closes what round 8 left; it keeps using this list. Step A checks the locked Forecast Ledger before the
+season tips off (2026-10-20 19:00 UTC) and writes the game-day runbook, **`docs/LEDGER_RUNBOOK.md`**. No table changed;
+the real `ledger_*` tables were not written (only dry runs and copies in a dropped `zz_` schema).
+
+| Check | Result |
+|---|---|
+| `ledger_lock.py --verify` | sha256 `c1a48402…3d17` reproduced |
+| Tag on GitHub | `git ls-remote --tags origin ledger-2026-27` = `c9071a8b…` (the lock's code commit). Emailing the hash to the guide is the owner's (not recordable here) |
+| `ledger_update.py --dry-run --today 2026-10-20` | exit 0; 1,206 events (1,200 count, 6 NBA Cup knockout games with teams TBD), 9 rows for opening night's 3 games, all before tip, standings 0-0 (OKC 67.9 expected wins on the roster forecast) |
+| `--dry-run --today 2026-10-21` | exit 0; the 10-20 rows again, then 10-21 **waits** for opening night's three games to go final, as the rule says |
+| ESPN's live schedule vs `ledger_schedule` | identical: same 1,206 ids, and 0 differences in date, tip time, time_valid, home, away, neutral site, venue, city, note; every event STATUS_SCHEDULED. So nothing needs a rule today; the runbook lists the rule for each kind of change the season can bring (postponed, suspended/cancelled, Cup knockout teams, games added after group play, tip time moved, score corrected) |
+| Simulated opening week | `api/tests/test_ledger_gameday.py` (new, ~10 s): the real script, six runs, on copies of the six locked tables in `zz_ledger_gameday` (search_path through `PGOPTIONS`), ESPN's scoreboard replaced by events built from the locked schedule, the clock set per run. Opening night's odds before tip = the locked odds (< 2e-6), record-only 0.5; the morning after (3 fake finals, one game postponed): 30 rows for the other 10 games, each equal to a recompute through the tag's code (< 1e-12), none for the postponed one; a missed day: 10-22's rows labelled recomputed (`before_tip` false) and 10-23 waiting for a game still in progress, no standings that morning; then 10-23 with the postponed game on its new date and new tip; every rerun adds no game-log row and identical standings; 15 games scored under all five versions; the schema dropped and the real ledger tables' row counts and content hashes unchanged |
+| Timing | the ESPN read takes 45-70 s (was ~20 s on 2026-09-30); README said ~20 s, corrected |
+
+Code: `api/ledger_live.live_tables_exist()` now checks `to_regclass('ledger_game_log')` without the `public.` prefix
+(same answer under the default search_path; it lets the update run on a `zz_` copy). Nothing frozen touched: the three
+tagged files' blob ids still equal the tag's. Found: R8-086 (every real ledger run changes the paper's inputs).
+
 ## Constraints (not defects)
 
 - **Layerbase:** 3,487 of 5,000 MB used (2026-10-06, after the Step 10 sync and slimming; was 4,203). Six paper-only tables stay local (`api/local_only.py`); any sync needs the owner's OK.
@@ -1152,4 +1174,10 @@ BPM reversal, on/off worse than zero, xRAPM's negative result, pre-game and simu
 - **Where:** `GET /games/guess-the-game/daily|guess|reveal` (`impact_core._guess_the_game_pool`), `GET /games/wp-replay/list` (`routers/wp_replay.py`).
 - **Reproduce (before):** daily 1.2 s, guess 0.7 s, reveal 0.7 s on every call; the replay list 0.65-0.77 s per call. All four run `DISTINCT ON (game_id) ... ORDER BY game_id, action_number DESC` over the 3.6M `pbp_events` rows (0.75 s in EXPLAIN ANALYZE).
 - **Fix:** kept per process after the first read, like the app's other play-by-play tables (restart impact_api after a rebuild): the pool (with a lock, read once under concurrent first calls), the daily puzzle per date (its ~470 win-probability calls were the other 0.4 s), and the replay list per season through the **unchanged** query, so games of one date keep the order it gives (that order isn't defined by the SQL; a rewritten query would reorder them). First call unchanged, then 0.00-0.01 s. Tests: `test_guess_the_game_*`, `test_replay_list_is_the_unchanged_query`.
+
+### R8-086 · Every real `ledger_update.py` run changes the paper's inputs
+- **Severity:** wrong number (the paper isn't byte-reproducible during the season) · **Step:** round 9 step 1 (paper freeze guard) · **Status:** open
+- **Where:** `scripts/paper_numbers.py` `ledger()` prints `\pnLgAsOf` = `max(ledger_runs.started_at)` (UTC date), and the paper prints it and `\pnManDigest`; `paper_manifest.py`'s database digest includes the five LIVE ledger tables (`ledger_results.fetched_at` and `ledger_runs` change on every run, even with no game scored).
+- **Reproduce:** run `ledger_update.py` (not a dry run), then `scripts/rebuild_all.sh paper-inputs`: `numbers.tex` changes in `\pnLgAsOf` (on a new date) and `\pnManDigest`, plus `paper/manifest.json`/`.tsv` and `SHA256SUMS`. Once the first game is scored, the claim `LgScored == 0` stops the run on purpose (round 9 step 6).
+- **Found by:** Round 8.5 Step A, reading what the daily runs touch. Round 9's rule "paper-inputs byte-identical through the round" can't hold unless step 1 decides: e.g. leave the LIVE tables out of the printed digest (or print a frozen-tables digest) and pin `LgAsOf` to the paper's freeze date, or accept these two macros changing and say so.
 

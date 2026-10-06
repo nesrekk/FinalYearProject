@@ -67,7 +67,9 @@ FROM res r JOIN ledger_forecasts f ON f.season = %(season)s AND f.kind = 'game' 
 
 
 def live_tables_exist(cur):
-    cur.execute("SELECT to_regclass('public.ledger_game_log') IS NOT NULL AND to_regclass('public.ledger_results') IS NOT NULL")
+    # Unqualified names follow the session's search_path (public by default), so the game-day test can
+    # run the update on copies in a zz_ schema (api/tests/test_ledger_gameday.py).
+    cur.execute("SELECT to_regclass('ledger_game_log') IS NOT NULL AND to_regclass('ledger_results') IS NOT NULL")
     return bool(cur.fetchone()[0])
 
 
