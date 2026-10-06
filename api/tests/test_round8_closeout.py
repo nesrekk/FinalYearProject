@@ -81,7 +81,9 @@ def test_compare_skips_local_only_and_catches_a_change():
     mirror["tables"] = [e for e in mirror["tables"] if e["table"] not in local_only.LOCAL_ONLY]
     lines, ok = PM.compare(here, mirror)
     assert ok, lines
-    assert lines[-1].startswith("skipped, kept local") and all(t in lines[-1] for t in local_only.LOCAL_ONLY)
+    # round 9 step 1 added a "skipped, live ledger log" line after it, so look for the line, not the last one
+    kept = [ln for ln in lines if ln.startswith("skipped, kept local")]
+    assert len(kept) == 1 and all(t in kept[0] for t in local_only.LOCAL_ONLY)
     changed = copy.deepcopy(mirror)
     changed["tables"][0]["content_md5"] = "0" * 32
     del changed["tables"][1]

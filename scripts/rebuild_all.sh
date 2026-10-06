@@ -21,7 +21,8 @@
 #                 in api/.env.
 #   load          local raw files into source tables. Tags name the gitignored input (docs/DATASHEET.md says
 #                 where each comes from): kaggle = nba_data/kaggle_1947_present/, shotcsv =
-#                 shots_data/pbp_shots_1997_2026/, salaries = nba_data/salaries/, torvik = nba_data/college_teams/.
+#                 shots_data/pbp_shots_1997_2026/, shotchart = shots_data/shotchart_detail/2026/ (the fetch stage's
+#                 cache), salaries = nba_data/salaries/, torvik = nba_data/college_teams/.
 #                 Untagged load steps read CSVs committed in nba_data/.
 #   derived       everything built from other tables. Rewrites the app's tables and the committed model
 #                 files (models/*.pkl, scripts/*.pkl): expect `git status` to show them afterwards.
@@ -69,6 +70,7 @@ need_input() {
   case "$1" in
     kaggle)   echo "nba_data/kaggle_1947_present/Player Per Game.csv" ;;
     shotcsv)  echo "shots_data/pbp_shots_1997_2026/pbp2026.csv" ;;
+    shotchart) echo "shots_data/shotchart_detail/2026/ATL_regular.csv" ;;
     salaries) echo "nba_data/salaries/nba_salaries_2000_2020.csv" ;;
     torvik)   echo "nba_data/college_teams/cbb26.csv" ;;
     *) echo "" ;;
@@ -114,6 +116,7 @@ step() {
 step fetch net      fetch_pbp_espn.py 2021 2026          # ESPN play-by-play via sportsdataverse (hosted release)
 step fetch nbaapi   fetch_play_by_play.py                # nba_api sample (420 games stored, all ESPN twins; args: season n)
 step fetch nbaapi   fetch_2025_26_season_data.py         # -> nba_data/nba_2025_26_*.csv (committed)
+step fetch nbaapi   fetch_season_shots.py --season 2026 --fetch-only   # 2025-26 shot chart, 90 calls -> shots_data/shotchart_detail/2026/
 step fetch nbaapi   build_schedule_fatigue.py            # team_game_fatigue (LeagueGameFinder)
 step fetch net      fetch_game_scores.py                 # ESPN scoreboard, one request per date (~7 min)
 step fetch net      fetch_postseason_games.py            # ESPN scoreboard, play-in and playoffs (~3 min)
@@ -139,6 +142,8 @@ step load -         load_2025_26_into_db.py              # 2025-26 player_season
 step load -         add_shooting_efficiency_stats.py     # counting stats from committed CSVs (additive columns)
 step load -         add_personal_fouls.py
 step load shotcsv   load_pbp_shots.py                    # player_shots, 6.3M rows
+step load shotchart fetch_season_shots.py --season 2026 --offline --apply   # merges the re-fetched 2025-26 chart
+                                                         # (four missing games, playoffs, play-in; round 8.5 step C)
 step load kaggle    load_draft_history_bref.py
 step load salaries  load_salaries.py
 step load torvik    load_college_teams.py

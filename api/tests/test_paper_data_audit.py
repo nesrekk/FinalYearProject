@@ -129,8 +129,9 @@ def test_recorded_counts_re_derive(audit):
     assert audit[("wrong_player_left", 0)] == 0                       # repair_espn_player_ids.find() finds nothing
     assert (audit[("wrong_player_events", 0)], audit[("wrong_player_games", 0)]) == (66, 9)
     # 8,688 when first counted; 8,708 since round 8 step 6a matched the feed's no-id players by name, so more of their
-    # missed shots line up with the chart (step 6b reran the audit)
-    assert audit[("miss_threes_as_twos", 0)] == 8708 and round(audit[("miss_threes_median_ft", 0)]) == 26
+    # missed shots line up with the chart (step 6b reran the audit); 8,709 since round 8.5 step C re-fetched the 2025-26
+    # chart (the four games it lacked add one)
+    assert audit[("miss_threes_as_twos", 0)] == 8709 and round(audit[("miss_threes_median_ft", 0)]) == 26
     # The feed still holds 12 team-less substitutions in 9 games, but since round 8 step 6a the parser ignores the ones
     # naming nobody leaving, so no game line gains seconds from them (until then: one player-game in each of the 9 games)
     assert (audit[("teamless_subs", 0)], audit[("teamless_games", 0)]) == (12, 9)

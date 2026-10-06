@@ -481,6 +481,32 @@ def shot_checks(conn, cur, A):
                             AND nba_game_id NOT IN (SELECT game_id FROM charted)""")
     A.put("chart_missing_games", missing, "reconciled games whose NBA id has no player_shots row",
           macro="DqChartMissingGames", fmt="word")
+    # Since 2025-26 the NBA counts a missed end-of-quarter heave (final 3 s of quarters 1-3, 36+ ft, play started in
+    # the backcourt) as a team attempt, not the shooter's (ESPN, 2025-09-10); ESPN's play-by-play logs it ("misses
+    # heave jump shot", action type 'Heave Jump Shot', in every period) and the chart leaves almost all of them out
+    # (round 8.5 step C, R8-088).
+    hv = pd.read_sql_query("""SELECT e.game_id, e.action_number, TRUE AS heave FROM pbp_events e
+                              JOIN pbp_games g ON g.game_id = e.game_id
+                              WHERE g.source = 'espn' AND e.action_type = 'Heave Jump Shot'""", conn)
+    # A heave is on the play-by-play but not the chart, so the shooter's make/miss sequence for that period no longer
+    # agrees and match_coordinates() drops every attempt of the period, not just the heave.
+    kh = known.merge(hv, on=["game_id", "action_number"], how="left")
+    kh["heave"] = kh["heave"].eq(True)
+    kh["heave_period"] = kh.groupby(["game_id", "pid", "period"]).heave.transform("any")
+    lo = by.idxmin()
+    klo = kh[kh.season == lo]
+    A.put("chart_heaves", int(klo.heave.sum()), "attempts the play-by-play calls an end-of-quarter heave, lowest season",
+          macro="DqChartHeaves", fmt="integer")
+    A.put("chart_heaves_all", int(kh.heave.sum()), "the same, all seasons")
+    A.put("chart_heaves_matched", int((kh.heave & kh.matched).sum()), "of them, matched to a chart row")
+    A.put("chart_heave_period_unmatched", int((klo.heave_period & ~klo.matched).sum()),
+          "lowest season's unmatched attempts in a shooter-period that has a heave", macro="DqChartHeavePeriodUnmatched",
+          fmt="integer")
+    A.put("chart_unmatched_min_season", int((~klo.matched).sum()), "lowest season's unmatched attempts",
+          macro="DqChartUnmatchedMinSeason", fmt="integer")
+    A.put("chart_match_min_no_heave", klo[~klo.heave_period].matched.mean(),
+          "lowest season's matched share outside the shooter-periods that have a heave", macro="DqChartMatchMinNoHeavePct",
+          fmt="pct1")
 
     mm = m[m.matched].copy()
     mm["nba_three"] = mm.shot_type.str.startswith("3")
@@ -628,10 +654,10 @@ CLASSES = [
      "\\pnDqUnrecGames{} of \\pnGamesParsed{} games (\\pnDqUnrecScore{} score, \\pnDqUnrecTotals{} rebound count, "
      "\\pnDqUnrecCup{} no final)",
      "excluded", "stored, flagged, left out of every ranking"),
-    ("Shot chart", "chart_gaps", "Games missing from the chart",
+    ("Shot chart", "chart_gaps", "Attempts not on the chart",
      "reconciled games with no chart rows; attempts matched",
-     "\\pnDqChartMissingGames{} games; \\pnDqChartMatchPct\\% of attempts matched (\\pnDqChartMatchMinPct\\% in "
-     "\\pnDqChartMatchMinSeason, \\pnDqChartMatchOtherMinPct\\%+ in the others)",
+     "none missing; \\pnDqChartMatchPct\\% of attempts matched (\\pnDqChartMatchMinPct\\% in \\pnDqChartMatchMinSeason: "
+     "its \\pnDqChartHeaves{} heaves, mostly off the chart; \\pnDqChartMatchOtherMinPct\\%+ in the others)",
      "disclosed", "unmatched attempts use the text's call"),
     ("Shot chart", "zero_distance", "Three with distance zero",
      "\\texttt{shot\\_distance} $=0$ on three-point attempts",

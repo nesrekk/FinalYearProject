@@ -809,9 +809,11 @@ def xrapm(cur, N):
     missing = rows(cur, """WITH charted AS (SELECT DISTINCT game_id FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2020-21')
                           SELECT season, count(*) FROM lineup_stint_games
                           WHERE game_ok AND nba_game_id IS NOT NULL AND nba_game_id NOT IN (SELECT game_id FROM charted) GROUP BY 1""")
-    N.claim(len(missing) == 1 and missing[0][0] == lo_s, "Methods: the games missing from the shot chart are all in the season with the lowest matched share")
-    N.raw["chart_missing"] = missing[0][1]
-    N.add("XrChartMissingGames", word(missing[0][1]), "reconciled games (lineup_stint_games.game_ok) whose NBA game id has no player_shots row at all")
+    # Round 8.5 step C re-fetched the 2025-26 chart from stats.nba.com: the four games of 2025-11-19/20 the bulk file
+    # lacked are in, so no reconciled game is missing. The lowest season's gap is ESPN's end-of-quarter heaves, which
+    # the NBA counts as team attempts since 2025-26 and leaves off the chart (docs/qa/ROUND8_ISSUES.md R8-088).
+    N.claim(not missing, "Methods (appendix): every reconciled game has shot-chart rows")
+    N.raw["chart_missing"] = 0
     # the rating change tracks shot-making: the expected-points target removes shooting skill, not only luck
     mk = {}
     for v in ("single", "prior"):
@@ -971,6 +973,11 @@ def data_audit(cur, N):
     N.claim(min(xr, key=xr.get) == a("chart_match_min_season"),
             "the audit's lowest chart-match season is the xRAPM section's (Methods, Expected-points RAPM)")
     N.claim(a("chart_missing_games") == N.raw["chart_missing"], "the audit's missing chart games equal the xRAPM section's")
+    N.claim(a("chart_missing_games") == 0, "Table audit: every game charted (the bulk file's gaps re-fetched, round 8.5 step C)")
+    N.claim(a("chart_heaves") == a("chart_heaves_all") > 0 and a("chart_heaves_matched") <= 0.01 * a("chart_heaves_all"),
+            "Table audit: the play-by-play's heaves are all in the lowest-matching season and almost none is on the chart")
+    N.claim(a("chart_heave_period_unmatched") > 0.8 * a("chart_unmatched_min_season"),
+            "Methods (appendix): most of the lowest season's unmatched attempts are in a shooter-period with a heave")
     # Sentences of the Data quality subsection and the table.
     N.claim(a("wrong_player_left") == 0, "Table audit: the wrong-player tags are repaired (repair_espn_player_ids.find() finds none)")
     N.claim(a("twin_same_teams") + a("twin_neutral") == a("twin_games"), "Table audit: every nba_api game is an ESPN game again")

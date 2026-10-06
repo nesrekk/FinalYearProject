@@ -129,7 +129,7 @@ SESSION = ("SET timezone = 'UTC'", "SET extra_float_digits = 1", "SET DateStyle 
 PRODUCERS = {
     # ---- sources: outside feeds and files
     "fetch_pbp_espn.py": ("source", ["pbp_events", "pbp_games"]),   # + fetch_play_by_play.py (nba_api sample), repair_espn_player_ids.py
-    "load_pbp_shots.py": ("source", ["player_shots"]),               # + api/shots_lib.py fills players the files lack
+    "load_pbp_shots.py": ("source", ["player_shots"]),               # + fetch_season_shots.py (2025-26 re-fetch), api/shots_lib.py fills players the files lack
     "fetch_game_scores.py": ("source", ["game_scores"]),
     "fetch_postseason_games.py": ("source", ["postseason_games"]),
     "build_schedule_fatigue.py": ("source", ["team_game_fatigue"]),  # stats.nba.com LeagueGameFinder

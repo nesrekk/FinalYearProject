@@ -229,7 +229,7 @@ COVERAGE_MAP = [
     {
         "table": "player_shots", "label": "Shot chart locations", "group": "Shooting",
         "range_sql": "SELECT MIN(season), MAX(season) FROM player_shots", "range_fmt": "season_text",
-        "source": "nba_api shot-chart endpoint, bulk-loaded per season.",
+        "source": "NBA shot chart: bulk play-by-play files per season (load_pbp_shots.py); 2025-26 re-fetched from stats.nba.com's ShotChartDetail on 2026-10-06 (fetch_season_shots.py: the four games the file lacked, playoffs and play-in).",
         "gap": "shot_zone_basic is NULL on bulk-loaded rows (zones come from api/shots_lib.classify_zone()); mixes regular season/playoffs/play-in — regular season only is game_id LIKE '002%'. No defender distance or shot type (catch-and-shoot vs. pull-up) per shot.",
         "used_by": ["shotcharts"],
     },

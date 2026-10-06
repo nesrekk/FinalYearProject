@@ -253,9 +253,12 @@ def size_text(key, A, S):
         return (f"{_n(A('unrec_games'))} games ({_n(A('unrec_score'))} score, {_n(A('unrec_totals'))} team totals, "
                 f"{_n(A('unrec_cup'))} no final)")
     if key == "chart_gaps":
+        lo = season_label(int(A('chart_match_min_season')))
+        # heaves: since 2025-26 the NBA counts a missed end-of-quarter heave as a team attempt, off the chart (R8-088)
+        heaves = (f", {_pct(A('chart_match_min_no_heave'))} outside the periods of its {_n(A('chart_heaves'))} end-of-period "
+                  f"heaves, which NBA.com's chart almost always leaves out" if A('chart_heaves') else "")
         return (f"{_n(A('chart_missing_games'))} games with no chart rows; {_pct(A('chart_match_share'))} of attempts matched "
-                f"({_pct(A('chart_match_min'))} in {season_label(int(A('chart_match_min_season')))}, "
-                f"{_pct(A('chart_match_other_min'))}+ in the others)")
+                f"({_pct(A('chart_match_min'))} in {lo}{heaves}; {_pct(A('chart_match_other_min'))}+ in the others)")
     if key == "zero_distance":
         return (f"{_pct(A('zero_dist_min'), 0)} to {_pct(A('zero_dist_max'), 0)} of threes a season "
                 f"({_pct(A('zero_dist_first'), 0)} in {season_label(int(A('zero_dist_first_season')))})")

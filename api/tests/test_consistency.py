@@ -30,8 +30,8 @@ Stated differences (the size pinned in the test that owns it):
   * a player's minutes on the Game Log equal his stints' minutes in every
     player-game (the 9 phantom-minute games of R8-023 were fixed in Step 6a);
   * the shot chart's regular-season FGA equals the season row's FGA x GP to the
-    per-game rounding (0.05 x GP + 2) in every season but 2025-26, where the four
-    games with no chart rows explain every gap (R8-028, Step 6);
+    per-game rounding (0.05 x GP + 2) in every season (2025-26 since its chart was
+    re-fetched in round 8.5 step C: the four games it lacked are in, R8-028);
   * the quality map's cells plus its off-map count (beyond half court) equal the
     regular-season FGA;
   * Team Comparison's basic per-game block (the stored fallback) takes points from
@@ -521,34 +521,19 @@ def test_shot_zones_route_counts_the_regular_season(cur, client):
 
 def test_shot_chart_fga_matches_the_season_table(cur):
     """The shot chart's regular-season FGA per player-season equals the season row's FGA x GP to the
-    per-game rounding (0.05 x GP + 2) for every player with 20+ games, 2009-10 to 2024-25, except
+    per-game rounding (0.05 x GP + 2) for every player with 20+ games, 2009-10 to 2025-26, except
     two a hair over it (Bogut 2015-16 and Nurkić 2016-17, each 6 attempts short of the season row).
-    In 2025-26 the four games with no chart rows (R8-028, Step 6) explain every gap: adding those
-    games' lines FGA brings every player back inside the tolerance."""
+    2025-26 passes since its chart was re-fetched (round 8.5 step C, R8-028): before, the four games
+    with no chart rows were its only gaps; every regular-season game now has chart rows."""
     cur.execute("""WITH sh AS (SELECT player_id, LEFT(season, 4)::int + 1 AS season, COUNT(*) fga
                                FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2009-10' GROUP BY 1, 2)
                    SELECT sh.season, COUNT(*), COUNT(*) FILTER (WHERE ABS(sh.fga - s.fga * s.gp) > 0.05 * s.gp + 2),
                           MAX(ABS(sh.fga - s.fga * s.gp))
                    FROM sh JOIN player_season_stats s USING (player_id, season) WHERE s.gp >= 20 GROUP BY 1 ORDER BY 1""")
     rows = cur.fetchall()
-    assert [s for s, *_ in rows][0] == 2010 and len(rows) >= 17
+    assert [s for s, *_ in rows][0] == 2010 and [s for s, *_ in rows][-1] == 2026 and len(rows) >= 17
     for season, n, off, worst in rows:
-        if season == 2026:
-            assert off > 0            # R8-028 (if this fails the chart was re-fetched: drop the branch below)
-            continue
         assert off <= (1 if season in (2016, 2017) else 0) and worst <= 6, (season, n, off, worst)
     cur.execute("""SELECT game_id FROM game_scores WHERE season = 2026
-                   AND game_id NOT IN (SELECT DISTINCT game_id FROM player_shots WHERE season = '2025-26')
-                   GROUP BY 1 ORDER BY 1""")
-    missing = [r[0] for r in cur.fetchall()]
-    assert missing == ["0022500259", "0022500260", "0022500261", "0022500265"]
-    (still_off,) = one(cur, """
-        WITH sh AS (SELECT player_id AS pid, COUNT(*) fga FROM player_shots WHERE game_id LIKE '002%%' AND season = '2025-26'
-                    GROUP BY 1),
-             miss AS (SELECT l.player_id AS pid, SUM(l.fga) fga FROM player_game_lines l
-                      JOIN game_scores g ON 'espn_' || g.espn_id = l.game_id AND g.team_abbreviation = l.team_abbreviation
-                      WHERE g.game_id = ANY(%s) GROUP BY 1)
-        SELECT COUNT(*) FILTER (WHERE ABS(sh.fga + COALESCE(miss.fga, 0) - s.fga * s.gp) > 0.05 * s.gp + 2)
-        FROM sh JOIN player_season_stats s ON s.player_id = sh.pid AND s.season = 2026
-        LEFT JOIN miss ON miss.pid = sh.pid WHERE s.gp >= 20""", (missing,))
-    assert still_off == 0
+                   AND game_id NOT IN (SELECT DISTINCT game_id FROM player_shots WHERE season = '2025-26')""")
+    assert cur.fetchall() == []
