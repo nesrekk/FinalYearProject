@@ -20,4 +20,7 @@ nba_data/salaries/
 nba_data/college_teams/
 # Local backups written before destructive reloads (load_kaggle_historical_seasons.py etc.)
 scratchpad_backups/*_before_reload.csv
+# The live season's daily fetch caches (scripts/daily_update.py): ESPN scoreboards and game summaries, nba_api frames,
+# the shot chart per team; delete to re-fetch
+live_data/
 scratchpad_backups/player_id_map_*.csv

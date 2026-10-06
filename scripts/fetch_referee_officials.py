@@ -12,18 +12,22 @@ very different:
      i.e. fouls called on them) and FTA, plus FGA/OREB/TOV to derive a
      real per-game possessions estimate (pace proxy). Fast.
 
-  2. BoxScoreSummaryV2 — real officials assigned to a game are only
+  2. BoxScoreSummaryV3 (V2 until round 9 step 2, 2026-10-06) — real officials assigned to a game are only
      available per-game, no bulk endpoint exists. This is the slow
      part: one real call per real game. Resumable — every attempted
      game_id (even ones that came back with zero officials) is logged
      to game_officials_fetch_log, so a re-run skips everything already
      tried instead of re-fetching from scratch.
 
-Known real data gap, verified directly against the live endpoint:
-nba_api's own BoxScoreSummaryV2 warns it may be missing officials for
-games on/after 2025-04-10. Those games are still logged as attempted
-(so we don't retry them forever) but simply contribute zero officials
-rows — a real, disclosed gap, not an error.
+Known real data gap: BoxScoreSummaryV2 answered an empty body for games
+from 2025-04-10 on (nba_api warns about it), so the games of that span
+that were attempted with V2 are in game_officials_fetch_log with zero
+officials and are never retried (3 games of 2025-26 have officials).
+Since round 9 step 2 (2026-10-06) the per-game fetch is BoxScoreSummaryV3,
+which answers for old and new games with personId; the live season's
+officials come through scripts/daily_update.py. Backfilling the V2 gap
+would change referee_tendencies' inputs, which the paper reads:
+docs/qa/ROUND9_ISSUES.md R9-012 (a season-end decision).
 
 Usage:
     cd scripts && python3 fetch_referee_officials.py [season_start] [season_end]
@@ -95,11 +99,28 @@ def possessions_estimate(fga, oreb, tov, fta):
     return fga - oreb + tov + 0.44 * fta
 
 
-def fetch_game_officials(game_id: str):
-    from nba_api.stats.endpoints import boxscoresummaryv2
+def box_rows(df, season: int):
+    """LeagueGameFinder's frame -> game_team_box rows (game_id, season, game_date, team_id, team_abbreviation, fta, pf,
+    fga, oreb, tov, poss_est). Shared with daily_update.py (round 9 step 2)."""
+    rows = []
+    for _, r in df.iterrows():
+        fga, oreb, tov, fta = int(r["FGA"]), int(r["OREB"]), int(r["TOV"]), int(r["FTA"])
+        rows.append((
+            r["GAME_ID"], season, r["GAME_DATE"], int(r["TEAM_ID"]), r["TEAM_ABBREVIATION"],
+            fta, int(r["PF"]), fga, oreb, tov, possessions_estimate(fga, oreb, tov, fta),
+        ))
+    return rows
 
-    endpoint = boxscoresummaryv2.BoxScoreSummaryV2(game_id=game_id, timeout=30)
-    return endpoint.officials.get_data_frame()
+
+def fetch_game_officials(game_id: str):
+    """[(official_id, name)] of one game from BoxScoreSummaryV3 (round 9 step 2, R9-005: V2 answers an empty body for
+    games from 2025-04-10 on; V3 answers for old games too, 0.4-1.3 s, with personId). An empty list when the game
+    has no officials listed."""
+    from nba_api.stats.endpoints import boxscoresummaryv3
+
+    summary = boxscoresummaryv3.BoxScoreSummaryV3(game_id=game_id, timeout=30).get_dict().get("boxScoreSummary") or {}
+    return [(int(o["personId"]), str(o.get("name") or f"{o.get('firstName', '')} {o.get('familyName', '')}").strip())
+            for o in summary.get("officials") or [] if o.get("personId")]
 
 
 def main():
@@ -130,13 +151,7 @@ def main():
             all_game_ids_by_season[season] = []
             continue
 
-        rows = []
-        for _, r in df.iterrows():
-            fga, oreb, tov, fta = int(r["FGA"]), int(r["OREB"]), int(r["TOV"]), int(r["FTA"])
-            rows.append((
-                r["GAME_ID"], season, r["GAME_DATE"], int(r["TEAM_ID"]), r["TEAM_ABBREVIATION"],
-                fta, int(r["PF"]), fga, oreb, tov, possessions_estimate(fga, oreb, tov, fta),
-            ))
+        rows = box_rows(df, season)
         psycopg2.extras.execute_values(
             cursor,
             """INSERT INTO game_team_box
@@ -160,10 +175,10 @@ def main():
     fetched, empty, failed = 0, 0, 0
     for i, game_id in enumerate(remaining):
         try:
-            off_df = fetch_game_officials(game_id)
-            n = len(off_df)
+            officials = fetch_game_officials(game_id)
+            n = len(officials)
             if n:
-                rows = [(game_id, int(r["OFFICIAL_ID"]), f"{r['FIRST_NAME']} {r['LAST_NAME']}".strip()) for _, r in off_df.iterrows()]
+                rows = [(game_id, oid, name) for oid, name in officials]
                 psycopg2.extras.execute_values(
                     cursor,
                     "INSERT INTO game_officials (game_id, official_id, official_name) VALUES %s ON CONFLICT DO NOTHING;",

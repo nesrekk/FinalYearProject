@@ -64,14 +64,19 @@ def unique_names(cur, through=None):
     return {n: (next(iter(p)), shown[n]) for n, p in ids.items() if len(p) == 1}
 
 
-def find(conn, through=None):
+def find(conn, through=None, game_ids=None):
     """One row per event to fix: id, game_id, team, old/new person_id and name (`through`: games of seasons up to that
-    end year only; the repair itself reads every season)."""
+    end year only; `game_ids`: only those pbp_games ids, the daily update's new games (round 9 step 2); the repair
+    itself reads every season)."""
     cap = f" AND g.season <= {int(through)}" if through else ""
+    params = None
+    if game_ids is not None:
+        cap += " AND g.game_id = ANY(%(ids)s)"
+        params = {"ids": list(game_ids)}
     ev = pd.read_sql_query(
         f"""SELECT e.id, e.game_id, e.team_tricode, e.person_id, e.player_name, e.description
            FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id
-           WHERE g.source = 'espn' AND e.person_id IS NOT NULL{cap};""", conn)
+           WHERE g.source = 'espn' AND e.person_id IS NOT NULL{cap};""", conn, params=params)
     ev["pn"] = ev.player_name.map(fold)
     ev["dn"] = ev.description.map(fold)
     ev["hit"] = [p in d for p, d in zip(ev.pn, ev.dn)]
@@ -105,13 +110,17 @@ def main():
     if "--apply" not in sys.argv:
         print(f"{len(fixes)} events would change; rerun with --apply to write them")
         return
-    cur = conn.cursor()
-    for r in fixes.itertuples(index=False):
-        cur.execute("UPDATE pbp_events SET person_id = %s, player_name = %s WHERE id = %s AND person_id = %s;",
-                    (r.new_id, r.new_name, r.id, r.old_id))
-        assert cur.rowcount == 1, r
+    apply_fixes(conn.cursor(), fixes)
     conn.commit()
     print(f"{len(fixes)} events updated")
+
+
+def apply_fixes(cur, fixes):
+    """Write find()'s rows (each UPDATE must hit exactly the one event)."""
+    for r in fixes.itertuples(index=False):
+        cur.execute("UPDATE pbp_events SET person_id = %s, player_name = %s WHERE id = %s AND person_id = %s;",
+                    (int(r.new_id), r.new_name, int(r.id), int(r.old_id)))
+        assert cur.rowcount == 1, r
 
 
 if __name__ == "__main__":

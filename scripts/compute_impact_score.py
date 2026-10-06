@@ -52,6 +52,34 @@ def add_column():
 
 # ─── Step 2–3: Compute raw + normalized impact scores ───────────────────────
 
+COMPONENTS = ["ts_pct", "net_rating", "usg_pct", "ast_pct", "reb_pct", "w_pct", "def_rating"]
+
+
+def impact_z(df):
+    """player_id, season, impact_score for the rows of `df` (player_id, season and COMPONENTS) that have every
+    component: the raw composite, z-scored within each season. The whole-table run and a one-season run give the
+    same values for that season (the z is per season); daily_update.py uses it for the live season's rows."""
+    df = df.dropna(subset=COMPONENTS).copy()
+    df["raw_score"] = (
+        (df["ts_pct"] * 2.0)
+        + (df["net_rating"] * 0.5)
+        + (df["usg_pct"] * 0.3)
+        + (df["ast_pct"] * 0.3)
+        + (df["reb_pct"] * 0.2)
+        + (df["w_pct"] * 1.5)
+        - (df["def_rating"] * 0.2)
+    )
+    season_stats = df.groupby("season")["raw_score"].agg(["mean", "std"])
+    df["impact_score"] = df.apply(
+        lambda row: (
+            (row["raw_score"] - season_stats.loc[row["season"], "mean"])
+            / season_stats.loc[row["season"], "std"]
+        ) if season_stats.loc[row["season"], "std"] > 0 else 0.0,
+        axis=1,
+    )
+    return df[["player_id", "season", "impact_score"]]
+
+
 def compute_scores():
     print("\n" + "=" * 60)
     print("Step 2–3: Computing and normalizing impact scores")
@@ -71,40 +99,16 @@ def compute_scores():
         df = pd.read_sql_query(query, conn)
         print(f"  Loaded {len(df):,} rows")
 
-        # Drop rows with NULLs in any component
-        components = ["ts_pct", "net_rating", "usg_pct", "ast_pct",
-                       "reb_pct", "w_pct", "def_rating"]
         before = len(df)
-        df = df.dropna(subset=components)
+        df = impact_z(df)      # drops rows with a NULL component, then the per-season z
         dropped = before - len(df)
         if dropped > 0:
             print(f"  Dropped {dropped} rows with NULL values")
 
-        # Raw impact score
-        df["raw_score"] = (
-            (df["ts_pct"] * 2.0)
-            + (df["net_rating"] * 0.5)
-            + (df["usg_pct"] * 0.3)
-            + (df["ast_pct"] * 0.3)
-            + (df["reb_pct"] * 0.2)
-            + (df["w_pct"] * 1.5)
-            - (df["def_rating"] * 0.2)
-        )
-
-        # Normalize per season (z-score)
-        season_stats = df.groupby("season")["raw_score"].agg(["mean", "std"])
-        df["impact_score"] = df.apply(
-            lambda row: (
-                (row["raw_score"] - season_stats.loc[row["season"], "mean"])
-                / season_stats.loc[row["season"], "std"]
-            ) if season_stats.loc[row["season"], "std"] > 0 else 0.0,
-            axis=1,
-        )
-
         print(f"  ✅ Computed normalized impact scores for {len(df):,} rows")
         print(f"  Score range: {df['impact_score'].min():.3f} to {df['impact_score'].max():.3f}")
 
-        return df[["player_id", "season", "impact_score"]]
+        return df
 
     except Exception as e:
         print(f"  ❌ Error: {e}")

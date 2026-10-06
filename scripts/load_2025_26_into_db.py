@@ -54,9 +54,13 @@ INSERT_COLUMNS = [
 
 
 def load_and_merge():
-    base = pd.read_csv(BASE_CSV)
-    adv = pd.read_csv(ADVANCED_CSV)
+    return merge_frames(pd.read_csv(BASE_CSV), pd.read_csv(ADVANCED_CSV), SEASON_INT)
 
+
+def merge_frames(base, adv, season_int):
+    """LeagueDashPlayerStats Base + Advanced (PerGame) frames -> the player_season_stats rows of `season_int`
+    (INSERT_COLUMNS; tov_pct = TM_TOV_PCT / 100). Shared with daily_update.py, which refreshes the live season's
+    rows from the same two endpoints (round 9 step 2)."""
     base = base[[
         "PLAYER_ID", "PLAYER_NAME", "TEAM_ABBREVIATION", "AGE", "GP", "MIN",
         "PTS", "REB", "AST", "STL", "BLK", "TOV", "FG_PCT", "FG3_PCT", "FT_PCT",
@@ -69,7 +73,7 @@ def load_and_merge():
 
     df = base.merge(adv, on="PLAYER_ID", how="inner")
     df["tov_pct"] = df["TM_TOV_PCT"] / 100.0
-    df["season"] = SEASON_INT
+    df["season"] = season_int
 
     rename = {
         "PLAYER_ID": "player_id", "PLAYER_NAME": "player_name", "TEAM_ABBREVIATION": "team_abbreviation",

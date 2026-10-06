@@ -58,13 +58,15 @@ def ensure_table(cursor):
     """)
 
 
-def fetch_season_games(season: int):
+def fetch_season_games(season: int, season_type: str = "Regular Season"):
+    """One LeagueGameFinder call: every team-game row of the season and season type ('Regular Season' by default;
+    daily_update.py passes 'Pre Season' in its tests, round 9 step 2)."""
     from nba_api.stats.endpoints import leaguegamefinder
 
     season_label = f"{season - 1}-{str(season)[-2:]}"
     endpoint = leaguegamefinder.LeagueGameFinder(
         season_nullable=season_label,
-        season_type_nullable="Regular Season",
+        season_type_nullable=season_type,
         league_id_nullable="00",
         timeout=45,
     )

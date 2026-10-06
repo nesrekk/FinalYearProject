@@ -193,12 +193,15 @@ def test_predicates_exclude_exactly_a_fake_2026_27_row(conn, catalogue):
             f"FROM (SELECT * FROM public.\"{t}\" ORDER BY {_order_col(cols)} LIMIT 1) x)",
             f"u AS (SELECT * FROM public.\"{t}\" UNION ALL SELECT * FROM fake)"]
         cur.execute("WITH " + ", ".join(ctes) + f" SELECT (SELECT count(*) FROM fake), (SELECT count(*) FROM u), "
-                    f"(SELECT count(*) FROM u WHERE {pred}), (SELECT count(*) FROM public.\"{t}\")")
-        n_fake, n_union, n_capped, n_plain = cur.fetchone()
+                    f"(SELECT count(*) FROM u WHERE {pred}), (SELECT count(*) FROM public.\"{t}\"), "
+                    f"(SELECT count(*) FROM public.\"{t}\" WHERE {pred})")
+        n_fake, n_union, n_capped, n_plain, n_paper = cur.fetchone()
         if n_plain == 0:
             continue                       # nothing to copy a fake row from (an empty table)
         assert n_fake == 1 and n_union == n_plain + 1, (t, n_fake, n_union, n_plain)
-        assert n_capped == n_plain, f"{t}: predicate {pred!r} keeps {n_capped} of {n_union} rows, the table has {n_plain}"
+        # the fake row is excluded and nothing else changes: the union's paper rows are the table's own paper rows
+        # (= every row until the live season adds 2026-27 rows to the table, round 9 step 2)
+        assert n_capped == n_paper, f"{t}: predicate {pred!r} keeps {n_capped} of {n_union} rows, the table's paper rows are {n_paper}"
         checked += 1
     assert checked >= 120, checked
 
@@ -226,13 +229,16 @@ def test_manifest_digest_skips_the_live_ledger_log():
 
 @needs_db
 def test_manifest_hashes_and_counts_apply_the_predicates(conn, catalogue):
-    """Today no capped table has a 2026-27 row, so the capped hash equals the plain one; and the WHERE is really
-    applied (a predicate that keeps nothing gives the empty table's hash)."""
+    """The capped hash equals the plain one exactly while a table has no 2026-27 row (every table until the live
+    season's daily update adds rows, round 9 step 2), and differs once it has; the WHERE is really applied (a
+    predicate that keeps nothing gives the empty table's hash)."""
     cur = conn.cursor()
     for t in ("pbp_games", "game_scores", "lineup_stint_games", "player_projections", "game_officials"):
         pred = catalogue[t][0]
         assert pred
-        assert PM.content_hash(cur, t, pred) == PM.content_hash(cur, t), t
+        cur.execute(f'SELECT count(*) FROM "{t}" WHERE NOT ({pred})')
+        live_rows = cur.fetchone()[0]
+        assert (PM.content_hash(cur, t, pred) == PM.content_hash(cur, t)) == (live_rows == 0), (t, live_rows)
     n, h = PM.content_hash(cur, "pbp_games", "FALSE")
     assert n == 0 and h == PM.content_hash(cur, "pbp_games", "season > 9999")[1]
     preds = {t: catalogue[t][0] for t in ("pbp_games", "game_scores")}

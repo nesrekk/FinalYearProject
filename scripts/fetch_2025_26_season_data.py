@@ -44,22 +44,26 @@ def polite_sleep(multiplier: float = 1.0):
     time.sleep((BASE_SLEEP_SECONDS * multiplier) + jitter)
 
 
-def fetch_with_retry(measure_type: str) -> pd.DataFrame:
+def fetch_with_retry(measure_type: str, season_label: str = SEASON_LABEL,
+                     season_type: str = "Regular Season", allow_empty: bool = False) -> pd.DataFrame:
     """
     Fetch a player stats table with retries and backoff.
-    measure_type should be 'Base' or 'Advanced'.
+    measure_type should be 'Base' or 'Advanced'. season_label / season_type default to this
+    script's 2025-26 regular season; daily_update.py passes the live season's (round 9 step 2)
+    with allow_empty=True: before the first game the endpoint answers an empty table, which is
+    not an error there (here an empty answer for 2025-26 is, and is retried).
     """
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             endpoint = leaguedashplayerstats.LeagueDashPlayerStats(
-                season=SEASON_LABEL,
-                season_type_all_star="Regular Season",
+                season=season_label,
+                season_type_all_star=season_type,
                 measure_type_detailed_defense=measure_type,
                 per_mode_detailed="PerGame",
                 timeout=REQUEST_TIMEOUT,
             )
             df = endpoint.get_data_frames()[0]
-            if df.empty:
+            if df.empty and not allow_empty:
                 raise RuntimeError(f"Empty dataframe returned for {measure_type}")
             return df
         except Exception as exc:

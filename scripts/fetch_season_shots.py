@@ -66,7 +66,12 @@ from db_config import DB_CONFIG
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+# kind -> (nba_api season type, NBA game-id prefix): the three season types player_shots holds (the checks and the
+# merge iterate these). EXTRA_TYPES: the preseason, fetchable for daily_update.py's tests on the live season's preseason
+# games (round 9 step 2), never merged by this script.
 TYPES = {"regular": ("Regular Season", "002"), "playoffs": ("Playoffs", "004"), "playin": ("PlayIn", "005")}
+EXTRA_TYPES = {"preseason": ("Pre Season", "001")}
+ALL_TYPES = {**TYPES, **EXTRA_TYPES}
 STAGE_SCHEMA = "zz_stage"
 KEY = ["game_id", "player_id", "period", "minutes_remaining", "seconds_remaining", "loc_x", "loc_y", "shot_made_flag"]
 INSERT_COLUMNS = ["player_id", "player_name", "season", "game_id", "loc_x", "loc_y", "shot_made_flag", "shot_type",
@@ -89,7 +94,7 @@ def fetch_one(team_id, season, kind, tries=4):
         try:
             df = shotchartdetail.ShotChartDetail(
                 team_id=team_id, player_id=0, season_nullable=season_label(season),
-                season_type_all_star=TYPES[kind][0], context_measure_simple="FGA", timeout=30,
+                season_type_all_star=ALL_TYPES[kind][0], context_measure_simple="FGA", timeout=30,
             ).get_data_frames()[0]
             return df
         except Exception as e:  # network or a throttled answer: wait and try again

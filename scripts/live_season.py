@@ -64,6 +64,7 @@ BY_PRODUCER = {
     "(before the first commit)": "season-end",
     "api/shots_lib.py": "cache", "snapshot_predictions.py": "cache",
     "ledger_lock.py": "ledger", "ledger_update.py": "ledger",
+    "daily_update.py": "daily",
     # derived
     "build_player_profile_data.py": "season-end", "build_first_nba_season.py": "season-end",
     "build_award_winners_table.py": "season-end", "build_contract_value.py": "static", "build_league_averages.py": "season-end",
@@ -161,6 +162,7 @@ NOTES = {
     "ledger_results": "LIVE: grows with the season; outside the manifest digest",
     "ledger_game_log": "LIVE", "ledger_team_log": "LIVE", "ledger_runs": "LIVE", "ledger_tests": "LIVE (from 100 scored games)",
     "defense_tracking_stats": "empty since its endpoint stopped answering",
+    "daily_update_runs": "LIVE: one row per daily_update.py run (what was checked, written, left pending, failed); outside the manifest digest",
 }
 
 LATEST_SQL = {   # rows of the newest season for tables without a season column (the one-season size estimate)

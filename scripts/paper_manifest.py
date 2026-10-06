@@ -57,9 +57,10 @@ event's season for pbp_events / pbp_event_clock / play_finder_events /
 game_officials, `last_season <= 2026` for player_projections); the predicate
 is recorded per table as `paper_rows` (null = no season dimension, read whole).
 The ledger's locked tables (kind ledger) are 2026-27 by design and hashed
-whole. The ledger's live log (LIVE below) is listed but left out of the digest
-and of the staleness check, since every ledger_update.py run changes it (round
-8 R8-086). A rebuild that adds only 2026-27 rows therefore leaves every entry,
+whole. The ledger's live log and the daily update's run log (LIVE below) are listed
+but left out of the digest and of the staleness check, since every
+ledger_update.py / daily_update.py run changes them (round 8 R8-086, round 9
+step 2). A rebuild that adds only 2026-27 rows therefore leaves every entry,
 the digest and paper_numbers.py's \\pnMan... macros unchanged.
 
 Kinds and producers
@@ -161,6 +162,10 @@ PRODUCERS = {
                                   "ledger_forecasts", "ledger_lock"]),
     # ---- ledger, live: appended each night of the season by the nightly update (LIVE below)
     "ledger_update.py": ("ledger", ["ledger_results", "ledger_game_log", "ledger_team_log", "ledger_runs", "ledger_tests"]),
+    # ---- the live season's daily fetch (round 9 step 2): its run log, one row a run (LIVE below); the tables it fills
+    # (pbp_*, game_scores, postseason_games, team_game_fatigue, game_team_box, game_officials*, player_shots,
+    # player_season_stats) stay listed under the scripts that create them
+    "daily_update.py": ("source", ["daily_update_runs"]),
     # ---- derived: season tables, awards, clusters
     "build_player_profile_data.py": ("derived", ["player_bio", "player_awards", "player_team_stints"]),
     "build_first_nba_season.py": ("derived", ["player_first_season"]),
@@ -421,7 +426,9 @@ def load_manifest(path=MANIFEST_JSON):
 
 
 # Tables appended on a schedule (the Forecast Ledger's nightly log): a later row count is expected.
-LIVE = {"ledger_results", "ledger_game_log", "ledger_team_log", "ledger_runs", "ledger_tests"}
+# Tables appended during the season on a schedule, listed in the manifest but outside its digest and its row-count
+# staleness check: the Forecast Ledger's live log (ledger_update.py) and the daily update's run log (daily_update.py).
+LIVE = {"ledger_results", "ledger_game_log", "ledger_team_log", "ledger_runs", "ledger_tests", "daily_update_runs"}
 
 
 def stale_reasons(cur, m):

@@ -125,6 +125,8 @@ step fetch -        ledger_lock.py --verify              # Forecast Ledger: a lo
 step fetch net      ledger_update.py                     # Forecast Ledger nightly: ESPN finals, odds from the tagged code,
                                                          # scores (appends; a rerun of a night adds nothing)
 step fetch nbaapi   fetch_referee_officials.py           # resumable: grows coverage each run
+step fetch net,nbaapi daily_update.py                    # the live season (round 9 step 2): finals, play-by-play, shots, season stats
+                                                         # since the last run; writes only the live season's rows (daily_update_runs = its log)
 step fetch nbaapi   fetch_spacing_data.py
 step fetch nbaapi   fetch_matchups.py
 step fetch nbaapi   fetch_defend_dashboard.py
