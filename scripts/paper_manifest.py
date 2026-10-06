@@ -46,6 +46,22 @@ The database digest is the sha256 of one line per table, sorted by name:
 "<table>\\t<schema md5>\\t<content md5>\\t<rows>". It changes if anything in
 any table changes. The paper prints its first 16 hex digits.
 
+The paper's rows (round 9 step 1, 2026-10-06)
+---------------------------------------------
+The paper is frozen on 2025-26 (api/paper_freeze.py, MAX_PAPER_SEASON = 2026)
+while the live 2026-27 season adds rows every day. So a table with a season
+dimension is counted and hashed over the paper's rows only: `rows` and
+`content_md5` are taken WHERE paper_freeze.paper_predicate(table) holds
+(`season <= 2026`, `season <= '2025-26'` for text seasons, the game's or
+event's season for pbp_events / pbp_event_clock / play_finder_events /
+game_officials, `last_season <= 2026` for player_projections); the predicate
+is recorded per table as `paper_rows` (null = no season dimension, read whole).
+The ledger's locked tables (kind ledger) are 2026-27 by design and hashed
+whole. The ledger's live log (LIVE below) is listed but left out of the digest
+and of the staleness check, since every ledger_update.py run changes it (round
+8 R8-086). A rebuild that adds only 2026-27 rows therefore leaves every entry,
+the digest and paper_numbers.py's \\pnMan... macros unchanged.
+
 Kinds and producers
 -------------------
 Every table carries the script that writes it (TABLES below) and a kind:
@@ -95,6 +111,7 @@ _API_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _API_DIR not in sys.path:
     sys.path.append(_API_DIR)
 from local_only import LOCAL_ONLY, on_mirror  # noqa: E402  (kept local, not on the cloud mirror)
+from paper_freeze import MAX_PAPER_SEASON, paper_predicate  # noqa: E402  (the paper's rows of a table the season adds to)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PAPER_DIR = os.path.join(ROOT, "paper")
@@ -269,7 +286,7 @@ def db_tables(cur):
 
 
 def schemas(cur):
-    """table -> (schema md5, column count, timestamp columns), from the catalogue (fast)."""
+    """table -> (schema md5, column count, timestamp columns, column names), from the catalogue (fast)."""
     cur.execute("""SELECT table_name, column_name, data_type, udt_name FROM information_schema.columns
                    WHERE table_schema = 'public' ORDER BY table_name, ordinal_position""")
     cols = {}
@@ -278,30 +295,44 @@ def schemas(cur):
     out = {}
     for t, cs in cols.items():
         text = "\n".join(f"{c}\t{udt}" for c, dt, udt in cs)
-        out[t] = (hashlib.md5(text.encode()).hexdigest(), len(cs), [c for c, dt, _ in cs if dt in TIME_TYPES])
+        out[t] = (hashlib.md5(text.encode()).hexdigest(), len(cs), [c for c, dt, _ in cs if dt in TIME_TYPES],
+                  [c for c, _, _ in cs])
     return out
 
 
-def row_counts(cur, tables):
-    """Exact row count of every table in one statement (~2 s for the whole database)."""
+def predicates(sch):
+    """table -> the paper-rows predicate (paper_freeze.paper_predicate) or None, from schemas()' output."""
+    return {t: paper_predicate(t, s[3]) for t, s in sch.items()}
+
+
+def _where(pred):
+    return f" WHERE {pred}" if pred else ""
+
+
+def row_counts(cur, tables, preds=None):
+    """Exact row count of every table in one statement (~2 s for the whole database); with `preds`
+    (table -> predicate or None) the paper's rows only."""
     if not tables:
         return {}
-    cur.execute(" UNION ALL ".join(f"SELECT %s, count(*) FROM \"{t}\"" for t in tables), tables)
+    preds = preds or {}
+    cur.execute(" UNION ALL ".join(f"SELECT %s, count(*) FROM \"{t}\"{_where(preds.get(t))}" for t in tables), tables)
     return dict(cur.fetchall())
 
 
-def content_hash(cur, table):
+def content_hash(cur, table, pred=None):
+    """(rows, content md5) of the table, or of the rows where `pred` holds."""
     cur.execute(f"""SELECT count(*), sum(('x' || substr(h, 1, 16))::bit(64)::bigint::numeric),
                            sum(('x' || substr(h, 17, 16))::bit(64)::bigint::numeric)
-                    FROM (SELECT md5(t::text) AS h FROM "{table}" t) s""")
+                    FROM (SELECT md5(t::text) AS h FROM "{table}" t{_where(pred)}) s""")
     n, a, b = cur.fetchone()
     key = f"{n}" if n == 0 else f"{n}|{a}|{b}"
     return n, hashlib.md5(key.encode()).hexdigest()
 
 
 def digest(entries):
+    """sha256 over every table but the LIVE ones (their rows change on every ledger_update.py run)."""
     lines = "".join(f"{e['table']}\t{e['schema_md5']}\t{e['content_md5']}\t{e['rows']}\n"
-                    for e in sorted(entries, key=lambda e: e["table"]))
+                    for e in sorted(entries, key=lambda e: e["table"]) if e["table"] not in LIVE)
     return hashlib.sha256(lines.encode()).hexdigest()
 
 
@@ -330,37 +361,46 @@ def build_manifest(conn, progress=False):
         raise SystemExit("tables with no producer in paper_manifest.PRODUCERS (say which script writes them): "
                          + ", ".join(missing))
     sch = schemas(cur)
+    preds = predicates(sch)
     cur.execute("SHOW server_version")
     version = cur.fetchone()[0]
     entries = []
     for t in tables:
-        n, h = content_hash(cur, t)
+        n, h = content_hash(cur, t, preds[t])
         kind, producer = TABLES[t]
-        smd5, ncol, tcols = sch[t]
+        smd5, ncol, tcols, _ = sch[t]
         entries.append({"table": t, "kind": kind, "producer": producer, "rows": n, "columns": ncol,
-                        "schema_md5": smd5, "content_md5": h, "time_columns": tcols})
+                        "schema_md5": smd5, "content_md5": h, "time_columns": tcols, "paper_rows": preds[t],
+                        "live": t in LIVE})
         if progress:
             print(f"  {t:34s} {n:>10,d}  {h}", flush=True)
     cur.close()
     head, dirty = git_state()
     return {
-        "about": "Row count and content hash of every table in the nba_analytics database; "
-                 "written by scripts/paper_manifest.py (method in its docstring).",
+        "about": "Row count and content hash of every table in the nba_analytics database, over the paper's rows "
+                 "(seasons to 2025-26) where a table has a season dimension; written by scripts/paper_manifest.py "
+                 "(method in its docstring).",
         "code": {"git_commit": head, "uncommitted_changes_in_pipeline_code": dirty},
         "database": {"server_version": version, "session": list(SESSION), "tables": len(entries),
                      "rows": sum(e["rows"] for e in entries), "digest_sha256": digest(entries),
                      "by_kind": {k: sum(1 for e in entries if e["kind"] == k)
-                                 for k in ("source", "derived", "paper", "cache", "legacy")}},
+                                 for k in ("source", "derived", "paper", "cache", "legacy", "ledger")},
+                     "paper_season": {"max_paper_season": MAX_PAPER_SEASON,
+                                      "capped_tables": sum(1 for e in entries if e["paper_rows"]),
+                                      "live_tables_outside_digest": sorted(LIVE),
+                                      "rule": "rows and content_md5 count only rows where paper_rows holds "
+                                              "(api/paper_freeze.py); live tables are listed, not digested"}},
         "tables": entries,
     }
 
 
 def render_tsv(m):
-    head = ["table", "kind", "producer", "rows", "columns", "schema_md5", "content_md5", "time_columns"]
+    head = ["table", "kind", "producer", "rows", "columns", "schema_md5", "content_md5", "time_columns", "paper_rows", "live"]
     out = ["# " + m["about"], f"# database digest (sha256): {m['database']['digest_sha256']}",
            f"# git commit: {m['code']['git_commit']}", "\t".join(head)]
     for e in m["tables"]:
-        out.append("\t".join(str(e[k]) if k != "time_columns" else ",".join(e[k]) for k in head))
+        out.append("\t".join(",".join(e[k]) if k == "time_columns" else ("" if e.get(k) is None else str(e.get(k)))
+                             for k in head))
     return "\n".join(out) + "\n"
 
 
@@ -398,9 +438,13 @@ def stale_reasons(cur, m):
     common = [t for t in now if t in have]
     sch = schemas(cur)
     reasons += [f"{t}: schema changed" for t in common if sch[t][0] != have[t]["schema_md5"]]
-    counts = row_counts(cur, common)
-    reasons += [f"{t}: {have[t]['rows']:,} rows in the manifest, {counts[t]:,} now"
-                for t in common if counts[t] != have[t]["rows"] and t not in LIVE]
+    preds = predicates(sch)
+    reasons += [f"{t}: paper-rows predicate is {have[t].get('paper_rows')!r} in the manifest, {preds[t]!r} now"
+                for t in common if have[t].get("paper_rows") != preds[t]]
+    counted = [t for t in common if t not in LIVE]
+    counts = row_counts(cur, counted, preds)
+    reasons += [f"{t}: {have[t]['rows']:,} rows in the manifest, {counts[t]:,} now" + (" (the paper's rows)"
+                if preds[t] else "") for t in counted if counts[t] != have[t]["rows"]]
     return reasons
 
 
@@ -414,9 +458,10 @@ def file_sums():
 
 
 def compare(local, other):
-    """Table-by-table comparison of two manifests, LOCAL_ONLY tables skipped. Returns (report lines, ok)."""
-    a = {e["table"]: e for e in local["tables"] if e["table"] not in LOCAL_ONLY}
-    b = {e["table"]: e for e in other["tables"] if e["table"] not in LOCAL_ONLY}
+    """Table-by-table comparison of two manifests, LOCAL_ONLY and LIVE tables skipped. Returns (report lines, ok)."""
+    skip = set(LOCAL_ONLY) | LIVE
+    a = {e["table"]: e for e in local["tables"] if e["table"] not in skip}
+    b = {e["table"]: e for e in other["tables"] if e["table"] not in skip}
     lines, bad = [], 0
     for t in sorted(set(a) | set(b)):
         if t not in b:
@@ -436,6 +481,7 @@ def compare(local, other):
     lines.append(f"digest over the {len(shared)} shared tables: here {da[:16]}, there {db[:16]}")
     present = sorted({e["table"] for e in local["tables"] + other["tables"]} & set(LOCAL_ONLY))
     lines.append(f"skipped, kept local (api/local_only.py): {', '.join(present) or 'none present'}")
+    lines.append(f"skipped, live ledger log (appended during the season): {', '.join(sorted(LIVE))}")
     return lines, bad == 0
 
 
@@ -465,8 +511,10 @@ def main():
     finally:
         conn.close()
     d = m["database"]
-    print(f"wrote manifest.json and manifest.tsv to {args.out}: {d['tables']} tables, {d['rows']:,} rows, "
-          f"digest {d['digest_sha256'][:16]}")
+    print(f"wrote manifest.json and manifest.tsv to {args.out}: {d['tables']} tables, {d['rows']:,} rows "
+          f"(the paper's: seasons to {MAX_PAPER_SEASON - 1}-{str(MAX_PAPER_SEASON)[-2:]} in the "
+          f"{d['paper_season']['capped_tables']} tables with a season dimension), digest {d['digest_sha256'][:16]} "
+          f"(the {len(LIVE)} live ledger tables listed, not digested)")
     if m["code"]["uncommitted_changes_in_pipeline_code"]:
         print("note: scripts/ or api/ has uncommitted changes; the manifest records the commit they sit on")
 

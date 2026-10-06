@@ -70,10 +70,14 @@ BOOT = 300
 RNG = np.random.default_rng(20260928)
 
 
-def load(conn):
-    lines = add_columns(pd.read_sql(LINES_SQL.format(where=""), conn))
+def load(conn, through=None):
+    """Lines and previous-season priors; `through` (an end year) keeps the seasons up to it (the paper's
+    scripts pass paper_freeze.MAX_PAPER_SEASON, round 9 step 1; this build reads every season)."""
+    cap = f" AND l.season <= {int(through)}" if through else ""
+    lines = add_columns(pd.read_sql(LINES_SQL.format(where=cap), conn))
     cols = ", ".join(f"{n} AS {k}_n, {d} AS {k}_d" for k, (n, d) in PRIOR_SQL.items())
-    prior = pd.read_sql(f"SELECT player_id, season + 1 AS season, gp, {cols} FROM player_season_stats WHERE gp >= %s",
+    prior_cap = f" AND season + 1 <= {int(through)}" if through else ""
+    prior = pd.read_sql(f"SELECT player_id, season + 1 AS season, gp, {cols} FROM player_season_stats WHERE gp >= %s{prior_cap}",
                         conn, params=(MIN_PRIOR_GAMES,))
     return lines, {(int(r.player_id), int(r.season)): r for r in prior.itertuples(index=False)}
 

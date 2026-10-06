@@ -183,6 +183,7 @@ from db_config import DB_CONFIG
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 import season_sim_lib as L  # noqa: E402
+from paper_freeze import F, MAX_PAPER_SEASON  # noqa: E402  (the paper's rows: seasons to 2025-26, round 9 step 1)
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -310,9 +311,9 @@ def player_part(design_next, o, d):
 
 def impact_stage(conn, out):
     log("impact: loading stints")
-    rows, n_stints, dropped = R.load_rows(conn)
-    bpm = R.load_bpm(conn)
-    dates = dict(pd.read_sql_query("SELECT game_id, game_date FROM lineup_stint_games", conn).itertuples(index=False))
+    rows, n_stints, dropped = R.load_rows(conn, through=MAX_PAPER_SEASON)
+    bpm = R.load_bpm(conn, through=MAX_PAPER_SEASON)
+    dates = dict(pd.read_sql_query(f"SELECT game_id, game_date FROM {F('lineup_stint_games')}", conn).itertuples(index=False))
     seasons = sorted(int(s) for s in rows.season.unique())
     assert seasons == list(range(TUNE[0], TEST + 1)), seasons
     designs = {s: R.Design(rows[rows.season == s]) for s in seasons}
@@ -320,7 +321,7 @@ def impact_stage(conn, out):
     all_of = {s: np.ones(designs[s].n, bool) for s in seasons}
     log(f"impact: {n_stints} tracked stints, {len(rows)} side-rows ({dropped} dropped), seasons {seasons[0]}-{seasons[-1]}")
     # Expected-points target (step 4): the same rows, the same design, only y differs.
-    xp = pd.read_sql_query("SELECT stint_id, home_xpts, away_xpts FROM paper_xrapm_stints", conn).set_index("stint_id")
+    xp = pd.read_sql_query(f"SELECT stint_id, home_xpts, away_xpts FROM {F('paper_xrapm_stints')}", conn).set_index("stint_id")
     assert len(xp), "paper_xrapm_stints is empty: run scripts/paper_xrapm.py first"
     xpts = np.where(rows.home.to_numpy() == 1, xp.home_xpts.reindex(rows.stint_id).to_numpy(), xp.away_xpts.reindex(rows.stint_id).to_numpy())
     assert not np.isnan(xpts).any(), "every tracked stint needs expected points"
@@ -334,7 +335,7 @@ def impact_stage(conn, out):
     log(f"impact: expected-points target loaded ({len(xp):,} stints)")
     # Round 6 step 8: look-ahead-free shooter-blind (lf) and shooter-aware (sa) targets; the held-out task trains on
     # fold_xpts, the same targets priced with the held-out fold's games excluded from every update.
-    ax = pd.read_sql_query("SELECT stint_id, home_xpts_lf, away_xpts_lf, home_xpts_sa, away_xpts_sa, fold_xpts FROM paper_xrapm_stints",
+    ax = pd.read_sql_query(f"SELECT stint_id, home_xpts_lf, away_xpts_lf, home_xpts_sa, away_xpts_sa, fold_xpts FROM {F('paper_xrapm_stints')}",
                            conn).set_index("stint_id")
     home_rows = rows.home.to_numpy() == 1
     poss_rows = rows.poss.to_numpy(float)
@@ -553,7 +554,7 @@ def impact_stage(conn, out):
     t_rmse, t_games = T.next_rmse(tdata, tpar, T.tune_pairs(TUNE))
     assert abs(t_rmse - float(tf.tune_rmse)) < 1e-6 and t_games == int(tf.tune_games), (t_rmse, tf.tune_rmse, t_games, tf.tune_games)
     tfilter = T.Filter(tdata, tpar, keep=True)
-    stored = pd.read_sql_query("SELECT season, player_id, orapm, drapm FROM player_rating_tracker WHERE kind = 'filtered'", conn)
+    stored = pd.read_sql_query(f"SELECT season, player_id, orapm, drapm FROM {F('player_rating_tracker')} WHERE kind = 'filtered'", conn)
     worst = 0.0
     for s in seasons:
         o, d_ = tfilter.ratings(s)
@@ -747,11 +748,11 @@ def load_shots_with_ids(conn):
     buf = io.StringIO()
     with conn.cursor() as cur:
         cur.copy_expert(
-            """COPY (SELECT id, player_id, player_name, substr(season, 1, 4)::int + 1 AS season,
+            f"""COPY (SELECT id, player_id, player_name, substr(season, 1, 4)::int + 1 AS season,
                             loc_x, loc_y, shot_made_flag AS made,
                             (shot_type = '3PT Field Goal')::int AS is3, period,
                             minutes_remaining * 60 + seconds_remaining AS clock
-                     FROM player_shots WHERE game_id LIKE '002%' ORDER BY id)
+                     FROM {F('player_shots')} WHERE game_id LIKE '002%' ORDER BY id)
                TO STDOUT WITH (FORMAT CSV, HEADER)""", buf)
     buf.seek(0)
     df = pd.read_csv(buf, dtype={"id": "int64", "player_id": "int32", "player_name": "string", "season": "int16",
@@ -908,7 +909,8 @@ def xfg_stage(conn, out):
 # ── pregame and simulator ────────────────────────────────────────────────────
 
 def load_games(conn):
-    df = L.prepare_rest(pd.read_sql(L.GAMES_REST_SQL.format(where=""), conn))
+    # the paper's seasons only (round 9 step 1): the live 2026-27 season's games never enter the protocol
+    df = L.prepare_rest(pd.read_sql(L.GAMES_REST_SQL.format(where=f"WHERE g.season <= {MAX_PAPER_SEASON}"), conn))
     return dict(tuple(df.groupby("season")))
 
 
@@ -981,7 +983,7 @@ def pregame_stage(conn, out, season_games):
 
 
 def sim_stage(conn, out, season_games, phases):
-    facts = pd.read_sql("SELECT season, team_abbreviation, play_in, playoffs, top6, wins, games, position FROM season_postseason", conn)
+    facts = pd.read_sql(f"SELECT season, team_abbreviation, play_in, playoffs, top6, wins, games, position FROM {F('season_postseason')}", conn)
     fact = facts.set_index(["season", "team_abbreviation"])
     rows = []
     for phase, (params, betas, form) in phases.items():

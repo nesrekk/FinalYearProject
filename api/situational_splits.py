@@ -61,14 +61,14 @@ MIN_GAMES = 10       # games on each side to qualify
 STORE_GAMES = 3      # rows with fewer games on either side aren't stored
 LONG_TRIP, SHORT_TRIP = 1000, 300
 
-LINES_SQL = """
+_LINES_TEMPLATE = """
     WITH margin AS (
         SELECT season, team_abbreviation,
                RANK() OVER (PARTITION BY season ORDER BY AVG(pts_for - pts_against) DESC) AS opp_rank
-        FROM game_scores GROUP BY season, team_abbreviation
+        FROM game_scores{where_scores} GROUP BY season, team_abbreviation
     ), lines AS (
         SELECT l.*, LAG(l.game_date) OVER (PARTITION BY l.player_id ORDER BY l.game_date) AS prev_date
-        FROM player_game_lines l WHERE l.seconds > 0
+        FROM player_game_lines l WHERE l.seconds > 0{where_lines}
     )
     SELECT l.player_id, l.season, l.game_date, l.team_abbreviation AS team, f.opponent, f.is_home,
            f.rest_days, f.travel_miles_since_last AS travel_miles, m.opp_rank,
@@ -76,10 +76,23 @@ LINES_SQL = """
            l.seconds / 60.0 AS min, l.pts, l.oreb + l.dreb AS reb, l.ast, l.stl, l.blk, l.tov,
            l.fga, l.fg3m, l.fg3a, l.fta, l.tm_fga, l.tm_fta, l.tm_tov
     FROM lines l
-    JOIN team_game_fatigue f ON f.team_abbreviation = l.team_abbreviation AND f.game_date = l.game_date
+    JOIN team_game_fatigue f ON f.team_abbreviation = l.team_abbreviation AND f.game_date = l.game_date{where_fatigue}
     JOIN margin m ON m.season = f.season AND m.team_abbreviation = f.opponent
     ORDER BY l.player_id, l.game_date
 """
+
+
+def lines_sql(through=None):
+    """The lines query; `through` (an end year) keeps the seasons up to it in each of its three table reads (the
+    paper's scripts pass paper_freeze.MAX_PAPER_SEASON, round 9 step 1). Without it, LINES_SQL as always."""
+    if through is None:
+        return _LINES_TEMPLATE.format(where_scores="", where_lines="", where_fatigue="")
+    t = int(through)
+    return _LINES_TEMPLATE.format(where_scores=f" WHERE season <= {t}", where_lines=f" AND l.season <= {t}",
+                                  where_fatigue=f" AND f.season <= {t}")
+
+
+LINES_SQL = lines_sql()
 
 
 def add_columns(df):

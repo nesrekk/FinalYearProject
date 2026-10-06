@@ -147,6 +147,7 @@ from db_config import DB_CONFIG
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 import report_card_lib as RC  # noqa: E402
+from paper_freeze import F, MAX_PAPER_SEASON  # noqa: E402  (the paper's rows: seasons to 2025-26, round 9 step 1)
 
 L = PE.L
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
@@ -242,7 +243,7 @@ def pregame_stage(conn, st):
 def check_pregame(conn, st, forms):
     """2024-25 / 2025-26 rows = paper_eval's validate / test rows (same constants, coefficients, features); the
     simulator's where the chosen form is the protocol's."""
-    pe = pd.read_sql("""SELECT phase, task, model, variant, season, unit_id, pred FROM paper_eval_predictions
+    pe = pd.read_sql(f"""SELECT phase, task, model, variant, season, unit_id, pred FROM {F('paper_eval_predictions')}
                         WHERE task IN ('pregame', 'sim_playoffs', 'sim_top6', 'sim_wins') AND phase IN ('validate', 'test')""", conn)
     proto_form = pd.read_sql("SELECT value FROM paper_eval_choices WHERE task = 'pregame' AND parameter = 'form'", conn).value.iloc[0]
     ours = pd.DataFrame(st.units, columns=["task", "model", "variant", "season", "unit_type", "unit_id", "pred", "actual", "lo", "hi", "date"])
@@ -270,9 +271,9 @@ def check_pregame(conn, st, forms):
 
 def impact_stage(conn, st, reuse_tracker):
     log("impact: loading stints")
-    rows, n_stints, dropped = R.load_rows(conn)
-    bpm = R.load_bpm(conn)
-    dates = dict(pd.read_sql_query("SELECT game_id, game_date FROM lineup_stint_games", conn).itertuples(index=False))
+    rows, n_stints, dropped = R.load_rows(conn, through=MAX_PAPER_SEASON)
+    bpm = R.load_bpm(conn, through=MAX_PAPER_SEASON)
+    dates = dict(pd.read_sql_query(f"SELECT game_id, game_date FROM {F('lineup_stint_games')}", conn).itertuples(index=False))
     seasons = sorted(int(s) for s in rows.season.unique())
     assert seasons == list(range(PE.TUNE[0], PE.TEST + 1)), seasons
     designs = {s: R.Design(rows[rows.season == s]) for s in seasons}
@@ -280,8 +281,8 @@ def impact_stage(conn, st, reuse_tracker):
     all_of = {s: np.ones(designs[s].n, bool) for s in seasons}
     log(f"impact: {n_stints} tracked stints, {len(rows)} side-rows ({dropped} dropped)")
 
-    xp = pd.read_sql_query("""SELECT stint_id, home_xpts, away_xpts, home_xpts_lf, away_xpts_lf, home_xpts_sa, away_xpts_sa
-                              FROM paper_xrapm_stints""", conn).set_index("stint_id")
+    xp = pd.read_sql_query(f"""SELECT stint_id, home_xpts, away_xpts, home_xpts_lf, away_xpts_lf, home_xpts_sa, away_xpts_sa
+                              FROM {F('paper_xrapm_stints')}""", conn).set_index("stint_id")
     home_rows = rows.home.to_numpy() == 1
     tdesigns, tgrams = {}, {}
     for v in AWARE:
@@ -354,15 +355,15 @@ def impact_stage(conn, st, reuse_tracker):
         with conn.cursor() as cur:
             cur.execute("SELECT to_regclass('report_card_choices')")
             if cur.fetchone()[0]:
-                cur.execute("SELECT season, parameter, value FROM report_card_choices WHERE task = 'impact' AND model = 'rapm_tracker'")
+                cur.execute(f"SELECT season, parameter, value FROM {F('report_card_choices')} WHERE task = 'impact' AND model = 'rapm_tracker'")
                 for s, k, v in cur.fetchall():
                     if k in T.PARAMS:
                         stored_tracker.setdefault(int(s), {})[k] = float(v)
     tf = pd.read_sql("SELECT estimated_on, tune_rmse, tune_games, lambda0, lambda_q, lambda_b, prior_scale, phi FROM rating_tracker_fit "
                      "WHERE version = 'tracker'", conn).iloc[0]
 
-    poss = pd.read_sql("""SELECT p.season, p.game_id, ls.stint_id, CASE WHEN p.off_home THEN 1 ELSE -1 END AS home, p.pts
-                          FROM possessions p JOIN lineup_stints ls ON ls.game_id = p.game_id AND ls.stint_no = p.stint_no
+    poss = pd.read_sql(f"""SELECT p.season, p.game_id, ls.stint_id, CASE WHEN p.off_home THEN 1 ELSE -1 END AS home, p.pts
+                          FROM {F('possessions', 'p')} JOIN {F('lineup_stints', 'ls')} ON ls.game_id = p.game_id AND ls.stint_no = p.stint_no
                           WHERE p.tracked_ok AND ls.tracked_ok AND p.season >= %s
                           ORDER BY p.game_id, p.poss_no""", conn, params=(IMPACT_TARGETS[0] - 1,))
     counted_rate = poss.groupby("season").pts.sum() / poss.groupby("season").size()
@@ -465,7 +466,7 @@ def impact_stage(conn, st, reuse_tracker):
 
 
 def check_impact(conn, st):
-    pe = pd.read_sql("""SELECT model, season, unit_id, pred FROM paper_eval_predictions
+    pe = pd.read_sql(f"""SELECT model, season, unit_id, pred FROM {F('paper_eval_predictions')}
                         WHERE task = 'impact_next' AND phase IN ('validate', 'test')""", conn)
     ours = pd.DataFrame([u for u in st.units if u[0] == "impact_next"],
                         columns=["task", "model", "variant", "season", "unit_type", "unit_id", "pred", "actual", "lo", "hi", "date"])
@@ -484,8 +485,8 @@ def check_impact(conn, st):
 
 def xfg_stage(conn, st):
     t0 = time.time()
-    df = pd.read_sql("""SELECT s.shot_id, s.season, s.made::int AS made, s.cls, s.p_lf, s.p_sa, ps.game_id
-                        FROM shot_value_shots s JOIN player_shots ps ON ps.id = s.shot_id ORDER BY s.shot_id""", conn)
+    df = pd.read_sql(f"""SELECT s.shot_id, s.season, s.made::int AS made, s.cls, s.p_lf, s.p_sa, ps.game_id
+                        FROM {F('shot_value_shots', 's')} JOIN {F('player_shots', 'ps')} ON ps.id = s.shot_id ORDER BY s.shot_id""", conn)
     log(f"xfg: {len(df):,} priced shots in {time.time() - t0:.0f}s")
     val = pd.read_sql("SELECT seasons, price, n, log_loss, brier FROM shot_value_validation WHERE cls = 'fg' AND scope = seasons", conn)
     checks = {}

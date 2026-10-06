@@ -134,6 +134,7 @@ from db_config import DB_CONFIG
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 import availability_lib as A  # noqa: E402
 import season_sim_lib as L  # noqa: E402
+from paper_freeze import F  # noqa: E402  (the paper's rows: seasons to 2025-26, round 9 step 1)
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -157,41 +158,41 @@ def log(msg):
 # ── loading ──────────────────────────────────────────────────────────────────
 
 def load(conn):
-    lines = pd.read_sql("""SELECT l.player_id, l.season, l.game_date, g.game_id, l.team_abbreviation AS team,
+    lines = pd.read_sql(f"""SELECT l.player_id, l.season, l.game_date, g.game_id, l.team_abbreviation AS team,
                                   l.seconds / 60.0 AS minutes
-                           FROM player_game_lines l
-                           JOIN game_scores g ON 'espn_' || g.espn_id = l.game_id AND g.team_abbreviation = l.team_abbreviation
+                           FROM {F('player_game_lines', 'l')}
+                           JOIN {F('game_scores', 'g')} ON 'espn_' || g.espn_id = l.game_id AND g.team_abbreviation = l.team_abbreviation
                            WHERE l.seconds > 0 ORDER BY l.player_id, l.game_date, g.game_id""", conn)
     # minutes per game the season before: player_game_lines from 2020-21, player_season_stats for 2019-20
     per = lines.groupby(["season", "player_id"]).minutes.mean()
     prev_mpg = {(s + 1, p): float(v) for (s, p), v in per.items()}
-    for p, m in pd.read_sql(f"SELECT player_id, min FROM player_season_stats WHERE season = {FIRST - 1} ORDER BY player_id", conn).itertuples(index=False):
+    for p, m in pd.read_sql(f"SELECT player_id, min FROM {F('player_season_stats')} WHERE season = {FIRST - 1} ORDER BY player_id", conn).itertuples(index=False):
         prev_mpg[(FIRST, p)] = float(m)
     # last season's minutes per team
-    st = pd.read_sql(f"SELECT player_id, team, gp, minutes FROM player_team_stints WHERE season = {FIRST - 1} ORDER BY player_id, stint", conn)
-    ps = pd.read_sql(f"""SELECT player_id, team_abbreviation AS team, gp, gp * min AS minutes FROM player_season_stats
+    st = pd.read_sql(f"SELECT player_id, team, gp, minutes FROM {F('player_team_stints')} WHERE season = {FIRST - 1} ORDER BY player_id, stint", conn)
+    ps = pd.read_sql(f"""SELECT player_id, team_abbreviation AS team, gp, gp * min AS minutes FROM {F('player_season_stats')}
                          WHERE season = {FIRST - 1} ORDER BY player_id, team_abbreviation""", conn)
     first_prev = pd.concat([st, ps[~ps.player_id.isin(st.player_id)]])
     first_prev = first_prev.assign(season=FIRST)[["season", "team", "player_id", "gp", "minutes"]]
     pm = lines.groupby(["season", "team", "player_id"]).minutes.agg(["size", "sum"]).reset_index()
     pm = pm.rename(columns={"size": "gp", "sum": "minutes"}).assign(season=lambda d: d.season + 1)
     prev_team = pd.concat([first_prev, pm], ignore_index=True)
-    tgp = pd.read_sql(f"""SELECT season + 1 AS season, team_abbreviation AS team, COUNT(*) AS n FROM game_scores
+    tgp = pd.read_sql(f"""SELECT season + 1 AS season, team_abbreviation AS team, COUNT(*) AS n FROM {F('game_scores')}
                             WHERE season >= {FIRST - 1} GROUP BY 1, 2 ORDER BY 1, 2""", conn)
     team_games_prev = {(s, t): int(n) for s, t, n in tgp.itertuples(index=False)}
     ratings = {
-        "bpm": pd.read_sql("""SELECT season, player_id, projection AS r, (hi - lo) / (2 * %(z)s) AS sd
-                              FROM projection_backtest_rows WHERE stat = 'bpm' ORDER BY season, player_id""", conn, params={"z": Z80}),
-        "rapm": pd.read_sql("""SELECT season + 1 AS season, player_id, rapm AS r, rapm_se AS sd
-                               FROM player_rapm WHERE version = 'prior' ORDER BY season, player_id""", conn),
+        "bpm": pd.read_sql(f"""SELECT season, player_id, projection AS r, (hi - lo) / (2 * %(z)s) AS sd
+                              FROM {F('projection_backtest_rows')} WHERE stat = 'bpm' ORDER BY season, player_id""", conn, params={"z": Z80}),
+        "rapm": pd.read_sql(f"""SELECT season + 1 AS season, player_id, rapm AS r, rapm_se AS sd
+                               FROM {F('player_rapm')} WHERE version = 'prior' ORDER BY season, player_id""", conn),
     }
     same_season = {
-        "bpm": pd.read_sql(f"SELECT season, player_id, bpm AS x FROM player_season_stats WHERE season >= {FIRST} ORDER BY 1, 2", conn),
-        "rapm": pd.read_sql("SELECT season, player_id, rapm AS x FROM player_rapm WHERE version = 'prior' ORDER BY 1, 2", conn),
+        "bpm": pd.read_sql(f"SELECT season, player_id, bpm AS x FROM {F('player_season_stats')} WHERE season >= {FIRST} ORDER BY 1, 2", conn),
+        "rapm": pd.read_sql(f"SELECT season, player_id, rapm AS x FROM {F('player_rapm')} WHERE version = 'prior' ORDER BY 1, 2", conn),
     }
     odds = pd.read_sql(f"""SELECT game_id, season, game_date, home, away, p_home, home_won, home_games, away_games
-                           FROM game_pregame_odds WHERE season >= {FIRST} ORDER BY game_date, game_id""", conn)
-    sigma = pd.read_sql("SELECT season, sigma_prev FROM season_sim_seasons", conn).set_index("season").sigma_prev.to_dict()
+                           FROM {F('game_pregame_odds')} WHERE season >= {FIRST} ORDER BY game_date, game_id""", conn)
+    sigma = pd.read_sql(f"SELECT season, sigma_prev FROM {F('season_sim_seasons')}", conn).set_index("season").sigma_prev.to_dict()
     tau2 = {"platform": float(pd.read_sql("SELECT value FROM season_sim_params WHERE name = 'tau2'", conn).value[0])}
     ch = pd.read_sql("""SELECT model, value FROM paper_eval_choices WHERE task = 'pregame' AND parameter = 'tau2'
                         AND model IN ('constants', 'constants_test')""", conn).set_index("model").value
@@ -199,14 +200,14 @@ def load(conn):
     tau2["test"] = float(ch["constants_test"])
     # minutes ESPN's unidentified players took (game length minus the identified players' minutes)
     ident = pd.read_sql(f"""SELECT g.game_id, g.team_abbreviation AS team, 240 + 25 * (g.periods - 4) - SUM(l.seconds::numeric)::float8 / 60.0 AS unid
-                            FROM player_game_lines l JOIN game_scores g ON 'espn_' || g.espn_id = l.game_id
+                            FROM {F('player_game_lines', 'l')} JOIN {F('game_scores', 'g')} ON 'espn_' || g.espn_id = l.game_id
                                  AND g.team_abbreviation = l.team_abbreviation
                             WHERE g.season >= {FIRST} GROUP BY 1, 2, g.periods ORDER BY 1, 2""", conn).set_index(["game_id", "team"]).unid
-    names = pd.read_sql("""SELECT DISTINCT ON (player_id) player_id, player_name FROM (
+    names = pd.read_sql(f"""SELECT DISTINCT ON (player_id) player_id, player_name FROM (
                                SELECT player_id, player_name, 1 AS pri, 0 AS season FROM player_bio
-                               UNION ALL SELECT player_id, player_name, 2, season FROM player_season_stats) x
+                               UNION ALL SELECT player_id, player_name, 2, season FROM {F('player_season_stats')}) x
                            ORDER BY player_id, pri, season DESC""", conn).set_index("player_id").player_name
-    base_eval = pd.read_sql("""SELECT phase, season, unit_id AS game_id, pred AS p_eval_base, actual FROM paper_eval_predictions
+    base_eval = pd.read_sql(f"""SELECT phase, season, unit_id AS game_id, pred AS p_eval_base, actual FROM {F('paper_eval_predictions')}
                                WHERE task = 'pregame' AND model = 'prior_rest' AND season >= %s ORDER BY unit_id""", conn, params=(FIRST,))
     return lines, prev_mpg, prev_team, team_games_prev, ratings, same_season, odds, sigma, tau2, names, base_eval, ident
 

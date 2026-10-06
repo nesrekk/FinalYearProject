@@ -82,6 +82,7 @@ Then rerun paper_numbers.py. Rerun this after paper_eval.py.
 
 import argparse
 import hashlib
+import os
 import sys
 import time
 import warnings
@@ -93,6 +94,9 @@ import psycopg2.extras
 from scipy import stats
 
 from db_config import DB_CONFIG
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "api"))
+from paper_freeze import F  # noqa: E402  (the paper's rows: seasons to 2025-26, round 9 step 1)
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -319,8 +323,8 @@ class Series:
 
 def load_phase(conn, task, phase, shot_games):
     """{(model, variant): Series} for one task and phase."""
-    df = pd.read_sql("""SELECT model, variant, season, unit_id, pred, actual, lo, hi, unit_date
-                        FROM paper_eval_predictions WHERE task = %s AND phase = %s""", conn, params=(task, phase))
+    df = pd.read_sql(f"""SELECT model, variant, season, unit_id, pred, actual, lo, hi, unit_date
+                        FROM {F('paper_eval_predictions')} WHERE task = %s AND phase = %s""", conn, params=(task, phase))
     if df.empty:
         return {}
     if task == "xfg":
@@ -333,7 +337,7 @@ def load_phase(conn, task, phase, shot_games):
 
 def load_shot_games(conn):
     t = time.time()
-    df = pd.read_sql("SELECT id, game_id FROM player_shots WHERE game_id LIKE '002%%'", conn)
+    df = pd.read_sql(f"SELECT id, game_id FROM {F('player_shots')} WHERE game_id LIKE '002%%'", conn)
     m = pd.Series(df.game_id.to_numpy(), index=df.id.to_numpy())
     log(f"xfg: {len(m):,} regular-season shot -> game ids in {time.time() - t:.0f}s")
     return m

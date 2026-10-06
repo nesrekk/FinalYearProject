@@ -125,12 +125,15 @@ VERSIONS = ("single", "multi", "prior")
 
 # ── Data ─────────────────────────────────────────────────────────────────────
 
-def load_rows(conn):
-    """Two rows per tracked stint (each side's offence), sides with no possession dropped."""
+def load_rows(conn, through=None):
+    """Two rows per tracked stint (each side's offence), sides with no possession dropped. `through` (an end year)
+    keeps the seasons up to it: the paper's scripts pass paper_freeze.MAX_PAPER_SEASON (round 9 step 1); the
+    app's build reads every season."""
+    cap = f" AND season <= {int(through)}" if through else ""
     st = pd.read_sql_query(
-        """SELECT stint_id, game_id, season, home_team, away_team, home_ids, away_ids, home_pts, away_pts,
+        f"""SELECT stint_id, game_id, season, home_team, away_team, home_ids, away_ids, home_pts, away_pts,
                   home_poss, away_poss, seconds
-           FROM lineup_stints WHERE tracked_ok ORDER BY stint_id""", conn)
+           FROM lineup_stints WHERE tracked_ok{cap} ORDER BY stint_id""", conn)
     home = pd.DataFrame({
         "stint_id": st.stint_id, "game_id": st.game_id, "season": st.season, "team": st.home_team, "opp": st.away_team,
         "off": st.home_ids, "de": st.away_ids, "pts": st.home_pts, "poss": st.home_poss, "home": 1, "seconds": st.seconds})
@@ -151,11 +154,13 @@ def game_fold(game_id):
     return int(hashlib.md5(game_id.encode()).hexdigest(), 16) % FOLDS
 
 
-def load_bpm(conn):
-    """(player, season) -> (obpm, dbpm, bpm, minutes) from Basketball-Reference's published values."""
+def load_bpm(conn, through=None):
+    """(player, season) -> (obpm, dbpm, bpm, minutes) from Basketball-Reference's published values; `through` as
+    in load_rows."""
+    cap = f" AND season <= {int(through)}" if through else ""
     df = pd.read_sql_query(
-        """SELECT player_id, season, obpm, dbpm, bpm, gp * min AS minutes FROM player_season_stats
-           WHERE bpm IS NOT NULL AND obpm IS NOT NULL AND dbpm IS NOT NULL""", conn)
+        f"""SELECT player_id, season, obpm, dbpm, bpm, gp * min AS minutes FROM player_season_stats
+           WHERE bpm IS NOT NULL AND obpm IS NOT NULL AND dbpm IS NOT NULL{cap}""", conn)
     return {(int(r.player_id), int(r.season)): (float(r.obpm), float(r.dbpm), float(r.bpm), float(r.minutes or 0))
             for r in df.itertuples()}
 

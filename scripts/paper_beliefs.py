@@ -161,6 +161,7 @@ from db_config import DB_CONFIG
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "api"))
 import hot_streaks as HSDEF  # noqa: E402
 import situational_splits as SPDEF  # noqa: E402
+from paper_freeze import F, MAX_PAPER_SEASON  # noqa: E402  (the paper's rows: seasons to 2025-26, round 9 step 1)
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -306,7 +307,7 @@ def clutch(conn, out, perms, perms2):
     import compute_wpa as W
     log("clutch: loading play-by-play and scoring the win-probability model")
     model, scaler = W.load_model()
-    df = W.load_events(conn)
+    df = W.load_events(conn, through=MAX_PAPER_SEASON)      # the paper's seasons only (round 9 step 1)
     df["margin"] = df["score_home"] - df["score_away"]
     df["wp_home"] = W.compute_win_probs(model, scaler, df["seconds_remaining"].values, df["margin"].values)
     tipoff_wp = float(W.win_prob(model, scaler, 2880.0, 0))
@@ -326,7 +327,7 @@ def clutch(conn, out, perms, perms2):
     # as pbp_lineups reads it: "three point", or 23+ feet when no type is written).
     at = ch["action_type"].fillna("")
     kind = np.where(at.str.startswith("Free Throw"), 0, np.where(at.str.contains("Turnover") | (at == "Traveling"), 1, 2))
-    three = pd.read_sql("""SELECT e.id FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id
+    three = pd.read_sql(f"""SELECT e.id FROM {F('pbp_events', 'e')} JOIN {F('pbp_games', 'g')} ON g.game_id = e.game_id
                            WHERE """ + W.PBP_DEDUP_WHERE + """ AND e.person_id IS NOT NULL
                              AND e.action_type ~ 'Shot|Layup|Dunk|Hook'
                              AND (e.description ILIKE '%%three point%%'
@@ -407,7 +408,7 @@ def clutch(conn, out, perms, perms2):
 def streak(conn, out, perms, perms2):
     import build_hot_streak_persistence as HS
     log("streak: loading player game lines and previous seasons")
-    lines, prior = HS.load(conn)
+    lines, prior = HS.load(conn, through=MAX_PAPER_SEASON)   # the paper's seasons only (round 9 step 1)
     lines = HSDEF.add_columns(lines)
     cur = conn.cursor()
     cur.execute("SELECT stat, window_games, prior_games, slope, slope_season_only FROM hot_streak_persistence")
@@ -521,10 +522,11 @@ def streak(conn, out, perms, perms2):
 
 def split(conn, out, perms, perms2):
     log("split: loading player game lines with the schedule")
-    lines = SPDEF.add_columns(pd.read_sql(SPDEF.LINES_SQL, conn))
-    stored = pd.read_sql("""SELECT player_id, season, split, stat, diff, vs_league, league_diff, games_a, games_b
-                            FROM player_situational_splits WHERE qualified""", conn)
-    league = pd.read_sql("SELECT season, split, stat, league_diff, league_value_b FROM situational_split_league WHERE season > 0", conn)
+    # the paper's seasons only (round 9 step 1): the bound sits inside each table read, the ORDER BY is untouched
+    lines = SPDEF.add_columns(pd.read_sql(SPDEF.lines_sql(MAX_PAPER_SEASON), conn))
+    stored = pd.read_sql(f"""SELECT player_id, season, split, stat, diff, vs_league, league_diff, games_a, games_b
+                            FROM {F('player_situational_splits')} WHERE qualified""", conn)
+    league = pd.read_sql(f"SELECT season, split, stat, league_diff, league_value_b FROM {F('situational_split_league')} WHERE season > 0", conn)
     # The average player's gap as a share of his side-B rate: the proportional effect taken out of every player's side A.
     league = {(r.split, r.stat, int(r.season)): (r.league_diff / r.league_value_b if r.league_value_b else 0.0)
               for r in league.itertuples()}
@@ -635,7 +637,7 @@ def split(conn, out, perms, perms2):
 # ------------------------------------------------------------------ team luck
 
 def luck(conn, out, perms2):
-    ts = pd.read_sql("SELECT season, franchise, luck_per82 FROM team_luck_schedule ORDER BY season, franchise", conn)
+    ts = pd.read_sql(f"SELECT season, franchise, luck_per82 FROM {F('team_luck_schedule')} ORDER BY season, franchise", conn)
     W = ts.pivot(index="season", columns="franchise", values="luck_per82")
     check(W.notna().all().all() and W.shape[1] == 30, "every franchise has a luck value in every season")
     X = W.to_numpy()                                     # (seasons, 30)
@@ -678,13 +680,13 @@ def luck(conn, out, perms2):
 # ------------------------------------------------------------------ referees
 
 def referee(conn, out, perms2):
-    games = pd.read_sql("""SELECT game_id, season, SUM(pf) AS fouls, SUM(fta) AS fta, AVG(poss_est) AS pace
-                           FROM game_team_box GROUP BY game_id, season HAVING COUNT(*) = 2
+    games = pd.read_sql(f"""SELECT game_id, season, SUM(pf) AS fouls, SUM(fta) AS fta, AVG(poss_est) AS pace
+                           FROM {F('game_team_box')} GROUP BY game_id, season HAVING COUNT(*) = 2
                            ORDER BY season, game_id""", conn)          # rows grouped by season (the shuffle is within season)
     for c in ("fouls", "fta", "pace"):
         games[c] = games[c].astype(float)
         games[c + "_adj"] = games[c] - games.groupby("season")[c].transform("mean")
-    offs = pd.read_sql("SELECT game_id, official_id, official_name FROM game_officials ORDER BY game_id, official_id", conn)
+    offs = pd.read_sql(f"SELECT game_id, official_id, official_name FROM {F('game_officials')} ORDER BY game_id, official_id", conn)
     offs = offs[offs["game_id"].isin(games["game_id"])]
     gidx = pd.Series(np.arange(len(games)), index=games["game_id"])
     per_game = offs.groupby("game_id").size()

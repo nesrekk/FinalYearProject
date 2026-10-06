@@ -115,6 +115,7 @@ from db_config import DB_CONFIG
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 import lineup_predictor_lib as LP  # noqa: E402
+from paper_freeze import F  # noqa: E402  (the paper's rows: seasons to 2025-26, round 9 step 1)
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -140,14 +141,14 @@ def log(msg):
 
 # ── loading ──────────────────────────────────────────────────────────────────
 
-LINEUP_GAMES_SQL = """
+LINEUP_GAMES_SQL = f"""
 WITH p AS (
   SELECT p.season, p.game_id, g.game_date, p.offense, p.defense, p.pts,
          CASE WHEN p.off_home THEN s.home_ids ELSE s.away_ids END AS off_ids,
          CASE WHEN p.off_home THEN s.away_ids ELSE s.home_ids END AS def_ids
-  FROM possessions p
-  JOIN lineup_stints s ON s.game_id = p.game_id AND s.stint_no = p.stint_no
-  JOIN possession_games g ON g.game_id = p.game_id
+  FROM {F('possessions', 'p')}
+  JOIN {F('lineup_stints', 's')} ON s.game_id = p.game_id AND s.stint_no = p.stint_no
+  JOIN {F('possession_games', 'g')} ON g.game_id = p.game_id
   WHERE p.tracked_ok AND p.season >= %(first)s),
 sides AS (
   SELECT season, game_id, game_date, offense AS team, off_ids AS ids, pts AS pf, 0 AS pa, 1 AS po, 0 AS pd FROM p
@@ -157,10 +158,10 @@ SELECT season, team, game_id, game_date, (SELECT array_agg(x ORDER BY x) FROM un
        SUM(po)::int AS po, SUM(pf)::int AS pf, SUM(pd)::int AS pd, SUM(pa)::int AS pa
 FROM sides GROUP BY 1, 2, 3, 4, 5 ORDER BY 1, 2, 4, 3, 5"""
 
-GAME_NO_SQL = """
+GAME_NO_SQL = f"""
 SELECT season, team, game_date, ROW_NUMBER() OVER (PARTITION BY season, team ORDER BY game_date, game_id) AS game_no
-FROM (SELECT season, home_team AS team, game_date, game_id FROM lineup_stint_games
-      UNION ALL SELECT season, away_team, game_date, game_id FROM lineup_stint_games) x
+FROM (SELECT season, home_team AS team, game_date, game_id FROM {F('lineup_stint_games')}
+      UNION ALL SELECT season, away_team, game_date, game_id FROM {F('lineup_stint_games')}) x
 WHERE season >= %(first)s ORDER BY 1, 2, 3"""
 
 
@@ -172,24 +173,24 @@ def load(conn):
     game_no = pd.read_sql(GAME_NO_SQL, conn, params={"first": first})
     q = lambda sql: pd.read_sql(sql, conn)  # noqa: E731
     pre = {   # (season, player_id) -> value, fixed before the season
-        "bpm": q("SELECT season, player_id, projection AS v FROM projection_backtest_rows WHERE stat = 'bpm'"),
-        "rapm": q("SELECT season + 1 AS season, player_id, rapm::text::float8 AS v FROM player_rapm WHERE version = 'prior'"),
-        "tracker": q("SELECT season + 1 AS season, player_id, rapm::text::float8 AS v FROM player_rating_tracker WHERE kind = 'filtered'"),
-        "gravity": q("SELECT season + 1 AS season, player_id, gravity AS v FROM player_gravity WHERE gravity IS NOT NULL"),
-        "usage": q("SELECT season, player_id, projection AS v FROM projection_backtest_rows WHERE stat = 'usg_pct'"),
+        "bpm": q(f"SELECT season, player_id, projection AS v FROM {F('projection_backtest_rows')} WHERE stat = 'bpm'"),
+        "rapm": q(f"SELECT season + 1 AS season, player_id, rapm::text::float8 AS v FROM {F('player_rapm')} WHERE version = 'prior'"),
+        "tracker": q(f"SELECT season + 1 AS season, player_id, rapm::text::float8 AS v FROM {F('player_rating_tracker')} WHERE kind = 'filtered'"),
+        "gravity": q(f"SELECT season + 1 AS season, player_id, gravity AS v FROM {F('player_gravity')} WHERE gravity IS NOT NULL"),
+        "usage": q(f"SELECT season, player_id, projection AS v FROM {F('projection_backtest_rows')} WHERE stat = 'usg_pct'"),
     }
     same = {  # the same season's own value, for the replacement level only
-        "bpm": q("SELECT season, player_id, bpm AS v FROM player_season_stats WHERE bpm IS NOT NULL"),
-        "rapm": q("SELECT season, player_id, rapm::text::float8 AS v FROM player_rapm WHERE version = 'prior'"),
-        "tracker": q("SELECT season, player_id, rapm::text::float8 AS v FROM player_rating_tracker WHERE kind = 'filtered'"),
-        "gravity": q("SELECT season, player_id, gravity AS v FROM player_gravity WHERE gravity IS NOT NULL"),
-        "usage": q("SELECT season, player_id, usg_pct AS v FROM player_season_stats WHERE usg_pct IS NOT NULL"),
+        "bpm": q(f"SELECT season, player_id, bpm AS v FROM {F('player_season_stats')} WHERE bpm IS NOT NULL"),
+        "rapm": q(f"SELECT season, player_id, rapm::text::float8 AS v FROM {F('player_rapm')} WHERE version = 'prior'"),
+        "tracker": q(f"SELECT season, player_id, rapm::text::float8 AS v FROM {F('player_rating_tracker')} WHERE kind = 'filtered'"),
+        "gravity": q(f"SELECT season, player_id, gravity AS v FROM {F('player_gravity')} WHERE gravity IS NOT NULL"),
+        "usage": q(f"SELECT season, player_id, usg_pct AS v FROM {F('player_season_stats')} WHERE usg_pct IS NOT NULL"),
     }
-    roles = q("SELECT season + 1 AS season, player_id, family FROM player_roles")
-    s2 = q("""SELECT season, var_pop(pts)::float8 AS s2 FROM possessions WHERE tracked_ok GROUP BY season ORDER BY season""")
-    names = q("""SELECT DISTINCT ON (player_id) player_id, player_name FROM (
+    roles = q(f"SELECT season + 1 AS season, player_id, family FROM {F('player_roles')}")
+    s2 = q(f"""SELECT season, var_pop(pts)::float8 AS s2 FROM {F('possessions')} WHERE tracked_ok GROUP BY season ORDER BY season""")
+    names = q(f"""SELECT DISTINCT ON (player_id) player_id, player_name FROM (
                      SELECT player_id, player_name, 1 AS pri, 0 AS season FROM player_bio
-                     UNION ALL SELECT player_id, player_name, 2, season FROM player_season_stats) x
+                     UNION ALL SELECT player_id, player_name, 2, season FROM {F('player_season_stats')}) x
                  ORDER BY player_id, pri, season DESC""")
     for d in list(pre.values()) + list(same.values()):
         assert not d.duplicated(["season", "player_id"]).any()
@@ -291,12 +292,12 @@ def season_to_date(u, before, k):
     return td_team, td_on
 
 
-SPLIT_SQL = """
+SPLIT_SQL = f"""
 WITH p AS (
   SELECT p.season, p.offense, p.defense, p.pts, abs(hashtext(p.game_id || ':' || p.poss_no)) %% 2 AS h,
          CASE WHEN p.off_home THEN s.home_ids ELSE s.away_ids END AS off_ids,
          CASE WHEN p.off_home THEN s.away_ids ELSE s.home_ids END AS def_ids
-  FROM possessions p JOIN lineup_stints s ON s.game_id = p.game_id AND s.stint_no = p.stint_no
+  FROM {F('possessions', 'p')} JOIN {F('lineup_stints', 's')} ON s.game_id = p.game_id AND s.stint_no = p.stint_no
   WHERE p.tracked_ok AND p.season >= %(first)s),
 sides AS (
   SELECT season, offense AS team, off_ids AS ids, h, pts AS pf, 0 AS pa, 1 AS po, 0 AS pd FROM p

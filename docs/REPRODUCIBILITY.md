@@ -72,6 +72,8 @@ Create the database with `createdb -T template0 -E UTF8 --locale=C nba_analytics
 
 The database digest is a sha256 over all tables. The paper prints its first 16 hex digits (`\pnManDigest`, `b9f5cf00c72f80ff` on 2026-09-30). `paper_numbers.py` stops if the manifest no longer matches the database's table set, schemas and row counts.
 
+**The paper's rows (round 9 step 1, 2026-10-06).** The paper is frozen on 2025-26 (`api/paper_freeze.py`, `MAX_PAPER_SEASON = 2026`) while the live 2026-27 season adds rows to the database every day. So for a table with a season dimension the manifest counts and hashes **the paper's rows only**: `season <= 2026` (text seasons `<= '2025-26'`), the game's or event's season for `pbp_events` / `pbp_event_clock` / `play_finder_events` / `game_officials`, `last_season <= 2026` for `player_projections`; the predicate is recorded per table (`paper_rows`, null = read whole). The Forecast Ledger's lock is 2026-27 by design and hashed whole; its live log (`ledger_results`, `ledger_game_log`, `ledger_team_log`, `ledger_runs`, `ledger_tests`) is listed but left out of the digest and of the staleness check, since every `ledger_update.py` run changes it. A database that has gained a season of rows therefore gives the same manifest, `numbers.tex` and figures; every paper-stage script reads those tables through `paper_freeze.F()` with the same bound (`docs/LIVE_SEASON.md`, `api/tests/test_paper_frozen.py`).
+
 `paper_manifest.py --files` writes `paper/SHA256SUMS` for the generated inputs: `numbers.tex`, `tables/*.tex`, `figures/*.pdf` and the manifest. Check them with `cd paper && shasum -a 256 -c SHA256SUMS`.
 
 **What to expect after a rebuild:**

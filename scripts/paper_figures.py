@@ -80,6 +80,7 @@ from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch  # noqa: E402
 
 import paper_numbers as PN  # noqa: E402  (import-safe: its work is in main())
+from paper_freeze import F  # noqa: E402  (api/ is on sys.path since paper_numbers' import; the paper's rows, round 9 step 1)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_OUT = os.path.join(ROOT, "paper", "figures")
@@ -390,7 +391,7 @@ def fig_calibration(cur, C, out_dir, png_dir):
 
     # (a) expected FG, test season: the chosen boosting model, ten fixed-width bins as in paper_tests.calibration_rows
     ax = axes[0]
-    xr = rows(cur, "SELECT pred, actual FROM paper_eval_predictions WHERE task = 'xfg' AND phase = 'test' AND model = 'hgb' "
+    xr = rows(cur, f"SELECT pred, actual FROM {F('paper_eval_predictions')} WHERE task = 'xfg' AND phase = 'test' AND model = 'hgb' "
                    "ORDER BY unit_id")
     p = PT.clip(np.array([r[0] for r in xr], float))
     y = np.array([r[1] for r in xr], float)
@@ -415,7 +416,7 @@ def fig_calibration(cur, C, out_dir, png_dir):
 
     # (b) pre-game odds, test season: the chosen form, P(home team wins)
     ax = axes[1]
-    gr = rows(cur, "SELECT pred, actual FROM paper_eval_predictions WHERE task = 'pregame' AND phase = 'test' "
+    gr = rows(cur, f"SELECT pred, actual FROM {F('paper_eval_predictions')} WHERE task = 'pregame' AND phase = 'test' "
                    "AND model = 'prior_rest' ORDER BY unit_id")
     p = np.array([r[0] for r in gr], float)
     y = np.array([r[1] for r in gr], float)
@@ -609,11 +610,11 @@ def fig_possessions(cur, C, out_dir, png_dir):
     """(a) points per possession by start type, every season pooled, intervals treating possessions as independent (the
     Possession Explorer's); (b) after a defensive rebound, by the second of the first attempt (possession_meta)."""
     import json
-    var = {k: (float(v), int(n)) for k, v, n in rows(cur, """
-        SELECT p.start_type, VAR_SAMP(p.pts), COUNT(*) FROM possessions p JOIN possession_games g USING (game_id)
+    var = {k: (float(v), int(n)) for k, v, n in rows(cur, f"""
+        SELECT p.start_type, VAR_SAMP(p.pts), COUNT(*) FROM {F('possessions', 'p')} JOIN {F('possession_games', 'g')} USING (game_id)
         WHERE g.game_ok GROUP BY 1""")}
     ps = {k: (float(pts), float(poss)) for k, pts, poss in rows(
-        cur, "SELECT start_type, sum(pts), sum(poss) FROM possession_seasons WHERE team = 'ALL' GROUP BY 1")}
+        cur, f"SELECT start_type, sum(pts), sum(poss) FROM {F('possession_seasons')} WHERE team = 'ALL' GROUP BY 1")}
     fig, axes = plt.subplots(1, 2, figsize=(COL_W, 1.75), gridspec_kw={"width_ratios": [1.05, 1]})
     fig.subplots_adjust(left=0.36, right=0.985, bottom=0.22, top=0.97, wspace=0.38)
     ax = axes[0]
@@ -730,8 +731,8 @@ REPORT_PANELS = (
 def fig_reportcard(cur, C, out_dir, png_dir):
     """report_card_tests (per season) and report_card_pooled (random effects), oriented first model minus second."""
     T = {}
-    for task, metric, variant, se, a, b, d, lo, hi in rows(cur, """SELECT task, metric, variant, season, model_a, model_b, diff, ci_lo, ci_hi
-                                                               FROM report_card_tests WHERE model_b <> ''"""):
+    for task, metric, variant, se, a, b, d, lo, hi in rows(cur, f"""SELECT task, metric, variant, season, model_a, model_b, diff, ci_lo, ci_hi
+                                                               FROM {F('report_card_tests')} WHERE model_b <> ''"""):
         T[(task, metric, variant, a, b, se)] = (d, lo, hi)
         T[(task, metric, variant, b, a, se)] = (-d, -hi, -lo)
     P = {}

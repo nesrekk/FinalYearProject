@@ -48,7 +48,9 @@ from db_config import DB_CONFIG
 from wpa_lib import CLUTCH_MARGIN, CLUTCH_SECONDS, PBP_DEDUP_WHERE, load_model, win_prob
 
 
-def load_events(conn):
+def events_sql(through=None):
+    """The events query; `through` (an end year) keeps the games of seasons up to it (the paper's scripts pass
+    paper_freeze.MAX_PAPER_SEASON, round 9 step 1; this build reads every season)."""
     # PBP_DEDUP_WHERE: one copy per real game (the ESPN one), so no play is
     # counted twice in a player's totals. Times come from pbp_event_clock (the
     # corrected clock, build_event_clock.py; since round 6 step 12, 2026-10-02):
@@ -56,7 +58,8 @@ def load_events(conn):
     # minutes' plays outside the clutch window. Every deduplicated event has a
     # row there; an event without one (an nba_api-only game, none today) keeps
     # its own time.
-    query = """
+    cap = f" AND g.season <= {int(through)}" if through else ""
+    return """
         SELECT e.game_id, e.action_number, e.id, e.period,
                COALESCE(k.seconds_remaining, e.seconds_remaining) AS seconds_remaining,
                e.score_home, e.score_away, e.team_tricode, e.person_id, e.player_name,
@@ -64,10 +67,13 @@ def load_events(conn):
         FROM pbp_events e
         JOIN pbp_games g ON g.game_id = e.game_id
         LEFT JOIN pbp_event_clock k ON k.event_id = e.id
-        WHERE """ + PBP_DEDUP_WHERE + """
+        WHERE """ + PBP_DEDUP_WHERE + cap + """
         ORDER BY e.game_id, e.action_number, e.id;
     """
-    return pd.read_sql_query(query, conn)
+
+
+def load_events(conn, through=None):
+    return pd.read_sql_query(events_sql(through), conn)
 
 
 # A "scoring chance": a shot, free throw or turnover (ESPN action_type

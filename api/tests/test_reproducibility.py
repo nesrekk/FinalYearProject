@@ -74,7 +74,11 @@ def plan():
 
 
 READ_RE = re.compile(r"\b(?:FROM|JOIN)\s+\"?([a-z_][a-z0-9_]*)", re.I)
+F_RE = re.compile(r"\bF\(\s*['\"]([a-z_][a-z0-9_]*)['\"]")   # a paper-stage read through paper_freeze.F(table)
 LOCAL = {os.path.basename(p)[:-3]: p for p in glob.glob(os.path.join(_API, "*.py")) + glob.glob(os.path.join(_SCRIPTS, "*.py"))}
+# Modules whose SQL text is a rule, not a read: paper_freeze's predicates name pbp_games / pbp_events /
+# pregame_availability_odds for every table they restrict (round 9 step 1); importing them reads nothing.
+RULE_MODULES = {"paper_freeze"}
 
 
 def reads(script):
@@ -83,13 +87,13 @@ def reads(script):
     seen, todo, found = set(), [os.path.join(_SCRIPTS, script)], set()
     while todo:
         path = todo.pop()
-        if path in seen:
+        if path in seen or os.path.basename(path)[:-3] in RULE_MODULES:
             continue
         seen.add(path)
         with open(path) as f:
             text = f.read()
         own = set(PM.PRODUCERS.get(os.path.basename(path), (None, []))[1]) if len(seen) > 1 else set()
-        found |= set(READ_RE.findall(text)) - own
+        found |= (set(READ_RE.findall(text)) | set(F_RE.findall(text))) - own
         for node in ast.walk(ast.parse(text)):
             names = [a.name for a in node.names] if isinstance(node, ast.Import) else \
                 [node.module] if isinstance(node, ast.ImportFrom) and node.module and node.level == 0 else []

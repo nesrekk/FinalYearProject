@@ -111,6 +111,8 @@ Then: paper_eval.py --only impact, paper_tests.py --only impact, paper_numbers.p
 Rerun after build_lineup_stints.py, build_shot_making.py (shot_xfg), build_shot_value.py or build_rapm.py.
 """
 
+import os
+import sys
 import time
 import warnings
 
@@ -123,6 +125,9 @@ import build_rapm as R
 import shot_value_lib as V
 from db_config import DB_CONFIG
 from pbp_lineups import Game, load_espn, load_season_names, match_coordinates
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "api"))
+from paper_freeze import F, MAX_PAPER_SEASON, paper_game_ids  # noqa: E402  (the paper's rows: seasons to 2025-26)
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -150,7 +155,7 @@ def collect_events(conn, cur):
     season, action_number, kind, side, shooter, period, made, the parser's value
     (1 for a free throw)."""
     season_names, all_names = load_season_names(cur)
-    games, grouped = load_espn(conn)
+    games, grouped = load_espn(conn, game_ids=paper_game_ids(conn))     # the paper's seasons only (round 9 step 1)
     rows = []
     for i, g in enumerate(games.itertuples(index=False)):
         ev = grouped.get(g.game_id)
@@ -173,9 +178,9 @@ def collect_events(conn, cur):
 
 def load_stints(conn):
     return pd.read_sql_query(
-        """SELECT stint_id, game_id, season, home_team, away_team, action_from, action_to, tracked_ok,
+        f"""SELECT stint_id, game_id, season, home_team, away_team, action_from, action_to, tracked_ok,
                   home_pts, away_pts, home_fga, away_fga, home_fta, away_fta, home_poss, away_poss, foul_ft_actions
-           FROM lineup_stints ORDER BY stint_id""", conn)
+           FROM {F('lineup_stints')} ORDER BY stint_id""", conn)
 
 
 def map_to_stints(ev, st):
@@ -217,7 +222,7 @@ def price_field_goals(conn, fg):
     stated fallback otherwise. Adds p_make, value, source ('chart', 'shooter',
     'league')."""
     fg = match_coordinates(conn, fg)
-    xfg = pd.read_sql_query("SELECT shot_id, p_make FROM shot_xfg", conn)
+    xfg = pd.read_sql_query(f"SELECT shot_id, p_make FROM {F('shot_xfg')}", conn)
     fg = fg.merge(xfg, left_on="nba_shot_id", right_on="shot_id", how="left").drop(columns=["shot_id"])
     chart = fg.p_make.notna()
     # the chart's two-or-three where matched (the text misses ~8,700 missed threes), the parser's call otherwise
@@ -261,21 +266,21 @@ def price_free_throws(ft, M):
 
 def load_aware_inputs(conn):
     """build_shot_value.py's tables and the inputs its in-season filter reads, in the order it read them."""
-    sv = pd.read_sql_query("""SELECT shot_id, season, game_date, player_id, cls, made, fold, p_blind, p_lf, p_sa
-                              FROM shot_value_shots ORDER BY shot_id""", conn)
+    sv = pd.read_sql_query(f"""SELECT shot_id, season, game_date, player_id, cls, made, fold, p_blind, p_lf, p_sa
+                              FROM {F('shot_value_shots')} ORDER BY shot_id""", conn)
     sv["game_date"] = pd.to_datetime(sv.game_date)
-    states = pd.read_sql_query("SELECT season, player_id, cls, pre_mean, pre_sd FROM shot_value_states", conn)
+    states = pd.read_sql_query(f"SELECT season, player_id, cls, pre_mean, pre_sd FROM {F('shot_value_states')}", conn)
     fit = pd.read_sql_query("SELECT cls, mu0, v0, phi, q, delta_var FROM shot_value_fit WHERE cls <> 'models'", conn).set_index("cls")
-    lines = pd.read_sql_query("""SELECT l.player_id, l.season, l.game_id, l.game_date, l.fta, l.ftm FROM player_game_lines l
-                                 WHERE EXISTS (SELECT 1 FROM game_scores g WHERE 'espn_' || g.espn_id = l.game_id)
+    lines = pd.read_sql_query(f"""SELECT l.player_id, l.season, l.game_id, l.game_date, l.fta, l.ftm FROM {F('player_game_lines', 'l')}
+                                 WHERE EXISTS (SELECT 1 FROM {F('game_scores', 'g')} WHERE 'espn_' || g.espn_id = l.game_id)
                                  ORDER BY l.game_date, l.game_id, l.player_id""", conn)
     lines["game_date"] = pd.to_datetime(lines.game_date)
     lines["fold"] = [R.game_fold(g) for g in lines.game_id]
-    lg = {int(s): float(v) for s, v in pd.read_sql_query("SELECT season, ft_pct FROM league_season_averages", conn).itertuples(index=False)}
+    lg = {int(s): float(v) for s, v in pd.read_sql_query(f"SELECT season, ft_pct FROM {F('league_season_averages')}", conn).itertuples(index=False)}
     rate = {(int(s), int(v)): float(r) for s, v, r in pd.read_sql_query(
-        """SELECT substr(season, 1, 4)::int + 1, CASE WHEN shot_type = '3PT Field Goal' THEN 3 ELSE 2 END, avg(shot_made_flag)
-           FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2019-20' GROUP BY 1, 2""", conn).itertuples(index=False)}
-    dates = pd.read_sql_query("SELECT game_id, game_date FROM pbp_games WHERE source = 'espn'", conn)
+        f"""SELECT substr(season, 1, 4)::int + 1, CASE WHEN shot_type = '3PT Field Goal' THEN 3 ELSE 2 END, avg(shot_made_flag)
+           FROM {F('player_shots')} WHERE game_id LIKE '002%%' AND season >= '2019-20' GROUP BY 1, 2""", conn).itertuples(index=False)}
+    dates = pd.read_sql_query(f"SELECT game_id, game_date FROM {F('pbp_games')} WHERE source = 'espn'", conn)
     return sv, states, fit, lines, lg, rate, dict(zip(dates.game_id, pd.to_datetime(dates.game_date)))
 
 
@@ -550,8 +555,8 @@ def aware_meta(out, counts, worst):
 def fit_all(conn, out):
     """Every target (TARGETS) x version x season; a version's name is the target's prefix + 'single' / 'prior'.
     The round-5 target ('') is fitted first, exactly as before."""
-    rows0, n_stints, dropped = R.load_rows(conn)
-    bpm = R.load_bpm(conn)
+    rows0, n_stints, dropped = R.load_rows(conn, through=MAX_PAPER_SEASON)
+    bpm = R.load_bpm(conn, through=MAX_PAPER_SEASON)
     x = out.set_index("stint_id")
     player_rows, fit_rows, curve_rows = [], [], []
     for prefix in TARGETS:
@@ -570,7 +575,7 @@ def fit_all(conn, out):
 
 
 def fit_target(conn, rows, bpm, prefix, n_stints, dropped):
-    app = pd.read_sql_query("SELECT version, season, player_id, orapm, drapm, rapm, qualified FROM player_rapm WHERE version IN ('single', 'prior')", conn)
+    app = pd.read_sql_query(f"SELECT version, season, player_id, orapm, drapm, rapm, qualified FROM {F('player_rapm')} WHERE version IN ('single', 'prior')", conn)
     app_idx = app.set_index(["version", "season", "player_id"])
     seasons = sorted(int(s) for s in rows.season.unique())
     log(f"fits ({prefix or 'round 5 '}target): {n_stints} tracked stints -> {len(rows)} side-rows ({dropped} sides with no possession "
@@ -690,8 +695,8 @@ def shot_making_diagnostic(conn, players):
     """Round 5's reading, per version: the change from a player's actual-points RAPM to his expected-points rating
     against his shot-making (player_shot_making) and, for round 6, against its two parts (shot_value_added: skill
     per FGA = what his record said, beyond per FGA = what he made beyond that). Qualified, 200+ FGA."""
-    sm = pd.read_sql_query("SELECT player_id, season, shot_making FROM player_shot_making WHERE fga >= 200", conn)
-    sv = pd.read_sql_query("SELECT player_id, season, skill_pts / fga AS skill, above_pts / fga AS beyond FROM shot_value_added WHERE fga >= 200", conn)
+    sm = pd.read_sql_query(f"SELECT player_id, season, shot_making FROM {F('player_shot_making')} WHERE fga >= 200", conn)
+    sv = pd.read_sql_query(f"SELECT player_id, season, skill_pts / fga AS skill, above_pts / fga AS beyond FROM {F('shot_value_added')} WHERE fga >= 200", conn)
     out = {}
     for version in sorted(players.version.unique()):
         d = players[(players.version == version) & players.qualified & players.rapm.notna()].merge(sm, on=["player_id", "season"]).merge(sv, on=["player_id", "season"])

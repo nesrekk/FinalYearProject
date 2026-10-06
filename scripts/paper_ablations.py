@@ -141,6 +141,7 @@ from db_config import DB_CONFIG
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 import season_sim_lib as L  # noqa: E402
 from luck_lib import srs_fit  # noqa: E402
+from paper_freeze import F, MAX_PAPER_SEASON  # noqa: E402  (the paper's rows: seasons to 2025-26, round 9 step 1)
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -234,9 +235,9 @@ def solve(d, gram, lam, prior=None, home=True):
 
 def impact_stage(conn, out, stored):
     log("impact: loading stints")
-    rows, n_stints, dropped = R.load_rows(conn)
-    bpm = R.load_bpm(conn)
-    dates = dict(pd.read_sql_query("SELECT game_id, game_date FROM lineup_stint_games", conn).itertuples(index=False))
+    rows, n_stints, dropped = R.load_rows(conn, through=MAX_PAPER_SEASON)
+    bpm = R.load_bpm(conn, through=MAX_PAPER_SEASON)
+    dates = dict(pd.read_sql_query(f"SELECT game_id, game_date FROM {F('lineup_stint_games')}", conn).itertuples(index=False))
     seasons = sorted(int(s) for s in rows.season.unique())
     assert seasons == list(range(TUNE[0], TEST + 1)), seasons
     designs = {s: R.Design(rows[rows.season == s]) for s in seasons}
@@ -370,7 +371,7 @@ def xfg_stage(conn, out, stored, check=True):
     season = df.season.to_numpy()
     X_all = S.hgb_matrix(df)
     ids_all = df.id.to_numpy()
-    games = pd.read_sql("SELECT id, game_id FROM player_shots WHERE game_id LIKE '002%%' AND season IN %s", conn,
+    games = pd.read_sql(f"SELECT id, game_id FROM {F('player_shots')} WHERE game_id LIKE '002%%' AND season IN %s", conn,
                         params=(tuple(f"{t - 1}-{str(t)[-2:]}" for t in (VALIDATE, TEST)),))
     game_of = pd.Series(games.game_id.to_numpy(), index=games.id.to_numpy())
     del df, games
@@ -451,7 +452,7 @@ def params_for(variant, season_games):
 
 def sim_stage(conn, out, stored):
     season_games = E.load_games(conn)
-    facts = pd.read_sql("SELECT season, team_abbreviation, playoffs, wins FROM season_postseason", conn).set_index(["season", "team_abbreviation"])
+    facts = pd.read_sql(f"SELECT season, team_abbreviation, playoffs, wins FROM {F('season_postseason')}", conn).set_index(["season", "team_abbreviation"])
     form_full = stored["pregame_form"]
     assert form_full == "prior_rest", form_full
     feats = {}
@@ -650,19 +651,19 @@ def load_stored(conn, stages):
         return pd.read_sql(sql, conn, params=params)
 
     if "impact" in stages:
-        st["impact_next"] = {m: q("SELECT season, unit_id, pred, actual FROM paper_eval_predictions WHERE task = 'impact_next' AND model = %s", m)
+        st["impact_next"] = {m: q(f"SELECT season, unit_id, pred, actual FROM {F('paper_eval_predictions')} WHERE task = 'impact_next' AND model = %s", m)
                              for m in ("rapm_single", "rapm_prior")}
-        st["impact_reliability"] = {m: q("SELECT season, unit_id, pred FROM paper_eval_predictions WHERE task = 'impact_reliability' AND model = %s", m)
+        st["impact_reliability"] = {m: q(f"SELECT season, unit_id, pred FROM {F('paper_eval_predictions')} WHERE task = 'impact_reliability' AND model = %s", m)
                                     for m in ("rapm_single", "rapm_prior")}
     if "xfg" in stages:
-        st["xfg"] = {ph: q("SELECT unit_id, pred FROM paper_eval_predictions WHERE task = 'xfg' AND model = 'hgb' AND phase = %s AND variant = %s",
+        st["xfg"] = {ph: q(f"SELECT unit_id, pred FROM {F('paper_eval_predictions')} WHERE task = 'xfg' AND model = 'hgb' AND phase = %s AND variant = %s",
                            ph, st["xfg_config"]) for ph in ("validate", "test")}
     if "sim" in stages:
-        st["pregame"] = {f: q("SELECT phase, season, unit_id, pred FROM paper_eval_predictions WHERE task = 'pregame' AND model = %s", f)
+        st["pregame"] = {f: q(f"SELECT phase, season, unit_id, pred FROM {F('paper_eval_predictions')} WHERE task = 'pregame' AND model = %s", f)
                          for f in ("prior_rest", "prior")}
-        a = q("""SELECT phase, season, unit_id, pred AS p_playoffs FROM paper_eval_predictions
+        a = q(f"""SELECT phase, season, unit_id, pred AS p_playoffs FROM {F('paper_eval_predictions')}
                  WHERE task = 'sim_playoffs' AND model = 'model' AND variant = %s""", CHECKPOINT)
-        b = q("""SELECT phase, season, unit_id, pred AS mean_wins, lo, hi FROM paper_eval_predictions
+        b = q(f"""SELECT phase, season, unit_id, pred AS mean_wins, lo, hi FROM {F('paper_eval_predictions')}
                  WHERE task = 'sim_wins' AND model = 'model' AND variant = %s""", CHECKPOINT)
         st["sim"] = a.merge(b, on=["phase", "season", "unit_id"])
     return st
