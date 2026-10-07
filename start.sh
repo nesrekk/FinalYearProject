@@ -25,6 +25,28 @@ stop_all() {
 }
 trap stop_all INT TERM
 
+# Local Postgres (Homebrew postgresql@18): start it for this boot if it's stopped.
+PGBIN=/opt/homebrew/opt/postgresql@18/bin
+if ! "$PGBIN/pg_isready" -q 2>/dev/null; then
+    echo "[postgres] not running — starting it (brew services run postgresql@18)..."
+    brew services run postgresql@18 >/dev/null
+    for _ in $(seq 1 20); do
+        "$PGBIN/pg_isready" -q 2>/dev/null && break
+        sleep 0.5
+    done
+    if "$PGBIN/pg_isready" -q 2>/dev/null; then
+        echo "[postgres] ready."
+    else
+        echo "[postgres] still not answering — the backends will fail until it is up."
+    fi
+fi
+
+# Frontend packages: install once if missing (e.g. a fresh checkout or worktree).
+if [ ! -d "$ROOT/frontend/node_modules" ]; then
+    echo "[frontend] node_modules missing — running npm install..."
+    (cd "$ROOT/frontend" && npm install) || { echo "[frontend] npm install failed"; exit 1; }
+fi
+
 for spec in "mvp_api 8000" "similarity_api 8001" "impact_api 8002"; do
     set -- $spec
     if lsof -nP -iTCP:"$2" -sTCP:LISTEN >/dev/null 2>&1; then
@@ -34,7 +56,21 @@ for spec in "mvp_api 8000" "similarity_api 8001" "impact_api 8002"; do
     (cd "$ROOT/api" && exec "$PY" -m uvicorn "$1:app" --port "$2" --reload) 2>&1 | sed -l "s/^/[$1] /" &
 done
 
-(cd "$ROOT/frontend" && exec npm run dev) 2>&1 | sed -l "s/^/[frontend] /" &
+FRONTEND_LOG="$(mktemp -t nbahub-frontend)"
+(cd "$ROOT/frontend" && exec npm run dev) 2>&1 | tee "$FRONTEND_LOG" | sed -l "s/^/[frontend] /" &
 
-echo "Starting... open the URL the [frontend] line prints (normally http://localhost:5173). Ctrl+C to stop."
+echo "Starting... Ctrl+C to stop everything."
+
+# Open the app in the browser once Vite prints its URL (skip with NO_OPEN=1 ./start.sh).
+if [ "${NO_OPEN:-0}" != "1" ]; then
+    (
+        for _ in $(seq 1 60); do
+            url=$(grep -oE 'http://localhost:[0-9]+/?' "$FRONTEND_LOG" | head -1)
+            if [ -n "$url" ]; then open "$url"; exit 0; fi
+            sleep 0.5
+        done
+    ) &
+fi
+
 wait
+rm -f "$FRONTEND_LOG"
