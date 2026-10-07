@@ -294,3 +294,56 @@ database) and 1 empty (`/ledger/live/games`, no scored game yet). On the real da
   `rebuild_all.sh paper-inputs` reran with `numbers.tex` byte-identical; `manifest.json` records the predicate
   (`capped_tables` 132 → 133) and `SHA256SUMS` its two manifest lines. `docs/LIVE_SEASON.md`'s table says "updated_at,
   capped" for it (`live_season.py --check` passes). The fake-row test covers it (a timestamp a year later is excluded).
+
+## Step 6: the Forecast Ledger in the daily run, the weekly report, the paper's forward test (2026-10-07)
+
+How it was checked (no 2026-27 game has been played yet, so on a simulated season): `api/tests/test_weekly_report.py`
+(4 tests, ~25 s, local database only) runs the real `ledger_update.py` once a day at 12:00 ET from 2026-10-20 to
+2026-11-09 on copies of the locked tables in schema `zz_weekly_report` (test_ledger_gameday's fake ESPN and clock; every
+earlier game final, scores from a seeded stream): three weeks, 92 games through 2026-11-01 and 146 through 11-08 (the
+run of 11-09 stores the paired tests). The weekly report for 11-02..11-08 equals `ledger_live`'s own scoring, the
+stored tests and the morning-after standings; the route and the Markdown file give the same report; the paper's
+ledger section emits the forward-test macros at an as-of with tests and refuses one without; the daily update's ledger
+step runs and skips when it should. The app's Weekly report tab was checked against a scratch copy with the same three
+weeks (backend with `PGOPTIONS`; schema dropped after) and the real database (empty state), page scan at 1280/375 x
+Paper/Ink: clean. `ledger_update.py` itself is unchanged; `daily_update.py --ledger-only --dry-run --date 2026-10-21`
+ran it against ESPN (35 s: opening night's nine odds rows, 10-21 waiting for 10-20's finals, nothing written).
+
+### R9-038 · The paper's forward-test claim would have stopped `paper-inputs` on opening night
+- **Severity:** broken (paper stage, from 2026-10-21) + design · **Step:** 6 (pin), later (the sentence) · **Status:** open
+  (the pin fixed in the round 9 step 6 commit; the sentence waits for a run date with stored tests)
+- **Where:** `paper_numbers.ledger()` counted every game the ledger had scored (`LgScored`) and claimed it was 0, on
+  purpose, so the first scored game would stop `rebuild_all.sh paper-inputs` and force the rewrite of "As of
+  \pnLgAsOf{} no game of the season has been played". But a rewrite from `ledger_tests` isn't possible until 100 games
+  are scored under every version (the ledger's MIN_TEST_GAMES; the run of 2026-11-03 is the first, by the schedule), so
+  `paper-inputs` would have been red for two weeks, and after a rewrite every nightly run would change the printed
+  numbers again (the paper must stay byte-identical through the round). **Decided:** the paper reads the ledger as of one
+  explicit run date, `api/paper_freeze.py` `LEDGER_AS_OF` (`None` = the lock date: `LgScored` counts the games dated
+  before it, 0, and `numbers.tex` is byte-identical, checked); `paper_numbers.py` prints a note (not a failure) once games
+  are scored. Setting a date makes the section emit `\pnLgFw*` (games, through date, each version's Brier and log loss,
+  every pair's difference with its interval and p from that morning's `ledger_tests`), each checked against the logged
+  odds, and claim that the date has stored tests covering exactly the games before it. **Left:** choosing the date and
+  rewriting the sentence in all three lengths (docs/LEDGER_RUNBOOK.md, "Updating the paper"): from 2026-11-03 at the
+  earliest, owner's call when (round 9 step 7 or 8, or a later chat).
+
+### R9-039 · The weekly report's first two weeks have no paired test
+- **Severity:** design (recorded) · **Step:** 6 · **Status:** decided
+- **Where:** `ledger_tests` starts at 100 games scored under every version (a judgment call of round 6 step 2, part of the
+  ledger's documented rules). By the schedule that is 43 games after opening week and 92 after the second; the first
+  report with paired tests is the third (2026-11-02..08, 146 games). **Decided:** the report doesn't compute its own paired
+  tests before then (that would be a second rule beside the ledger's); it shows each version's Brier and log loss with a
+  95% interval on its own (games resampled, 2,000 times, seeded by season, week and version) and says "None yet: the
+  ledger stores paired tests from 100 games (N so far)".
+
+### R9-040 · "Rewrite the paper's sentence when the claim fails" depends on paper-inputs being run that day
+- **Severity:** design · **Step:** 6 · **Status:** decided (see R9-038)
+- **Where:** the plan's trigger for the paper's only round-9 change. With the as-of pin nothing fails any more; the
+  trigger is now a person: `paper_numbers.py` prints `note: the Forecast Ledger has scored N games ...` on every run once
+  games are scored, the weekly report shows when tests start, and the runbook lists the three steps.
+
+### R9-041 · The ledger runbook's "things that change because of a run" was stale
+- **Severity:** looks wrong (docs) · **Step:** 6 · **Status:** fixed in the round 9 step 6 commit
+- **Where:** `docs/LEDGER_RUNBOOK.md` still said each run changes `\pnLgAsOf` and `\pnManDigest` (true before round 9
+  step 1, which pinned the first and took the live tables out of the digest) and that the claim `LgScored == 0` stops
+  `paper-inputs` (R9-038). Rewritten; the runbook also gained the daily update's ledger step, the weekly report and
+  "Updating the paper".

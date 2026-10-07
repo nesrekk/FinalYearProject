@@ -1219,6 +1219,15 @@ export async function fetchLedgerLiveGames(params) {
     return response.data;
 }
 
+// The weekly guide report (api/weekly_report_lib.py, shared with scripts/weekly_report.py; never cached).
+export async function fetchLedgerWeekly(week, season) {
+    const params = {};
+    if (week) params.week = week;
+    if (season) params.season = season;
+    const response = await axios.get(`${IMPACT_BASE}/ledger/weekly`, { params });
+    return response.data;
+}
+
 // The canonical CSV the lock's SHA-256 is taken of (a plain download link).
 export function ledgerCsvUrl(season) {
     return `${IMPACT_BASE}/ledger/lock.csv${season ? `?season=${season}` : ''}`;

@@ -15,6 +15,9 @@ they haven't changed since.
                                           intervals, the latest paired tests, standings against the locked ranges,
                                           tonight's logged odds, the latest results
     GET /ledger/live/games?season=&team=  every scored game with each version's odds
+    GET /ledger/weekly?season=&week=      the weekly guide report (round 9 step 6) for the week (Monday to Sunday)
+                                          holding `week` (default: the latest week with a final), plus every week
+                                          with finals; api/weekly_report_lib.py, shared with scripts/weekly_report.py
 
 Written once by scripts/ledger_lock.py; the rules are in api/ledger_lib.py. Every read is cached per
 process (the lock never changes; restart impact_api after a --relock), except the two live reads, which
@@ -34,6 +37,7 @@ import pandas as pd
 
 import ledger_lib as LL
 import ledger_live as LV
+import weekly_report_lib as WR
 from impact_core import get_db
 from source_badge import make_source
 
@@ -319,3 +323,44 @@ def ledger_live_games(season: Optional[int] = None, team: Optional[str] = None):
         rows = [r for r in rows if t in (r["home"], r["away"])]
     return {"season": season, "team": team.upper() if team else None, "games": rows,
             "_source": make_source(["ledger_results", "ledger_game_log", "ledger_forecasts"], LIVE_UPSTREAM)}
+
+
+def _plain(v):
+    """JSON-safe: NaN -> None, dates -> ISO text, recursively."""
+    if isinstance(v, dict):
+        return {k: _plain(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_plain(x) for x in v]
+    if hasattr(v, "item"):
+        v = v.item()
+    if isinstance(v, float) and v != v:
+        return None
+    if isinstance(v, (date, datetime)):
+        return v.isoformat()
+    return v
+
+
+def _weekly_payload(conn, season, week=None):
+    weeks = WR.weeks(conn, season)
+    if week is not None:
+        end = week + pd.Timedelta(days=6 - week.weekday()).to_pytimedelta()
+    elif weeks:
+        end = weeks[-1]
+    else:
+        cur = conn.cursor()
+        cur.execute("SELECT first_tip_utc FROM ledger_lock WHERE season = %s", (season,))
+        tip = cur.fetchone()[0].date()
+        conn.rollback()
+        end = tip + pd.Timedelta(days=6 - tip.weekday()).to_pytimedelta()
+    return {"weeks": [w.isoformat() for w in weeks], "report": _plain(WR.build(conn, season, end))}
+
+
+@router.get("/ledger/weekly")
+def ledger_weekly(season: Optional[int] = None, week: Optional[date] = None):
+    """The weekly guide report for the week holding `week` (not cached: reads the nightly tables)."""
+    season = _season(season)
+    with get_db() as conn:
+        body = _weekly_payload(conn, season, week)
+    return {"season": season, "season_label": f"{season - 1}-{str(season)[-2:]}", **body,
+            "_source": make_source(LV.LIVE_TABLES + ["ledger_forecasts", "game_scores", "game_pregame_odds", "best_games",
+                                                     "player_rating_tracker"], LIVE_UPSTREAM)}

@@ -1,7 +1,7 @@
 # Forecast Ledger: game-day runbook (2026-27)
 
 The 2026-27 forecasts were **locked on 2026-09-30** (SHA-256 `c1a48402c1363db2f1e247f6931bad5c788a928d36717806aa5d8f89e8483d17`,
-git tag `ledger-2026-27` = `c9071a8`). During the season one command scores them: `scripts/ledger_update.py`. It
+git tag `ledger-2026-27` = `c9071a8`). During the season one command scores them: `scripts/ledger_update.py`, which the live season's daily command (`scripts/daily_update.py`) runs first since round 9 step 6. It
 logs each game's odds on the morning of its date, stores ESPN's final scores, updates the standings projection and,
 from 100 scored games, the paired tests. The Live scoring tab of Teams › Forecast Ledger reads what it writes.
 
@@ -19,14 +19,29 @@ a simulated opening week passes (`api/tests/test_ledger_gameday.py`).
 
 ## The one command (every day with games)
 
+Since round 9 step 6 the live season's daily command runs the ledger first, so a game day needs only this:
+
 ```bash
 brew services run postgresql@18          # only if Postgres isn't running (after a reboot)
 cd ~/Desktop/"main nba project build"/scripts
+DB_TARGET=local /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 daily_update.py
+```
+
+`daily_update.py` starts `ledger_update.py` (unchanged) as its own process before anything else, keeps its output in
+`live_data/2027/ledger/<date>.log`, prints its lines prefixed `ledger |`, and records `ledger_status`, `ledger_seconds`
+and `ledger_summary` in its run row (`daily_update_runs`); then it fetches the night's games and rebuilds the season
+(docs/LIVE_SEASON.md). A ledger failure makes the whole run exit 1, but the fetch still runs. `--ledger-only` runs the
+ledger and nothing else; `--no-ledger` skips it. `--dry-run` is passed through (with `--date D` as the ledger's
+`--today D`); a non-dry `--date` other than today skips the ledger (a logged row must carry the real time).
+
+The ledger on its own, exactly as before:
+
+```bash
 DB_TARGET=local /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 ledger_update.py
 ```
 
-`DB_TARGET=local` makes sure it writes to the laptop's database even if `api/.env` points somewhere else. It takes
-about a minute (reading ESPN's whole season is 45-70 s). It exits 0 when it worked and prints five lines:
+`DB_TARGET=local` makes sure it writes to the laptop's database even if `api/.env` points somewhere else. The ledger
+part takes about a minute (reading ESPN's whole season is 35-70 s). It exits 0 when it worked and prints five lines:
 
 ```
 frozen code: ledger-2026-27 = c9071a8b5a85, 3 files match the lock's blob ids; lock sha256 c1a48402c1363db2... reproduced
@@ -82,7 +97,9 @@ regular-season game (2027-04-11) run it once more to store the final scores.
      FROM ledger_runs ORDER BY started_at DESC LIMIT 5"
   ```
 
-  `late_rows` > 0 = recomputed rows; `waiting` not empty = run again later.
+  `late_rows` > 0 = recomputed rows; `waiting` not empty = run again later. Run through `daily_update.py`, the ledger's
+  result is also in that run's row: `SELECT today_et, ledger_status, ledger_seconds, ledger_summary FROM daily_update_runs
+  ORDER BY started_at DESC LIMIT 5`.
 
 ## When something goes wrong
 
@@ -119,12 +136,45 @@ regular-season game (2027-04-11) run it once more to store the final scores.
   yes/no in round 9 step 7).
 - Sync the `ledger_*` tables to Layerbase without the owner's OK.
 
+## The weekly report (Mondays)
+
+After Monday's run (it scores Sunday's games; the daily summary says "Monday: the week's report is due"):
+
+```bash
+cd ~/Desktop/"main nba project build"/scripts
+DB_TARGET=local /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 weekly_report.py
+```
+
+It writes `docs/weekly/<Sunday>.md` for the week that ended the day before (Monday to Sunday, US Eastern; `--end D`
+for another week, `--all` for every week so far, `--stdout` to print only). Reads only. The same report is the app's
+printable **Weekly report** tab (`?page=ledger&tab=weekly&wk=<Sunday>`, Print this report), from the same code
+(`api/weekly_report_lib.py`): the five versions' Brier and log loss so far and this week with 95% intervals (games
+resampled), the paired tests the ledger stored on Monday (from 100 games), the week's biggest misses, standings
+against the locked forecast, the week's biggest moves in expected wins, best game and biggest upset by the app's own
+pre-game odds, and the Rating Tracker's top ten. Commit the file with the week's other changes; it is the guide's page.
+
+## Updating the paper (the forward-test sentence)
+
+The paper reports the ledger as of **one explicit run date**, `api/paper_freeze.py` `LEDGER_AS_OF` (`None` = the lock
+date, when nothing had been played), never "today", so nightly runs change nothing in `numbers.tex` (`\pnLgAsOf` is
+the lock date; the five live tables are outside the manifest's digest). `paper_numbers.py` prints a note (not an error)
+once games are scored. To report them:
+
+1. Pick a run date with stored paired tests (`SELECT DISTINCT as_of FROM ledger_tests ORDER BY 1`; from 100 games
+   scored under every version, early November), set `LEDGER_AS_OF = date(...)` in `api/paper_freeze.py`.
+2. Copy the three papers to `paper/versions/*_<date>_ledger.tex`, run `scripts/rebuild_all.sh paper-inputs`: the
+   ledger section now emits `\pnLgScored`, `\pnLgFwThrough`, `\pnLgFwGames`(`Early`), each version's Brier and log loss
+   (`\pnLgFwBrRoster`, `\pnLgFwLlAsIs`, ...) and every pair's difference with interval and p
+   (`\pnLgFwDLlRosterAsIs`, `Lo`, `Hi`, `P`; pairs as in `ledger_live.PAIRS`), each checked against the logged odds.
+3. Rewrite the sentence "As of \pnLgAsOf{} no game of the season has been played; ..." (Pre-game section, "A forecast
+   locked in advance") in all three lengths from those macros, add a claim in `paper_numbers.ledger()` for every
+   direction the sentence states, and `scripts/paper_build.sh`. That is the only paper change round 9 makes.
+
 ## Things that change because of a run (expected)
 
-- `scripts/rebuild_all.sh paper-inputs` stops at the claim `LgScored == 0` once the first game is scored. That is on
-  purpose: round 9 step 6 rewrites the paper's forward-test sentence from `ledger_tests`.
-- Every run changes the paper's printed `\pnLgAsOf` (date of the last run) and `\pnManDigest` (the manifest covers
-  the five live ledger tables), so `paper-inputs` is not byte-identical after a run (R8-086, for round 9 step 1).
+- Nothing in `scripts/rebuild_all.sh paper-inputs` (since round 9 steps 1 and 6: `\pnLgAsOf` is pinned to the lock,
+  the forward test is read as of `LEDGER_AS_OF`, and the five live ledger tables are outside the manifest's digest).
+  Before step 6 the claim `LgScored == 0` would have stopped `paper-inputs` on the first scored game.
 
 ## Testing without touching the real ledger
 

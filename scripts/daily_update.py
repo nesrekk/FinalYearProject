@@ -6,7 +6,8 @@ and stored, and the season's own source tables are refreshed, so the pages and t
 have the night's games. Nothing of an earlier season is ever touched.
 
 Run it once a day after the night's games are final, about 14:00 IST (04:30 US Eastern) on a game day, the Forecast
-Ledger's hour (docs/LEDGER_RUNBOOK.md; the ledger's own ledger_update.py is a separate command until step 9-6):
+Ledger's hour (docs/LEDGER_RUNBOOK.md, docs/DAILY_RUNBOOK.md once written). Since round 9 step 6 this one command also runs the
+Forecast Ledger's ledger_update.py first (step 0 below), so a game day needs nothing else:
 
     cd scripts && python3 daily_update.py                       # the day's run, ~2-4 min on a game day
     python3 daily_update.py --dry-run                           # fetch and compute everything in one transaction, roll it back
@@ -21,8 +22,17 @@ Ledger's hour (docs/LEDGER_RUNBOOK.md; the ledger's own ledger_update.py is a se
              --rebuild-only (no fetch: just the season rebuild, e.g. after a build script changed)
              --no-models (skip the season-to-date models after the rebuild)  --models (run them even when the rebuild
              was skipped)  --models-only (no fetch, no rebuild: just the models)
+             --no-ledger (don't run ledger_update.py)  --ledger-only (run nothing else)
 
 What a run does, in order (each step in its own transaction; a step that fails is logged and the rest still run):
+  0. The Forecast Ledger (round 9 step 6): scripts/ledger_update.py, unchanged, as its own process (it imports the
+     model code from the lock's git tag and writes only the ledger_* tables; output in live_data/<season>/ledger/
+     <date>.log). It runs first because its odds should be logged before the day's first tip (a row logged after tip
+     is labelled recomputed). Its exit code and its "odds:" / "scored:" lines go into the run row (ledger_status,
+     ledger_seconds, ledger_summary); a ledger failure fails the run (exit 1) but the fetch still runs. Passed through:
+     --dry-run (with --date as its --today), --offline. Skipped with a reason, never silently: --no-ledger, the
+     preseason runs of the tests, --rebuild-only / --models-only, a --date other than today outside a dry run (a logged
+     row carries the real time), a --season other than the ledger's.
   1. ESPN scoreboard, one request per US date from --from-date to today: which games are final, by season type
      (1 preseason, 2 regular season, 3 playoffs, 5 play-in). The through date = the last date whose every game is
      final, postponed or cancelled; the next run starts there.
@@ -65,6 +75,7 @@ What a run does, in order (each step in its own transaction; a step that fails i
      phase 'models'). Every one of them reads its pooled fit from the stored fit row and applies it to the season
      (round 9 issue R9-009): nothing is tuned on the live season.
  11. One row in daily_update_runs (listed in paper_manifest.LIVE: outside the paper's digest) and one summary line.
+     On Mondays (US Eastern) the summary reminds that the week's report is due (scripts/weekly_report.py).
 
 Idempotent: a second run on the same day writes nothing new (stored games are skipped, upserts repeat their values,
 the chart pairs every shot). Resumable: every answer is cached under live_data/<season>/ (gitignored; delete it to
@@ -140,6 +151,8 @@ REBUILD_STEPS = ["build_event_clock.py", "build_player_game_lines.py", "build_te
                  "build_player_game_onfloor.py", "build_player_on_off.py", "build_possessions.py", "build_situational_splits.py",
                  "build_rotations.py", "build_rim_deterrence.py", "build_assist_network.py", "build_play_finder.py",
                  "build_best_games.py", "build_leverage_splits.py"]
+LEDGER_SEASON = 2027         # the season the Forecast Ledger locked (ledger_update.SEASON; not imported: that module
+                             # loads the frozen code from the tag on import of main())
 NEEDS = {"game_scores": ("scoreboard", "nba_games"), "postseason": ("scoreboard",), "season_stats": (),
          "pbp": ("scoreboard", "season_stats"), "officials": ("nba_games",), "shots": ("scoreboard", "nba_games"), "nba_games": (),
          "rebuild": ()}
@@ -153,7 +166,9 @@ RUN_LOG_DDL = """CREATE TABLE IF NOT EXISTS daily_update_runs (
     failed_steps TEXT, status TEXT, summary TEXT, code_commit TEXT, rebuild_seconds REAL, rebuild_steps TEXT)"""
 # the two rebuild columns were added in round 9 step 3: a run log created by step 2 gains them here
 RUN_LOG_ALTER = """ALTER TABLE daily_update_runs ADD COLUMN IF NOT EXISTS rebuild_seconds REAL,
-    ADD COLUMN IF NOT EXISTS rebuild_steps TEXT"""
+    ADD COLUMN IF NOT EXISTS rebuild_steps TEXT, ADD COLUMN IF NOT EXISTS ledger_status TEXT,
+    ADD COLUMN IF NOT EXISTS ledger_seconds REAL, ADD COLUMN IF NOT EXISTS ledger_summary TEXT"""
+# (the three ledger columns since round 9 step 6)
 
 FATIGUE_INSERT = """INSERT INTO team_game_fatigue (game_id, team_abbreviation, season, game_date, is_home, opponent, win, plus_minus,
     rest_days, is_b2b, games_last_7_days, travel_miles_since_last, timezones_crossed_since_last) VALUES %s"""
@@ -651,6 +666,57 @@ class Run:
                 coverage[kind]["short_of_box"] = sorted(g for g, n in got.items() if n < box_fga.get(g, 0))
         return out
 
+    # ── 0. the Forecast Ledger ────────────────────────────────────────────────
+
+    def ledger_wanted(self):
+        """(run it?, why) for ledger_update.py; every skip has a reason the summary prints."""
+        a = self.args
+        if a.no_ledger:
+            return False, "--no-ledger"
+        if a.rebuild_only or a.models_only:
+            return False, "--rebuild-only / --models-only"
+        if self.season != LEDGER_SEASON:
+            return False, f"the ledger scores {SS.season_label(LEDGER_SEASON)} only"
+        if self.box_kind != "regular":
+            return False, "only with the regular season (the ledger scores regular-season games)"
+        if a.date and a.date != eastern_today() and not a.dry_run:
+            return False, "--date outside a dry run (a logged row carries the real time; ledger_update.py --today is dry-run only)"
+        return True, ""
+
+    def ledger_command(self):
+        cmd = [sys.executable, "ledger_update.py"]
+        if self.args.dry_run:
+            cmd.append("--dry-run")
+            if self.args.date:
+                cmd += ["--today", self.today.isoformat()]
+        if self.args.offline:
+            cmd.append("--offline")
+        return cmd
+
+    def step_ledger(self):
+        wanted, why = self.ledger_wanted()
+        if not wanted:
+            log(f"   ledger skipped: {why}")
+            return {"ran": False, "why": why}
+        path = self.cache / "ledger" / f"{self.today}.log"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        cmd = self.ledger_command()
+        t0 = time.time()
+        r = subprocess.run(cmd, cwd=ROOT / "scripts", env=dict(os.environ), capture_output=True, text=True)
+        secs = round(time.time() - t0, 1)
+        with open(path, "a") as f:
+            f.write(f"$ {' '.join(cmd[1:])}  ({datetime.now(timezone.utc).isoformat(timespec='seconds')})\n{r.stdout}{r.stderr}\n")
+        lines = [ln.strip() for ln in r.stdout.splitlines()]
+        keep = [ln for ln in lines if ln.startswith(("odds:", "scored:", "dry run:", "offline:"))
+                or "WARNING" in ln or "note:" in ln]
+        out = {"ran": True, "exit": r.returncode, "seconds": secs, "log": str(path), "lines": keep}
+        for ln in r.stdout.splitlines():
+            log(f"   ledger | {ln.rstrip()}")
+        if r.returncode:
+            tail = " ".join((r.stderr or r.stdout).strip().splitlines()[-3:])[-400:]
+            raise RuntimeError(f"ledger_update.py exited {r.returncode} after {secs:.0f}s ({path}): {tail}")
+        return out
+
     # ── 9. the season rebuild ─────────────────────────────────────────────────
 
     def rebuild_wanted(self):
@@ -761,9 +827,15 @@ class Run:
         if md:
             parts.append(f"models {md['ok']} of {len(MODEL_STEPS)} in {md['seconds']:.0f}s;" if md.get("ran")
                          else f"models skipped ({md['why']});")
+        lg = c.get("ledger", {})
+        if lg:
+            parts.append(f"ledger ok ({'; '.join(x.rstrip('.') for x in lg['lines'] if x.startswith(('odds:', 'scored:')))});"
+                         if lg.get("ran") else f"ledger skipped ({lg['why']});")
         parts.append(f"{time.time() - self.t0:.0f}s")
         if e:
             parts.append("FAILED: " + "; ".join(f"{k} ({v})" for k, v in e.items()))
+        if self.today.weekday() == 0 and self.box_kind == "regular":
+            parts.append(f"| Monday: the week's report is due (python3 weekly_report.py --end {self.today - timedelta(days=1)})")
         return " ".join(parts)
 
     def write_run_log(self, status, summary):
@@ -775,8 +847,10 @@ class Run:
         self.cur.execute("""INSERT INTO daily_update_runs (season, run_id, started_at, finished_at, today_et, mode, season_types,
             from_date, through_date, dates_checked, events, finals, pbp_games_new, pbp_events_new, pbp_pending, pbp_unmatched_events,
             pbp_unmatched_names, game_scores_rows, fatigue_rows, box_rows, officials_games, shots_inserted, shots_deleted, shot_kinds,
-            season_stats_players, failed_steps, status, summary, code_commit, rebuild_seconds, rebuild_steps)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            season_stats_players, failed_steps, status, summary, code_commit, rebuild_seconds, rebuild_steps,
+            ledger_status, ledger_seconds, ledger_summary)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s)""",
                          (self.season, self.run_id, self.started, datetime.now(timezone.utc), self.today, self.mode,
                           self.args.season_types, getattr(self, "from_date", None), self.through, len(self.dates),
                           sb.get("events"), sb.get("finals"), pb.get("new_games"), pb.get("events"),
@@ -785,8 +859,20 @@ class Run:
                           ng.get("box_rows"), of.get("games"), sh.get("inserted"), sh.get("deleted"),
                           ",".join(sh.get("fetched_kinds", [])) if sh else None, ss.get("players"),
                           ", ".join(self.errors) or None, status, summary, git_commit(),
-                          secs if steps else None, json.dumps(steps) if steps else None))
+                          secs if steps else None, json.dumps(steps) if steps else None,
+                          *self.ledger_columns()))
         self.conn.commit()
+
+    def ledger_columns(self):
+        """(ledger_status, ledger_seconds, ledger_summary) for the run row: ok / failed / skipped: <why>."""
+        lg = self.counts.get("ledger")
+        if "ledger" in self.errors:
+            return "failed", self.timing.get("ledger"), self.errors["ledger"]
+        if not lg:
+            return None, None, None
+        if not lg.get("ran"):
+            return f"skipped: {lg['why']}", None, None
+        return "ok", lg["seconds"], " | ".join(lg["lines"]) or None
 
 
 def main():
@@ -806,15 +892,24 @@ def main():
     ap.add_argument("--no-models", action="store_true", help="skip the season-to-date models after the rebuild")
     ap.add_argument("--models", action="store_true", help="run the season-to-date models even when the rebuild was skipped")
     ap.add_argument("--models-only", action="store_true", help="no fetch, no rebuild: only the season-to-date models")
+    ap.add_argument("--no-ledger", action="store_true", help="don't run the Forecast Ledger's ledger_update.py")
+    ap.add_argument("--ledger-only", action="store_true", help="run the Forecast Ledger's update and nothing else")
     args = ap.parse_args()
+    if args.ledger_only and (args.no_ledger or args.rebuild_only or args.models_only):
+        raise SystemExit("--ledger-only can't be combined with --no-ledger, --rebuild-only or --models-only")
     run = Run(args)
     if args.rebuild_only or args.models_only:
         run.mode = "rebuild" if args.rebuild_only else "models"
+    elif args.ledger_only and run.mode == "live":
+        run.mode = "ledger"
     log(f"run {run.run_id}: season {run.season} {run.kinds}, today {run.today} ({run.mode}), cache {run.cache}")
     run.cur.execute(RUN_LOG_DDL)
     run.cur.execute(RUN_LOG_ALTER)
     if not args.dry_run:
         run.conn.commit()
+    run.step("ledger", run.step_ledger)
+    if args.ledger_only:
+        return finish(run, args)
     for name in STEPS if not (args.rebuild_only or args.models_only) else ():
         run.step(name, getattr(run, f"step_{name}"))
         if name == "scoreboard" and name in run.errors:
@@ -823,6 +918,10 @@ def main():
         run.step("rebuild", run.step_rebuild)
     if args.models_only or "scoreboard" not in run.errors:
         run.step("models", run.step_models)
+    return finish(run, args)
+
+
+def finish(run, args):
     status = "ok" if not run.errors else "failed"
     summary = run.summary_line()
     if args.dry_run:

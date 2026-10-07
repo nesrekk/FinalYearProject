@@ -10,13 +10,14 @@ import SourceBadge from '../common/SourceBadge';
 import TableExport from '../common/TableExport';
 import TeamLink from '../common/TeamLink';
 import ForecastLedgerLive from './ForecastLedgerLive';
+import ForecastLedgerWeekly from './ForecastLedgerWeekly';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import { signed } from '../../utils/format';
 import '../../styles/rapm.css';
 import '../../styles/simulator.css';
 import '../../styles/ledger.css';
 
-// Forecast Ledger (?page=ledger&tab=preseason|live&v=both|as_is|roster&team=&sort=&dir=): the
+// Forecast Ledger (?page=ledger&tab=preseason|live|weekly&v=both|as_is|roster&team=&sort=&dir=&wk=): the
 // 2026-27 preseason forecasts locked before the first tip (GET /ledger/*,
 // written once by scripts/ledger_lock.py), with the SHA-256 that proves they
 // haven't changed and the exact CSV it is taken of; and the Live scoring tab
@@ -41,7 +42,7 @@ function pct(v, d = 0) {
 }
 
 const VIEWS = [['both', 'Both side by side'], ['roster', 'Roster-aware in full'], ['as_is', 'As is in full']];
-const TABS = [['live', 'Live scoring'], ['preseason', 'Preseason lock']];
+const TABS = [['live', 'Live scoring'], ['weekly', 'Weekly report'], ['preseason', 'Preseason lock']];
 const CAL_VERSIONS = ['roster', 'as_is', 'record', 'roster_pre', 'as_is_pre'];
 const FULL_COLS = [
     ['team', 'Team', null],
@@ -431,6 +432,7 @@ export default function ForecastLedger() {
         team: parseParam.str(params, 'team')?.toUpperCase() ?? null,
         sort: parseParam.oneOf(params, 'sort', SORT_KEYS) ?? null,
         dir: parseParam.oneOf(params, 'dir', ['asc', 'desc']) ?? 'desc',
+        week: /^\d{4}-\d{2}-\d{2}$/.test(parseParam.str(params, 'wk') ?? '') ? parseParam.str(params, 'wk') : null,
     }));
 
     useEffect(() => {
@@ -448,6 +450,7 @@ export default function ForecastLedger() {
     useUrlSync({
         tab: form.tab, v: form.view === 'both' ? null : form.view, team: form.team, sort: form.sort, dir: form.dir === 'desc' ? null : form.dir,
         m: form.metric === 'log_loss' ? null : form.metric, cal: form.cal === 'roster' ? null : form.cal, tv: form.tv === 'all' ? null : form.tv,
+        wk: tab === 'weekly' ? form.week : null,
     });
 
     const byTeam = useMemo(() => {
@@ -494,7 +497,9 @@ export default function ForecastLedger() {
                         className={`tab-btn ${tab === k ? 'tab-btn--active' : ''}`} onClick={() => set({ tab: k })}>{label}</button>
                 ))}
             </div>
-            {tab === 'live' ? (
+            {tab === 'weekly' ? (
+                <ForecastLedgerWeekly week={form.week} onWeek={(w) => set({ week: w })} />
+            ) : tab === 'live' ? (
                 live?.error ? <p className="error-message">The live scoring couldn&apos;t load.</p>
                     : <ForecastLedgerLive data={live} form={form} set={set} />
             ) : (<>

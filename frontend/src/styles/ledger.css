@@ -94,3 +94,40 @@
 .lg-swatch.lg-v--roster_pre { background: repeating-linear-gradient(90deg, var(--brand) 0 2px, transparent 2px 5px); }
 .lg-swatch.lg-v--as_is_pre { background: repeating-linear-gradient(90deg, var(--text) 0 2px, transparent 2px 5px); }
 .lg-muted-cell { color: var(--text-3); }
+
+/* Weekly report tab (ForecastLedgerWeekly.jsx): printable on its own. */
+.lg-weekly-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); margin: var(--space-3) 0; }
+.lg-weekly-bar label { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
+.lg-weekly-bar select { flex: none; min-width: 12rem; }
+.lg-weekly-lede { margin: var(--space-2) 0 0; max-width: 80ch; font-size: 0.9rem; line-height: 1.5; color: var(--text-2); }
+.lg-weekly-title { margin: var(--space-3) 0 0; font-size: 1.15rem; color: var(--text); }
+.lg-weekly .rp-panel { margin-top: var(--space-4); }
+.lg-weekly .rp-panel-title { margin-top: var(--space-4); }
+.lg-weekly .rp-panel-title:first-of-type { margin-top: var(--space-2); }
+.lg-weekly-list { margin: 0; padding-left: 1.1rem; display: grid; gap: var(--space-2); color: var(--text); }
+.lg-caption { caption-side: top; text-align: left; font-weight: 700; padding: var(--space-2) 0; color: var(--text); }
+
+@media print {
+  body:has(.lg-weekly) .top-nav,
+  body:has(.lg-weekly) .app-footer,
+  body:has(.lg-weekly) .page-header,
+  body:has(.lg-weekly) .lg-tabs,
+  body:has(.lg-weekly) .hb-page-title,
+  .lg-weekly .lg-noprint,
+  .lg-weekly .table-export,
+  .lg-weekly .chart-export {
+    display: none !important;
+  }
+  body:has(.lg-weekly) {
+    --bg: #fff; --surface: #fff; --surface-2: #f2f2f2; --text: #000; --text-2: #333; --text-3: #555;
+    --hairline: rgba(0, 0, 0, 0.2); --line: #000; --brand-text: #000; --positive: #000; --negative: #000;
+    background: #fff !important;
+    color: #000 !important;
+  }
+  body:has(.lg-weekly) .dashboard-card { border: none !important; box-shadow: none !important; background: none !important; padding: 0 !important; }
+  body:has(.lg-weekly) .dashboard-card::before { display: none !important; }
+  .lg-weekly .rp-panel { break-inside: auto; border: none; padding: 0; background: none; }
+  .lg-weekly table { font-size: 9pt; break-inside: avoid; }
+  .lg-weekly .table-wrapper { overflow: visible !important; }
+}

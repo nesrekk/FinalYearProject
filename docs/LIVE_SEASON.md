@@ -606,6 +606,26 @@ season dimension that the manifest counted whole, so the first live run would ha
 now has a paper-rows predicate (the rows at the freeze) and `paper-inputs` is byte-identical. Rule for later steps: a
 table a daily step writes needs a season dimension or a predicate in `paper_freeze.EXPLICIT_PREDICATES`.
 
+## 9. Step 6: the Forecast Ledger in the daily run, the weekly report (2026-10-07)
+
+**The daily run.** `daily_update.py` runs `scripts/ledger_update.py` first (step 0 of its docstring), unchanged and as its
+own process: the ledger imports its model code from the lock's git tag and writes only the `ledger_*` tables, so the
+daily update gains no model code. First because the ledger's odds should be logged before the day's first tip (a row
+logged later is labelled recomputed). Its exit code and its odds / scored lines go into the run row (`ledger_status`,
+`ledger_seconds`, `ledger_summary`); a failure fails the run, the fetch still runs. Skipped with a stated reason for the
+preseason runs of the tests, `--rebuild-only` / `--models-only`, `--no-ledger` and a non-dry `--date` other than today.
+
+**The weekly report.** `api/weekly_report_lib.py` builds one week (Monday to Sunday, US Eastern) from the stored tables:
+each version's Brier and log loss for the week and the season so far with 95% intervals, the ledger's own paired tests
+from the morning after (from 100 games, R9-039), the biggest misses, standings against the locked ranges, the week's
+movers, best game and biggest upset (the Dashboard's queries, `api/week_lib.py`) and the Rating Tracker's top ten.
+`scripts/weekly_report.py` writes it to `docs/weekly/<Sunday>.md`; the Forecast Ledger's Weekly report tab shows it,
+printable. Reads only; nothing in it is a second rule beside the ledger's.
+
+**The paper.** The forward-test sentence is read as of one run date, `paper_freeze.LEDGER_AS_OF` (R9-038): `None` (the
+lock) keeps `numbers.tex` byte-identical however many games are scored; a date with stored tests makes the ledger section
+emit `\pnLgFw*`. Rewriting the sentence is the one paper change of the round, from 2026-11-03 at the earliest.
+
 ## For the guide
 
 - The paper is frozen on 2025-26 by code: one constant, every paper script reads through it, and the manifest hashes
@@ -631,3 +651,7 @@ table a daily step writes needs a season dimension or a predicate in `paper_free
   player's numbers is still noise; the Dashboard has a "This week" panel (results, biggest upset, best game) and Live
   Scores links each final to Game Replay. Checked on a copy of the database holding the preseason as a stand-in season:
   three pages that broke on a short season and about a dozen routes that defaulted to a season they don't have, all fixed.
+- Step 6 (2026-10-07): the daily command now runs the Forecast Ledger first, and a weekly report ("what the models said
+  vs what happened": each forecast's error so far with intervals, the biggest misses, standings against the locked
+  forecast) is written each Monday to `docs/weekly/` and shown, printable, in the app; checked on a simulated three-week
+  season. The paper's forward-test sentence will be updated once, from a chosen date with 100+ games scored.

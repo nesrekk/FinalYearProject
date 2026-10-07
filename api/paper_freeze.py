@@ -69,6 +69,13 @@ EXPLICIT_PREDICATES = {
 LEDGER_TABLES = frozenset({"ledger_meta", "ledger_schedule", "ledger_rosters", "ledger_hindcast", "ledger_forecasts",
                            "ledger_lock", "ledger_results", "ledger_game_log", "ledger_team_log", "ledger_runs",
                            "ledger_tests"})
+# The one place the paper reads the live season (round 9 step 6): the forward-test sentence ("A forecast locked in
+# advance") reports the Forecast Ledger as of this run date (US Eastern; ledger_update.py's `today_et`): the games scored
+# before it and the paired tests that morning's run stored in ledger_tests. None = the lock date, when nothing had been
+# played (so numbers.tex doesn't change with each nightly run). Moving it is a deliberate paper update: pick a run date
+# with stored tests (100+ games), rerun `rebuild_all.sh paper-inputs`, rewrite the sentence in all three lengths from
+# the LgFw* macros (docs/LEDGER_RUNBOOK.md, "Updating the paper").
+LEDGER_AS_OF = None
 
 
 def season_label(end_year):

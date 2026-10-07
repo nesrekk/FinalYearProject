@@ -1790,7 +1790,7 @@ def availability(cur, N):
             "the availability base model is the protocol's chosen pre-game form on the same games")
 
 
-def ledger(cur, N):
+def ledger(cur, N, as_of=None):
     """Round 6 steps 1-2: the Forecast Ledger (scripts/ledger_lock.py, ledger_update.py). The locked forecast and its
     hindcast; the forward test is read from ledger_game_log / ledger_results as of the last nightly run."""
     N.start("Forecast Ledger (Section: pre-game, a forecast locked in advance; round 6 steps 1-2) -- ledger_lock, ledger_meta, "
@@ -1826,15 +1826,60 @@ def ledger(cur, N):
         N.add(f"LgHcD{K}Lo", dec(r["ci_lo"], d), f"ledger_meta.hindcast.{k}.ci_lo (cluster bootstrap by season)")
         N.add(f"LgHcD{K}Hi", dec(r["ci_hi"], d), f"ledger_meta.hindcast.{k}.ci_hi")
         N.claim(r["ci_hi"] < 0, f"Ledger: the roster-aware forecast beats the as-is one on {k} in the hindcast, outside the interval")
-    # Pinned to the lock (round 9 step 1, R8-086): the nightly log (ledger_runs) is outside the paper's inputs, so its last
-    # run can't date the paper. Round 9 step 6 rewrites the forward-test sentence from ledger_tests once games are scored.
-    N.add("LgAsOf", locked.astimezone(timezone.utc).strftime("%Y-%m-%d"),
-          "ledger_lock.locked_at (UTC date): the forward-test sentence is as of the lock, not of the last nightly run")
+    # Pinned (round 9 step 1, R8-086; round 9 step 6): the nightly log is outside the paper's inputs, so the forward test is
+    # read as of one explicit run date, paper_freeze.LEDGER_AS_OF (None = the lock date, nothing played), never "today".
+    import pandas as pd
     import ledger_live as LL       # the page's own scoring query (api/ledger_live.py: pandas only, no model code)
-    scored = int(LL.common(LL.scored(cur.connection, sea)).espn_id.nunique())
-    N.add("LgScored", integer(scored), "ledger_live.common(scored()): games final and scored under every version, as of LgAsOf")
-    N.claim(scored == 0, "Pre-game: no 2026-27 game has been scored yet -- once games are scored, rewrite the forward-test sentence "
-                         "with ledger_tests' intervals (and drop this claim)")
+    import paper_freeze as PF
+    as_of = as_of if as_of is not None else PF.LEDGER_AS_OF
+    df = LL.scored(cur.connection, sea)
+    if len(df):
+        df = df[pd.to_datetime(df.game_date).dt.date < (as_of or locked.astimezone(timezone.utc).date())]
+    both = LL.common(df)
+    scored = int(both.espn_id.nunique())
+    live = int(LL.common(LL.scored(cur.connection, sea)).espn_id.nunique())
+    if as_of is None:
+        N.add("LgAsOf", locked.astimezone(timezone.utc).strftime("%Y-%m-%d"),
+              "ledger_lock.locked_at (UTC date): the forward-test sentence is as of the lock, not of the last nightly run")
+        N.add("LgScored", integer(scored), "ledger_live.common(scored()): games final and scored under every version, as of LgAsOf")
+        N.claim(scored == 0, "Pre-game: no 2026-27 game has been scored yet -- once games are scored, rewrite the forward-test sentence "
+                             "with ledger_tests' intervals (and drop this claim)")
+        if live:
+            print(f"note: the Forecast Ledger has scored {live:,} games; the paper's forward-test sentence is as of the lock "
+                  "(paper_freeze.LEDGER_AS_OF = None). To report them, set it to a run date with stored tests "
+                  "(docs/LEDGER_RUNBOOK.md, 'Updating the paper').", file=sys.stderr)
+        return
+    # As of a run date: the games dated before it (that morning's run scored them) and that run's paired tests
+    N.add("LgAsOf", as_of.isoformat(), "paper_freeze.LEDGER_AS_OF: the Forecast Ledger run date the forward test is read as of (US Eastern)")
+    N.claim(as_of > tip.astimezone(timezone.utc).date(), "Ledger: the paper's as-of date is after the season's first tip")
+    N.add("LgScored", integer(scored), "ledger_live.common(scored()) on games dated before LgAsOf: final and scored under every version")
+    through = max(pd.to_datetime(both.game_date).dt.date) if scored else None
+    N.add("LgFwThrough", through.isoformat() if through else "none", "latest game date scored before LgAsOf")
+    tests = {(r[0], r[1], r[2], r[3]): r[4:] for r in rows(cur, """SELECT variant, metric, model_a, model_b, n, value_a, value_b, diff,
+                ci_lo, ci_hi, p_boot FROM ledger_tests WHERE season = %s AND as_of = %s""", (sea, as_of))}
+    N.claim(bool(tests), "Ledger: the run of LgAsOf stored paired tests (at least ledger_live.MIN_TEST_GAMES games)")
+    if not tests:
+        return
+    n_all = {v[0] for k, v in tests.items() if k[0] == "all"}
+    N.claim(n_all == {scored}, "Ledger: the stored tests of LgAsOf cover exactly the games scored before it")
+    N.add("LgFwGames", integer(scored), "ledger_tests n (variant all) at LgAsOf = LgScored")
+    early = {v[0] for k, v in tests.items() if k[0] == "logged_before_tip"}
+    N.add("LgFwGamesEarly", integer(early.pop()) if early else "0",
+          "ledger_tests n, variant logged_before_tip (games whose in-season odds were all logged before tip-off)")
+    name = {"as_is": "AsIs", "roster": "Roster", "record": "Record", "as_is_pre": "AsIsPre", "roster_pre": "RosterPre"}
+    ref = {m["version"]: m for m in LL.metrics(both)}
+    for metric, M in (("brier", "Br"), ("log_loss", "Ll")):
+        for v in LL.VERSIONS:
+            N.add(f"LgFw{M}{name[v]}", dec(ref[v][metric], 4), f"ledger_live.metrics: {metric} of {v} on the LgScored games")
+        for a, b in LL.PAIRS:
+            n, va, vb, d, lo, hi, p = tests[("all", metric, a, b)]
+            N.claim(abs(va - ref[a][metric]) < 1e-9 and abs(vb - ref[b][metric]) < 1e-9,
+                    f"Ledger: ledger_tests' {metric} of {a} and {b} at LgAsOf recompute from the logged odds")
+            w = f"ledger_tests {a} - {b}, {metric}, variant all, as_of LgAsOf"
+            N.add(f"LgFwD{M}{name[a]}{name[b]}", dec(d, 4), w + ": diff (negative = the first has the lower error)")
+            N.add(f"LgFwD{M}{name[a]}{name[b]}Lo", dec(lo, 4), w + ": ci_lo (games resampled)")
+            N.add(f"LgFwD{M}{name[a]}{name[b]}Hi", dec(hi, 4), w + ": ci_hi")
+            N.add(f"LgFwD{M}{name[a]}{name[b]}P", pval(p), w + ": p_boot")
 
 
 def report_card(cur, N):
