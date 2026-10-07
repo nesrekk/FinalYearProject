@@ -74,6 +74,27 @@ def test_migration_and_manifest_use_the_same_list():
     assert len(set(local_only.LOCAL_ONLY)) == 6
 
 
+def test_migration_writes_nothing_without_a_known_mode(monkeypatch, capsys):
+    """R9-042: `--help` once fell through to a full copy. No flag, --help, an unknown flag or two modes stop before
+    any connection; only a known mode gets as far as connecting."""
+    import migrate_to_layerbase as M
+
+    def no_connect(**_kw):
+        raise RuntimeError("connected")
+    monkeypatch.setattr(M.psycopg2, "connect", no_connect)
+    for argv, code in (([], 2), (["--help"], 0), (["-h"], 0), (["--bogus"], 2), (["--check", "--all"], 2),
+                       (["--all", "--x"], 2)):
+        monkeypatch.setattr(sys, "argv", ["migrate_to_layerbase.py", *argv])
+        with pytest.raises(SystemExit) as e:
+            M.main()
+        assert e.value.code == code, argv
+    for argv in (["--all"], ["--check"], ["--tables", "game_scores"]):
+        monkeypatch.setattr(sys, "argv", ["migrate_to_layerbase.py", *argv])
+        with pytest.raises(RuntimeError):
+            M.main()
+    capsys.readouterr()
+
+
 @needs_manifest
 def test_compare_skips_local_only_and_catches_a_change():
     here = PM.load_manifest()

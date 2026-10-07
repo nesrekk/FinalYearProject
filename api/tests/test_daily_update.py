@@ -49,6 +49,7 @@ import daily_update as D  # noqa: E402
 import espn_summary as ES  # noqa: E402
 import fetch_pbp_espn as FP  # noqa: E402
 import live_season as LS  # noqa: E402
+import local_only  # noqa: E402
 import paper_manifest as PM  # noqa: E402
 import upgrade_impact_scores as UI  # noqa: E402
 from db_config import DB_CONFIG  # noqa: E402
@@ -211,6 +212,8 @@ def _counts(cur, schema):
 def preseason_run():
     if not (_db_reachable() and _espn_reachable() and _nba_api_reachable()):
         pytest.skip("needs the database, ESPN and stats.nba.com")
+    if local_only.on_mirror():
+        pytest.skip("local database only: the test creates and drops a schema")
     conn = psycopg2.connect(**DB_CONFIG)
     conn.autocommit = True
     cur = conn.cursor()

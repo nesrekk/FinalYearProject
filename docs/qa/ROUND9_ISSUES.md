@@ -347,3 +347,45 @@ ran it against ESPN (35 s: opening night's nine odds rows, 10-21 waiting for 10-
   step 1, which pinned the first and took the live tables out of the digest) and that the claim `LgScored == 0` stops
   `paper-inputs` (R9-038). Rewritten; the runbook also gained the daily update's ledger step, the weekly report and
   "Updating the paper".
+
+## Step 8a: catch-up close-out before opening night (2026-10-07)
+
+Checks: local suite 640 passed + 1 skipped (exit 0); eslint 0; vite build; `paper-inputs` unchanged since step 6 (digest
+`e8f6204b932c41bb`, `numbers.tex` byte-identical); crawl `docs/qa/crawl_2026-10-07_8a.tsv` 210 called, 0 not 2xx, 0 over
+3 s (`--skip-quota`). Layerbase (the owner's OK): six orphaned sessions ended; 84 tables copied + 39 by R9-042; `--reindex`
+(782.8 → 704.1 MB); 207 of 207 shared tables content-hash identical (digest `fa40bd022bc99631`), the six live tables
+equal under UTC; 3,488 MB, 1,512 MB free. `DB_TARGET=layerbase` tests: smoke 103/103, then Layerbase stopped completing
+logins (~21:05 IST, TCP open, handshake timeout; not this Mac's network): the other batches' results are connection errors
+and skips, to be rerun.
+
+### R9-042 · `migrate_to_layerbase.py --help` ran a full copy to Layerbase
+- **Severity:** broken (ops tool; wrote to the mirror without the owner's OK) · **Found by:** step 8a, by running it ·
+  **Step:** 8a · **Status:** fixed in the round 9 step 8a commit (the script); the mirror's state is the owner's sync
+- **What happened:** the script read only the flags it knew and treated anything else as "copy every table", so
+  `--help` started a full migration. It was stopped (process killed) after 39 tables, alphabetically
+  `aging_curve_summary` .. `game_officials_fetch_log` (incl. `daily_update_runs`, new on Layerbase), each dropped,
+  recreated and reloaded from the local database in its own committed transaction: every one printed its row count equal
+  to local's (0 mismatches). So those 39 now hold exactly local's contents, which a sync would have copied anyway; their
+  primary keys are loosely packed until `--reindex`. The 40th, `game_pregame_odds`, never got further than its `DROP`:
+  it was queued behind a lock one of the orphaned sessions holds, and the killed client's backend kept waiting (and so
+  blocked every read of that table queued behind it). It was cancelled with `pg_cancel_backend` (the `DROP` rolled
+  back; `game_pregame_odds` 19,118 rows, no lock left waiting). Nothing else on Layerbase was touched.
+- **Fix:** a run needs exactly one known mode (`--all`, `--tables`, `--check`, `--drop-local-only`, `--reindex`); a full
+  copy is `--all` now. No flag, `--help`, an unknown flag or two modes print the usage and write nothing
+  (`test_round8_closeout.py::test_migration_writes_nothing_without_a_known_mode`, connections stubbed). README updated.
+- **Found on the way:** Layerbase has **six** orphaned `idle in transaction` sessions, not two: the two of 2026-10-04 and
+  four more of ~2026-10-06 (all reading `ledger_forecasts` / `ledger_game_log`, clients gone). The Step 10 query ends all
+  six (it picks those older than a day).
+
+### R9-043 · Layerbase's pooler carries session settings between clients
+- **Severity:** slow / wrong-answer risk on the mirror only · **Found by:** step 8a · **Step:** 8a · **Status:** worked
+  around in the round 9 step 8a commit (the manifest); recorded
+- **Where:** Layerbase sits behind a connection pooler: a startup option (`PGOPTIONS='-c statement_timeout=0'`) is refused
+  ("unsupported startup parameter in options"), and a `SET` one client leaves on a server session can reach the next
+  client handed that session. Seen once: right after a check that ran `SET statement_timeout = '20s'`, a fresh connection
+  showed `20s` (the server default is 0) and the Layerbase manifest's hash of a big table was cancelled; the next fresh
+  connection showed 0. **Done:** `paper_manifest.SESSION` now sets `statement_timeout = 0` itself (no effect on the
+  local manifest or any hash). **Rule for scripts and checks against Layerbase:** set what you rely on right after
+  connecting (the manifest's UTC/float settings already are), and prefer `SET LOCAL` inside a transaction for anything
+  you don't want to leave behind. A stray `timezone`/`extra_float_digits` reaching the app could change how a
+  timestamp or float prints on `DB_TARGET=layerbase`; no test has shown it.

@@ -35,6 +35,7 @@ if _API_DIR not in sys.path:
     sys.path.insert(0, _API_DIR)
 
 from db_config import DB_CONFIG  # noqa: E402
+import local_only  # noqa: E402
 
 SCHEMA = "zz_current_season"
 
@@ -87,6 +88,8 @@ def test_the_rule_on_todays_database(cur):
 def scratch(cur):
     """Copies of the three tables the rule reads, plus a fake opening night: BOS-NYK and LAL-GSW final on 2026-10-20,
     every player of four 2025-26 teams given a three-game 2026-27 line (search_path = the schema, then public)."""
+    if local_only.on_mirror():
+        pytest.skip("local database only: the test creates and drops a schema")
     cur.execute(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE")
     cur.execute(f"CREATE SCHEMA {SCHEMA}")
     for t in ("game_scores", "luck_schedule_seasons", "player_season_stats"):

@@ -123,7 +123,10 @@ SUMS = os.path.join(PAPER_DIR, "SHA256SUMS")
 FILE_GLOBS = ("numbers.tex", "manifest.json", "manifest.tsv", "tables/*.tex", "figures/*.pdf")
 
 SESSION = ("SET timezone = 'UTC'", "SET extra_float_digits = 1", "SET DateStyle = 'ISO, MDY'",
-           "SET IntervalStyle = 'postgres'", "SET bytea_output = 'hex'")
+           "SET IntervalStyle = 'postgres'", "SET bytea_output = 'hex'",
+           # Layerbase's pooler rejects startup options and can hand a client a server session another client left a
+           # timeout on (R9-043): a content hash must never be cut short by one.
+           "SET statement_timeout = 0")
 
 # script -> (kind, tables it writes). A table written by two scripts is listed under the one that creates it;
 # the others are named in its note in docs/DATASHEET.md.

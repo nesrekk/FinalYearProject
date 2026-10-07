@@ -26,7 +26,8 @@ copied (asking for one with --tables stops the run), --check doesn't count them 
 `DB_TARGET=layerbase python3 paper_manifest.py --out $TMPDIR/lb` then `paper_manifest.py --compare $TMPDIR/lb`.
 
 Usage:
-    cd scripts && python3 migrate_to_layerbase.py                    # every table except LOCAL_ONLY
+    cd scripts && python3 migrate_to_layerbase.py --all              # every table except LOCAL_ONLY
+    (no flag, --help, or an unknown flag: prints this and writes nothing)
     cd scripts && python3 migrate_to_layerbase.py --tables a,b,c     # just these
     cd scripts && python3 migrate_to_layerbase.py --check            # compare row counts only, no writes
     cd scripts && python3 migrate_to_layerbase.py --drop-local-only  # drop the LOCAL_ONLY tables on Layerbase
@@ -228,7 +229,17 @@ def reindex(only=None):
     print(f"Indexes of the re-packed tables: {before / mb:,.1f} -> {after / mb:,.1f} MB.")
 
 
+MODES = ("--all", "--tables", "--check", "--drop-local-only", "--reindex")
+
+
 def main():
+    # Round 9 step 8a (R9-042): an unknown flag (even --help) used to fall through to "copy every table". Now a run
+    # needs exactly one known mode, and a full copy needs --all; anything else prints the usage and writes nothing.
+    flags = [a for a in sys.argv[1:] if a.startswith("-")]
+    modes = [a for a in flags if a in MODES]
+    if any(a not in MODES for a in flags) or len(modes) != 1:
+        print(__doc__)
+        raise SystemExit(0 if set(flags) & {"-h", "--help"} else 2)
     if "--reindex" in sys.argv:
         i = sys.argv.index("--reindex")
         only = set(sys.argv[i + 1].split(",")) if len(sys.argv) > i + 1 and not sys.argv[i + 1].startswith("--") else None
