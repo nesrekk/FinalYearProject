@@ -115,7 +115,7 @@ One line each; search `docs/HISTORY.md` for the record behind one.
 - Every write to Layerbase needs the owner's OK in that chat. `migrate_to_layerbase.py` takes exactly one mode (`--check`, `--tables a,b`, `--all`, `--drop-local-only`, `--reindex`); `--reindex` after every copy. Find what changed with `paper_manifest.py --compare DIR` (content hashes, not row counts).
 - `api/local_only.py` `LOCAL_ONLY` tables are never copied; grep `api/` and `frontend/src` before adding one.
 - Layerbase's pooler refuses startup options (`PGOPTIONS` fails) and can pass one client's `SET` to the next: set what you rely on after connecting. Compare hashes with `SET timezone = 'UTC'` on both sides (local runs Asia/Kolkata).
-- Layerbase tests run in batches; after an SSL drop or a read-only spell, rerun the failed tests alone before suspecting the data. `test_every_verified_column_runs` fails there by design (8 s timeout). Don't serve the Workbench from it (~8× slower).
+- Layerbase tests run in batches; after an SSL drop or a read-only spell, rerun the failed tests alone before suspecting the data. `test_every_verified_column_runs` (8 s timeout) and `test_play_finder_season_filter_is_fast` (5 s budget) fail there: a slower server, not the data. Don't serve the Workbench from it (~8× slower). **Logins timing out (TCP open, no handshake) = the free tier hibernated (dashboard: Wake) and/or a VPN is on**: wake it, VPN off, then retry.
 
 **Testing and verification in the hidden browser pane**
 - The hidden pane never advances framer-motion or IntersectionObserver: use the harness `frontend/zz-harness.html` described in `frontend/qa/page_scan.js`'s header (`MotionGlobalConfig.skipAnimations = true` before importing `/src/main.jsx`, IntersectionObserver stub, rAF shim, `?zzdb=1`). Delete it before committing.
@@ -132,7 +132,7 @@ One line each; search `docs/HISTORY.md` for the record behind one.
 - When two chats share the checkout, run long chains from a git worktree (symlink `api/.env` and `paper/` in; `npm install` in its `frontend/`).
 
 ## Open items
-- **Layerbase mirror in sync** as of 2026-10-07, after round 9 step 8a: 207 of 207 shared tables content-hash identical (digest `fa40bd022bc99631` both sides); **3,488 MB, 1,512 MB free of the 5 GB tier**. Its tests: smoke 103/103; batches 2-4 to rerun once it accepts logins again (it stopped ~21:05 IST on 2026-10-07; batch list and sync history in `docs/HISTORY.md`).
+- **Layerbase mirror in sync** as of 2026-10-07, after round 9 step 8a: 207 of 207 shared tables content-hash identical (digest `fa40bd022bc99631` both sides); **3,488 MB, 1,512 MB free of the 5 GB tier**. Its tests (642, four batches): 566 passed, 74 skipped, 2 failed, both Layerbase-only slowness (`test_every_verified_column_runs`; `test_play_finder_season_filter_is_fast`, 12 s vs its 5 s budget); five SSL-drop failures passed rerun alone (sync history in `docs/HISTORY.md`).
 - **Not on Layerbase from opening night (2026-10-20):** every 2026-27 row `daily_update.py` writes. Sync weekly at most, owner's OK each time, `--reindex` after.
 - Open issues (details in the issue lists): R8-010, R8-082, R8-088 (heaves; owner's call), R9-012 (officials backfill at season end; owner's call), R9-024, R9-028, R9-035, R9-038.
 - `Rapm.jsx` still has a local `signed()` (its fix, 38cb542 on branch `claude/gallant-newton-49b1e2`, isn't on main). `draft_prospects.py` still takes MIN(season) as the rookie year.

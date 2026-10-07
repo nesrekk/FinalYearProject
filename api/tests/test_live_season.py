@@ -26,6 +26,7 @@ import live_season as LS  # noqa: E402
 import paper_freeze as PF  # noqa: E402
 import paper_manifest as PM  # noqa: E402
 from db_config import DB_CONFIG  # noqa: E402
+import local_only  # noqa: E402
 
 
 def _db_reachable():
@@ -37,6 +38,8 @@ def _db_reachable():
 
 
 needs_db = pytest.mark.skipif(not _db_reachable(), reason="Postgres DB is not reachable")
+# The classification is of the local database's 219 tables; the mirror leaves out LOCAL_ONLY on purpose (R9-044).
+whole_db = pytest.mark.skipif(local_only.on_mirror(), reason="classifies every local table; the mirror has no LOCAL_ONLY tables")
 
 
 @pytest.fixture(scope="module")
@@ -67,6 +70,7 @@ def test_tables_that_change_during_the_season_have_a_season_dimension(rows):
 
 
 @needs_db
+@whole_db
 def test_frozen_covers_the_paper_and_the_pooled_tables(rows):
     cls = {r["table"]: r["cls"] for r in rows}
     assert all(cls[t] == "frozen" for t, (kind, _) in PM.TABLES.items() if kind == "paper"), "a paper table isn't frozen"
@@ -76,6 +80,7 @@ def test_frozen_covers_the_paper_and_the_pooled_tables(rows):
 
 
 @needs_db
+@whole_db
 def test_doc_table_is_current(rows):
     md = LS.markdown(rows)
     assert LS.classification_rows(md) == LS.classification_rows(LS.doc_block()), \

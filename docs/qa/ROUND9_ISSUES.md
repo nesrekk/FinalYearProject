@@ -354,9 +354,10 @@ Checks: local suite 640 passed + 1 skipped (exit 0); eslint 0; vite build; `pape
 `e8f6204b932c41bb`, `numbers.tex` byte-identical); crawl `docs/qa/crawl_2026-10-07_8a.tsv` 210 called, 0 not 2xx, 0 over
 3 s (`--skip-quota`). Layerbase (the owner's OK): six orphaned sessions ended; 84 tables copied + 39 by R9-042; `--reindex`
 (782.8 → 704.1 MB); 207 of 207 shared tables content-hash identical (digest `fa40bd022bc99631`), the six live tables
-equal under UTC; 3,488 MB, 1,512 MB free. `DB_TARGET=layerbase` tests: smoke 103/103, then Layerbase stopped completing
-logins (~21:05 IST, TCP open, handshake timeout; not this Mac's network): the other batches' results are connection errors
-and skips, to be rerun.
+equal under UTC; 3,488 MB, 1,512 MB free. `DB_TARGET=layerbase` tests (642): 566 passed, 74 skipped, 2 failed
+(Layerbase-only speed: the Workbench's 8 s timeout, the Play Finder's 5 s budget at 12 s); five SSL-drop failures passed
+rerun alone. The first pass stopped mid-run: Layerbase had hibernated (free tier) and the owner's VPN was on; after the
+dashboard's Wake and the VPN off, the batches ran.
 
 ### R9-042 · `migrate_to_layerbase.py --help` ran a full copy to Layerbase
 - **Severity:** broken (ops tool; wrote to the mirror without the owner's OK) · **Found by:** step 8a, by running it ·
@@ -389,3 +390,13 @@ and skips, to be rerun.
   connecting (the manifest's UTC/float settings already are), and prefer `SET LOCAL` inside a transaction for anything
   you don't want to leave behind. A stray `timezone`/`extra_float_digits` reaching the app could change how a
   timestamp or float prints on `DB_TARGET=layerbase`; no test has shown it.
+
+### R9-044 · Two live-season tests failed on the Layerbase mirror
+- **Severity:** broken (tests, mirror only) · **Found by:** step 8a's Layerbase run · **Step:** 8a · **Status:** fixed in
+  the round 9 step 8a follow-up commit
+- **Where:** `test_live_season.py::test_frozen_covers_the_paper_and_the_pooled_tables` (KeyError `paper_eval_predictions`)
+  and `::test_doc_table_is_current` (docs table "stale") classify every table of the database they read; the mirror leaves
+  out the six LOCAL_ONLY tables on purpose, so on `DB_TARGET=layerbase` the list is six short. Both now skip there with
+  that reason (`whole_db`); locally 4 of 4 pass, on Layerbase 2 pass + 2 skip.
+- **Also seen, recorded not changed:** `test_round8_speed.py::test_play_finder_season_filter_is_fast` takes 12 s on
+  Layerbase against its 5 s budget (cold, ~8× slower server); like the Workbench timeout, a mirror-only failure.
