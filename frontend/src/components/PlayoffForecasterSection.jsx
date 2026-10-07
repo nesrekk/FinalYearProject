@@ -11,6 +11,7 @@ import usePlayerSuggestions from '../utils/usePlayerSuggestions';
 import { STAT_GLOSSARY } from '../utils/statGlossary';
 import TableExport from './common/TableExport';
 import SeasonSelect from './common/SeasonSelect';
+import { latestCompleteSeason } from '../utils/season';
 
 const ROWS = [
     { key: 'ts_pct', label: 'True Shooting %', pct: true },
@@ -37,7 +38,7 @@ export default function PlayoffForecasterSection() {
     const [searchInput, setSearchInput] = useState('Shai Gilgeous-Alexander');
     // { name, id }: the id (from a suggestion) picks the player exactly; a typed name opens the latest of that name.
     const [player, setPlayer] = useState({ name: 'Shai Gilgeous-Alexander', id: null });
-    const [season, setSeason] = useState(2026);
+    const [season, setSeason] = useState(() => latestCompleteSeason());
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -102,7 +103,7 @@ export default function PlayoffForecasterSection() {
                         <AutocompleteDropdown anchorRef={searchInputRef} items={sug.labels}
                             onPick={(label) => { const p = sug.pick(label); if (p) pick({ name: p.name, id: p.id }); }} />
                     </div>
-                    <SeasonSelect value={season} onChange={setSeason} from={2010} />
+                    <SeasonSelect value={season} onChange={setSeason} from={2010} to={latestCompleteSeason()} />
                 </div>
                 <NamesakeNote name={data?.player_name} id={data?.player_id} onPick={pick} />
                 {error && <p className="error-message" style={{ marginTop: '0.5rem' }}>{error}</p>}

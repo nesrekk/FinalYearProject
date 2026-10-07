@@ -28,6 +28,7 @@ import json
 import math
 from functools import lru_cache
 
+import current_season
 from fastapi import APIRouter, HTTPException, Query
 
 from impact_core import get_db
@@ -192,7 +193,9 @@ def _signal():
     (1 - mean sampling variance / observed variance, per season, then averaged) and the year-to-year r of team
     values (every pair of consecutive seasons)."""
     b = _base()
-    seasons = [s["season"] for s in b["seasons"]]
+    # complete seasons only: a season being played would join the average with a few games a team (round 9 step 5)
+    last = current_season.status()["latest_complete"]
+    seasons = [s["season"] for s in b["seasons"] if s["season"] <= last]
     out = {}
     for key in ["all"] + MAIN_STARTS:
         for side in ("off", "def"):
@@ -253,7 +256,10 @@ def _season_extras(season):
                        FROM possessions p JOIN possession_games g USING (game_id)
                        WHERE g.game_ok AND p.season = %s GROUP BY 1""", (season,))
         allowed = {t: {"second_chance_pts": int(s), "oreb_poss": int(o)} for t, s, o in cur.fetchall()}
-    transition = [{"start_type": k, **tr[k]} for k in ["all"] + TIMED_STARTS if k in tr]
+    # a short season can have a start type with no transition (or no settled) possession yet: give both halves
+    empty = {"poss": 0, "pts": 0, "ppp": None}
+    transition = [{"start_type": k, "trans": tr[k].get("trans", empty), "settled": tr[k].get("settled", empty)}
+                  for k in ["all"] + TIMED_STARTS if k in tr]
     return transition, allowed
 
 
@@ -308,8 +314,9 @@ def possession_options():
     tc = b["meta"].get("transition_check", {})
     cc = b["meta"].get("clock_check", {}).get("all", {})
     pooled = {}
+    last = current_season.status()["latest_complete"]  # the complete seasons pooled (round 9 step 5)
     for key in ["all"] + START_KEYS:
-        rs = [b["rows"].get((s["season"], "ALL", key)) for s in b["seasons"]]
+        rs = [b["rows"].get((s["season"], "ALL", key)) for s in b["seasons"] if s["season"] <= last]
         rs = [r for r in rs if r]
         if rs:
             n = sum(r["poss"] for r in rs)

@@ -160,7 +160,10 @@ def test_answers_come_from_the_data(truth, study):
 
 def test_table_check_assumes_the_real_latest_season(study):
     from routers.workbench import _dataset_meta
-    assert by_key(study)["t1"]["check"]["latest"] == _dataset_meta()["player_season"]["to"]
+    # The frozen task set was written when 2025-26 was the newest season. In the live season the app's newest is
+    # 2026-27 and a table with no last season still covers 2025-26, so the grading is the same (round 9 step 5).
+    latest = by_key(study)["t1"]["check"]["latest"]
+    assert latest == 2026 and _dataset_meta()["player_season"]["to"] >= latest
 
 
 def test_the_shot_chart_of_task_4_has_shots():

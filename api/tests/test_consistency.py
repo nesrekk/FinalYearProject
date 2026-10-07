@@ -101,14 +101,15 @@ def sim_client():
 def players(cur):
     """(player_id, season) player-seasons 2020-21 on with 30+ games and 20+ minutes a game."""
     cur.execute("""SELECT player_id, season FROM player_season_stats
-                   WHERE season >= 2021 AND gp >= 30 AND min >= 20 ORDER BY player_id, season""")
+                   WHERE season BETWEEN 2021 AND 2026 AND gp >= 30 AND min >= 20 ORDER BY player_id, season""")
     return random.Random(SEED).sample(cur.fetchall(), N_PLAYERS)
 
 
 @pytest.fixture(scope="module")
 def teams(cur):
     """(season, team) team-seasons 2010-11 on (the simulator's span)."""
-    cur.execute("SELECT season, team_abbreviation FROM team_luck_schedule WHERE season >= 2011 ORDER BY 1, 2")
+    # complete seasons only (R9-011): the same sample as drawn on 2026-10-05, whatever the live season adds
+    cur.execute("SELECT season, team_abbreviation FROM team_luck_schedule WHERE season BETWEEN 2011 AND 2026 ORDER BY 1, 2")
     return random.Random(SEED).sample(cur.fetchall(), N_TEAMS)
 
 
@@ -260,7 +261,7 @@ def test_standings_and_team_stats_fallback_are_the_real_season(cur, client):
     whose team totals ran within 0.5 rebounds, 0.2 assists and 0.4 FG% points of NBA.com's own
     2025-26 team block on 2026-10-05 (team rebounds belong to nobody in the lines)."""
     from routers.meta import db_standings, db_team_stats
-    season = one(cur, "SELECT MAX(season) FROM player_season_stats")[0]
+    season = 2026  # the newest complete season (R9-011: MAX(season) is the live season from opening night)
     cur.execute("""SELECT abbreviation, w, l, pts_per_game FROM team_seasons
                    WHERE season = %s AND NOT is_league_avg ORDER BY 1""", (season,))
     truth = {a: (int(w), int(l), float(p)) for a, w, l, p in cur.fetchall()}
@@ -415,7 +416,8 @@ def test_game_log_games_match_nba_gp(cur):
                                FROM player_game_lines WHERE game_id IN (SELECT 'espn_' || espn_id FROM game_scores)
                                GROUP BY 1, 2)
                    SELECT lt.season, COUNT(*), COUNT(*) FILTER (WHERE lt.gp <> s.gp), MAX(ABS(lt.gp - s.gp))
-                   FROM lt JOIN player_season_stats s USING (player_id, season) WHERE lt.teams = 1 GROUP BY 1""")
+                   FROM lt JOIN player_season_stats s USING (player_id, season) WHERE lt.teams = 1 AND lt.season <= 2026
+                   GROUP BY 1""")
     for season, n, differ, worst in cur.fetchall():
         assert differ / n <= 0.05 and worst <= 2, (season, n, differ, worst)
 
@@ -526,7 +528,7 @@ def test_shot_chart_fga_matches_the_season_table(cur):
     2025-26 passes since its chart was re-fetched (round 8.5 step C, R8-028): before, the four games
     with no chart rows were its only gaps; every regular-season game now has chart rows."""
     cur.execute("""WITH sh AS (SELECT player_id, LEFT(season, 4)::int + 1 AS season, COUNT(*) fga
-                               FROM player_shots WHERE game_id LIKE '002%%' AND season >= '2009-10' GROUP BY 1, 2)
+                               FROM player_shots WHERE game_id LIKE '002%%' AND season BETWEEN '2009-10' AND '2025-26' GROUP BY 1, 2)
                    SELECT sh.season, COUNT(*), COUNT(*) FILTER (WHERE ABS(sh.fga - s.fga * s.gp) > 0.05 * s.gp + 2),
                           MAX(ABS(sh.fga - s.fga * s.gp))
                    FROM sh JOIN player_season_stats s USING (player_id, season) WHERE s.gp >= 20 GROUP BY 1 ORDER BY 1""")

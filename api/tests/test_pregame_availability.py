@@ -89,7 +89,7 @@ def test_every_game_and_its_base_odds(cur):
     n, missing, base_diff, lineless = _all(cur, """
         SELECT COUNT(g.game_id), COUNT(g.game_id) - COUNT(o.game_id), MAX(ABS(o.p_base - g.p_home)),
                STRING_AGG(o.game_id, ',') FILTER (WHERE NOT o.lineups_ok)
-        FROM game_pregame_odds g LEFT JOIN pregame_availability_odds o USING (game_id) WHERE g.season >= 2021""")[0]
+        FROM game_pregame_odds g LEFT JOIN pregame_availability_odds o USING (game_id) WHERE g.season BETWEEN 2021 AND 2026""")[0]
     assert n == 7230 and missing == 0 and base_diff == 0
     assert lineless == "0022500614"
     # without lineups the odds stay the base odds

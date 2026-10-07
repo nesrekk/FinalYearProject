@@ -1428,6 +1428,15 @@ def stored_games_by_date(cursor, date_str: str):
                 "neutral_site": False, "venue": None, "note": note or rnd,
                 "away": away_side, "home": home_side,
             })
+    # Game Replay's id (round 9 step 5): the ESPN play-by-play of a final, once the daily update has stored it.
+    espn_ids = [g["espn_id"] for g in games if g["espn_id"]]
+    replayable = set()
+    if espn_ids:
+        cursor.execute("SELECT game_id FROM pbp_games WHERE game_id = ANY(%s);", ([f"espn_{e}" for e in espn_ids],))
+        replayable = {r[0] for r in cursor.fetchall()}
+    for g in games:
+        rid = f"espn_{g['espn_id']}" if g["espn_id"] else None
+        g["replay_id"] = rid if rid in replayable else None
     games.sort(key=lambda g: (g["kind"] != "Regular season", g["id"]))
     return games
 
@@ -1446,12 +1455,21 @@ def games_by_date(date_str: str):
         return {
             "games": [], "source": "none", "status": "unreachable",
             "message": (f"ESPN's scoreboard didn't answer within {espn_live.TIMEOUT_SECONDS:g} s and {date_str} "
-                        "isn't in the stored results (regular-season, play-in and playoff games 2009-10 to "
-                        "2025-26). Try again in a moment."),
+                        "isn't in the stored results (regular-season, play-in and playoff games from 2009-10, "
+                        "the current season through the last daily update). Try again in a moment."),
         }
+    replayable = set()
+    finals = [f"espn_{g['espn_id']}" for g in live if g.get("espn_id") and g["status"] == "FINAL"]
+    if finals:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT game_id FROM pbp_games WHERE game_id = ANY(%s);", (finals,))
+            replayable = {r[0] for r in cur.fetchall()}
     for g in live:
         if g["status"] == "SCHEDULED":
             g["away"]["score"] = g["home"]["score"] = None
+        rid = f"espn_{g.get('espn_id')}"
+        g["replay_id"] = rid if rid in replayable else None
     return {"games": live, "source": "espn", "status": "ok", "message": None}
 
 
@@ -1479,7 +1497,7 @@ def game_boxscore(game_id: str):
     if not espn_id:
         return {"game_id": gid, "espn_id": None, "boxscore": empty, "teams": {}, "game_status": None,
                 "status": "unknown_game",
-                "message": f"No ESPN game id on file for {gid} (NBA ids are mapped for the regular seasons 2009-10 to 2025-26)."}
+                "message": f"No ESPN game id on file for {gid} (NBA ids are mapped for the regular seasons from 2009-10, the current season through the last daily update)."}
     box = espn_live.boxscore(espn_id)
     if box is None:
         return {"game_id": gid, "espn_id": espn_id, "boxscore": empty, "teams": {}, "game_status": None,

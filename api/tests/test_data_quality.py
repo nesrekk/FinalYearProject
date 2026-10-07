@@ -74,7 +74,9 @@ def one(cur, sql, args=None):
 
 
 def test_one_flag_row_per_game_and_levels(cur):
-    assert one(cur, """SELECT count(*) FROM lineup_stint_games g FULL JOIN data_quality_game_flags f USING (game_id)
+    # the flags are the paper's (frozen on 2020-21 to 2025-26); the live season's games aren't flagged (R9-011)
+    assert one(cur, """SELECT count(*) FROM (SELECT * FROM lineup_stint_games WHERE season <= 2026) g
+                       FULL JOIN data_quality_game_flags f USING (game_id)
                        WHERE g.game_id IS NULL OR f.game_id IS NULL""")[0] == 0
     cur.execute("SELECT game_id, classes, n_classes, level FROM data_quality_game_flags")
     order = [lv for lv, _, _ in Q.LEVELS]
@@ -138,7 +140,7 @@ def test_every_game_rows_reproduce_the_stored_tests(cur):
                    WHERE result = 'possessions' AND drop_set = 'none' AND metric = 'ppp' AND model_b = ''""")
     ppp = dict(cur.fetchall())
     cur.execute("""SELECT start_type, sum(pts)::float8 / sum(poss) FROM possession_seasons WHERE team = 'ALL'
-                   AND start_type IN ('steal', 'made_fg') GROUP BY 1""")
+                   AND start_type IN ('steal', 'made_fg') AND season <= 2026 GROUP BY 1""")
     league = dict(cur.fetchall())
     for k, v in league.items():
         assert abs(ppp[k] - v) < 1e-12, k
@@ -146,7 +148,7 @@ def test_every_game_rows_reproduce_the_stored_tests(cur):
 
 def test_drop_sets_drop_their_games(cur):
     # possessions: the result's games are the reconciled possession games
-    scope = one(cur, "SELECT count(*) FROM possession_games WHERE game_ok")[0]
+    scope = one(cur, "SELECT count(*) FROM possession_games WHERE game_ok AND season <= 2026")[0]
     cur.execute("""SELECT DISTINCT drop_set, games_dropped, games_in_scope FROM data_quality_sensitivity WHERE result = 'possessions'""")
     sets = cur.fetchall()
     assert {s for s, _, _ in sets} >= {"none", "flagged", "tag_text", "unidentified"}
@@ -166,7 +168,8 @@ def test_drop_sets_drop_their_games(cur):
     cur.execute("SELECT DISTINCT drop_set FROM data_quality_sensitivity")
     assert not {k for (k,) in cur.fetchall()} & {"zero_distance", "missed_threes"}
     # impact: the result's games are the games with a tracked stint side that had a possession (build_rapm.load_rows)
-    scope = one(cur, "SELECT count(DISTINCT game_id) FROM lineup_stints WHERE tracked_ok AND (home_poss > 0 OR away_poss > 0)")[0]
+    scope = one(cur, "SELECT count(DISTINCT game_id) FROM lineup_stints WHERE tracked_ok AND (home_poss > 0 OR away_poss > 0) "
+                     "AND season <= 2026")[0]
     assert one(cur, "SELECT min(games_in_scope), max(games_in_scope) FROM data_quality_sensitivity WHERE result = 'impact'") == (scope, scope)
 
 

@@ -19,10 +19,11 @@ import SaveViewButton from '../common/SaveViewButton';
 import OpenInWorkbenchButton from '../common/OpenInWorkbenchButton';
 import { compareBoard } from '../../utils/openInWorkbench';
 import { parseParam, pushPage, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { currentSeason, defaultSeasonFor } from '../../utils/season';
+import LiveSeasonNote from '../common/LiveSeasonNote';
+import SeasonSelect from '../common/SeasonSelect';
 
 // compare-profile covers 2009-10 to the latest finished season.
-const LATEST_SEASON = 2026;
-const SEASONS = Array.from({ length: LATEST_SEASON - 2010 + 1 }, (_, i) => LATEST_SEASON - i);
 
 // Theme tokens (styles/tokens.css): the Ink colours were 1.6-2.6:1 as text on Paper.
 const COLOR_A = 'var(--compare-a)';
@@ -204,7 +205,7 @@ export default function PlayerComparison() {
     // A shared link carries ?season=&a=&aid=&b=&bid= (utils/useUrlState.js): aid/bid (NBA ids) pick
     // the players, a/b keep the link readable and alone open the latest player of that name.
     const params = useInitialParams();
-    const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: LATEST_SEASON }) ?? LATEST_SEASON);
+    const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: currentSeason() }) ?? defaultSeasonFor(20)); // the pool's gp >= 20
     const { isAdvanced } = useMotionMode();
     const preset = motionPreset(isAdvanced);
 
@@ -288,11 +289,9 @@ export default function PlayerComparison() {
                 <p className="page-subtitle">Pick a season and two players to compare their full statistical profile.</p>
 
                 <div className="input-row">
-                    <select className="input-field" value={season} onChange={(e) => setSeason(Number(e.target.value))}
-                        aria-label="Season" style={{ maxWidth: 130 }}>
-                        {SEASONS.map((y) => <option key={y} value={y}>{`${y - 1}-${String(y).slice(-2)}`}</option>)}
-                    </select>
+                    <SeasonSelect value={season} onChange={setSeason} from={2010} />
                 </div>
+                <LiveSeasonNote season={season} />
 
                 <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
                     <SearchBox placeholder="Player A…" value={searchA} onChange={setSearchA} resolvedName={profileA?.player_name} onPick={pickA} color={COLOR_A} />

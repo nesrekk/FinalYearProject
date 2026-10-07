@@ -17,6 +17,7 @@ are cached per process: restart impact_api after rebuilding.
 
 from functools import lru_cache
 
+import current_season
 from fastapi import APIRouter, HTTPException, Query
 
 from best_games import FORMULA, LEAD_CHANGE_W, MARGIN_W, OVERTIME_W, SORT_LABELS, SORTS
@@ -98,18 +99,22 @@ def _options():
                                     MIN(game_date) AS first_date, MAX(game_date) AS last_date
                              FROM game_pregame_odds GROUP BY season ORDER BY season""")
         meta = {r["name"]: r for r in _rows(cur, "SELECT * FROM best_games_meta")}
+        # the calibration and the favourites' record pool complete seasons (a season being played would make them
+        # drift daily; round 9 step 5)
+        last = current_season.latest_complete_season(cur)
         cal = []
         for lo, hi in CAL_BINS:
             cur.execute("""SELECT COUNT(*), AVG(LEAST(p_home, 1 - p_home)),
                                   AVG(((home_won AND p_home < 0.5) OR (NOT home_won AND p_home > 0.5))::int)
-                           FROM game_pregame_odds WHERE LEAST(p_home, 1 - p_home) > %s AND LEAST(p_home, 1 - p_home) <= %s""",
-                        (lo, hi))
+                           FROM game_pregame_odds WHERE LEAST(p_home, 1 - p_home) > %s AND LEAST(p_home, 1 - p_home) <= %s
+                             AND season <= %s""",
+                        (lo, hi, last))
             n, expected, actual = cur.fetchone()
             cal.append({"lo": lo, "hi": hi, "games": n, "expected": expected, "actual": actual})
         cur.execute("""SELECT AVG(GREATEST(p_home, 1 - p_home)),
                               AVG(((home_won AND p_home >= 0.5) OR (NOT home_won AND p_home < 0.5))::int),
                               AVG(home_won::int) FILTER (WHERE season < 2020 OR season > 2021), COUNT(*)
-                       FROM game_pregame_odds""")
+                       FROM game_pregame_odds WHERE season <= %s""", (last,))
         fav_mean, fav_win, home_win, total = cur.fetchone()
     teams = sorted({FRANCHISE.get(t, t) for t in _team_set()})
     return {

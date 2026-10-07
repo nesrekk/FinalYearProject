@@ -6,6 +6,7 @@ import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
 import SourceBadge from './common/SourceBadge';
 import SeasonSelect from './common/SeasonSelect';
+import { currentSeason } from '../utils/season';
 
 const AWARDS = {
     mvp: {
@@ -67,7 +68,7 @@ const AWARDS = {
 
 export default function AwardsRaceSection() {
     const [award, setAward] = useState('mvp');
-    const [season, setSeason] = useState(2026);
+    const [season, setSeason] = useState(() => currentSeason());
     const [results, setResults] = useState(null);
     const [poolInfo, setPoolInfo] = useState(null);
     const [inSeason, setInSeason] = useState(null);

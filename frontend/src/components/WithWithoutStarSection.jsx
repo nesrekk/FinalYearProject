@@ -8,6 +8,8 @@ import TeamLogo from './common/TeamLogo';
 import PlayerHeadshot from './common/PlayerHeadshot';
 import { signed } from '../utils/format';
 import SeasonSelect from './common/SeasonSelect';
+import { currentSeason } from '../utils/season';
+import LiveSeasonNote from './common/LiveSeasonNote';
 
 function fmt(v, digits = 1) {
     return v == null ? '—' : Number(v).toFixed(digits);
@@ -30,7 +32,7 @@ function SplitCard({ label, split, color }) {
 }
 
 export default function WithWithoutStarSection() {
-    const [season, setSeason] = useState(2026);
+    const [season, setSeason] = useState(() => currentSeason());
     const [teams, setTeams] = useState([]);
     const [team, setTeam] = useState('');
     const [roster, setRoster] = useState([]);
@@ -112,6 +114,7 @@ export default function WithWithoutStarSection() {
                     ))}
                 </select>
             </div>
+            <LiveSeasonNote season={season} />
 
             {error && <p className="error-message" style={{ marginTop: '0.5rem' }}>{error}</p>}
             {loading && <Loader />}

@@ -205,7 +205,12 @@ def rim_deterrence(season: Optional[int] = None, team: Optional[str] = None, min
     if not seasons:
         raise HTTPException(status_code=503, detail="No rim deterrence data: run scripts/build_rim_deterrence.py.")
     available = sorted(seasons)
-    season = season or available[-1]
+    if season is None:
+        # the newest season where someone clears the minutes floor: a live season's first weeks have nobody at
+        # 1,000 minutes (round 9 step 5)
+        floor0 = max(0.0, min_minutes)
+        cleared = sorted({r["season"] for r in _rows() if (r["minutes_on"] or 0) >= floor0})
+        season = cleared[-1] if cleared else available[-1]
     if season not in seasons:
         raise HTTPException(status_code=404, detail=(
             f"No rim deterrence data for {_label(season)}; the play-by-play covers {_label(available[0])} to "

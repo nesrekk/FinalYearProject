@@ -11,6 +11,7 @@ import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import TableExport from '../common/TableExport';
 import SourceBadge from '../common/SourceBadge';
+import LiveSeasonNote from '../common/LiveSeasonNote';
 
 const STAT_OPTIONS = [
   { key: 'pts', label: 'Points' },
@@ -110,6 +111,7 @@ export default function StatLeaders() {
           </p>
           {note && <p className="page-subtitle" style={{ marginTop: '-0.5rem' }}>{note}</p>}
           {floorText && <p className="page-subtitle" style={{ marginTop: '-0.5rem' }}>{floorText}</p>}
+          <LiveSeasonNote season={season} />
 
           <div className="hb-rail-group">
             <span className="hb-rail-label">Stat</span>

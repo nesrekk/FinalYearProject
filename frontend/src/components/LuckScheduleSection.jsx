@@ -12,6 +12,7 @@ import TeamLink from './common/TeamLink';
 import { currentPageParam, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
 import { signed } from '../utils/format';
 import '../styles/luck.css';
+import { LiveSeasonTag } from './common/LiveSeasonNote';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
@@ -417,6 +418,7 @@ export default function LuckScheduleSection() {
                         onChange={(e) => { setDateDraft(''); set({ season: Number(e.target.value), asof: null }); }}>
                         {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
                     </select>
+                    <LiveSeasonTag season={season} />
                 </label>
                 <label>
                     <span>As of (morning of)</span>

@@ -10,6 +10,7 @@ import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import { signed as signedNum } from '../../utils/format';
 import '../../styles/stability.css';
+import { LiveSeasonTag } from '../common/LiveSeasonNote';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const FORMATS = {
@@ -150,6 +151,7 @@ export default function BreakoutDetector() {
                         onChange={(e) => set({ season: Number(e.target.value) })}>
                         {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)} vs {seasonLabel(s - 1)}</option>)}
                     </select>
+                    <LiveSeasonTag season={data?.season} />
                 </label>
                 <label>
                     <span>Min. games (both seasons)</span>

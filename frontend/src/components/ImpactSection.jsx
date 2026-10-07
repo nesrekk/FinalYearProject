@@ -6,9 +6,11 @@ import InfoTooltip from './common/InfoTooltip';
 import Icon from './common/Icon';
 import SourceBadge from './common/SourceBadge';
 import SeasonSelect from './common/SeasonSelect';
+import { currentSeason } from '../utils/season';
+import LiveSeasonNote from './common/LiveSeasonNote';
 
 export default function ImpactSection() {
-    const [season, setSeason] = useState(2026);
+    const [season, setSeason] = useState(() => currentSeason());
     const [results, setResults] = useState(null);
     const [source, setSource] = useState(null);
     const [activeTab, setActiveTab] = useState(null); // 'raw' | 'star'
@@ -103,6 +105,7 @@ export default function ImpactSection() {
                     {loading && activeTab === 'bpm' ? 'Loading…' : 'BPM / VORP'}
                 </button>
             </div>
+            <LiveSeasonNote season={season} />
 
             {loading && <Loader />}
             {error && <p className="error-message">{error}</p>}

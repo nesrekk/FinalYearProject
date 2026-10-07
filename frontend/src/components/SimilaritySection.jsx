@@ -10,11 +10,12 @@ import AutocompleteDropdown from './common/AutocompleteDropdown';
 import NamesakeNote from './common/NamesakeNote';
 import usePlayerSuggestions from '../utils/usePlayerSuggestions';
 import { signed as signedNum } from '../utils/format';
+import { currentSeason, defaultSeasonFor } from '../utils/season';
 
 // Similarity inputs exist from 2009-10 on (usage, net rating, AST%/REB%).
 // The last season updates from the API's pool after the first search.
 const FIRST_SEASON = 2010;
-const DEFAULT_LAST_SEASON = 2026;
+const DEFAULT_MIN_GP = 20;
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const pct = (v) => `${(v * 100).toFixed(1)}%`;
@@ -52,10 +53,10 @@ function StatCells({ stats }) {
 
 export default function SimilaritySection() {
     const [player, setPlayer] = useState('');
-    const [season, setSeason] = useState(String(DEFAULT_LAST_SEASON));
-    const [lastSeason, setLastSeason] = useState(DEFAULT_LAST_SEASON);
+    const [season, setSeason] = useState(() => String(defaultSeasonFor(DEFAULT_MIN_GP)));
+    const [lastSeason, setLastSeason] = useState(() => currentSeason());
     const [excludeSelf, setExcludeSelf] = useState(true);
-    const [minGp, setMinGp] = useState(20);
+    const [minGp, setMinGp] = useState(DEFAULT_MIN_GP);
     const [onePerPlayer, setOnePerPlayer] = useState(false);
     const [topN, setTopN] = useState(10);
     const [searched, setSearched] = useState(null);

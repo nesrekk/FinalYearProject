@@ -15,6 +15,7 @@ Shooting percentages need a minimum number of attempts per game, so a
 1-for-1 season can't top 3P%.
 """
 
+from current_season import default_season_for
 from fastapi import APIRouter, HTTPException, Query
 
 from impact_core import get_db
@@ -108,7 +109,9 @@ def custom_leaderboard(
     with get_db() as conn:
         cur = conn.cursor()
         lo, hi = _bounds(cur)
-        season_to = hi if season_to is None else season_to
+        # no season given: the newest one whose teams have played min_gp games (the season being played once it can
+        # meet the floor, else the newest complete one; round 9 step 5)
+        season_to = min(hi, default_season_for(min_gp, cur)) if season_to is None else season_to
         season_from = season_to if season_from is None else season_from
         if season_from > season_to:
             season_from, season_to = season_to, season_from
@@ -362,7 +365,8 @@ def composite_leaderboard(
     with get_db() as conn:
         cur = conn.cursor()
         lo, hi = _bounds(cur)
-        season_to = hi if season_to is None else season_to
+        # as /leaderboard/custom: no season given = the newest one whose teams have played min_gp games (round 9 step 5)
+        season_to = min(hi, default_season_for(min_gp, cur)) if season_to is None else season_to
         season_from = season_to if season_from is None else season_from
         if season_from > season_to:
             season_from, season_to = season_to, season_from

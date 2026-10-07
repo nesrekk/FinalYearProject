@@ -189,7 +189,8 @@ def season_dim(table, columns):
         return "2026-27 (lock)"
     if table in EXPLICIT_PREDICATES:
         return {"player_projections": "last_season", "game_officials": "game id", "game_officials_fetch_log": "game id",
-                "pbp_events": "game id", "pregame_availability_players": "game id"}.get(table, "event id")
+                "pbp_events": "game id", "pregame_availability_players": "game id",
+                "player_shots_cache_status": "updated_at"}.get(table, "event id")
     if "season" in columns:
         return "season (text)" if table in TEXT_SEASON_TABLES else "season (int)"
     return "—"

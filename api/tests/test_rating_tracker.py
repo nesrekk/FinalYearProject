@@ -149,7 +149,7 @@ def test_curve_and_validation_hold_the_known_results(cur):
     assert abs(chosen[0] - lq) < 1e-9 and abs(chosen[1] - rmse) < 1e-4    # the curve's RMSE is stored to 4 decimals
     assert chosen[1] <= min(r[1] for r in rows) + 1e-4       # the choice is the profile's minimum along the drift
     nxt = {(s, m): (g, sc, cov) for s, m, g, sc, cov in q(cur, "SELECT season, model, game_rmse, scale_fit, coverage FROM rating_tracker_validation WHERE test = 'next_season'")}
-    seasons = sorted({s for s, _ in nxt})
+    seasons = sorted({s for s, _ in nxt if s <= 2026})  # the paper's seasons (R9-011)
     assert seasons == [2022, 2023, 2024, 2025, 2026]
     for s in seasons:
         assert nxt[(s, "rapm_tracker")][0] < nxt[(s, "zero")][0] - 0.5
@@ -158,7 +158,7 @@ def test_curve_and_validation_hold_the_known_results(cur):
         # picks on the rebuilt stints (weaker carry-over: its 2025-26 ratings run ~15% too wide; R8-076)
         assert 0.8 < nxt[(s, "rapm_tracker")][1] < 1.1
         assert nxt[(s, "rapm_tracker")][2] >= nxt[(s, "rapm_single")][2]  # carries ratings of players who sat out
-    held = dict((s, g) for s, g in q(cur, "SELECT season, game_rmse FROM rating_tracker_validation WHERE test = 'held_out_games' AND model = 'rapm_tracker'"))
+    held = dict((s, g) for s, g in q(cur, "SELECT season, game_rmse FROM rating_tracker_validation WHERE test = 'held_out_games' AND model = 'rapm_tracker' AND season <= 2026"))
     app = dict((s, g) for s, g in q(cur, "SELECT season, game_rmse FROM rapm_validation WHERE test = 'held_out_games' AND model = 'zero'"))
     assert set(held) == {2021, 2022, 2023, 2024, 2025, 2026} and all(held[s] < app[s] for s in held)
     y2y = {(s, m): c for s, m, c in q(cur, "SELECT season, model, corr FROM rating_tracker_validation WHERE test = 'year_to_year'")}
@@ -173,7 +173,7 @@ def test_api_tracker_version_and_profile_block(cur):
     client = TestClient(app)
     o = client.get("/rapm/options").json()
     tv = next(v for v in o["versions"] if v["id"] == "tracker")
-    assert tv["seasons"] == [2021, 2022, 2023, 2024, 2025, 2026] and o["tracker"]["built"] and o["tracker"]["kinds"] == ["filtered", "smoothed"]
+    assert [s for s in tv["seasons"] if s <= 2026] == [2021, 2022, 2023, 2024, 2025, 2026] and o["tracker"]["built"] and o["tracker"]["kinds"] == ["filtered", "smoothed"]
     for kind in ("filtered", "smoothed"):
         d = client.get("/rapm", params={"version": "tracker", "season": 2024, "kind": kind}).json()
         assert d["tracker"]["kind"] == kind and d["fit"]["tracker"]["estimated_on"] == TUNE_SPAN and len(d["tracker"]["curve"]) >= 14

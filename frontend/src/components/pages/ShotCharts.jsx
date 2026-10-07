@@ -15,6 +15,7 @@ import shotTotals, { SHOT_GAMES } from '../../utils/shotTotals';
 import { namesakes, playerSpan, searchPlayers } from '../../utils/playerChoice';
 import { SV_MINS, SV_SORTS } from '../../utils/shotValue';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
+import { LiveSeasonTag } from '../common/LiveSeasonNote';
 
 function zoneForShot(s) {
   const x = Number(s.loc_x || 0);
@@ -289,6 +290,7 @@ export default function ShotCharts() {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+          <LiveSeasonTag season={season ? Number(String(season).slice(0, 4)) + 1 : null} />
 
           {!onShotMaking && !onQuality && !onValue && (
             <select

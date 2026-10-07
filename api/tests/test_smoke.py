@@ -295,7 +295,7 @@ def test_impact_rest_study():
 
 def test_impact_schedule_difficulty():
     from impact_api import app
-    resp = TestClient(app).get("/schedule/difficulty")
+    resp = TestClient(app).get("/schedule/difficulty", params={"season": 2026})  # a complete season (R9-011)
     assert resp.status_code in (200, 404, 503)
     if resp.status_code == 200:
         data = resp.json()
@@ -1367,7 +1367,7 @@ def test_game_log_and_finder_match_known_games():
     lebron = client.get("/games/player-log/2544", params={"season": 2024}).json()
     assert lebron["cup_final_games"] == 1 and "2023-12-09" not in {r["date"] for r in lebron["rows"]}
     prof = client.get("/player-profile/203999").json()["game_log"]
-    assert {r["season"] for r in prof["seasons"]} == {2021, 2022, 2023, 2024, 2025, 2026}
+    assert {r["season"] for r in prof["seasons"] if r["season"] <= 2026} == {2021, 2022, 2023, 2024, 2025, 2026}
     assert client.get("/games/player-log/203999", params={"season": 2010}).status_code == 404
 
     # Whitelisted inputs only.
@@ -1885,7 +1885,7 @@ def test_luck_schedule_srs_and_carryover():
     assert abs(sum(t["luck"] for t in d["teams"])) < 5
     # 2020-21 had mostly empty arenas: the smallest home-court edge on file.
     m = client.get("/teams/luck-schedule/model").json()
-    hca = {s["season"]: s["hca"] for s in m["seasons"]}
+    hca = {s["season"]: s["hca"] for s in m["seasons"] if s["season"] <= 2026}  # complete seasons (R9-011)
     assert min(hca, key=hca.get) == 2021 and hca[2021] < 1.5
     assert len(m["points"]) == 510 and sum(f["chosen"] for f in m["fits"]) == 1
     c = m["checks"]
@@ -2022,7 +2022,7 @@ def test_lineup_stints_reconcile_and_feed_lineup_tools():
     conn = psycopg2.connect(**DB_CONFIG)
     try:
         cur = conn.cursor()
-        cur.execute("SELECT season, games, games_ok, tracked_minutes_share FROM lineup_stint_seasons ORDER BY season")
+        cur.execute("SELECT season, games, games_ok, tracked_minutes_share FROM lineup_stint_seasons WHERE season <= 2026 ORDER BY season")
         rows = cur.fetchall()
         assert [r[0] for r in rows] == [2021, 2022, 2023, 2024, 2025, 2026]
         # 7,220 of 7,232 games reconcile on points, seconds and possessions; 99.6-99.98% of minutes are tracked (93.7-99.8%
@@ -2116,7 +2116,7 @@ def test_possessions_reconcile_and_clock():
         cur = conn.cursor()
         cur.execute("""SELECT season, COUNT(*), SUM(game_ok::int), AVG((home_poss + away_poss) / 2.0),
                               AVG((home_poss + away_poss - home_est - away_est + home_team_oreb + away_team_oreb) / 2.0)
-                       FROM possession_games GROUP BY 1 ORDER BY 1""")
+                       FROM possession_games WHERE season <= 2026 GROUP BY 1 ORDER BY 1""")
         rows = cur.fetchall()
         assert [r[0] for r in rows] == [2021, 2022, 2023, 2024, 2025, 2026]
         # 7,220 of 7,232 games add up (the stints' own set); about 99-101 possessions a team-game; counted possessions sit within ~1.5 of the
@@ -2259,7 +2259,7 @@ def test_possession_explorer():
     client = TestClient(app)
     o = client.get("/possessions/options").json()
     _assert_has_source(o)
-    assert [s["season"] for s in o["seasons"]] == [2021, 2022, 2023, 2024, 2025, 2026] and len(o["teams"]) == 30
+    assert [s["season"] for s in o["seasons"] if s["season"] <= 2026] == [2021, 2022, 2023, 2024, 2025, 2026] and len(o["teams"]) == 30
     # Six seasons pooled: a steal is worth about 0.2 points more than the inbound after a make.
     p = o["pooled"]
     assert 0.15 < p["steal"]["ppp"] - p["made_fg"]["ppp"] < 0.25 and p["steal"]["ppp"] > p["dead_tov"]["ppp"]
@@ -2321,7 +2321,7 @@ def test_possession_explorer():
     assert rows["all"]["off_diff"]["lo"] < rows["all"]["off_diff"]["diff"] < rows["all"]["off_diff"]["hi"]
     assert client.get("/possessions/player/1").status_code == 404
     prof = client.get("/player-profile/203999").json()
-    assert prof["possessions"]["seasons"] == [2021, 2022, 2023, 2024, 2025, 2026]
+    assert [s for s in prof["possessions"]["seasons"] if s <= 2026] == [2021, 2022, 2023, 2024, 2025, 2026]
 
 # ─── Round 4, Phase 2: RAPM ───────────────────────────────────────────────────
 
@@ -2336,8 +2336,8 @@ def test_rapm_versions_validation_and_profile():
     _assert_has_source(o)
     versions = {v["id"]: v for v in o["versions"]}
     assert set(versions) == {"single", "multi", "prior", "tracker", "shotaware"} and o["qualified_poss"] == 1000 and o["bootstraps"] >= 200
-    assert versions["single"]["seasons"] == [2021, 2022, 2023, 2024, 2025, 2026]
-    assert versions["multi"]["seasons"] == [2023, 2024, 2025, 2026]   # three seasons on file from 2022-23 on
+    assert [s for s in versions["single"]["seasons"] if s <= 2026] == [2021, 2022, 2023, 2024, 2025, 2026]
+    assert [s for s in versions["multi"]["seasons"] if s <= 2026] == [2023, 2024, 2025, 2026]   # three seasons on file from 2022-23 on
 
     # 2023-24 single season: lambda chosen inside the grid, home edge about 2 points per 100, Jokić top 5
     # among 1,000+ possession players, RAPM = O + D, intervals contain the estimate, correlation with BPM
@@ -2444,7 +2444,8 @@ def test_rotations_minutes_closing_and_team_block():
 
     o = client.get("/rotations/options").json()
     _assert_has_source(o)
-    assert o["seasons"] == [2021, 2022, 2023, 2024, 2025, 2026] and all(len(t) == 30 for t in o["teams"].values())
+    assert [s for s in o["seasons"] if s <= 2026] == [2021, 2022, 2023, 2024, 2025, 2026]
+    assert all(len(t) == 30 for s, t in o["teams"].items() if int(s) <= 2026)
 
     # Opening night 2023-24: DEN 119, LAL 107; LeBron played 29 minutes. Every player's minutes equal his Game Log's,
     # and each side's player-seconds (plus unidentified slots) fill five places for the whole game.
@@ -2544,7 +2545,7 @@ def test_rim_deterrence_known_cases():
     assert bigs["players"] and all(p["big"] for p in bigs["players"])
     # Profile block: every season 2020-21 on.
     prof = client.get("/player-profile/203497").json()["rim_deterrence"]
-    assert {r["season"] for r in prof["rows"]} == {2021, 2022, 2023, 2024, 2025, 2026}
+    assert {r["season"] for r in prof["rows"] if r["season"] <= 2026} == {2021, 2022, 2023, 2024, 2025, 2026}
     # Guards.
     assert client.get("/defense/rim-deterrence", params={"season": 2010}).status_code == 404
     assert client.get("/defense/rim-deterrence", params={"team": "XXX"}).status_code == 404
@@ -2577,8 +2578,8 @@ def test_assist_network_matches_game_log_and_known_duos():
         assert n > 3000 and differ <= cur.fetchone()[0]
     opts = client.get("/assists/options").json()
     _assert_has_source(opts)
-    assert opts["seasons"] == [2021, 2022, 2023, 2024, 2025, 2026]
-    for lg in opts["league"].values():
+    assert [s for s in opts["seasons"] if s <= 2026] == [2021, 2022, 2023, 2024, 2025, 2026]
+    for lg in (v for k, v in opts["league"].items() if int(k) <= 2026):
         assert lg["lines_mismatch"] == 0 and 0.995 < lg["ast_vs_nba"] < 1.005
         assert 0.58 < lg["assisted_share"] < 0.66 and lg["share3"] > 0.8 > lg["share2"] > 0.45
         assert lg["unknown_passer"] < 0.01 * lg["assisted"]
@@ -2599,7 +2600,7 @@ def test_assist_network_matches_game_log_and_known_duos():
     assert sum(p["ast_fgm2"] + p["ast_fgm3"] for p in den["players"]) == den["totals"]["assisted"]
     assert all(sum(x["kinds"].values()) == x["ast"] and x["ast2"] + x["ast3"] == x["ast"] for x in den["edges"])
     assert den["totals"]["games"] <= 82
-    for season in opts["seasons"]:
+    for season in (s for s in opts["seasons"] if s <= 2026):  # complete seasons (R9-011)
         g = client.get("/assists/team", params={"team": "GSW", "season": season}).json()["edges"][0]
         assert (g["passer_id"], g["scorer_id"]) == (203110, 201939)
     # Creators make their own shots; spot-up shooters' threes are set up.
@@ -2632,25 +2633,25 @@ def test_play_finder_matches_game_log_and_bam_83():
         if cur.fetchone()[0] is None:
             pytest.skip("play_finder_events not built (run scripts/build_play_finder.py)")
         cur.execute("SELECT SUM(lines_checked), SUM(lines_differ), SUM(lines_fg3a_differ), SUM(games), SUM(rows) "
-                    "FROM play_finder_seasons")
+                    "FROM play_finder_seasons WHERE season <= 2026")
         checked, differ, fg3a_differ, games, rows = cur.fetchone()
         assert checked > 150_000 and differ == 0 and fg3a_differ == 0 and games == 7229
         # The Game Log's threes: missed shots take the NBA shot chart's call, so 3PA total NBA.com's within 0.2%
         # every season (the text alone left them 0.6-1.9% short); Bam went 7-22 from three that night.
-        cur.execute("""WITH l AS (SELECT player_id, season, SUM(fg3a) f FROM player_game_lines GROUP BY 1, 2)
+        cur.execute("""WITH l AS (SELECT player_id, season, SUM(fg3a) f FROM player_game_lines WHERE season <= 2026 GROUP BY 1, 2)
                        SELECT MIN(r), MAX(r) FROM (SELECT SUM(l.f) / SUM(s.fg3a * s.gp) r FROM l
                        JOIN player_season_stats s USING (player_id, season) WHERE s.gp >= 20 GROUP BY s.season) x""")
         lo, hi = cur.fetchone()
         assert 0.998 < lo <= hi < 1.002
         cur.execute("SELECT fg3m, fg3a FROM player_game_lines WHERE player_id = 1628389 AND game_date = '2026-03-10'")
         assert cur.fetchone() == (7, 22)
-        cur.execute("SELECT COUNT(*) FROM play_finder_events")
+        cur.execute("SELECT COUNT(*) FROM play_finder_events p JOIN play_finder_games g USING (game_no) WHERE g.season <= 2026")
         assert cur.fetchone()[0] == rows
-        cur.execute("SELECT SUM(plays) FROM play_finder_games")
+        cur.execute("SELECT SUM(plays) FROM play_finder_games WHERE season <= 2026")
         assert cur.fetchone()[0] == rows
     opts = client.get("/plays/finder/options").json()
     _assert_has_source(opts)
-    assert opts["seasons"] == {"from": 2021, "to": 2026} and len(opts["teams"]) == 30
+    assert opts["seasons"]["from"] == 2021 and opts["seasons"]["to"] >= 2026 and len(opts["teams"]) == 30
     # Bam Adebayo, 83 points on 2026-03-10: 20 field goals (7 threes), 36 free throws.
     d = client.get("/plays/finder", params={"player_id": 1628389, "date_from": "2026-03-10",
                                             "date_to": "2026-03-10", "limit": 200}).json()
@@ -2699,7 +2700,7 @@ def test_season_simulator_pregame_odds_and_backtest():
 
     o = client.get("/season-sim/options").json()
     _assert_has_source(o)
-    assert [s["season"] for s in o["seasons"]] == list(range(2011, 2027)) and o["play_in_from"] == 2021
+    assert [s["season"] for s in o["seasons"] if s["season"] <= 2026] == list(range(2011, 2027)) and o["play_in_from"] == 2021
     assert o["form"] == "prior_rest" and 0.1 < o["beta"]["exp_margin"] < 0.2
     assert o["beta"]["home_b2b"] < -0.15 and o["beta"]["away_b2b"] > 0.15 and o["runs"] == 10000
 
@@ -2772,7 +2773,7 @@ def test_season_simulator_pregame_odds_and_backtest():
     assert all(r[2] == (8 if r[0] >= 2021 else 2 if r[0] == 2020 else 0) for r in rows)
     cur.execute("SELECT team_abbreviation FROM season_postseason WHERE season = 2026 AND play_in ORDER BY 1")
     assert [r[0] for r in cur.fetchall()] == ["CHA", "GSW", "LAC", "MIA", "ORL", "PHI", "PHX", "POR"]
-    cur.execute("SELECT COUNT(*), COUNT(DISTINCT season) FROM game_pregame_odds")
+    cur.execute("SELECT COUNT(*), COUNT(DISTINCT season) FROM game_pregame_odds WHERE season <= 2026")
     assert cur.fetchone() == (19118, 16)
     cur.execute("SELECT COUNT(*) FROM postseason_games WHERE stage = 'play-in' AND season = 2026")
     assert cur.fetchone()[0] == 6
@@ -2794,7 +2795,7 @@ def test_best_games_and_upsets():
         cur.execute("SELECT to_regclass('best_games')")
         if cur.fetchone()[0] is None:
             pytest.skip("best_games not built (run scripts/build_best_games.py)")
-        cur.execute("SELECT COUNT(*), COUNT(*) FILTER (WHERE NOT score_ok) FROM best_games")
+        cur.execute("SELECT COUNT(*), COUNT(*) FILTER (WHERE NOT score_ok) FROM best_games WHERE season <= 2026")
         assert cur.fetchone() == (7229, 7)
         # The stored score is the page's formula applied to the stored parts, in every game.
         cur.execute("SELECT swing, lead_changes, periods, final_margin, excitement, pts_home, pts_away, ties, comeback, "
@@ -2810,8 +2811,8 @@ def test_best_games_and_upsets():
 
     o = client.get("/best-games/options").json()
     _assert_has_source(o)
-    assert [s["season"] for s in o["seasons"]["best"]] == list(range(2021, 2027))
-    assert [s["season"] for s in o["seasons"]["upsets"]] == list(range(2011, 2027))
+    assert [s["season"] for s in o["seasons"]["best"] if s["season"] <= 2026] == list(range(2021, 2027))
+    assert [s["season"] for s in o["seasons"]["upsets"] if s["season"] <= 2026] == list(range(2011, 2027))
     assert o["formula"]["rank_corr_swing"] > 0.95 and o["formula"]["lead_change_w"] == B.LEAD_CHANGE_W
     assert 0.65 < o["favourites"]["won"] < 0.67 and o["favourites"]["games"] == 19118
     for c in o["calibration"]:
@@ -2821,7 +2822,7 @@ def test_best_games_and_upsets():
     # The best game of six seasons: Lakers 145, Warriors 144 in double overtime (2024-01-27).
     d = client.get("/best-games", params={"limit": 25}).json()
     _assert_has_source(d)
-    assert d["total"] == 7222 and d["results"][0]["date"] == "2024-01-27"
+    assert d["total"] >= 7222 and d["results"][0]["date"] == "2024-01-27"  # 7,222 ranked through 2025-26, plus the live season's
     top = d["results"][0]
     assert (top["home"], top["away"], top["pts_home"], top["pts_away"], top["overtimes"]) == ("GSW", "LAL", 144, 145, 2)
     assert top["peak"] and top["peak"]["event_id"] > 0 and "Curry" in top["peak"]["description"]
@@ -2853,7 +2854,7 @@ def test_best_games_and_upsets():
     # Upsets: lowest pre-game chance first; the Kings at Golden State without Curry (2017-11-27) is the biggest.
     u = client.get("/upsets", params={"limit": 25}).json()
     _assert_has_source(u)
-    assert u["games"] == 19118 and 0.33 < u["upset_rate"] < 0.35
+    assert u["games"] >= 19118 and 0.33 < u["upset_rate"] < 0.35  # 19,118 through 2025-26, plus the live season's
     assert (u["results"][0]["date"], u["results"][0]["winner"]) == ("2017-11-27", "SAC")
     ps = [r["winner_chance"] for r in u["results"]]
     assert ps == sorted(ps) and ps[0] < 0.06 and all(p < 0.5 for p in ps)

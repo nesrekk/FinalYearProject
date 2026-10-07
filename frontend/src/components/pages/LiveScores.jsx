@@ -6,6 +6,8 @@ import SourceBadge from '../common/SourceBadge';
 import { signed } from '../../utils/format';
 import TeamLink from '../common/TeamLink';
 import TeamLogo from '../common/TeamLogo';
+import '../../styles/thisweek.css';
+import { isPlainClick, pageHref, parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 
 // abbr -> "Boston Celtics". The scoreboard's own nickname field comes back empty and its logo is a
 // third-party image or null (round 8 step 2b), so the card uses the app's names and NBA.com logos.
@@ -57,8 +59,29 @@ function formatMinutes(value) {
 // 20 October in the US, when that night's games are being played.
 const STATUS_LABEL = { POSTPONED: 'Postponed', CANCELED: 'Canceled', SUSPENDED: 'Suspended' };
 
-export default function LiveScores() {
-    const [selectedDate, setSelectedDate] = useState(nbaDateIso());
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Game Replay for a final whose play-by-play the daily update has stored (round 9 step 5).
+function ReplayLink({ replayId, onNavigate }) {
+    if (!replayId) return null;
+    const params = { game: replayId };
+    return (
+        <a className="action-btn ls-replay" href={`${pageHref('analytics', params)}#replay`}
+            onClick={(e) => { e.stopPropagation(); if (isPlainClick(e) && onNavigate) { e.preventDefault(); onNavigate('analytics', 'replay', params); } }}
+            onKeyDown={(e) => e.stopPropagation()}>
+            Game Replay
+        </a>
+    );
+}
+
+export default function LiveScores({ onNavigate }) {
+    // ?page=scores&date=YYYY-MM-DD opens a date (the Dashboard's "This week" links here).
+    const params = useInitialParams();
+    const [selectedDate, setSelectedDate] = useState(() => {
+        const d = parseParam.str(params, 'date');
+        return d && ISO_DATE.test(d) ? d : nbaDateIso();
+    });
+    useUrlSync({ date: selectedDate === nbaDateIso() ? null : selectedDate });
     const [games, setGames] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
@@ -89,6 +112,7 @@ export default function LiveScores() {
                     statusText: g.status_text || STATUS_LABEL[g.status] || g.status,
                     kind: g.kind,
                     note: g.note,
+                    replayId: g.replay_id || null,
                     away: g.away,
                     home: g.home,
                 }));
@@ -193,6 +217,12 @@ export default function LiveScores() {
 
                                 <GameTeam team={game.home} isScheduled={isScheduled} />
                             </div>
+                            {isFinal && (
+                                <div className="ls-links">
+                                    <span className="ls-link-hint">Box score</span>
+                                    <ReplayLink replayId={game.replayId} onNavigate={onNavigate} />
+                                </div>
+                            )}
                         </div>
                     );
                 })}
@@ -219,6 +249,7 @@ export default function LiveScores() {
                             </div>
                             <div className="bsm-vs-block">
                                 <span className="bsm-status">{selectedGame.statusText || selectedGame.status}</span>
+                                <ReplayLink replayId={selectedGame.replayId} onNavigate={onNavigate} />
                             </div>
                             <div className="bsm-team">
                                 <span className="bsm-name">{teamName(selectedGame.home)}</span>

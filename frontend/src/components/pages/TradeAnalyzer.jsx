@@ -15,6 +15,7 @@ import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import { shownSign, signed } from '../../utils/format';
+import { currentSeason, isLiveSeason, seasonRange } from '../../utils/season';
 
 function StatLabel({ statKey, children }) {
     const def = STAT_GLOSSARY[statKey];
@@ -123,8 +124,8 @@ function TeamPanel({ side, isAdvanced, preset }) {
 }
 
 // Keep a player id only if they're on the roster that just loaded.
-// Rosters and the win model cover 2009-10 to the latest finished season (GET /trade/teams/{season}).
-const TRADE_SEASONS = Array.from({ length: 2026 - 2010 + 1 }, (_, i) => 2026 - i);
+// Rosters and the win model cover 2009-10 on (GET /trade/teams/{season}); the season being played reads its
+// season-to-date rosters and per-game lines (round 9 step 5).
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 
 const onRoster = (roster) => (id) => (roster.some((p) => String(p.player_id) === id) ? id : '');
@@ -133,7 +134,7 @@ export default function TradeAnalyzer({ onNavigate }) {
     // A shared link carries ?season=&ta=&pa=&tb=&pb= (utils/useUrlState.js).
     const params = useInitialParams();
     const linkedId = (key) => (parseParam.int(params, key, { min: 1 }) ?? '').toString();
-    const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: 2026 }) ?? 2026);
+    const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: currentSeason() }) ?? currentSeason());
     const [teams, setTeams] = useState([]);
 
     const [teamA, setTeamA] = useState(() => parseParam.str(params, 'ta')?.toUpperCase() ?? '');
@@ -252,7 +253,7 @@ export default function TradeAnalyzer({ onNavigate }) {
 
                 <div className="input-row">
                     <select className="input-field" value={season} onChange={(e) => changeSeason(Number(e.target.value))} aria-label="Season">
-                        {TRADE_SEASONS.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
+                        {seasonRange(2010).map((s) => <option key={s} value={s}>{seasonLabel(s)}{isLiveSeason(s) ? ' (so far)' : ''}</option>)}
                     </select>
                     <select className="input-field" value={teamA} onChange={(e) => changeTeamA(e.target.value)}>
                         <option value="">Team A…</option>

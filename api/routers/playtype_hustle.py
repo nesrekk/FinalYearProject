@@ -1,5 +1,6 @@
 from typing import Optional
 
+from current_season import latest_season_in
 from fastapi import APIRouter, HTTPException
 
 from source_badge import make_source
@@ -28,7 +29,8 @@ def get_hustle_leaders(stat: str = "deflections", season: Optional[int] = None, 
         cursor.execute("SELECT to_regclass('public.player_hustle');")
         if cursor.fetchone()[0] is None:
             raise HTTPException(status_code=503, detail="No hustle data yet — run scripts/fetch_hustle_stats.py first.")
-        resolved_season = season or get_latest_season(cursor)
+        # the newest season with hustle rows (not in the daily update; round 9 step 5)
+        resolved_season = season or latest_season_in(cursor, "player_hustle") or get_latest_season(cursor)
         # Stat Leaders' floor (R8-068): 30+ games and 20+ minutes a game; without it 2025-26's charges drawn
         # opened on a 2-game player.
         floor = qualifying(stat)
@@ -66,7 +68,9 @@ def get_playtype_profile(player_name: str, season: Optional[int] = None, player_
             raise HTTPException(status_code=503, detail="No play-type data yet — run scripts/fetch_playtypes.py first.")
 
         player_id, resolved_name = resolve_player(cursor, player_name, player_id)
-        resolved_season = season or get_latest_season(cursor)
+        # this player's newest season with play types on file (not in the daily update; round 9 step 5)
+        resolved_season = season or latest_season_in(cursor, "player_playtypes", "player_id = %s", (player_id,)) \
+            or get_latest_season(cursor)
 
         cursor.execute(
             """SELECT play_type, gp, poss, freq, ppp, percentile

@@ -30,6 +30,13 @@ season-to-date models' `--season` mode found: a build whose stored rows aren't b
 tracker's season summary, Shot Value's year-to-year rows and folds, shot-making left for the season's end, the award
 models' in-season pool, the models' cost, and a scratch-schema accident). Open for later steps: R9-011, R9-012, R9-024.
 
+**Round 9 step 5 (2026-10-07): 37 entries in all; step 5 fixed R9-011 and logged R9-029 to R9-037** (the current-season
+rule, and what a crawl, a page sweep and the test suite on a live-season copy of the database found: three pages that
+crashed or answered 500 on a short season, routes that opened on a season their table doesn't have, floors no
+early-season player clears, tests that assumed the newest season is complete, a cache table that would have broken
+`paper-inputs` after the first live run, and the pages still on the newest complete season by design). Open for later steps: R9-012, R9-024, R9-028,
+R9-035.
+
 ## Step 1: design and guards (2026-10-06)
 
 ### R9-001 · Four paper-stage files still read every season
@@ -88,7 +95,7 @@ models' in-season pool, the models' cost, and a scratch-schema accident). Open f
 - **Found by:** step 2, when adding the run log the plan asked for ("a run log table added to paper_manifest.LIVE"). The plan's "paper-inputs byte-identical through the round" and that instruction conflict on this one macro. **For 9-8:** the close-out's byte-identity check allows exactly these two lines of `numbers.tex` (and the manifest / SHA256SUMS entries that follow from them) besides the ledger sentence of 9-6.
 
 ### R9-011 · Tests and pages pinned to 2025-26 as the newest season
-- **Severity:** wrong number (from opening night) · **Step:** 5 · **Status:** open
+- **Severity:** wrong number (from opening night) · **Step:** 5 · **Status:** fixed in the round 9 step 5 commit (2026-10-07): the rule is `api/current_season.py` (R9-029); the season pickers read it (`frontend/src/utils/season.js`); `test_consistency.py`'s two tests pin 2025-26 (the standings truth and the shot-chart span); the other tests the entry lists read their own seasons and pass with live rows (checked on the step's live-season copy, R9-036)
 - **Where:** tests that take `MAX(season)` of `player_season_stats` or assert `season == 2026`: `api/tests/test_consistency.py` (263, 534), `test_round8_live.py` (271, 388), `test_smoke.py` (947, 2945), `test_round8_pages.py` (133), `test_round8_step7.py` (236), `test_report_card.py` (78, paper tables: fine); pages whose season pickers default to 2025-26 and routes that take the newest season as "current".
 - **Reproduce:** once `daily_update.py` has stored 2026-27 rows (from 2026-10-20), `player_season_stats` has season 2027 rows with 1-5 games: a route that picks `MAX(season)` serves a 2-game season as the current one, and those tests fail.
 - **Found by:** step 2's grep while building the loader. **For 9-5:** the shared "current season" rule (the plan's step 5) must say when 2026-27 becomes the default (e.g. after N games) and the tests must pin 2025-26 explicitly where they mean the complete season.
@@ -175,3 +182,115 @@ models' in-season pool, the models' cost, and a scratch-schema accident). Open f
 ### R9-028 · The LeagueGameFinder step isn't bounded by `--date`
 - **Severity:** looks wrong (a test's count) · **Step:** 7 (the runbook) · **Status:** open (the test relaxed)
 - **Where:** `daily_update.step_nba_games` fetches the season type's whole LeagueGameFinder table and rebuilds `team_game_fatigue` / `game_team_box` from every game it lists, while the scoreboard, game_scores and the play-by-play stop at `--date`. On 2026-10-07 the preseason run of `api/tests/test_daily_update.py` (`--date 2026-10-05`) stored 24 box rows (12 games) against the 16 (8 games) of 2026-10-06, because four more preseason games had been played by the run day. Harmless for a real daily run (today is the date) but it means a `--date` replay isn't a pure replay for those two tables. The test now asserts at least 16.
+
+## Step 5: the app in "current season" mode (2026-10-07)
+
+How it was checked: a scratch schema `zz_trial27` (the step-4 trial's pattern: copies of every table the fetch, the
+rebuild and the models write, then `daily_update.py` on the 2026-27 preseason through 2026-10-05 stored as season 2027,
+then the fourteen + eight builds with `--season 2027`) stands in for opening night: eight finals, 16 teams with one
+game. The three backends ran with `PGOPTIONS=-c search_path=zz_trial27,public`; `scripts/qa_route_crawl.py` called all
+211 routes and `frontend/qa/page_scan.js` swept 36 pages at 1280/375 x Paper/Ink. First crawl: 11 not 2xx, 5 empty;
+after the fixes below: 1 not 2xx (`/shots/league-zones/2025`, a table the trial copied partly; 200 on the real
+database) and 1 empty (`/ledger/live/games`, no scored game yet). On the real database (no live season):
+`docs/qa/crawl_2026-10-07.tsv`, 211 routes, 0 not 2xx, 0 over 3 s.
+
+### R9-029 · One rule for the current season
+- **Severity:** design · **Step:** 5 · **Status:** decided (2026-10-07)
+- **Where:** `api/current_season.py` (`status()`, cached five minutes; `GET /meta/season` in `api/routers/season_status.py`)
+  and `frontend/src/utils/season.js` (read once before the first render in `main.jsx`, 1.5 s timeout, the last answer
+  kept in localStorage, fallback 2025-26).
+- **Decision:** the app opens on the newest season whose regular season is complete (`luck_schedule_seasons.complete`)
+  until a newer season has `DEFAULT_AFTER_GAMES` = 1 regular-season final in `game_scores` (written by
+  `daily_update.py` from opening night), then on that season: "once it has games", as the plan says, with warnings
+  rather than a delay. The answer carries the live season's through date, games played of the schedule
+  (`luck_schedule_seasons.scheduled`, else the ledger's 1,200 counting games), games a team, the next season's first tip
+  before it starts (the locked schedule: 2026-10-20), and `early`: for eight stats the median sample of a rotation player
+  (15+ minutes a game) so far and its reliability n / (n + M) with Stat Stability's frozen M. Tools with a games floor
+  open on the newest complete season until the live season's teams can meet it (`default_season_for(min_games)`, both
+  sides: Radar, Player Comparison, Heliocentricity, Similarity 20 games; the Leaderboard Builder's default 30; Hot
+  Streaks window + 10). Every page showing the live season says so: `common/LiveSeasonNote.jsx` (the full line with the
+  early-season warnings: Player Stats, Player Comparison, Rookies, Stat Leaders, Impact, With/Without, Radar,
+  Heliocentricity) or its inline `LiveSeasonTag` ("so far, through Oct 22 · 34 games") beside the season picker (On/Off,
+  Pair and Lineup Chemistry, Luck & Schedule, Rim, Rotations, Possessions, Assists, Splits, RAPM, Best Games, Breakouts,
+  Leaderboard Builder, Shot Charts, the team page, every profile block's picker, the Game Log); the shared
+  `SeasonSelect` labels it "2026-27 (so far)".
+
+### R9-030 · Assist Network answered 500 for a season without NBA.com assists
+- **Severity:** broken · **Step:** 5 · **Status:** fixed in the round 9 step 5 commit
+- **Where:** `/assists/options`, `/assists/pairs`, `/assists/team`: `assist_seasons.ast_vs_nba` is NaN for a season with
+  no NBA.com season rows to compare with (the trial's preseason; also a live season if the season stats step failed),
+  and JSON can't carry NaN. `build_assist_network.py` now stores NULL there (every stored season is unchanged: all have
+  the ratio) and the router reads a stored NaN as None.
+
+### R9-031 · Possession Explorer crashed on a short season
+- **Severity:** broken · **Step:** 5 · **Status:** fixed in the round 9 step 5 commit
+- **Where:** `/possessions/league` gave a start type with no transition (or no settled) possession yet only the half it
+  had; the page's transition table read both. The route now always gives both halves (0 possessions, ppp None) and the
+  page shows "—" for the gap. Also: the options' "all six seasons" pooled points per possession and the team-trait table
+  (share beyond chance, year-to-year r) now pool the complete seasons only (`current_season.status()['latest_complete']`),
+  so the page's "six seasons" stays true and a season with a few games a team doesn't join the averages.
+
+### R9-032 · Garbage Time crashed on a season with no qualified player
+- **Severity:** broken · **Step:** 5 · **Status:** fixed in the round 9 step 5 commit
+- **Where:** the section's validation line read `ppg_vs_official_r.toFixed()`, None when nobody qualifies; the route's
+  default season is now the newest with a qualified player (`player_leverage_summary.qualified`), and the line shows "—".
+
+### R9-033 · Routes that opened on a season their table doesn't have
+- **Severity:** broken (404 or an empty page from opening night) · **Step:** 5 · **Status:** fixed in the round 9 step 5 commit
+- **Where:** routes whose default was `MAX(season)` of `player_season_stats` (the live season from opening night) but
+  which read a table the daily update doesn't refresh: `/matchups/player/*` (player_matchups), `/players/playtype-profile/*`
+  (player_playtypes), `/hustle/leaders` (player_hustle), `/teams/compare/*` (team_seasons: Basketball-Reference's team
+  ratings, rebuilt at the season's end), `/players/garbage-time/player/*` and `/games/hot-streak/*` (the league's newest
+  season, not the player's: a player who hasn't played yet got a 404), `/era/translate` (its default target had no league
+  averages yet: 400). Each now defaults to the newest season its own table has (`current_season.latest_season_in`; for a
+  player, his own newest), and the pages with hard-coded pickers for these tools stay on the newest complete season
+  (Matchup Finder, Offensive Style, Player Archetypes, Playoff Forecaster: `to={latestCompleteSeason()}`).
+
+### R9-034 · Floors nobody clears in a young season
+- **Severity:** looks wrong (empty tables) · **Step:** 5 · **Status:** fixed in the round 9 step 5 commit
+- **Where:** Stat Leaders' stored path and the Dashboard's top-scorer tile used the 30-game floor for the live season
+  (empty until December): `routers/leaders.stored_floor()` scales it to 70% of the most games played so far, the live
+  path's rule (R8-068). The Leaderboard Builder's default season (no link) is the newest one whose teams have played its
+  30-game floor; `/defense/rim-deterrence` defaults to the newest season where someone clears its minutes floor;
+  `/games/hot-streaks` to the newest season with window + 10 games. Player Stats hid every live-season row: its position
+  chips filter on `bpm_position`, which the season-end BPM build writes; rows without one now show while every chip is on
+  ("position n/a").
+
+### R9-035 · Pages that stay on the newest complete season by design
+- **Severity:** design · **Step:** season end (or 9-8 if wanted) · **Status:** open (recorded)
+- **Where:** pages whose data isn't refreshed by the daily update keep showing the newest season they have, labelled
+  with its season: the team page (team_seasons), Team Comparison's ratings, shot-making / the quality map (R9-024), DAD,
+  Gravity, Spacing Lab, Role Finder, Matchup Finder, play types and hustle (tracking fetches not in the daily run),
+  Player Archetypes and roles (season-end clustering), Era Translator's targets, Similarity (stored season vectors from
+  20 games on). Bringing any of them into the season is a fetch or a `--season` build, not a page change.
+
+### R9-036 · Tests that assumed the newest season is complete
+- **Severity:** broken (the suite would have gone red on opening night) · **Step:** 5 · **Status:** fixed in the round 9 step 5 commit
+- **Where:** the suite run with `PGOPTIONS=-c search_path=zz_trial27,public` (the live-season copy; the four tests that build
+  their own schemas left out): **49 failed + 5 errors** at first. After cleaning the copy's own artifacts (two event
+  tables had been copied with one season only, and importing `impact_core` with that search_path created an empty
+  `league_shot_zones` in the scratch schema, shadowing public's: `shots_lib.ensure_schema()`'s
+  `CREATE TABLE IF NOT EXISTS` checks the first schema only) and pinning every test that means the complete seasons:
+  **0 failed** (589 passed, 2 skipped on the copy; 636 passed, 1 skipped on the real database). The pins: season lists and counts over "every
+  season" (`WHERE season <= 2026`, `if s <= 2026`) in test_smoke (23 places), test_consistency (the seeded samples
+  are drawn from 2020-21 to 2025-26 so they stay the same draw), test_known_facts, test_data_quality, test_rating_tracker,
+  test_round85_shots, test_round8_rebuild, test_paper_beliefs / paper_data_audit / paper_xrapm (the paper's seasons),
+  test_pregame_availability, test_lineup_predictor, test_workbench(_step7), test_usability_study; Stat Leaders' test
+  applies the route's (scaled) floor; four round-8 static tests now pin `utils/season.js` instead of the literal 2026.
+  Routes fixed on the way (also in R9-033/R9-034): Team Comparison's recent form and head-to-head read finals with a stored
+  score only (a LeagueGameFinder row whose final isn't stored gave a None margin; R9-028), the composite leaderboard's
+  default season meets its floor, Learn the Game's sample season is the newest complete one, Luck & Schedule's model
+  chart and Best Games' calibration / favourites pool complete seasons only.
+
+### R9-037 · The first live run would have broken `paper-inputs`
+- **Severity:** broken (paper stage) · **Step:** 5 · **Status:** fixed in the round 9 step 5 commit
+- **Where:** `daily_update.py`'s shot step adds a `player_shots_cache_status` row for each new player whose shots it
+  stores (rookies; the shot pages need it while `ENABLE_LIVE_SHOT_FETCH` is off). The table has no season dimension, so the
+  manifest counted it whole: after the first live run `paper_manifest.stale_reasons()` reported "2,842 rows in the
+  manifest, 2,901 now" and `paper_numbers.py` stopped on its manifest claim (found on the live-season copy, where the
+  preseason run added 59). **Fix:** `paper_freeze.EXPLICIT_PREDICATES['player_shots_cache_status']` = the rows that
+  existed at the freeze (`updated_at < 2026-10-07`; all 2,842 are from 2026-09-25, and the fetch never updates an
+  existing row); the content hash and row count under it equal today's, so the digest and every macro are unchanged:
+  `rebuild_all.sh paper-inputs` reran with `numbers.tex` byte-identical; `manifest.json` records the predicate
+  (`capped_tables` 132 → 133) and `SHA256SUMS` its two manifest lines. `docs/LIVE_SEASON.md`'s table says "updated_at,
+  capped" for it (`live_season.py --check` passes). The fake-row test covers it (a timestamp a year later is excluded).

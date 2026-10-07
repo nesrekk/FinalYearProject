@@ -6,13 +6,14 @@ import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
 import ChartExport from './common/ChartExport';
 import SeasonSelect from './common/SeasonSelect';
+import { latestCompleteSeason } from '../utils/season';
 
 const PALETTE = ['var(--series-4)', 'var(--series-0)', 'var(--series-1)', 'var(--series-3)', 'var(--series-2)', 'var(--series-8)'];
 
 export default function OffensiveStyleSection() {
     const svgRef = useRef(null);
     const [styles, setStyles] = useState([]);
-    const [season, setSeason] = useState(2026);
+    const [season, setSeason] = useState(() => latestCompleteSeason());
     const [seasonData, setSeasonData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -109,7 +110,7 @@ export default function OffensiveStyleSection() {
             )}
 
             <div className="input-row" style={{ marginBottom: '1rem' }}>
-                <SeasonSelect value={season} onChange={setSeason} from={2013} />
+                <SeasonSelect value={season} onChange={setSeason} from={2013} to={latestCompleteSeason()} />
             </div>
 
             {loading && <Loader />}

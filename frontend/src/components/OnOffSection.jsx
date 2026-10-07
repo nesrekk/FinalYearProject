@@ -10,6 +10,7 @@ import TeamLogo from './common/TeamLogo';
 import TeamLink from './common/TeamLink';
 import { currentPageParam, openPage, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
 import { bySign, signed } from '../utils/format';
+import { LiveSeasonTag } from './common/LiveSeasonNote';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
@@ -222,6 +223,7 @@ export default function OnOffSection() {
                     <select className="input-field" value={season} onChange={(e) => set({ season: Number(e.target.value) })}>
                         {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
                     </select>
+                    <LiveSeasonTag season={season} />
                 </label>
                 {isTeam && (
                     <label>

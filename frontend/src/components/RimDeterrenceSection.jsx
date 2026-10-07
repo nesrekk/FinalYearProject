@@ -15,6 +15,7 @@ import { bySign, signed } from '../utils/format';
 import { currentPageParam, openPage, parseParam, pushPage, useInitialParams, useUrlSync } from '../utils/useUrlState';
 import { useWidth } from '../utils/rotationFormat';
 import '../styles/rim.css';
+import { LiveSeasonTag } from './common/LiveSeasonNote';
 
 // Analytics › Player Analysis › Rim Deterrence (#rim). Opponents' shots at
 // the rim with each defender on the floor vs. off, from every tracked
@@ -393,6 +394,7 @@ export default function RimDeterrenceSection() {
                     <select className="input-field" value={season} onChange={(e) => set({ season: Number(e.target.value), sel: null })}>
                         {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
                     </select>
+                    <LiveSeasonTag season={season} />
                 </label>
                 {isTeam && (
                     <label>

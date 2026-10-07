@@ -11,6 +11,7 @@ import SeasonSelect from './common/SeasonSelect';
 import AutocompleteDropdown from './common/AutocompleteDropdown';
 import NamesakeNote from './common/NamesakeNote';
 import usePlayerSuggestions from '../utils/usePlayerSuggestions';
+import { latestCompleteSeason } from '../utils/season';
 
 // Small samples were faded with opacity (text at 2.1-4.1:1, R8-051) and got an extra cell the header
 // didn't have; they now say "small sample" under the name.
@@ -36,7 +37,7 @@ function MatchupRow({ row, highlight }) {
 export default function MatchupFinderSection() {
     const [player, setPlayer] = useState('');
     const [role, setRole] = useState('scorer');
-    const [season, setSeason] = useState(2026);
+    const [season, setSeason] = useState(() => latestCompleteSeason());
     const [picked, setPicked] = useState(null); // { name, id } from a suggestion
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -106,7 +107,7 @@ export default function MatchupFinderSection() {
                     <option value="scorer">As scorer — who guards them best?</option>
                     <option value="defender">As defender — who do they shut down?</option>
                 </select>
-                <SeasonSelect value={season} onChange={setSeason} from={2018} label="Season" />
+                <SeasonSelect value={season} onChange={setSeason} from={2018} to={latestCompleteSeason()} label="Season" />
                 <button
                     className="action-btn"
                     onClick={() => handleSearch()}

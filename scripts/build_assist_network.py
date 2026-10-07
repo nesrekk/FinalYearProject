@@ -284,7 +284,9 @@ def main():
         {', '.join(f'{c} DOUBLE PRECISION' if c == 'ast_vs_nba' else f'{c} INTEGER' for c in scols if c != 'season')});""")
     psycopg2.extras.execute_values(
         cur, f"INSERT INTO assist_seasons ({', '.join(scols)}) VALUES %s",
-        [tuple(float(v) if c == "ast_vs_nba" else int(v) for c, v in zip(scols, r)) for r in seasons.itertuples(index=False)])
+        # a season with no NBA.com assists to compare with (a live season before its season rows load) stores NULL, not NaN
+        [tuple((None if v != v else float(v)) if c == "ast_vs_nba" else int(v) for c, v in zip(scols, r))
+         for r in seasons.itertuples(index=False)])
     conn.commit()
 
     for t in ("assist_pairs", "player_assisted_share", "assist_seasons"):

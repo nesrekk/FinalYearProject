@@ -106,13 +106,14 @@ def test_phone_search_button_shows_its_icon():
 
 def test_season_pickers_default_to_the_latest_season():
     """R8-037: Player Stats and Player Comparison opened on 2024-25 with a raw-year number box (Rookie
-    Class Tracker had the number box too)."""
+    Class Tracker had the number box too). Round 9 step 5: the latest season is the app's current season
+    (utils/season.js), not a literal."""
     for rel in ("components/pages/PlayerStats.jsx", "components/pages/PlayerComparison.jsx",
                 "components/pages/RookieClassTracker.jsx"):
         src = _read(rel)
-        assert "const LATEST_SEASON = 2026;" in src, rel
+        assert "currentSeason()" in src and "LATEST_SEASON" not in src, rel
         assert "?? 2025" not in src and "useState(2025)" not in src, rel
-        assert "seasonLabel" in src or "slice(-2)" in src, rel  # options read 2025-26, not 2026
+        assert "seasonLabel" in src or "slice(-2)" in src or "<SeasonSelect" in src, rel  # options read 2025-26, not 2026
 
 
 def test_stat_leaders_season_label():
@@ -211,11 +212,12 @@ def test_trade_pages_use_season_pickers():
     Impact had the number box too (its 2024-25 default is deliberate: the last season with all three
     blocks)."""
     ta = _read("components/pages/TradeAnalyzer.jsx")
-    assert "?? 2026);" in ta and "?? 2024)" not in ta
+    assert "?? currentSeason());" in ta and "?? 2024)" not in ta  # round 9 step 5: the current season
     for rel in ("components/pages/TradeAnalyzer.jsx", "components/pages/TradeImpact.jsx"):
         src = _read(rel)
         assert 'type="number"' not in src, rel
-        assert "TRADE_SEASONS.map" in src and "slice(-2)" in src, rel
+        assert "seasonRange(2010).map" in src, rel
+    assert "slice(-2)" in _read("components/pages/TradeImpact.jsx") and "seasonLabel(s)" in ta
 
 
 def test_team_pages_link_player_names():
@@ -336,8 +338,16 @@ def test_analytics_season_pickers():
         assert "import SeasonSelect from './common/SeasonSelect';" in src, name
         assert f"from={{{frm}}}" in src, name
         assert not re.search(r'type="number"[^/]*?value=\{season\}', src, re.S), name
-        expect = 2022 if name == "TrajectoryForecasterSection" else 2026
-        assert f"const [season, setSeason] = useState({expect});" in src, name
+        # round 9 step 5: the default comes from utils/season.js (current season; the newest complete one for tools
+        # whose data isn't in the daily update; a 20-game floor waits for the live season to meet it)
+        expect = {"TrajectoryForecasterSection": "useState(2022)",
+                  "MatchupFinderSection": "useState(() => latestCompleteSeason())",
+                  "OffensiveStyleSection": "useState(() => latestCompleteSeason())",
+                  "PlayerArchetypesSection": "useState(() => latestCompleteSeason())",
+                  "PlayoffForecasterSection": "useState(() => latestCompleteSeason())",
+                  "RadarCompareSection": "useState(() => defaultSeasonFor(20))",
+                  "HeliocentricitySection": "useState(() => defaultSeasonFor(20))"}.get(name, "useState(() => currentSeason())")
+        assert f"const [season, setSeason] = {expect};" in src, name
     assert "Shai Gilgeous-Alexander" in _read("components/PlayoffForecasterSection.jsx")  # played 2025-26's playoffs
 
 

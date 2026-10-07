@@ -23,6 +23,8 @@ import {
     fetchWpReplayList,
 } from '../../services/api';
 import { localDateIso, nbaDateIso } from '../../utils/date';
+import { currentSeason } from '../../utils/season';
+import ThisWeek from '../common/ThisWeek';
 
 const AWARD_META = {
     mvp: { icon: 'emoji_events', label: 'MVP' },
@@ -91,14 +93,11 @@ export default function DashboardHome({ onNavigate }) {
             }
         }
 
-        async function loadDashboard() {
+        // News on its own: a cold feed read can take many seconds and used to hold up the award cards (round 9 step 5).
+        async function loadNews() {
             try {
-                const [n, m] = await Promise.all([
-                    fetchCurrentNews(today, 10),
-                    fetchCurrentMeta(),
-                ]);
-                if (!active) return;
-                if (Array.isArray(n?.items) && n.items.length > 0) {
+                const n = await fetchCurrentNews(today, 10);
+                if (active && Array.isArray(n?.items) && n.items.length > 0) {
                     setNews(
                         n.items.map((item, idx) => ({
                             id: `dash-news-${idx}`,
@@ -109,11 +108,21 @@ export default function DashboardHome({ onNavigate }) {
                         }))
                     );
                 }
+            } catch {
+                // the news block simply stays empty
+            }
+        }
+
+        async function loadDashboard() {
+            try {
+                const m = await fetchCurrentMeta();
+                if (!active) return;
                 if (m) setMeta(m);
-                if (m?.stored_season || m?.season) {
-                    // Start from the latest stored season (the award models' newest): asking for the
-                    // league year in progress was a 404 on every load (round 8 R8-049).
-                    const resolvedSeason = await resolveSeasonWithData(m.stored_season ?? m.season);
+                {
+                    // Start from the app's current season (utils/season.js: the season being played once it has a
+                    // final stored, the award models read its line so far); asking for a season with no stored rows
+                    // was a 404 on every load (round 8 R8-049).
+                    const resolvedSeason = await resolveSeasonWithData(currentSeason());
                     if (active && resolvedSeason) {
                         const [mvp, dpoy, roy, allnba] = await Promise.allSettled([
                             fetchMVPPrediction(resolvedSeason),
@@ -133,13 +142,14 @@ export default function DashboardHome({ onNavigate }) {
                     }
                 }
             } catch {
-                // news, meta and awards simply stay empty
+                // meta and awards simply stay empty
             } finally {
                 if (active) setAwardsLoading(false);
             }
         }
 
         loadGames();
+        loadNews();
         loadDashboard();
         return () => {
             active = false;
@@ -367,6 +377,11 @@ export default function DashboardHome({ onNavigate }) {
                     )}
                 </Tile>
             </BentoGrid>
+
+            {/* This week (round 9 step 5) */}
+            <Section className="dashboard-section" eyebrow="This week" title="Results, upsets, thrillers.">
+                <ThisWeek onNavigate={onNavigate} />
+            </Section>
 
             {/* Quick Links */}
             <Section className="dashboard-section" eyebrow="Explore" title="Jump straight in.">

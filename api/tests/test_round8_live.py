@@ -274,9 +274,10 @@ def test_leaders_default_falls_back_to_the_latest_stored_season(client, cur, mon
     assert body["results"], "the fallback must show the latest stored leaders"
     if body["fallback"]:
         assert body["note"] and f"{latest - 1}-{str(latest)[-2:]}" in body["note"]
+    f = body["qualifying"]  # the route's floor (scaled to the games played so far in a live season, round 9 step 5)
     cur.execute(
         "SELECT player_name, pts FROM player_season_stats WHERE season = %s AND team_abbreviation <> 'TOT' "
-        "ORDER BY pts DESC LIMIT 1;", (latest,),
+        "AND gp >= %s AND min >= %s ORDER BY pts DESC, gp DESC, player_name LIMIT 1;", (latest, f["min_gp"], f["min_mpg"]),
     )
     name, pts = cur.fetchone()
     assert body["results"][0]["player_name"] == name and body["results"][0]["value"] == round(float(pts), 2)
@@ -411,7 +412,8 @@ def test_pages_use_nba_dates_and_the_routes_season_labels():
     api = _read("services/api.js")
     assert "fetchGamesByDate(nbaDateIso())" in api and "const d = date || nbaDateIso();" in api
     dash = _read("components/pages/DashboardHome.jsx")
-    assert "m.stored_season ?? m.season" in dash and "meta.top_scorer_season" in dash and "fetchGamesByDate(nbaDateIso())" in dash
+    # round 9 step 5: the award walk starts at the app's current season (utils/season.js), not /meta/current's
+    assert "resolveSeasonWithData(currentSeason())" in dash and "meta.top_scorer_season" in dash and "fetchGamesByDate(nbaDateIso())" in dash
     assert "meta?.stored_season" in _read("components/pages/LandingPage.jsx")
     standings = _read("components/pages/StandingsSection.jsx")
     assert "meta.standings_season" in standings and "meta.standings_source" in standings

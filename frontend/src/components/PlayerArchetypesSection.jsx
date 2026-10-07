@@ -11,6 +11,7 @@ import SeasonSelect from './common/SeasonSelect';
 import AutocompleteDropdown from './common/AutocompleteDropdown';
 import NamesakeNote from './common/NamesakeNote';
 import usePlayerSuggestions from '../utils/usePlayerSuggestions';
+import { latestCompleteSeason } from '../utils/season';
 
 // Ten distinct hues for the ten roles; fills only (never text), readable on Paper and Ink.
 // Ten roles, ten theme series colours (tokens.css --series-N, >= 3:1 on Paper and Ink).
@@ -101,7 +102,7 @@ function TrendMiniChart({ label, data, valueKey, format, color }) {
 export default function PlayerArchetypesSection() {
     const scatterRef = useRef(null);
     const [archetypes, setArchetypes] = useState([]);
-    const [season, setSeason] = useState(2026);
+    const [season, setSeason] = useState(() => latestCompleteSeason());
     const [seasonData, setSeasonData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -252,7 +253,7 @@ export default function PlayerArchetypesSection() {
             )}
 
             <div className="input-row" style={{ marginTop: '1.25rem' }}>
-                <SeasonSelect value={season} onChange={setSeason} from={2010} />
+                <SeasonSelect value={season} onChange={setSeason} from={2010} to={latestCompleteSeason()} />
             </div>
 
             {loading && <Loader />}

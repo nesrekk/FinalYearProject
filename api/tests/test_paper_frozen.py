@@ -242,7 +242,9 @@ def test_manifest_hashes_and_counts_apply_the_predicates(conn, catalogue):
     n, h = PM.content_hash(cur, "pbp_games", "FALSE")
     assert n == 0 and h == PM.content_hash(cur, "pbp_games", "season > 9999")[1]
     preds = {t: catalogue[t][0] for t in ("pbp_games", "game_scores")}
-    assert PM.row_counts(cur, list(preds), preds) == PM.row_counts(cur, list(preds))
+    cur.execute("SELECT count(*) FROM game_scores WHERE season > 2026")
+    live = cur.fetchone()[0] > 0
+    assert (PM.row_counts(cur, list(preds), preds) == PM.row_counts(cur, list(preds))) == (not live)
     assert PM.row_counts(cur, ["pbp_games"], {"pbp_games": "FALSE"}) == {"pbp_games": 0}
 
 

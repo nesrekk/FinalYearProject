@@ -13,6 +13,7 @@ import useChartCrosshair from '../../utils/useChartCrosshair';
 import { ProfileEmbedContext } from '../pages/playerProfileShared';
 import { signed } from '../../utils/format';
 import '../../styles/gamelog.css';
+import { LiveSeasonTag } from './LiveSeasonNote';
 
 // Game log on the player profile: every regular-season game he played in a
 // season (GET /games/player-log/{id}, player_game_lines, 2020-21 on), with a
@@ -188,6 +189,7 @@ export default function GameLogBlock({ playerId, seasons, nbaGp = {}, initialSea
                     <select className="input-field" value={season} onChange={(e) => { setError(''); setSeason(Number(e.target.value)); onSeasonChange?.(Number(e.target.value)); }}>
                         {[...have].reverse().map((s) => <option key={s} value={s}>{label(s)} ({gamesBySeason[s]} games)</option>)}
                     </select>
+                    <LiveSeasonTag season={season} />
                 </label>
                 <label className="pp-select">
                     <span>Chart</span>

@@ -580,13 +580,14 @@ def test_game_scores_and_fatigue_are_the_same_rows(cur):
     need(cur, "game_scores", "team_game_fatigue")
     (orphans,) = one(
         cur,
-        """SELECT COUNT(*) FROM game_scores g
-           FULL JOIN team_game_fatigue f USING (game_id, team_abbreviation)
+        # complete seasons: in a live season LeagueGameFinder can list a game before its final is stored (R9-028)
+        """SELECT COUNT(*) FROM (SELECT * FROM game_scores WHERE season <= 2026) g
+           FULL JOIN (SELECT * FROM team_game_fatigue WHERE season <= 2026) f USING (game_id, team_abbreviation)
            WHERE g.game_id IS NULL OR f.game_id IS NULL""",
     )
     assert orphans == 0
     n_scores, n_fatigue = one(
-        cur, "SELECT (SELECT COUNT(*) FROM game_scores), (SELECT COUNT(*) FROM team_game_fatigue)"
+        cur, "SELECT (SELECT COUNT(*) FROM game_scores WHERE season <= 2026), (SELECT COUNT(*) FROM team_game_fatigue WHERE season <= 2026)"
     )
     assert n_scores == n_fatigue
 
@@ -758,9 +759,9 @@ def test_player_game_lines_season_totals_match_season_stats(cur):
                   SUM(l.fg3a)::float / SUM(s.fg3a * s.gp)
            FROM (SELECT player_id, season, SUM(pts) pts, SUM(oreb) oreb, SUM(dreb) dreb,
                         SUM(ast) ast, SUM(stl) stl, SUM(fg3a) fg3a
-                 FROM player_game_lines GROUP BY 1, 2) l
+                 FROM player_game_lines WHERE season <= 2026 GROUP BY 1, 2) l
            JOIN player_season_stats s USING (player_id, season)
-           GROUP BY 1 ORDER BY 1""")
+           GROUP BY 1 ORDER BY 1""")  # complete seasons (R9-011): mid-season the two feeds update at different times
     assert len(data) >= 6
     for season, *ratios in data:
         for name, ratio in zip(("pts", "reb", "ast", "stl", "fg3a"), ratios):
@@ -795,7 +796,7 @@ def test_pregame_odds_look_like_real_basketball(cur):
     need(cur, "game_pregame_odds")
     data = rows(cur, """SELECT season, AVG(home_won::int),
                   AVG(((p_home >= 0.5) = home_won)::int)
-           FROM game_pregame_odds GROUP BY 1 ORDER BY 1""")
+           FROM game_pregame_odds WHERE season <= 2026 GROUP BY 1 ORDER BY 1""")  # complete seasons (R9-011)
     assert len(data) >= 15
     home = {}
     for season, home_rate, fav_rate in data:

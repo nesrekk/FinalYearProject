@@ -8,6 +8,8 @@ import TeamLogo from './common/TeamLogo';
 import SourceBadge from './common/SourceBadge';
 import TableExport from './common/TableExport';
 import SeasonSelect from './common/SeasonSelect';
+import { defaultSeasonFor } from '../utils/season';
+import LiveSeasonNote from './common/LiveSeasonNote';
 
 function indexColor(v) {
     if (v == null) return 'var(--text-muted)';
@@ -17,7 +19,7 @@ function indexColor(v) {
 }
 
 export default function HeliocentricitySection() {
-    const [season, setSeason] = useState(2026);
+    const [season, setSeason] = useState(() => defaultSeasonFor(20)); // the tool's 20-game floor (RADAR_MIN_GAMES)
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -62,6 +64,7 @@ export default function HeliocentricitySection() {
                 <div className="input-row">
                     <SeasonSelect value={season} onChange={setSeason} from={2014} />
                 </div>
+                <LiveSeasonNote season={season} />
                 {error && <p className="error-message" style={{ marginTop: '0.5rem' }}>{error}</p>}
                 {data && (
                     <p className="page-subtitle" style={{ marginTop: '0.5rem' }}>

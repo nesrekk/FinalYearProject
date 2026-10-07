@@ -10,6 +10,7 @@ import PlayerHeadshot from './common/PlayerHeadshot';
 import PlayerName from './common/PlayerName';
 import { currentPageParam, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
 import { signed } from '../utils/format';
+import { LiveSeasonTag } from './common/LiveSeasonNote';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const int = (v) => Math.round(v).toLocaleString();
@@ -145,6 +146,7 @@ export default function PairChemistrySection() {
                             </option>
                         ))}
                     </select>
+                    <LiveSeasonTag season={data.season} />
                 </label>
                 <label>
                     <span>Team</span>

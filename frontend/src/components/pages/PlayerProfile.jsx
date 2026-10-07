@@ -27,6 +27,7 @@ import { ProfileEmbedContext, missingReasons, seasonRanges } from './playerProfi
 import { playerBoard } from '../../utils/openInWorkbench';
 import '../../styles/profile.css';
 import '../../styles/rim.css';
+import { LiveSeasonTag } from '../common/LiveSeasonNote';
 
 // One page per player (?page=player&id=<NBA person id>). Everything comes
 // from GET /player-profile/{id} except the similar seasons (similarity
@@ -82,6 +83,7 @@ function SeasonSelect({ value, seasons, onChange, labelText = 'Season', format =
             <select className="input-field" value={value} onChange={(e) => onChange(Number(e.target.value))}>
                 {[...seasons].reverse().map((s) => <option key={s} value={s}>{format(s)}</option>)}
             </select>
+            <LiveSeasonTag season={value} />
         </label>
     );
 }

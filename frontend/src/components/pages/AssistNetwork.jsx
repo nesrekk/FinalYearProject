@@ -13,6 +13,7 @@ import { pickNetwork } from '../../utils/assistNetwork';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/rapm.css';
 import '../../styles/assists.css';
+import { LiveSeasonTag } from '../common/LiveSeasonNote';
 
 // Assist Network (?page=assists&team=&season=&player=&n=&min=&v=): who
 // assists whom on a team, from every assisted basket in the play-by-play
@@ -383,6 +384,7 @@ export default function AssistNetwork() {
                     }}>
                         {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
                     </select>
+                    <LiveSeasonTag season={form.season} />
                 </label>
                 {form.view === 'team' && (
                     <label>

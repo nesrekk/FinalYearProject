@@ -355,8 +355,8 @@ export default function GarbageTimeSection() {
                 </div>
                 {v && (
                     <p className="page-subtitle" style={{ marginTop: '0.75rem', fontSize: '0.8rem' }}>
-                        <strong>Validation:</strong> rebuilt raw PPG vs. the official per-game line, r = {v.ppg_vs_official_r.toFixed(4)},
-                        mean abs. error {v.ppg_vs_official_mae.toFixed(2)} PPG (n = {v.ppg_vs_official_n} qualified players) ·{' '}
+                        <strong>Validation:</strong> rebuilt raw PPG vs. the official per-game line, r = {v.ppg_vs_official_r?.toFixed(4) ?? '—'},
+                        mean abs. error {v.ppg_vs_official_mae?.toFixed(2) ?? '—'} PPG (n = {v.ppg_vs_official_n} qualified players) ·{' '}
                         {pct(v.points_attribution_rate, 2)} of real points credited to a matched player ·{' '}
                         {pct(v.assist_match_rate)} of assists matched · {v.n_games} real games.
                         {v.note && <span style={{ display: 'block', marginTop: '0.25rem' }}>{v.note}</span>}

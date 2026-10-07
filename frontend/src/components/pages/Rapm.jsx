@@ -15,6 +15,7 @@ import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlStat
 import '../../styles/rapm.css';
 import '../../styles/tracker.css';
 import '../../styles/shotvalue.css';
+import { LiveSeasonTag } from '../common/LiveSeasonNote';
 
 // RAPM (?page=rapm, GET /rapm): regularized adjusted plus-minus for every
 // player from the play-by-play stints, in three versions (one season, a
@@ -648,6 +649,7 @@ export default function Rapm() {
                     <select className="input-field" value={season} onChange={(e) => set({ season: Number(e.target.value) })}>
                         {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
                     </select>
+                    <LiveSeasonTag season={season} />
                 </label>
                 <label>
                     <span>Team</span>

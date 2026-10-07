@@ -9,6 +9,8 @@ import SeasonSelect from './common/SeasonSelect';
 import AutocompleteDropdown from './common/AutocompleteDropdown';
 import NamesakeNote from './common/NamesakeNote';
 import usePlayerSuggestions from '../utils/usePlayerSuggestions';
+import { defaultSeasonFor } from '../utils/season';
+import LiveSeasonNote from './common/LiveSeasonNote';
 
 // Also the colour of each player's name in the table: text tokens (>= 4.5:1 on Paper and Ink).
 const PALETTE = ['var(--compare-b)', 'var(--compare-a)', 'var(--series-3)'];
@@ -83,7 +85,7 @@ function PlayerSlot({ index, color, entry, onSearch, onPick, onRemove, searchVal
 
 export default function RadarCompareSection() {
     const svgRef = useRef(null);
-    const [season, setSeason] = useState(2026);
+    const [season, setSeason] = useState(() => defaultSeasonFor(20)); // the tool's 20-game floor (RADAR_MIN_GAMES)
     const [slots, setSlots] = useState([null, null, null]); // {playerName, playerId, data, error}
     const [searchValues, setSearchValues] = useState(['', '', '']);
 
@@ -170,6 +172,7 @@ export default function RadarCompareSection() {
             <div className="input-row">
                 <SeasonSelect value={season} onChange={setSeason} from={2010} />
             </div>
+            <LiveSeasonNote season={season} />
 
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.75rem', marginBottom: '1.5rem' }}>
                 {[0, 1, 2].map((i) => (

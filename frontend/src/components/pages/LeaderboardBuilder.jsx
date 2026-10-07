@@ -13,6 +13,8 @@ import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlStat
 import { signed as signedNum } from '../../utils/format';
 import CompositeBuilder from './CompositeBuilder';
 import '../../styles/stability.css';
+import { LiveSeasonTag } from '../common/LiveSeasonNote';
+import { defaultSeasonFor } from '../../utils/season';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 
@@ -43,7 +45,9 @@ function formFromParams(p, o) {
     const last = o.seasons.to;
     const stat = o.stats.find((s) => s.key === p.get('stat')) ?? o.stats.find((s) => s.key === 'pts');
     const floor = Math.max(first, stat.first_season);
-    const season = (key) => Math.max(floor, parseParam.int(p, key, { min: first, max: last }) ?? last);
+    // With no link, the current season once it can meet the default 30-game floor (utils/season.js).
+    const dflt = Math.min(last, defaultSeasonFor(30));
+    const season = (key) => Math.max(floor, parseParam.int(p, key, { min: first, max: last }) ?? dflt);
     const n = parseParam.int(p, 'n');
     return {
         stat: stat.key,
@@ -243,6 +247,7 @@ export default function LeaderboardBuilder() {
                             <select className="input-field" value={form.to} onChange={(e) => set({ to: Number(e.target.value) })}>
                                 {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
                             </select>
+                            <LiveSeasonTag season={form.to} />
                         </label>
                         <label>
                             <span>Min. games</span>

@@ -873,6 +873,14 @@ export async function fetchCurrentMeta() {
     });
 }
 
+// The Dashboard's "This week" (round 9 step 5): the week of finals through the current season's last stored date.
+export async function fetchDashboardWeek() {
+    return getWithCache('dashboard_week', 5 * 60 * 1000, async () => {
+        const response = await axios.get(`${IMPACT_BASE}/dashboard/week`);
+        return response.data;
+    });
+}
+
 export async function fetchTeamComparisonExtra(teamA, teamB, season) {
     const params = season ? { season } : {};
     return getWithCache(`team_compare_extra_${teamA}_${teamB}_${season || 'current'}`, 90 * 1000, async () => {

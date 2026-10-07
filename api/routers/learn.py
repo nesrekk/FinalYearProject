@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+import current_season
 from fastapi import APIRouter
 
 import shots_lib
@@ -22,9 +23,9 @@ ZONE_POINTS = {
 def _basics():
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT max(season) FROM player_shots")
-        season_label = cur.fetchone()[0]
-        season = int(season_label[:4]) + 1
+        # the newest complete season (a season being played has a few games' sample; round 9 step 5)
+        season = current_season.latest_complete_season(cur)
+        season_label = f"{season - 1}-{str(season)[-2:]}"
 
         cur.execute(
             """SELECT loc_x, loc_y, shot_distance, shot_type, shot_zone_basic, shot_made_flag

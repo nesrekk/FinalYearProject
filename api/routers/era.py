@@ -159,6 +159,9 @@ def era_translate(player_id: int, season: int | None = None, target: int | None 
             raise HTTPException(status_code=404, detail=f"No {_label(season)} season on file for that player.")
         cur.execute("SELECT MIN(season), MAX(season) FROM player_season_stats;")
         first_on_file, last_on_file = cur.fetchone()
+        # a target needs its league averages (league_season_averages, built at a season's end): the season being
+        # played isn't one until then (round 9 step 5)
+        last_on_file = max(s for s in league if s <= last_on_file)
         target = last_on_file if target is None else target
         if target not in league or not first_on_file <= target <= last_on_file:
             raise HTTPException(status_code=400, detail=(

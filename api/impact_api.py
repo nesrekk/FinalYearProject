@@ -82,6 +82,7 @@ from routers import (
     schedule_fatigue,
     scouting_report,
     season_sim,
+    season_status,
     shot_charts,
     shot_making,
     shot_quality_map,
@@ -155,6 +156,7 @@ for _router_module in (
     workbench,
     workbench_finder,
     workbench_parse,
+    season_status,
 ):
     app.include_router(_router_module.router)
 

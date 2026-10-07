@@ -6,17 +6,18 @@ import PlayerName from '../common/PlayerName';
 import Icon from '../common/Icon';
 import TableExport from '../common/TableExport';
 import SourceBadge from '../common/SourceBadge';
+import { currentSeason } from '../../utils/season';
+import SeasonSelect from '../common/SeasonSelect';
+import LiveSeasonNote from '../common/LiveSeasonNote';
 
 // The ROY model scores 2009-10 to the latest finished season.
-const LATEST_SEASON = 2026;
-const SEASONS = Array.from({ length: LATEST_SEASON - 2010 + 1 }, (_, i) => LATEST_SEASON - i);
 
 function fmt(v, digits = 1) {
     return v == null ? '—' : Number(v).toFixed(digits);
 }
 
 export default function RookieClassTracker() {
-    const [season, setSeason] = useState(LATEST_SEASON);
+    const [season, setSeason] = useState(() => currentSeason());
     const [rookies, setRookies] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -78,14 +79,12 @@ export default function RookieClassTracker() {
                 </h2>
 
                 <div className="input-row">
-                    <select className="input-field" value={season} onChange={(e) => setSeason(Number(e.target.value))}
-                        aria-label="Season" style={{ maxWidth: 130 }}>
-                        {SEASONS.map((y) => <option key={y} value={y}>{`${y - 1}-${String(y).slice(-2)}`}</option>)}
-                    </select>
+                    <SeasonSelect value={season} onChange={setSeason} from={2010} />
                     <button type="button" className="action-btn" onClick={loadClass} disabled={loading}>
                         {loading ? 'Loading…' : 'Load Rookie Class'}
                     </button>
                 </div>
+                <LiveSeasonNote season={season} what="Rookies are players with no earlier season on file until the season's end (R9-025)." />
 
                 {loading && <Loader />}
                 {error && <p className="error-message" style={{ marginTop: '0.5rem' }}>{error}</p>}

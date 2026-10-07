@@ -1,6 +1,7 @@
 import math
 from typing import Optional
 
+import current_season
 from fastapi import APIRouter, HTTPException
 
 from routers.leaderboard import ATTEMPT_DEFAULTS, DEFAULT_MIN_GP, DEFAULT_MIN_MPG, STATS as LB_STATS
@@ -78,6 +79,16 @@ def live_leaders(key: str, season: int, top_n: int):
             "qualifying": f}
 
 
+def stored_floor(cursor, key: str, season: int) -> dict:
+    """qualifying() for a stored season: the season being played (current_season's live season) scales the games
+    floor to the most games anyone has played so far, as the live path does (round 9 step 5)."""
+    live = current_season.status(cursor)["live"]
+    if live and live["season"] == int(season):
+        cursor.execute("SELECT MAX(gp) FROM player_season_stats WHERE season = %s", (season,))
+        return qualifying(key, cursor.fetchone()[0] or 0)
+    return qualifying(key)
+
+
 def _stored_leaders(cursor, key: str, season: int, top_n: int):
     selected_col = None
     for candidate_col in STAT_MAP[key]["columns"]:
@@ -86,7 +97,7 @@ def _stored_leaders(cursor, key: str, season: int, top_n: int):
             break
     if selected_col is None:
         raise HTTPException(status_code=400, detail=f"Stat '{key}' is not available in this database.")
-    f = qualifying(key)
+    f = stored_floor(cursor, key, season)
     att_sql = f"AND {f['attempts']} >= %(att)s" if f["attempts"] else ""
     cursor.execute(
         f"""
@@ -162,6 +173,7 @@ def get_stat_leaders(stat_key: str, season: Optional[int] = None, top_n: int = 1
             shown = requested
             note = None
         results = _stored_leaders(cursor, key, shown, safe_top_n)
+        floor = stored_floor(cursor, key, shown)
 
     return {
         "season": int(shown),
@@ -170,7 +182,7 @@ def get_stat_leaders(stat_key: str, season: Optional[int] = None, top_n: int = 1
         "note": note,
         "stat_key": key,
         "stat_label": STAT_MAP[key]["label"],
-        "qualifying": qualifying(key),
+        "qualifying": floor,
         "results": results,
         "_source": make_source(["player_season_stats"], "nba_api (stats.nba.com) season tables, stored"),
     }

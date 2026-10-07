@@ -171,9 +171,12 @@ def luck_schedule(season: Optional[int] = None, as_of: Optional[date] = None):
 @lru_cache(maxsize=1)
 def _model():
     rows, seasons, fits, checks = _stored()
+    # the curves were fitted on complete seasons: a season being played (a few games a team) isn't a point of the
+    # model's chart (round 9 step 5)
+    complete = {s["season"] for s in seasons if s.get("complete")}
     points = [{"season": r["season"], "team": r["team_abbreviation"], "mov": round(r["mov"], 2),
                "win_pct": round(r["win_pct"], 4), "exp_win_pct": round(r["exp_win_pct"], 4),
-               "games": r["games"]} for r in rows]
+               "games": r["games"]} for r in rows if r["season"] in complete]
     return {
         "fits": [_round(f) for f in sorted(fits, key=lambda f: f["loso_rmse_wins"])],
         "checks": {k: _round(v) for k, v in checks.items()},

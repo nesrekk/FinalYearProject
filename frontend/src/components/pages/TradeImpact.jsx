@@ -12,6 +12,7 @@ import CopyLinkButton from '../common/CopyLinkButton';
 import SaveViewButton from '../common/SaveViewButton';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/trade-impact.css';
+import { currentSeason, isLiveSeason, seasonRange } from '../../utils/season';
 
 // One screen for a 1-for-1 trade: projected wins (Trade Analyzer's model),
 // starting-five spacing (Gravity Index, additive over any five) and payroll
@@ -19,7 +20,6 @@ import '../../styles/trade-impact.css';
 // says which seasons it covers and shows nothing when the data isn't there.
 
 const DEFAULT_SEASON = 2025; // the latest season with all three blocks on file
-const TRADE_SEASONS = Array.from({ length: 2026 - 2010 + 1 }, (_, i) => 2026 - i); // the Trade Analyzer's range
 
 function fmt(v, digits = 1) {
     return v == null ? '—' : Number(v).toFixed(digits);
@@ -307,7 +307,7 @@ export default function TradeImpact({ onNavigate }) {
     // so the two pages can hand a trade to each other.
     const params = useInitialParams();
     const linkedId = (key) => (parseParam.int(params, key, { min: 1 }) ?? '').toString();
-    const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: 2026 }) ?? DEFAULT_SEASON);
+    const [season, setSeason] = useState(() => parseParam.int(params, 'season', { min: 2010, max: currentSeason() }) ?? DEFAULT_SEASON);
     const [teams, setTeams] = useState([]);
     const [teamA, setTeamA] = useState(() => parseParam.str(params, 'ta')?.toUpperCase() ?? '');
     const [teamB, setTeamB] = useState(() => parseParam.str(params, 'tb')?.toUpperCase() ?? '');
@@ -403,7 +403,7 @@ export default function TradeImpact({ onNavigate }) {
 
                 <div className="input-row">
                     <select className="input-field" value={season} onChange={(e) => changeSeason(Number(e.target.value))} aria-label="Season">
-                        {TRADE_SEASONS.map((s) => <option key={s} value={s}>{`${s - 1}-${String(s).slice(-2)}`}</option>)}
+                        {seasonRange(2010).map((s) => <option key={s} value={s}>{`${s - 1}-${String(s).slice(-2)}`}{isLiveSeason(s) ? ' (so far)' : ''}</option>)}
                     </select>
                     <select className="input-field" value={teamA} onChange={(e) => changeTeamA(e.target.value)} aria-label="Team A">
                         <option value="">Team A…</option>

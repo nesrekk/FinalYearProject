@@ -94,7 +94,7 @@ def test_chart_attempts_equal_the_nba_box_score(cur):
     (0022500792: chart 170, box 169). Before the re-fetch the four games with no rows were 2025-26's gaps."""
     cur.execute("""WITH ch AS (SELECT LEFT(season, 4)::int + 1 AS season, game_id, count(*) n FROM player_shots
                                WHERE game_id LIKE '002%%' AND season >= '2020-21' GROUP BY 1, 2),
-                        bx AS (SELECT season, game_id, sum(fga) n FROM game_team_box GROUP BY 1, 2)
+                        bx AS (SELECT season, game_id, sum(fga) n FROM game_team_box WHERE season <= 2026 GROUP BY 1, 2)
                    SELECT bx.season, count(*), count(*) FILTER (WHERE ch.n IS DISTINCT FROM bx.n),
                           max(abs(coalesce(ch.n, 0) - bx.n))
                    FROM bx LEFT JOIN ch USING (season, game_id) GROUP BY 1 ORDER BY 1""")
@@ -153,7 +153,7 @@ def test_espn_heaves_explain_the_lines_surplus(cur):
     surplus is gone, the parser now drops them: update R8-088, README and this test."""
     cur.execute("""SELECT g.season, count(*) FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id
                    WHERE g.source = 'espn' AND e.action_type = 'Heave Jump Shot' GROUP BY 1 ORDER BY 1""")
-    assert [s for s, _ in cur.fetchall()] == [2026]
+    assert [s for s, _ in cur.fetchall()][0] == 2026  # none before 2025-26 (the live season has them too)
     games, eq, surplus, heaves = one(cur, """
         WITH hv AS (SELECT e.game_id, count(*) n FROM pbp_events e JOIN pbp_games g ON g.game_id = e.game_id
                     WHERE g.source = 'espn' AND g.season = 2026 AND e.action_type = 'Heave Jump Shot' GROUP BY 1),

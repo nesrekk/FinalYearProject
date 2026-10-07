@@ -19,6 +19,7 @@ import { ProfileEmbedContext } from './playerProfileShared';
 import { teamBoard } from '../../utils/openInWorkbench';
 import '../../styles/profile.css';
 import '../../styles/teamprofile.css';
+import { LiveSeasonTag } from '../common/LiveSeasonNote';
 
 // One page per team-season (?page=team&abbr=BOS&season=2024), the team twin
 // of the player profile. Everything comes from GET /team-profile/{abbr}; a
@@ -114,6 +115,7 @@ function Hero({ d, onSeason }) {
                                 </option>
                             ))}
                         </select>
+                        <LiveSeasonTag season={d.season} />
                     </label>
                     <CopyLinkButton />
                     <SaveViewButton pageId="team" title={`${d.team_name} ${label(d.season)}`} />

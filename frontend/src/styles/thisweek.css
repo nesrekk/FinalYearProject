@@ -1,0 +1,47 @@
+/* The Dashboard's "This week" (common/ThisWeek.jsx) and Live Scores' replay links (round 9 step 5). */
+.tw-note { color: var(--text-2); font-size: 0.88rem; margin: 0 0 var(--space-4); }
+.tw-empty { color: var(--text-2); }
+.tw-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+@media (max-width: 900px) { .tw-grid { grid-template-columns: 1fr; } }
+.tw-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.tw-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tw-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tw-score { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.tw-team { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--text); }
+.tw-team a { color: inherit; }
+.tw-pts { color: var(--text-2); min-width: 2.2ch; text-align: right; }
+.tw-pts.tw-win { color: var(--text); font-weight: 700; }
+.tw-dash { color: var(--text-3); }
+.tw-ot { font-size: 0.75rem; color: var(--text-2); }
+.tw-fact { color: var(--text-2); font-size: 0.88rem; margin: 0; line-height: 1.45; }
+.tw-fact strong { color: var(--text); }
+.tw-actions { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-top: auto; }
+.tw-link { color: var(--brand-text); font-size: 0.85rem; font-weight: 600; }
+
+/* Live Scores */
+.ls-links {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+}
+.ls-link-hint { font-size: 0.78rem; color: var(--text-2); }
+.ls-replay { font-size: 0.78rem; padding: 4px 10px; text-decoration: none; }
+.bsm-vs-block .ls-replay { margin-top: 6px; }
+.tw-note .pill-badge { white-space: normal; max-width: 100%; }

@@ -12,6 +12,7 @@ import { isPlainClick, pageHref, parseParam, useInitialParams, useUrlSync } from
 import '../../styles/gamelog.css';
 import '../../styles/playfinder.css';
 import '../../styles/bestgames.css';
+import { LiveSeasonTag } from '../common/LiveSeasonNote';
 
 // Best Games & Upsets (?page=bestgames): the most exciting regular-season
 // games since 2020-21 (GET /best-games, from best_games: win-probability
@@ -278,6 +279,7 @@ export default function BestGames({ onNavigate }) {
                         <option value="">All ({isGames ? options.seasons.best[0].label : options.seasons.upsets[0].label} on)</option>
                         {seasonList.map((s) => <option key={s.season} value={s.season}>{s.label}</option>)}
                     </select>
+                    <LiveSeasonTag season={form.season} />
                 </label>
                 <label>
                     <span>Team</span>

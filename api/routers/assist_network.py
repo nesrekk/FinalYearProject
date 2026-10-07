@@ -118,7 +118,9 @@ def _league(s):
            "assisted": s["assisted"], "assisted_share": _ratio(s["assisted"], s["fgm"]),
            "share2": _ratio(s["ast_fgm2"], s["fgm2"]), "share3": _ratio(s["ast_fgm3"], s["fgm3"]),
            "unknown_passer": s["unknown_passer"], "unknown_scorer": s["unknown_scorer"],
-           "data_errors": s["data_errors"], "lines_mismatch": s["lines_mismatch"], "ast_vs_nba": s["ast_vs_nba"]}
+           "data_errors": s["data_errors"], "lines_mismatch": s["lines_mismatch"],
+           # NaN (stored by builds before 2026-10-07 for a season without NBA.com rows) reads as None
+           "ast_vs_nba": None if s["ast_vs_nba"] is None or s["ast_vs_nba"] != s["ast_vs_nba"] else s["ast_vs_nba"]}
     for k in ("rim", "floater", "jumper"):
         out[f"share_{k}"] = _ratio(s[f"ast_{k}"], s[f"fgm_{k}"])
     out["share_three"] = out["share3"]

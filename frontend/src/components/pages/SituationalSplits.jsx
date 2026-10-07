@@ -10,6 +10,7 @@ import TableExport from '../common/TableExport';
 import { SHORT_SIDES, fmtGap, fmtR, fmtValue, repeatWords, seasonLabel } from '../common/situationalFormat';
 import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlState';
 import '../../styles/splits.css';
+import { LiveSeasonTag } from '../common/LiveSeasonNote';
 
 // Situational Splits (?page=splits, GET /splits/situational/*): every
 // player-season's home/away, back-to-back, long-trip and strong/weak-opponent
@@ -180,6 +181,7 @@ export default function SituationalSplits() {
                     <select className="input-field" value={form.season} onChange={(e) => set({ season: Number(e.target.value), team: null })}>
                         {[...options.seasons].reverse().map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
                     </select>
+                    <LiveSeasonTag season={form.season} />
                 </label>
                 <label>
                     <span>Stat</span>

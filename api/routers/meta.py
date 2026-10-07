@@ -4,7 +4,7 @@ from functools import lru_cache
 from fastapi import APIRouter
 
 from local_only import LOCAL_ONLY, NOTE as LOCAL_ONLY_NOTE
-from routers.leaders import live_leaders, qualifying
+from routers.leaders import live_leaders, stored_floor
 from source_badge import make_source
 
 from impact_core import (
@@ -129,7 +129,7 @@ def get_current_meta():
             live_team_stats = team_stats_future.result()
             live_pts_leaders = leaders_future.result()
 
-        floor = qualifying("pts")  # Stat Leaders' floor (R8-068), so the tile names the same player
+        floor = stored_floor(cursor, "pts", db_latest_season)  # Stat Leaders' floor (R8-068; scaled in a live season)
         cursor.execute(
             """
             SELECT player_name, pts

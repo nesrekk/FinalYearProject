@@ -15,6 +15,7 @@ import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlStat
 import { bySign, signed } from '../../utils/format';
 import '../../styles/rapm.css';
 import '../../styles/rotations.css';
+import { LiveSeasonTag } from '../common/LiveSeasonNote';
 
 // Rotations (?page=rotations&team=&season=&game=): a team-season's rotation
 // as a heatmap of every regulation minute, its starting and closing fives,
@@ -347,6 +348,7 @@ export default function Rotations({ onNavigate }) {
                     }}>
                         {seasons.map((s) => <option key={s} value={s}>{seasonLabel(s)}</option>)}
                     </select>
+                    <LiveSeasonTag season={form.season} />
                 </label>
                 <label>
                     <span>Team</span>

@@ -59,6 +59,10 @@ EXPLICIT_PREDICATES = {
     "game_officials_fetch_log": _NBA_GAME_ID,
     "pregame_availability_players": "game_id IN (SELECT game_id FROM pregame_availability_odds WHERE season <= {cap})",
     "player_projections": "(last_season IS NULL OR last_season <= {cap})",
+    # the shot cache's bookkeeping (no season dimension, read by no paper script): the rows that existed at the freeze.
+    # The daily update adds one for each new player whose shots it stores (rookies); without this the manifest's row
+    # count, and with it paper_numbers.py's manifest claim, failed after the first live run (round 9 step 5, R9-037)
+    "player_shots_cache_status": "updated_at < TIMESTAMP '2026-10-07'",
 }
 
 # The Forecast Ledger (scripts/ledger_lock.py, ledger_update.py): 2026-27 by design, never capped.

@@ -83,7 +83,7 @@ def test_units_recompute_and_add_up(cur):
     assert np.abs(expect / noise - 1).max() < 1e-6
     assert sorted({int(s) for s in season}) == [2022, 2023, 2024, 2025, 2026]
     # every tracked possession is one offensive possession of exactly one unit, minus the dropped one-ended units
-    tot = _all(cur, "SELECT COUNT(*), SUM(pts) FROM possessions WHERE tracked_ok AND season >= 2022")[0]
+    tot = _all(cur, "SELECT COUNT(*), SUM(pts) FROM possessions WHERE tracked_ok AND season BETWEEN 2022 AND 2026")[0]
     po_sum, pd_sum, pf_sum = _all(cur, "SELECT SUM(po), SUM(pd), SUM(pf) FROM lineup_predictor_units")[0]
     teams = _all(cur, "SELECT SUM(po), SUM(pd), SUM(pf) FROM lineup_predictor_teams")[0]
     assert teams[0] == tot[0] and teams[1] == tot[0] and teams[2] == tot[1]

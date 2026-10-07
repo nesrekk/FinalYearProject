@@ -242,7 +242,7 @@ The classes:
 | `player_shot_making` | derived | `build_shot_making.py` | season (int) | capped | **season-to-date** | whole table | 14,513 | 582 | 3.0 | 0.1 |  |
 | `player_shot_tracking` | source | `fetch_spacing_data.py` | season (int) | capped | **season-to-date** | per season | 6,908 | 582 | 0.9 | 0.1 |  |
 | `player_shots` | source | `load_pbp_shots.py` | season (text) | capped | **daily** | per season + incremental | 6,334,308 | 234,673 | 986.9 | 36.6 | ShotChartDetail per team and season type (fetch_season_shots.py's path, 90 calls a season), or per game (game_id_nullable); 2026-27 rows get season '2026-27' |
-| `player_shots_cache_status` | cache | `api/shots_lib.py` | — | whole | **cache** | — | 2,842 |  | 0.3 |  |  |
+| `player_shots_cache_status` | cache | `api/shots_lib.py` | updated_at | capped | **cache** | — | 2,842 |  | 0.3 |  |  |
 | `player_situational_splits` | derived | `build_situational_splits.py` | season (int) | capped | **daily** | whole table | 123,530 | 20,878 | 30.2 | 5.1 |  |
 | `player_team_stints` | derived | `build_player_profile_data.py` | season (int) | capped | **season-end** | whole table | 5,829 | 151 | 0.6 | 0.0 |  |
 | `player_wpa_totals` | derived | `compute_wpa.py` | — | whole | **frozen** | whole table | 880 |  | 0.2 |  | career totals with no season dimension: the Clutch WPA page cannot take 2026-27 until a season column is added (R9-002); paper_beliefs recomputes and checks against this table |
@@ -567,6 +567,45 @@ and `/season-sim` carry `live`, `today_date`, `played_through`, `schedule_source
 `/projections/player/{id}` carry `actual`, `gap`, `in_range` per row and `actual_summary` / `actual_through`; the award
 routes carry `in_season`, `through`, `games_played_max`, `in_season_note`. The pages show each note.
 
+## 8. Step 5: the app in "current season" mode (2026-10-07)
+
+**The rule** (`api/current_season.py`, `GET /meta/season`; R9-029): the app opens on the newest season whose regular
+season is complete until a newer season has one regular-season final stored in `game_scores`, then on that season. So
+it opens on 2025-26 today and on 2026-27 from the morning after opening night (the first `daily_update.py` run that stores
+a final). The frontend reads the answer once before its first render (`frontend/src/utils/season.js`: `currentSeason()`,
+`latestCompleteSeason()`, `isLiveSeason()`, `defaultSeasonFor(minGames)`, `seasonRange()`, `shortDate()`); no component
+holds a season literal any more (a test greps for one). Change `DEFAULT_AFTER_GAMES` to make the switch wait.
+
+**What a page shows for the live season:** `common/LiveSeasonNote.jsx`: "2026-27 so far, through Oct 22: 34 of 1,200
+games played (2-3 a team). Early season: how much of a typical rotation player's number is signal so far: FG% 20%,
+3P% 5%, ..." (the stats under 50%, from Stat Stability's frozen M), or its inline form beside a season picker. Tools with
+a games floor wait for the live season's teams to reach it before defaulting to it; their pickers still offer it.
+
+**Defaults that now follow each table** (R9-033, R9-034): routes on tables the daily update doesn't refresh open on the
+newest season their table has; Stat Leaders' and the Dashboard's floors scale with the games played so far; Garbage
+Time, Rim Deterrence and Hot Streaks open on the newest season someone qualifies in. Pages that stay on the newest
+complete season by design are listed in R9-035.
+
+**New on the pages:** the Dashboard's "This week" (`GET /dashboard/week`: the seven days of finals ending on the current
+season's last stored date, the latest night's results, the biggest upset by the held-out pre-game odds and the best game
+by excitement, each with its Game Replay; before a season starts, the last week of the newest complete season and the
+next season's first tip); Live Scores keeps the date in the link (`?page=scores&date=`) and gives every final with stored
+play-by-play a Game Replay link beside its box score (`replay_id` on `/games/by-date`).
+
+**How it was checked without a live season:** the step-4 trial schema (`zz_trial27`: the 2026-27 preseason through
+2026-10-05 stored as season 2027, the daily chain and the models run with `--season 2027`) with the three backends
+pointed at it by `PGOPTIONS`, a crawl of every route and a page sweep (Step 5 section of `docs/qa/ROUND9_ISSUES.md`).
+`api/tests/test_current_season.py` (8 tests) checks the rule on the real database and on a scratch copy with a fake
+opening night, the scaled floors, the week's upset and best game against the Best Games tables, the replay ids, the
+per-table defaults and the frontend's lack of season literals.
+
+**The test suite on the copy** (R9-036) failed 49 tests and errored 5 at first: tests that iterated "every season" and
+meant the complete ones. They now pin 2025-26 (`season <= 2026`) and pass on the copy and on the real database. The same
+run found **R9-037**: the daily update's shot step adds `player_shots_cache_status` rows for rookies, a table without a
+season dimension that the manifest counted whole, so the first live run would have stopped `paper_numbers.py`; the table
+now has a paper-rows predicate (the rows at the freeze) and `paper-inputs` is byte-identical. Rule for later steps: a
+table a daily step writes needs a season dimension or a predicate in `paper_freeze.EXPLICIT_PREDICATES`.
+
 ## For the guide
 
 - The paper is frozen on 2025-26 by code: one constant, every paper script reads through it, and the manifest hashes
@@ -587,3 +626,8 @@ routes carry `in_season`, `through`, `games_played_max`, `in_season_note`. The p
   follow the live season under one rule: every pooled fit stays fitted on the paper's seasons and is only applied to
   2026-27, checked against the stored fit rows before it is used; a test proves the mode reproduces 2025-26's stored
   rows; the eight builds add about three minutes to a game day; every page says "season to date".
+- Step 5 (2026-10-07): the app opens on 2026-27 from the morning after opening night (one rule, one endpoint), every
+  page showing the live season says "so far, through <date>" with the games played and, where it matters, how much of a
+  player's numbers is still noise; the Dashboard has a "This week" panel (results, biggest upset, best game) and Live
+  Scores links each final to Game Replay. Checked on a copy of the database holding the preseason as a stand-in season:
+  three pages that broke on a short season and about a dozen routes that defaulted to a season they don't have, all fixed.

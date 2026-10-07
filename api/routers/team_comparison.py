@@ -1,6 +1,7 @@
 from typing import Optional
 from source_badge import make_source
 
+from current_season import latest_season_in
 from fastapi import APIRouter, HTTPException
 
 from impact_core import get_db, get_latest_season
@@ -74,7 +75,9 @@ def _recent_form(cursor, team_abbr: str, n: int = 10) -> Optional[dict]:
     cursor.execute(
         """SELECT f.game_date, f.opponent, f.win, g.pts_for - g.pts_against
            FROM team_game_fatigue f
-           LEFT JOIN game_scores g ON g.game_id = f.game_id AND g.team_abbreviation = f.team_abbreviation
+           -- finals with a stored score only: in a live season LeagueGameFinder can list a game before its final is
+           -- stored (R9-028); for every finished season the two tables hold the same rows
+           JOIN game_scores g ON g.game_id = f.game_id AND g.team_abbreviation = f.team_abbreviation
            WHERE f.team_abbreviation = %s
            ORDER BY f.game_date DESC
            LIMIT %s;""",
@@ -99,7 +102,7 @@ def _head_to_head(cursor, team_a: str, team_b: str, limit_recent: int = 5) -> di
     cursor.execute(
         """SELECT f.game_date, f.win, g.pts_for - g.pts_against
            FROM team_game_fatigue f
-           LEFT JOIN game_scores g ON g.game_id = f.game_id AND g.team_abbreviation = f.team_abbreviation
+           JOIN game_scores g ON g.game_id = f.game_id AND g.team_abbreviation = f.team_abbreviation  -- as _recent_form
            WHERE f.team_abbreviation = %s AND f.opponent = %s
            ORDER BY f.game_date DESC;""",
         (team_a, team_b),
@@ -123,7 +126,8 @@ def get_team_comparison(team_a: str, team_b: str, season: Optional[int] = None):
     with get_db() as conn:
         cursor = conn.cursor()
         if season is None:
-            season = get_latest_season(cursor)
+            # the newest season with team ratings (team_seasons, rebuilt at the season's end; round 9 step 5)
+            season = latest_season_in(cursor, "team_seasons", "NOT is_league_avg AND o_rtg IS NOT NULL") or get_latest_season(cursor)
 
         adv_a = _advanced_team_stats(cursor, team_a, season)
         adv_b = _advanced_team_stats(cursor, team_b, season)

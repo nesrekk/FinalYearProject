@@ -95,7 +95,7 @@ def test_shot_xfg_covers_every_regular_season_shot_once_and_is_calibrated(cur):
 
 @needs_db
 def test_stints_reconcile_with_lineup_stints(cur):
-    (n_st,), = q(cur, "SELECT count(*) FROM lineup_stints")
+    (n_st,), = q(cur, "SELECT count(*) FROM lineup_stints WHERE season <= 2026")  # the paper's seasons (R9-011)
     (n_x, n_missing), = q(cur, """SELECT count(*), count(*) FILTER (WHERE l.stint_id IS NULL)
                                   FROM paper_xrapm_stints x LEFT JOIN lineup_stints l ON l.stint_id = x.stint_id""")
     assert n_x == n_st and n_missing == 0

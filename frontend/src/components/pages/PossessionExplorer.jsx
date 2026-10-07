@@ -13,6 +13,7 @@ import { parseParam, useInitialParams, useUrlSync } from '../../utils/useUrlStat
 import { signed } from '../../utils/format';
 import '../../styles/playfinder.css';
 import '../../styles/possessions.css';
+import { LiveSeasonTag } from '../common/LiveSeasonNote';
 
 // Possession Explorer (?page=possessions): points per possession by how the
 // possession began (after a make, a defensive rebound, a steal, ...),
@@ -351,6 +352,7 @@ export default function PossessionExplorer() {
                     <select className="input-field" value={form.season} onChange={(e) => set({ season: Number(e.target.value) })}>
                         {[...options.seasons].reverse().map((s) => <option key={s.season} value={s.season}>{s.label}</option>)}
                     </select>
+                    <LiveSeasonTag season={form.season} />
                 </label>
                 <label>
                     <span>Team</span>
@@ -509,7 +511,7 @@ export default function PossessionExplorer() {
                                                 <td className="lb-num">{pct(x.trans.poss / (x.trans.poss + x.settled.poss))}</td>
                                                 <td className="lb-num">{f3(x.trans.ppp)}</td>
                                                 <td className="lb-num">{f3(x.settled.ppp)}</td>
-                                                <td className="lb-num">{signed3(x.trans.ppp - x.settled.ppp)}</td>
+                                                <td className="lb-num">{x.trans.ppp == null || x.settled.ppp == null ? '—' : signed3(x.trans.ppp - x.settled.ppp)}</td>
                                             </tr>
                                         ))}
                                     </tbody>

@@ -46,6 +46,7 @@ from functools import lru_cache
 
 import numpy as np
 import pandas as pd
+from current_season import default_season_for
 from fastapi import APIRouter, HTTPException, Query
 
 from hot_streaks import (LINES_SQL, MIN_BASE_GAMES, MIN_BASE_MPG, MIN_PRIOR_GAMES, PRIOR_SQL, STATS, WINDOWS,
@@ -254,6 +255,11 @@ def hot_streak_options():
 @router.get("/games/hot-streak/{player_id}")
 def hot_streak(player_id: int, season: int | None = None, stat: str = "pts", window: int = 10,
                as_of: date | None = None):
+    if season is None:  # this player's newest season with game lines (round 9 step 5), not the league's newest
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT MAX(season) FROM player_game_lines WHERE player_id = %s", (player_id,))
+            season = cur.fetchone()[0]
     season = _check_inputs(season, stat, window)
     names = _names()
     if player_id not in names:
@@ -305,6 +311,10 @@ def _league(season, stat, window, as_of):
 @router.get("/games/hot-streaks")
 def hot_streaks(season: int | None = None, stat: str = "pts", window: int = 10, as_of: date | None = None,
                 direction: str = Query("hot", pattern="^(hot|cold)$"), limit: int = Query(25, ge=5, le=100)):
+    if season is None:
+        # nobody can be tested before window + MIN_BASE_GAMES games: the newest complete season until the season
+        # being played has them (round 9 step 5)
+        season = default_season_for(window + MIN_BASE_GAMES)
     season = _check_inputs(season, stat, window)
     first, last = _seasons()[season]
     as_of = min(max(as_of or last, first), last)

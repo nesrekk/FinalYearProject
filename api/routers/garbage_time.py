@@ -2,6 +2,7 @@ from typing import Optional
 
 from source_badge import make_source
 
+from current_season import latest_season_in
 from fastapi import APIRouter, HTTPException
 
 from impact_core import (
@@ -56,7 +57,9 @@ def _resolve_season(cursor, season: Optional[int]):
     if not seasons:
         raise HTTPException(status_code=503, detail="player_leverage_summary is empty.")
     if season is None:
-        season = seasons[-1]
+        # the newest season with a qualified player: a live season's first weeks have none (round 9 step 5)
+        cursor.execute("SELECT MAX(season) FROM player_leverage_summary WHERE qualified")
+        season = cursor.fetchone()[0] or seasons[-1]
     if season not in seasons:
         raise HTTPException(status_code=404, detail=f"No real play-by-play coverage for season {season}.")
     return season, seasons
@@ -168,6 +171,8 @@ def get_garbage_time_player(player_id: int, season: Optional[int] = None):
     with get_db() as conn:
         cursor = conn.cursor()
         _require_table(cursor)
+        if season is None:  # this player's newest season on file (round 9 step 5), not the league's
+            season = latest_season_in(cursor, "player_leverage_summary", "player_id = %s", (player_id,))
         season, _ = _resolve_season(cursor, season)
         cursor.execute(
             f"SELECT {SUMMARY_COLS} FROM player_leverage_summary WHERE season = %s AND player_id = %s;",

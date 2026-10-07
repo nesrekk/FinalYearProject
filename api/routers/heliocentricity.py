@@ -4,6 +4,7 @@ from psycopg2 import pool
 from source_badge import make_source
 from season_team import season_team_sql
 
+from current_season import default_season_for
 from fastapi import APIRouter, HTTPException
 
 from impact_core import (
@@ -28,7 +29,8 @@ def get_heliocentricity_leaderboard(season: Optional[int] = None, top_n: int = 2
 
     with get_db() as conn:
         cursor = conn.cursor()
-        resolved_season = season or get_latest_season(cursor)
+        # the pool needs RADAR_MIN_GAMES games: the newest complete season until the live one has them (round 9 step 5)
+        resolved_season = season or default_season_for(RADAR_MIN_GAMES, cursor)
         check_season_exists(cursor, resolved_season)
         cursor.execute(
             f"""

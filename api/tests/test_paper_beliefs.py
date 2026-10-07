@@ -179,7 +179,7 @@ def test_split_statistics_equal_player_situational_splits(cur):
 @needs_db
 def test_luck_and_referee_statistics_equal_the_platform(cur, summary):
     cur.execute("""SELECT max(abs(b.stat - t.m)), max(abs(b.stat - b.platform_stat)) FROM paper_beliefs b
-                   JOIN (SELECT franchise, avg(luck_per82) m FROM team_luck_schedule GROUP BY 1) t ON t.franchise = b.unit_id
+                   JOIN (SELECT franchise, avg(luck_per82) m FROM team_luck_schedule WHERE season <= 2026 GROUP BY 1) t ON t.franchise = b.unit_id
                    WHERE b.key = 'luck:luck_per82'""")
     assert max(cur.fetchone()) < 1e-9
     cur.execute("SELECT count(*) FROM paper_beliefs WHERE key = 'luck:luck_per82'")

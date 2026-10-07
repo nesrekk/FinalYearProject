@@ -184,8 +184,9 @@ def _lin_se(on, b, off, e):
 def test_on_off_equals_numpy_on_the_corrected_points(client, cur):
     ids = [JOKIC, SGA, MURRAY]
     arrays = _onoff_arrays(cur, ids)
+    arrays = {k: a for k, a in arrays.items() if k[1] <= 2026}  # complete seasons (R9-011)
     d = _q(client, dataset="player_onoff", entities=ids, columns=["on_off_net", "net_on", "net_off", "games", "pm_on"],
-           season_from=2021, limit=100)
+           season_from=2021, season_to=2026, limit=100)
     assert d["rows"] and len(d["rows"]) == len(arrays)
     for row in d["rows"]:
         a = arrays[(row["player_id"], row["season"], row["team"])]
@@ -198,7 +199,8 @@ def test_on_off_equals_numpy_on_the_corrected_points(client, cur):
         se = _lin_se(on, b, off, e)
         assert row["ci"]["on_off_net"] == pytest.approx([est - 1.959964 * se, est + 1.959964 * se], abs=2e-3)
     # Combined over seasons: pooled on minus pooled off, not a mean of differences.
-    d = _q(client, dataset="player_onoff", entities=[JOKIC], columns=["on_off_net"], season_from=2021, group_by="entity")
+    d = _q(client, dataset="player_onoff", entities=[JOKIC], columns=["on_off_net"], season_from=2021, season_to=2026,
+           group_by="entity")
     parts = [_net_diff(a) for k, a in arrays.items() if k[0] == JOKIC]
     on, b, off, e = (np.concatenate([p[i] for p in parts]) for i in range(4))
     assert d["rows"][0]["on_off_net"] == pytest.approx(100 * (on.sum() / b.sum() - off.sum() / e.sum()), abs=1e-3)
@@ -310,7 +312,7 @@ def test_pairs(client, cur):
 
 def test_team_possessions_equal_the_table(client, cur):
     keys = ["ppp", "ppp_steal", "share_steal", "d_ppp", "trans_share", "net_ppp"] + [f"share_{k}" for k, _ in WC.POSS_STARTS]
-    d = _q(client, dataset="team_possessions", entities=["DEN"], columns=keys, season_from=2021)
+    d = _q(client, dataset="team_possessions", entities=["DEN"], columns=keys, season_from=2021, season_to=2026)
     assert len(d["rows"]) == 6
     for row in d["rows"]:
         cur.execute("""SELECT start_type, poss, pts, d_poss, d_pts, trans_poss, timed_poss FROM possession_seasons

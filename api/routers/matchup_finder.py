@@ -1,6 +1,7 @@
 from typing import Optional
 from source_badge import make_source
 
+from current_season import latest_season_in
 from fastapi import APIRouter, HTTPException
 
 from impact_core import (
@@ -29,7 +30,8 @@ def get_player_matchups(player_name: str, role: str = "scorer", season: Optional
             raise HTTPException(status_code=503, detail="No matchup data yet — run scripts/fetch_matchups.py first.")
 
         player_id, resolved_name = resolve_player(cursor, player_name, player_id)
-        resolved_season = season or get_latest_season(cursor)
+        # the newest season with matchups on file (they aren't in the daily update; round 9 step 5)
+        resolved_season = season or latest_season_in(cursor, "player_matchups") or get_latest_season(cursor)
 
         if role == "scorer":
             # Real defenders who have guarded this player while this player was on offense.

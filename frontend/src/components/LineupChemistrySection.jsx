@@ -12,6 +12,7 @@ import CopyLinkButton from './common/CopyLinkButton';
 import SaveViewButton from './common/SaveViewButton';
 import { currentPageParam, parseParam, useInitialParams, useUrlSync } from '../utils/useUrlState';
 import { bySign, signed } from '../utils/format';
+import { LiveSeasonTag } from './common/LiveSeasonNote';
 
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 const URL_KEYS = ['season', 'order', 'min'];
@@ -107,6 +108,7 @@ export default function LineupChemistrySection() {
                                 </option>
                             ))}
                         </select>
+                        <LiveSeasonTag season={data.season} />
                     </label>
                     <label>
                         <span>Min. shared minutes</span>

@@ -105,14 +105,14 @@ def test_printed_rows_have_known_formats_and_defined_macros(cur):
 
 @needs_db
 def test_audit_matches_the_database_now(cur, audit):
-    cur.execute("SELECT count(*) - sum(game_ok::int) FROM lineup_stint_games")
+    cur.execute("SELECT count(*) - sum(game_ok::int) FROM lineup_stint_games WHERE season <= 2026")  # the paper's seasons
     assert audit[("unrec_games", 0)] == cur.fetchone()[0]
     cur.execute("SELECT count(*), count(DISTINCT game_id) FROM pbp_events WHERE game_id IN (SELECT game_id FROM pbp_games WHERE source = 'nba_api')")
     assert (audit[("twin_rows", 0)], audit[("twin_games", 0)]) == cur.fetchone()
     assert audit[("twin_same_teams", 0)] + audit[("twin_neutral", 0)] == audit[("twin_games", 0)]
     cur.execute("""SELECT count(DISTINCT f.game_id) FROM team_game_fatigue f JOIN game_scores g
                    ON g.game_id = f.game_id AND g.team_abbreviation = f.team_abbreviation
-                   WHERE abs(f.plus_minus - (g.pts_for - g.pts_against)) > 1e-6""")
+                   WHERE abs(f.plus_minus - (g.pts_for - g.pts_against)) > 1e-6 AND f.season <= 2026""")
     assert audit[("pm_bad", 0)] == cur.fetchone()[0]
     cur.execute("""SELECT count(*) FROM pbp_events e JOIN pbp_games g USING (game_id)
                    WHERE g.source = 'espn' AND coalesce(e.player_name, '') <> '' AND e.person_id IS NULL""")

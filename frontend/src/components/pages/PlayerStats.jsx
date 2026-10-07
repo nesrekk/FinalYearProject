@@ -12,6 +12,8 @@ import { STAT_GLOSSARY } from '../../utils/statGlossary';
 import { useMotionMode, motionPreset } from '../../context/MotionModeContext';
 import TableExport from '../common/TableExport';
 import SourceBadge from '../common/SourceBadge';
+import { currentSeason, isLiveSeason, seasonRange } from '../../utils/season';
+import LiveSeasonNote from '../common/LiveSeasonNote';
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'];
 
@@ -59,8 +61,6 @@ const STAT_TABS = {
 const TOP_LEVEL_LABELS = { age: 'AGE', gp: 'GP', min: 'MIN' };
 
 // The table covers 2009-10 to the latest finished season (GET /players/table).
-const LATEST_SEASON = 2026;
-const SEASONS = Array.from({ length: LATEST_SEASON - 2010 + 1 }, (_, i) => LATEST_SEASON - i);
 const seasonLabel = (s) => `${s - 1}-${String(s).slice(-2)}`;
 
 function fmt(v, digits = 1, signed = false) {
@@ -70,7 +70,7 @@ function fmt(v, digits = 1, signed = false) {
 }
 
 export default function PlayerStats() {
-    const [season, setSeason] = useState(LATEST_SEASON);
+    const [season, setSeason] = useState(() => currentSeason());
     const [minMinutes, setMinMinutes] = useState(10);
     const [table, setTable] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -126,7 +126,10 @@ export default function PlayerStats() {
 
     const rows = useMemo(() => {
         if (!table) return [];
-        let list = table.results.filter((r) => activePositions.has(r.position));
+        // A season being played has no estimated position yet (the BPM build runs at the season's end): those rows
+        // show with every position chip on (round 9 step 5).
+        const allOn = activePositions.size === POSITIONS.length;
+        let list = table.results.filter((r) => activePositions.has(r.position) || (r.position == null && allOn));
         if (search.trim()) {
             const q = search.trim().toLowerCase();
             list = list.filter((r) => r.player_name.toLowerCase().includes(q));
@@ -180,7 +183,7 @@ export default function PlayerStats() {
                     <div className="hb-rail-group">
                         <span className="hb-rail-label">Season</span>
                         <select value={season} onChange={(e) => setSeason(Number(e.target.value))} aria-label="Season">
-                            {SEASONS.map((y) => <option key={y} value={y}>{seasonLabel(y)}</option>)}
+                            {seasonRange(2010).map((y) => <option key={y} value={y}>{seasonLabel(y)}{isLiveSeason(y) ? ' (so far)' : ''}</option>)}
                         </select>
                     </div>
                     <div className="hb-rail-group">
@@ -268,6 +271,7 @@ export default function PlayerStats() {
                                 Showing {rows.length} of {table.count} players, {seasonLabel(table.season)} (min ≥ {table.min_minutes} MPG), sorted by {leaderLabel}.
                                 <SourceBadge source={table._source} />
                             </p>
+                            <LiveSeasonNote season={table.season} />
 
                             <motion.div
                                 key={tableVersion}
@@ -334,7 +338,7 @@ export default function PlayerStats() {
                                                             >
                                                                 {r.player_name}
                                                             </motion.span>
-                                                            <span className="entity-row-sub">{r.position}</span>
+                                                            <span className="entity-row-sub">{r.position ?? 'position n/a'}</span>
                                                         </span>
                                                     </span>
                                                 </td>

@@ -262,6 +262,7 @@ def test_every_verified_column_runs(client):
         all_cols = [k for k, c in ds.columns.items() if c.status == "verified"]
         last = client.get("/workbench/catalogue").json()
         last = next(x for x in last["datasets"] if x["key"] == ds.key)["seasons"]["to"]
+        last = min(last, 2026)  # the newest complete season: a live one has no BPM or season-end columns yet (R9-011)
         # A request takes at most 40 columns; the projections have 136.
         for at in range(0, len(all_cols), 40):
             cols = all_cols[at:at + 40]
@@ -471,7 +472,7 @@ def test_rate_over_a_span_is_summed_makes_over_summed_attempts(client, cur):
 
 def test_team_games_add_up_to_team_seasons(client):
     """Wins from the final scores = Basketball-Reference's for every team-season 2009-10 on."""
-    games = _q(client, dataset="team_game", columns=["wins", "games"], group_by=["entity", "season"], limit=5000)
+    games = _q(client, dataset="team_game", columns=["wins", "games"], group_by=["entity", "season"], season_to=2026, limit=5000)
     seasons = _q(client, dataset="team_season", columns=["w", "g"], season_from=2010, limit=5000)
     by_game = {(r["franchise"], r["season"]): (r["wins"], r["games"]) for r in games["rows"]}
     by_season = {(r["franchise"], r["season"]): (r["w"], r["g"]) for r in seasons["rows"]}
