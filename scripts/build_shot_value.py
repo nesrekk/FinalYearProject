@@ -83,10 +83,36 @@ the optimiser starts are fixed and the bootstrap is seeded (SEED).
 
 Usage (Python: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3):
     cd scripts && OMP_NUM_THREADS=4 python3 build_shot_value.py
+    cd scripts && OMP_NUM_THREADS=4 python3 build_shot_value.py --season 2027    # the live season only (round 9 step 4)
 Then paper_xrapm.py, paper_eval.py --only impact, paper_tests.py --only impact,
 rebuild_all.sh paper-inputs; restart impact_api. Rerun after a player_shots
 reload, build_player_game_lines.py, build_player_profile_data.py /
 build_first_nba_season.py or a player_season_stats load.
+
+--season N (round 9 step 4, 2026-10-07; scripts/season_mode.py): season N
+priced the way the full build prices a season, with nothing refitted on it:
+  * the five fold location models for N are fitted on every shot of 1996-97
+    to N-1 by the other folds' players (the full build's rule for any priced
+    season; for the live season that is every chart shot up to the paper's
+    test season) and price the fold's shots of 2010-11 to N: one set of five
+    fits, about three minutes, instead of thirty;
+  * a player's fold is the paper's: the shuffle over the players seen up to
+    api/paper_freeze.MAX_PAPER_SEASON (reproducing shot_xfg's folds, checked),
+    and a player seen only after it takes the next fold in turn;
+  * the four classes' hyperparameters and the league-level shrinkage are
+    read from shot_value_fit (empirical Bayes on 2010-11 to 2019-20: fitted
+    once, never on a priced season; round 9 issue R9-009), the skill filter
+    runs over 2010-11 to N-1 with N's models and then date by date through N;
+  * written for N only: shot_value_shots, shot_value_states, shot_value_added
+    (ranks within N) and shot_value_validation's rows of N (its own scope and
+    the year-to-year pairs N-1 -> N, the earlier season's parts read from the
+    stored table; the pooled scopes tune / validate / test / all stay the
+    paper's; no p_xfg row for a live season, shot_xfg being frozen). The
+    bootstrap stream is replayed past the earlier seasons' draws (the stored
+    rows' game counts, in the full build's order), so N's intervals are the
+    ones a full build would give it. shot_value_fit is never touched (its
+    'models' row keeps the paper seasons' iterations).
+The test proves `--season 2026` reproduces the stored 2025-26 rows byte for byte.
 """
 
 import io
@@ -103,8 +129,13 @@ import psycopg2.extras
 
 import build_rapm as R
 import build_shot_making as S
+import season_mode as SM
 import shot_value_lib as V
 from db_config import DB_CONFIG
+from paper_freeze import MAX_PAPER_SEASON
+
+FIT_THROUGH = MAX_PAPER_SEASON      # the --season mode: the paper's player folds, the frozen fit row
+TABLES = ("shot_value_shots", "shot_value_states", "shot_value_added", "shot_value_fit", "shot_value_validation")
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -133,13 +164,13 @@ def player_folds(df):
     return fold_of_player.reindex(df.player_id.to_numpy()).to_numpy()
 
 
-def location_models(df, fold):
+def location_models(df, fold, priced=V.PRICED):
     """{S: P(make) per shot (NaN outside 2010-11..S)} from five fold models fitted on 1996-97..S-1."""
     X = S.hgb_matrix(df)
     y = df.made.to_numpy()
     season = df.season.to_numpy()
     out, iters = {}, {}
-    for s in V.PRICED:
+    for s in priced:
         p = np.full(len(df), np.nan, np.float32)
         its = []
         for k in range(S.N_FOLDS):
@@ -156,13 +187,29 @@ def location_models(df, fold):
     return out, iters
 
 
+def season_folds(df, through=FIT_THROUGH):
+    """player_folds() over the players seen up to `through` (the paper's shuffle, which reproduces shot_xfg's folds)
+    plus, for a player seen only after it, the next fold in turn: the --season mode's folds."""
+    season = df.season.to_numpy()
+    pid = df.player_id.to_numpy()
+    paper = np.unique(pid[season <= through])
+    rng = np.random.default_rng(S.SEED)
+    rng.shuffle(paper)
+    new = np.setdiff1d(np.unique(pid), paper)
+    order = np.concatenate([paper, new])
+    fold_of_player = pd.Series(np.arange(len(order)) % S.N_FOLDS, index=order)
+    return fold_of_player.reindex(pid).to_numpy(), len(paper), len(new)
+
+
 def check_folds(conn, df, fold):
+    """The reproduced folds equal shot_xfg's on every shot it holds (the paper's seasons; a live season's shots are not in it)."""
     xf = pd.read_sql_query("SELECT shot_id, fold FROM shot_xfg", conn).set_index("shot_id").fold
-    m = df.season.to_numpy() >= 2021
-    got = pd.Series(fold[m], index=df.id.to_numpy()[m])
-    agree = float((xf.reindex(got.index).to_numpy() == got.to_numpy()).mean())
+    got = pd.Series(fold, index=df.id.to_numpy())
+    common = got.index.intersection(xf.index)
+    assert len(common) == len(xf), f"shot_xfg holds {len(xf) - len(common):,} shots not in the chart read"
+    agree = float((xf.reindex(common).to_numpy() == got.reindex(common).to_numpy()).mean())
     assert agree == 1.0, f"the reproduced folds agree with shot_xfg's on {agree:.4%} of shots"
-    log(f"player folds reproduce shot_xfg's on all {int(m.sum()):,} shots from 2020-21")
+    log(f"player folds reproduce shot_xfg's on all {len(common):,} shots it holds")
 
 
 # ── 3. Players, debuts, free throws ──────────────────────────────────────────
@@ -329,10 +376,14 @@ def boot_diff(game, d, rng):
     return est, float(lo), float(hi), p, G
 
 
-def validation_rows(all_shots, all_ft, xfg, rng):
+def validation_groups(priced=V.PRICED):
+    groups = [("tune", (2021, 2022, 2023, 2024)), ("validate", (2025,)), ("test", (2026,)), ("all", priced)]
+    return [(label(s), (s,)) for s in priced] + groups
+
+
+def validation_rows(all_shots, all_ft, xfg, rng, groups=None):
     rows = []
-    groups = [("tune", (2021, 2022, 2023, 2024)), ("validate", (2025,)), ("test", (2026,)), ("all", V.PRICED)]
-    groups = [(label(s), (s,)) for s in V.PRICED] + groups
+    groups = validation_groups() if groups is None else groups
     for name, seasons in groups:
         for c in V.CLASSES + ("fg",):
             if c == "ft":
@@ -420,9 +471,9 @@ def player_table(conn, all_shots, all_ft, states, players, lg):
     return t
 
 
-def yty_rows(t):
+def yty_rows(t, pairs=None):
     out = []
-    for lo, hi in zip(V.PRICED[:-1], V.PRICED[1:]):
+    for lo, hi in (zip(V.PRICED[:-1], V.PRICED[1:]) if pairs is None else pairs):
         a = t[(t.season == lo) & (t.fga >= MIN_FGA)].set_index("player_id")
         b = t[(t.season == hi) & (t.fga >= MIN_FGA)].set_index("player_id")
         both = a.join(b, lsuffix="_a", rsuffix="_b", how="inner")
@@ -456,6 +507,17 @@ def clean(v):
     return v
 
 
+ADDED_COLS = ["player_id", "season", "player_name", "team_abbreviation", "fga", "fgm", "fg3a", "fg3m", "pts", "x_blind", "x_aware",
+              "skill_pts", "above_pts", "total_pts", "fta", "ftm", "ft_x_blind", "ft_x_aware", "ft_skill_pts", "ft_above_pts", "ft_total_pts",
+              "sva", "beyond"] + [f"{k}_{c}" for c in V.FG_CLASSES for k in ("att", "made")] + \
+             [f"{w}_{c}{sd}" for c in V.CLASSES for w in ("pre", "post") for sd in ("", "_sd")] + \
+             ["qualified", "rank_sva", "rank_total", "rank_beyond", "pool"]
+ADDED_INTS = {"fga", "fgm", "fg3a", "fg3m", "pts", "fta", "ftm", "rank_sva", "rank_total", "rank_beyond", "pool"} | \
+             {f"{k}_{c}" for c in V.FG_CLASSES for k in ("att", "made")}
+VAL_COLS = ["scope", "seasons", "cls", "price", "n", "log_loss", "brier", "mean_price", "make_rate", "d_log_loss_vs_lf", "ci_lo", "ci_hi",
+            "p_boot", "games", "corr"]
+
+
 def write(conn, all_shots, states, table, fit_rows, val):
     cur = conn.cursor()
     cur.execute("DROP TABLE IF EXISTS shot_value_shots, shot_value_states, shot_value_added, shot_value_fit, shot_value_validation")
@@ -487,15 +549,10 @@ def write(conn, all_shots, states, table, fit_rows, val):
                                    [(int(r.season), int(r.player_id), r.cls, float(r.pre_mean), float(r.pre_sd), float(r.post_mean),
                                      float(r.post_sd), int(r.att), int(r.made)) for r in st.itertuples(index=False)], page_size=5000)
 
-    cols = ["player_id", "season", "player_name", "team_abbreviation", "fga", "fgm", "fg3a", "fg3m", "pts", "x_blind", "x_aware",
-            "skill_pts", "above_pts", "total_pts", "fta", "ftm", "ft_x_blind", "ft_x_aware", "ft_skill_pts", "ft_above_pts", "ft_total_pts",
-            "sva", "beyond"] + [f"{k}_{c}" for c in V.FG_CLASSES for k in ("att", "made")] + \
-           [f"{w}_{c}{sd}" for c in V.CLASSES for w in ("pre", "post") for sd in ("", "_sd")] + \
-           ["qualified", "rank_sva", "rank_total", "rank_beyond", "pool"]
+    cols = ADDED_COLS
     types = {"player_id": "integer NOT NULL", "season": "smallint NOT NULL", "player_name": "text", "team_abbreviation": "text",
              "qualified": "boolean NOT NULL"}
-    ints = {"fga", "fgm", "fg3a", "fg3m", "pts", "fta", "ftm", "rank_sva", "rank_total", "rank_beyond", "pool"} | \
-           {f"{k}_{c}" for c in V.FG_CLASSES for k in ("att", "made")}
+    ints = ADDED_INTS
     ddl = ", ".join(f"{c} {types.get(c, 'integer' if c in ints else 'real')}" for c in cols)
     cur.execute(f"CREATE TABLE shot_value_added ({ddl}, PRIMARY KEY (player_id, season))")
     tt = table.sort_values(["season", "player_id"])
@@ -510,8 +567,7 @@ def write(conn, all_shots, states, table, fit_rows, val):
         detail jsonb)""")
     psycopg2.extras.execute_values(cur, "INSERT INTO shot_value_fit VALUES %s", fit_rows)
 
-    vcols = ["scope", "seasons", "cls", "price", "n", "log_loss", "brier", "mean_price", "make_rate", "d_log_loss_vs_lf", "ci_lo", "ci_hi",
-             "p_boot", "games", "corr"]
+    vcols = VAL_COLS
     cur.execute("""CREATE TABLE shot_value_validation (
         scope text NOT NULL, seasons text NOT NULL, cls text NOT NULL, price text NOT NULL, n integer NOT NULL,
         log_loss double precision, brier double precision, mean_price double precision, make_rate double precision,
@@ -548,11 +604,152 @@ def sniff(t):
         print(f"  {label(s)} bottom SVA: " + "; ".join(f"{r.player_name} {r.sva:+.0f}" for r in bot.itertuples()))
 
 
+def stored_fit(conn):
+    """{cls: ({mu0, v0, phi, q}, n2ll, {})} and {cls: delta_var} from shot_value_fit (the frozen hyperparameters)."""
+    df = pd.read_sql_query("SELECT cls, mu0, v0, phi, q, n2ll, delta_var FROM shot_value_fit WHERE cls <> 'models'", conn)
+    pars, dvar = {}, {}
+    for r in df.itertuples():
+        pars[r.cls] = ({"mu0": float(r.mu0), "v0": float(r.v0), "phi": float(r.phi), "q": float(r.q)}, float(r.n2ll), {})
+        dvar[r.cls] = float(r.delta_var)
+    missing = [c for c in V.CLASSES if c not in pars]
+    if missing:
+        raise SystemExit(f"--season: shot_value_fit has no row for {missing}; run the full build first")
+    return pars, dvar
+
+
+def replay_validation_draws(conn, rng, before, log):
+    """Advance the bootstrap stream past the draws the full build makes for the per-season validation rows of the
+    seasons before N (validation_rows' order: season, class, price; one boot_diff per stored row with a game count)."""
+    df = pd.read_sql_query("SELECT scope, cls, price, games FROM shot_value_validation WHERE games IS NOT NULL", conn)
+    have = {(r.scope, r.cls, r.price): int(r.games) for r in df.itertuples()}
+    n = 0
+    for s in before:
+        for c in V.CLASSES + ("fg",):
+            prices = ("blind", "pre", "sa", "xfg") if c != "ft" else ("pre", "sa")
+            for k in prices:
+                G = have.get((label(s), c, k))
+                if G is None:
+                    raise SystemExit(f"--season: shot_value_validation has no {label(s)} / {c} / {k} row; run the full build first")
+                rng.integers(0, G, size=(BOOT, G))
+                n += 1
+    log(f"  bootstrap stream replayed past the {n} validation draws of {', '.join(label(s) for s in before) or 'no earlier season'}")
+
+
+def stored_player_table(conn, season):
+    """shot_value_added's rows of one season, the columns yty_rows reads."""
+    return pd.read_sql_query("""SELECT player_id, season, fga, fta, skill_pts, above_pts, total_pts, ft_skill_pts, ft_above_pts,
+                                       ft_total_pts FROM shot_value_added WHERE season = %s""", conn, params=(int(season),))
+
+
+def write_season(conn, season, all_shots, states, table, val):
+    cur = conn.cursor()
+    SM.require_tables(cur, TABLES, season)
+    n = sum(SM.delete_season(cur, t, season) for t in ("shot_value_shots", "shot_value_states", "shot_value_added"))
+    # the season's own scope and its year-to-year rows; never the pooled scopes (tune / validate / test / all), whose
+    # `seasons` label can equal a season's
+    n += SM.delete_season(cur, "shot_value_validation", label(season), "(scope = %s OR (cls = 'yty' AND seasons = %s))")
+    buf = io.StringIO()
+    s_ = all_shots.sort_values("id")
+    for r in zip(s_.id.tolist(), s_.season.tolist(), s_.date.dt.strftime("%Y-%m-%d").tolist(), s_.player_id.tolist(), s_.cls.tolist(),
+                 s_.made.tolist(), s_.fold.tolist(), s_.p_blind.tolist(), s_.p_lf.tolist(), s_.p_sa.tolist()):
+        buf.write(f"{r[0]},{r[1]},{r[2]},{r[3]},{r[4]},{'t' if r[5] else 'f'},{r[6]},{r[7]!r},{r[8]!r},{r[9]!r}\n")
+    buf.seek(0)
+    cur.copy_expert("COPY shot_value_shots FROM STDIN WITH (FORMAT CSV)", buf)
+    st = states.sort_values(["season", "player_id", "cls"])
+    psycopg2.extras.execute_values(cur, "INSERT INTO shot_value_states VALUES %s",
+                                   [(int(r.season), int(r.player_id), r.cls, float(r.pre_mean), float(r.pre_sd), float(r.post_mean),
+                                     float(r.post_sd), int(r.att), int(r.made)) for r in st.itertuples(index=False)], page_size=5000)
+    cols = ADDED_COLS
+    tt = table.sort_values(["season", "player_id"])
+    psycopg2.extras.execute_values(cur, f"INSERT INTO shot_value_added ({', '.join(cols)}) VALUES %s",
+                                   [tuple(clean(r[c]) if c not in ADDED_INTS else (None if pd.isna(r[c]) else int(r[c])) for c in cols)
+                                    for _, r in tt.iterrows()], page_size=2000)
+    vv = val.reindex(columns=VAL_COLS)
+    psycopg2.extras.execute_values(cur, f"INSERT INTO shot_value_validation ({', '.join(VAL_COLS)}) VALUES %s",
+                                   [tuple(clean(v) for v in r) for r in vv.itertuples(index=False)])
+    conn.commit()
+    return n
+
+
+def main_season(season):
+    """The --season mode (docstring)."""
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    cur.execute("SELECT to_regclass('shot_xfg'), to_regclass('player_game_lines'), to_regclass('player_first_season'), "
+                "to_regclass('league_season_averages'), to_regclass('game_scores')")
+    assert all(cur.fetchone()), "needs shot_xfg, player_game_lines, player_first_season, league_season_averages and game_scores"
+    SM.require_tables(cur, TABLES, season)
+    pars, dvar = stored_fit(conn)
+    log(f"--season {season}: hyperparameters from shot_value_fit (" + ", ".join(f"{c} phi {pars[c][0]['phi']:.3f} q {pars[c][0]['q']:.4f}" for c in V.CLASSES) + ")")
+    log("loading shots")
+    df = S.add_features(S.load_shots(conn))
+    if int(df.season.max()) < season:
+        print(f"--season {season}: no regular-season chart shot of {label(season)} on file yet; nothing to price")
+        conn.close()
+        return
+    fold, n_paper, n_new = season_folds(df)
+    check_folds(conn, df, fold)
+    log(f"folds: the paper's shuffle over {n_paper:,} players seen up to {label(FIT_THROUGH)}, {n_new} newer players in turn")
+    cls = V.shot_class(df.zone.to_numpy(), df.is3.to_numpy())
+    dates = load_dates(conn)
+    ft_hist_rows, ft_games = load_ft(conn)
+    lg = league_ft(conn)
+    for s in range(V.WINDOW_FROM, season):
+        assert s in lg, f"league_season_averages has no FT% for {label(s)}"
+    seen = pd.concat([df[df.season >= V.WINDOW_FROM].groupby("player_id").season.min(), ft_hist_rows.groupby("player_id").season.min(),
+                      ft_games.groupby("player_id").season.min()]).groupby(level=0).min()
+    players = sorted(set(df.player_id[df.season >= V.WINDOW_FROM]) | set(ft_hist_rows.player_id) | set(ft_games.player_id))
+    pmap = {p: i for i, p in enumerate(players)}
+    debut = debuts(conn, players, seen)
+    pidx = np.full(len(df), -1, np.int64)
+    w = df.season.to_numpy() >= V.WINDOW_FROM
+    pidx[w] = df.player_id[w].map(pmap).to_numpy()
+    log(f"location models for {label(season)}, look-ahead free (5 fits on {label(int(df.season.min()))} to {label(season - 1)})")
+    p_by_season, iters = location_models(df, fold, priced=(season,))
+    t = time.time()
+    shots, ft, states = price_season(season, df, pidx, cls, p_by_season[season], dates, ft_hist_rows, ft_games, pmap, lg, debut, pars, dvar)
+    shots["season"] = season
+    states["season"] = season
+    active = set(shots.p) | set(ft.p)
+    states = states[states.p.isin(active)].reset_index(drop=True)
+    states["player_id"] = np.asarray(players)[states.p.to_numpy()]
+    y = shots.made.to_numpy(float)
+    msg = ", ".join(f"{k[2:]} {ll_vec(shots[k].to_numpy(), y).mean():.5f}" for k in ("p_blind", "p_lf", "p_pre", "p_sa"))
+    log(f"  {label(season)}: {len(shots):,} shots, log loss {msg}; FT {int(ft.fta.sum()):,} attempts ({time.time() - t:.0f}s)")
+
+    log("validation")
+    xfg = pd.read_sql_query("SELECT shot_id, p_make FROM shot_xfg", conn).set_index("shot_id").p_make
+    gid = pd.read_sql_query("SELECT id, game_id FROM player_shots WHERE game_id LIKE '002%%' AND season = %s", conn,
+                            params=(label(season),)).set_index("id").game_id
+    shots["game_key"] = shots.id.map(gid).to_numpy()
+    rng = np.random.default_rng(SEED)
+    before = [s for s in range(V.PRICED[0], season)]
+    replay_validation_draws(conn, rng, before, log)
+    val = validation_rows(shots, ft, xfg, rng, groups=[(label(season), (season,))])
+    table = player_table(conn, shots, ft, states, players, lg)
+    prev = stored_player_table(conn, season - 1)
+    if len(prev):
+        val = pd.concat([val, yty_rows(pd.concat([prev, table[prev.columns]], ignore_index=True), pairs=[(season - 1, season)])], ignore_index=True)
+    print(val[val.cls != "yty"].pivot_table(index=["scope", "cls"], columns="price", values="log_loss").round(5).to_string())
+    if (val.cls == "yty").any():
+        print(val[val.cls == "yty"][["scope", "price", "n", "corr"]].to_string(index=False))
+    n_del = write_season(conn, season, shots, states, table, val)
+    log(f"--season {season}: replaced {n_del:,} rows with {len(shots):,} priced shots, {len(states):,} states, {len(table):,} player rows "
+        f"and {len(val)} validation rows; shot_value_fit, the pooled validation scopes and every other season untouched")
+    sniff(table)
+    conn.close()
+    log("done")
+
+
 def main():
     import argparse
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--cache", help="development only: keep the 30 fits' prices in this directory and reuse them")
+    ap.add_argument("--season", type=int, help="price one season only, nothing refitted on it (round 9 step 4; the docstring)")
     args = ap.parse_args()
+    if args.season is not None:
+        main_season(args.season)
+        return
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
     cur.execute("SELECT to_regclass('shot_xfg'), to_regclass('player_game_lines'), to_regclass('player_first_season'), "

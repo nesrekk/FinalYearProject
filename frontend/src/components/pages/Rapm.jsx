@@ -698,14 +698,24 @@ export default function Rapm() {
                 <p className="rx-verdict">
                     <strong>{windowLabel}: {fit.players} players in {int(fit.stints)} tracked stints of {int(fit.games)} games; {data.noise.qualified}
                         {data.team ? ` league-wide` : ''} clear {int(floor)} possessions.</strong>{' '}
-                    Shrinkage λ = {fit.lambda.toLocaleString()}{isPrior && fit.prior_scale != null ? ` and prior scale ${fit.prior_scale}` : ''} was chosen by
+                    {String(fit.lambda_rule ?? '').startsWith('frozen')
+                        ? <>Shrinkage λ = {fit.lambda.toLocaleString()}{isPrior && fit.prior_scale != null ? ` and prior scale ${fit.prior_scale}` : ''} are {fit.live?.frozen_from ?? 'the last paper season'}&apos;s
+                            choices held fixed: nothing is tuned on a live season&apos;s stints (held-out stint error at that choice {num(fit.cv_rmse, 2)} against {num(fit.cv_rmse_zero, 2)} with
+                            everyone set to average; the season&apos;s own cross-validation minimum would sit at λ {Number(fit.cv_best_lambda).toLocaleString()}). </>
+                        : <>Shrinkage λ = {fit.lambda.toLocaleString()}{isPrior && fit.prior_scale != null ? ` and prior scale ${fit.prior_scale}` : ''} was chosen by
                     {' '}{fit.cv_folds}-fold cross-validation grouped by game: held-out stint error {num(fit.cv_rmse, 2)} against {num(fit.cv_rmse_zero, 2)} with
-                    everyone set to average, a small gain because single stints are mostly noise. The home side scores{' '}
+                    everyone set to average, a small gain because single stints are mostly noise. </>}The home side scores{' '}
                     {signed(fit.home_edge_per_100)} per 100 possessions more than an identical away side.{' '}
                     {data.noise.ci_excludes_zero} of the {data.noise.qualified} qualified intervals clear zero (about {data.noise.expected_by_chance} would by chance).
                     {data.noise.corr_with_bpm != null && <> Correlation with BPM among them: r = {num(data.noise.corr_with_bpm, 2)}, positive and well under 1.</>}
                     {isPrior && fit.players_with_prior != null && <> {fit.players_with_prior} of {fit.players} players had a BPM to shrink toward; the rest shrink toward zero.</>}
                 </p>
+                )}
+
+                {fit.live && (
+                    <p className="rp-panel-note rp-live-note" role="status">
+                        <strong>Season to date{fit.live.through ? `, through ${fit.live.through}` : ''}.</strong> {fit.live.note}
+                    </p>
                 )}
 
                 <div className="rp-grid">

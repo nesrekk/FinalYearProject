@@ -16,6 +16,14 @@ fits the model and backtests the simulator). Live views use the all-season
 coefficients from `pregame_model_fit`; the backtest used coefficients fitted
 without the season being tested (they differ in the third decimal). Every
 read is cached per process: restart impact_api after rerunning the script.
+
+The live season (round 9 step 4): a season with no postseason facts yet is
+"live": its played games come from game_scores as for any season, its
+remaining games from ESPN's schedule as the Forecast Ledger last read it
+(api/season_sim_live.py), the default morning is today (US Eastern), and
+the response says so (`info.live`, `info.live_note`). This is the app's
+current model recomputed from today's results, separate from the Forecast
+Ledger's locked odds (the forward test, frozen code); the page names both.
 """
 
 from datetime import date
@@ -27,6 +35,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException
 
 import season_sim_lib as L
+import season_sim_live as SL
 from impact_core import get_db
 from source_badge import make_source
 
@@ -85,8 +94,27 @@ def _stored():
         fits = _rows(cur, "SELECT * FROM pregame_model_fit ORDER BY loso_log_loss")
         facts = _rows(cur, "SELECT * FROM season_postseason")
     chosen = next(f for f in fits if f["chosen"])
+    with_facts = {f["season"] for f in facts}        # a season is live while it has no postseason facts
+    for sr in seasons:
+        sr["live"] = sr["season"] not in with_facts
+        if sr["live"]:
+            today = SL.clamp(SL.today_eastern(), sr["first_date"], sr["last_date"])
+            sr["today_date"] = today
     return {"seasons": seasons, "params": params, "fits": fits, "chosen": chosen,
             "facts": {(f["season"], f["team_abbreviation"]): f for f in facts}}
+
+
+@lru_cache(maxsize=4)
+def _schedule(season):
+    """The live season's schedule (every counting game, played or not) from the ledger's nightly ESPN read."""
+    with get_db() as conn:
+        return SL.schedule(conn.cursor(), season)
+
+
+LIVE_NOTE = ("Live season: the app's current model, recomputed from the results so far (ratings = last season's final SRS "
+             "as the prior, updated by this season's games); the games still to play are ESPN's schedule as the Forecast "
+             "Ledger last read it. This is not the Forecast Ledger: the ledger's odds were locked before opening night "
+             "and are scored with frozen code (the forward test); these can change as the code does.")
 
 
 @lru_cache(maxsize=8)
@@ -138,11 +166,19 @@ def _simulate(season, as_of):
     st = _stored()
     info = next(s for s in st["seasons"] if s["season"] == season)
     sg, prev = _games(season)
-    teams = sorted(sg.team_abbreviation.unique())
+    live = bool(info.get("live"))
+    sched = _schedule(season) if live else None
+    teams = sorted(set(sg.team_abbreviation.unique()) | (set(sched.home) | set(sched.away) if live and len(sched) else set()))
     prior = L.season_prior(prev)
     params = _params()
     played = sg[sg.game_date < as_of]
-    left = L.home_rows(sg[sg.game_date >= as_of])
+    if live:
+        if sched.empty:
+            raise HTTPException(status_code=503, detail=f"No schedule on file for {season} (ledger_results / ledger_schedule): "
+                                                        "run scripts/ledger_update.py.")
+        left = SL.remaining_home_rows(sched, as_of)
+    else:
+        left = L.home_rows(sg[sg.game_date >= as_of])
     rat = L.ratings_as_of(played, teams, prior, params)
     standings = L.Standings(teams, played)
     pos_now = L.current_positions(standings, season, np.random.default_rng(L.sim_seed(season, as_of, "now")))
@@ -192,7 +228,12 @@ def _simulate(season, as_of):
                         "seed": seed, "prior_games_worth": rat["sigma"] ** 2 / params["tau2"],
                         "ratings_from_srs": rat["n_games"] >= L.MIN_GAMES_FOR_SRS,
                         "first_date": info["first_date"], "last_date": info["last_date"],
-                        "halfway_date": info["halfway_date"], "sixty_date": info["sixty_date"], "note": info["note"]}),
+                        "halfway_date": info["halfway_date"], "sixty_date": info["sixty_date"], "note": info["note"],
+                        "live": live, "today_date": info.get("today_date"),
+                        "played_through": sg.game_date.max() if live and len(sg) else None,
+                        "schedule_source": sched.source.iloc[0] if live and len(sched) else None,
+                        "scheduled_games": int(len(sched)) if live else None,
+                        "live_note": LIVE_NOTE if live else None}),
         "conferences": out,
     }
 
@@ -200,7 +241,7 @@ def _simulate(season, as_of):
 @router.get("/season-sim")
 def season_sim(season: Optional[int] = None, as_of: Optional[date] = None):
     season, info = _season_info(season)
-    as_of = as_of or info["halfway_date"]
+    as_of = as_of or (info["today_date"] if info.get("live") else info["halfway_date"])
     if as_of < info["first_date"] or as_of > info["last_date"]:
         raise HTTPException(status_code=400, detail=(
             f"Pick a date from {info['first_date'].isoformat()} (opening day: nothing played yet) to "

@@ -108,14 +108,36 @@ paper_eval.py then refuses).
 
 Usage (Python: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3):
     cd scripts && OMP_NUM_THREADS=4 python3 build_rating_tracker.py [--quick]
+    cd scripts && python3 build_rating_tracker.py --season 2027      # the live season only (round 9 step 4)
 Rerun after build_lineup_stints.py, load_bref_bpm_vorp.py or build_rapm.py
 (the validation compares against player_rapm); then paper_eval.py --only
 impact, paper_tests.py --only impact and rebuild_all.sh paper-inputs.
+
+--season N (round 9 step 4, 2026-10-07; scripts/season_mode.py): the filtered
+rating through today for season N, with nothing re-tuned. The five
+hyperparameters and sigma^2 are read from the stored rating_tracker_fit row
+(a --quick row is refused; the row itself is never written: it is the
+paper's, api/paper_freeze.py), the filter runs over every season up to N
+exactly as the full build runs it (about half a second a season), and only
+season N's rows are replaced: player_rating_tracker (both kinds; for the
+last season on file the smoother's estimate equals the filter's, so the
+'with hindsight' rows of N are its 'as of then' rows, and the earlier
+seasons' with-hindsight rows, which a full build would revise with N's
+games, stay as the paper's full build left them), rating_tracker_validation
+(held-out folds of N, N predicted from N-1's ratings, year to year) and the
+season's summary (players, rows, games, stints, possessions, intercept, home
+term, BPM measurements, qualified), which the full build keeps in the fit
+row's JSON and the --season mode writes as the row version 'tracker',
+season N of rapm_fits (the one per-season model table; lambda there is
+lambda_0, prior_scale is k, lambda_rule 'tracker:frozen'). rating_tracker_fit
+and rating_tracker_curve are never touched. The test proves `--season 2026`
+reproduces the stored 2025-26 rows byte for byte.
 """
 
 import argparse
 import json
 import time
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -124,7 +146,10 @@ import psycopg2.extras
 
 import build_rapm as R
 import rating_tracker_lib as T
+import season_mode as SM
 from db_config import DB_CONFIG
+
+warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
 VERSION = "tracker"
 KINDS = ("filtered", "smoothed")
@@ -149,11 +174,12 @@ def span(seasons):
 
 # ── Loading ──────────────────────────────────────────────────────────────────
 
-def load(conn):
+def load(conn, through=None):
+    """Every season's Design (up to `through`: the --season mode), BPM, names, seasons."""
     rows, n_stints, dropped = R.load_rows(conn)
     bpm = R.load_bpm(conn)
     names = R.load_names(conn)
-    seasons = sorted(int(s) for s in rows.season.unique())
+    seasons = sorted(int(s) for s in rows.season.unique() if through is None or int(s) <= through)
     designs = {s: R.Design(rows[rows.season == s]) for s in seasons}
     log(f"{n_stints} tracked stints -> {len(rows)} side-rows ({dropped} sides with no possession dropped); seasons {seasons[0]}-{seasons[-1]}")
     return designs, bpm, names, seasons
@@ -251,8 +277,10 @@ def write(conn, player_rows, fit_row, curve_rows, val_rows):
 
 # ── Checks ───────────────────────────────────────────────────────────────────
 
-def print_checks(conn, names):
+def print_checks(conn, names, season=None):
+    """The checks the README quotes; with `season` only that season's rows (the --season mode)."""
     cur = conn.cursor()
+    only = "" if season is None else f" AND t.season = {int(season)}"
     print("\nFit (rating_tracker_fit):")
     print(pd.read_sql_query("""SELECT estimated_on, lambda0, lambda_q, lambda_b, prior_scale, phi, tune_rmse, sigma2, newcomer_sd, drift_sd,
                                       bpm_sd, evaluations, converged, quick, players FROM rating_tracker_fit""", conn).to_string(index=False))
@@ -263,29 +291,30 @@ def print_checks(conn, names):
     print(pd.read_sql_query("SELECT lambda_q, next_rmse, neg2ll, chosen FROM rating_tracker_curve ORDER BY lambda_q", conn).to_string(index=False))
     for kind in KINDS:
         df = pd.read_sql_query(
-            """SELECT t.season, t.player_id, t.teams, t.poss, t.orapm, t.drapm, t.rapm, t.rapm_sd, t.carried, t.bpm,
+            f"""SELECT t.season, t.player_id, t.teams, t.poss, t.orapm, t.drapm, t.rapm, t.rapm_sd, t.carried, t.bpm,
                       p.rapm AS single, p.rapm_se AS single_se, q.rapm AS prior
                FROM player_rating_tracker t
                LEFT JOIN player_rapm p ON p.version = 'single' AND p.season = t.season AND p.player_id = t.player_id
                LEFT JOIN player_rapm q ON q.version = 'prior' AND q.season = t.season AND q.player_id = t.player_id
-               WHERE t.kind = %s AND t.qualified ORDER BY t.season, t.rapm DESC""", conn, params=(kind,))
+               WHERE t.kind = %s AND t.qualified{only} ORDER BY t.season, t.rapm DESC""", conn, params=(kind,))
         df["name"] = df.player_id.map(names)
         print(f"\n{kind}: top 8 per season (qualified, {R.QUALIFIED_POSS}+ possessions)")
+        if df.empty:
+            print(f"  (no qualified player: under {R.QUALIFIED_POSS} possessions each so far)")
         for season, g in df.groupby("season"):
             top = g.head(8)
             jok = g.reset_index(drop=True)
             jrank = jok.index[jok.player_id == 203999]
             jr = f"Jokić #{jrank[0] + 1} of {len(jok)}" if len(jrank) else "Jokić not qualified"
-            r_b = g[["rapm", "bpm"]].dropna().corr().iloc[0, 1]
-            r_s = g[["rapm", "single"]].dropna().corr().iloc[0, 1]
-            r_p = g[["rapm", "prior"]].dropna().corr().iloc[0, 1]
+            corr = lambda a, b: g[[a, b]].dropna().corr().iloc[0, 1] if g[[a, b]].dropna().shape[0] > 2 else float("nan")  # noqa: E731
+            r_b, r_s, r_p = corr("rapm", "bpm"), corr("rapm", "single"), corr("rapm", "prior")
             print(f"  {label(season)} ({jr}; r with BPM {r_b:.2f}, one-season {r_s:.2f}, BPM-prior {r_p:.2f}; sd {g.rapm.std():.2f}; "
                   f"mean sd {g.rapm_sd.mean():.2f} vs one-season se {g.single_se.mean():.2f}): "
                   + "; ".join(f"{x.name} {x.rapm:+.1f}±{x.rapm_sd:.1f}" for x in top.itertuples()))
     print("\nValidation (rating_tracker_validation):")
-    v = pd.read_sql_query("""SELECT test, season, model, fit_seasons, games, coverage, coverage_all10, scale_fit, stint_rmse,
+    v = pd.read_sql_query(f"""SELECT test, season, model, fit_seasons, games, coverage, coverage_all10, scale_fit, stint_rmse,
                                     game_rmse, game_corr, corr, players
-                             FROM rating_tracker_validation ORDER BY test, season, game_rmse NULLS LAST, corr DESC NULLS LAST, model""", conn)
+                             FROM rating_tracker_validation t WHERE TRUE{only} ORDER BY test, season, game_rmse NULLS LAST, corr DESC NULLS LAST, model""", conn)
     print(v.to_string(index=False))
     for t in ("player_rating_tracker", "rating_tracker_fit", "rating_tracker_curve", "rating_tracker_validation"):
         cur.execute(f"SELECT COUNT(*), pg_size_pretty(pg_total_relation_size('{t}')) FROM {t}")
@@ -354,6 +383,35 @@ def main():
     # 5. the filter over every season, and the smoother
     f = T.Filter(data, par, keep=True)
     ms, Ps = f.smooth()
+    player_rows, season_info = season_rows(f, ms, Ps, designs, data, bpm, par, sigma2, seasons)
+
+    # 6. validation
+    val_rows = []
+    for s in seasons:
+        val_rows += validation_rows(s, f, designs, data, bpm, stored_rapm, player_rows, seasons)
+    nx = {(r["season"], r["model"]): r["game_rmse"] for r in val_rows if r["test"] == "next_season"}
+    for s in seasons[1:]:
+        log(f"  next-season {label(s)}: " + ", ".join(f"{m} {nx[(s, m)]:.2f}" for m in ("rapm_tracker", "rapm_single", "rapm_prior", "rapm_multi", "bpm", "zero") if (s, m) in nx))
+
+    fit_row = {
+        "version": VERSION, "seasons_from": seasons[0], "seasons_to": seasons[-1], "estimated_on": span(tune), "criterion": criterion,
+        **{k: float(par[k]) for k in T.PARAMS}, "tune_rmse": float(tune_rmse), "tune_games": int(tune_games),
+        "sigma2": float(sigma2), "neg2ll": float(neg2ll), "nuisance_var": T.NUISANCE_VAR,
+        "newcomer_sd": round(float(np.sqrt(sigma2 / par["lambda0"])), 3), "drift_sd": round(float(np.sqrt(sigma2 / par["lambda_q"])), 3),
+        "bpm_sd": round(float(np.sqrt(sigma2 / par["lambda_b"])), 3),
+        "evaluations": int(info["evaluations"]), "converged": bool(info["starts"][info["best_start"]]["converged"]), "quick": bool(quick),
+        "starts": json.dumps(info["starts"]), "ml_estimate": json.dumps(ml_estimate), "loo_pairs": json.dumps(loo),
+        "ridge_check": json.dumps({"season": cs, "lambda": cl, "prior_scale": ck, "max_abs_diff": ridge_diff}),
+        "seasons": json.dumps(season_info), "players": data.P, "qualified_poss": R.QUALIFIED_POSS, "runtime_s": round(time.time() - T0, 1),
+    }
+    write(conn, player_rows, fit_row, curve_rows, val_rows)
+    log(f"wrote {len(player_rows)} player rows, {len(curve_rows)} curve points, {len(val_rows)} validation rows")
+    print_checks(conn, names)
+    conn.close()
+
+
+def season_rows(f, ms, Ps, designs, data, bpm, par, sigma2, seasons):
+    """The player rows (both kinds) and the per-season summary of every season from a filter run and its smoother."""
     sizes = {s: R.player_sizes(designs[s]) for s in seasons}
     P = data.P
     player_rows = []
@@ -395,68 +453,129 @@ def main():
                                "home_edge_per_100": round(2 * hm, 3), "n_bpm": int(len(data.meas_idx[s]) // 2), "qualified": int(n_q),
                                "newcomers": int(sum(1 for p in d.players if data.first[p] == s))}
         log(f"  {label(s)}: {d.P} players, {n_q} qualified, {season_info[str(s)]['newcomers']} newcomers, home edge {2 * hm:+.2f}/100")
+    return player_rows, season_info
 
-    # 6. validation
+
+def validation_rows(s, f, designs, data, bpm, stored_rapm, player_rows, seasons):
+    """Season s's validation rows (build_rapm's tests) from the filter and the stored RAPM versions."""
     val_rows = []
-    for s in seasons:
-        d = designs[s]
-        # held-out folds, the prior into the season fixed
-        pred = np.zeros(d.n)
-        for k in sorted(set(d.fold)):
-            test = d.fold == k
-            pred[test] = d.X[test] @ f.heldout_beta(s, k)
-        val_rows.append({"test": "held_out_games", "season": s, "model": "rapm_tracker", "fit_seasons": f"{label(s)} (other folds), earlier seasons",
-                         **R.score(d, np.ones(d.n, bool), pred)})
-        if s > seasons[0]:
-            prev = s - 1
-            o, de = f.ratings(prev)
-            models = {"rapm_tracker": (o, de, f"through {label(prev)}")}
-            for v in ("single", "prior", "multi"):
-                if (v, prev) in stored_rapm:
-                    fs = label(prev) if v != "multi" else f"{label(prev - R.WINDOW + 1)} to {label(prev)}"
-                    models[f"rapm_{v}"] = (*stored_rapm[(v, prev)], fs)
-            models["bpm"] = ({p: v[0] for (p, ss), v in bpm.items() if ss == prev}, {p: v[1] for (p, ss), v in bpm.items() if ss == prev}, label(prev))
-            models["zero"] = ({}, {}, label(prev))
-            for name, (mo, md, fs) in models.items():
-                val_rows.append(next_season_row(d, mo, md, name, s, fs))
-            # year-to-year among players qualified in both seasons
-            qa = {r["player_id"]: r for r in player_rows if r["kind"] == "filtered" and r["season"] == prev and r["qualified"]}
-            qb = {r["player_id"]: r for r in player_rows if r["kind"] == "filtered" and r["season"] == s and r["qualified"]}
-            both = sorted(set(qa) & set(qb))
-            sm = {(r["season"], r["player_id"]): r["rapm"] for r in player_rows if r["kind"] == "smoothed"}
-            series = {"rapm_tracker": [(qa[p]["rapm"], qb[p]["rapm"]) for p in both],
-                      "rapm_tracker_smoothed": [(sm[(prev, p)], sm[(s, p)]) for p in both],
-                      "bpm": [(bpm[(p, prev)][2], bpm[(p, s)][2]) for p in both if (p, prev) in bpm and (p, s) in bpm]}
-            for v in ("single", "prior"):
-                if (v, prev) in stored_rapm and (v, s) in stored_rapm:
-                    a_, b_ = stored_rapm[(v, prev)], stored_rapm[(v, s)]
-                    series[f"rapm_{v}"] = [(a_[0][p] + a_[1][p], b_[0][p] + b_[1][p]) for p in both if p in a_[0] and p in b_[0]]
-            for model, xy in series.items():
-                arr = np.array(xy, float)
-                if len(arr) < 20:
-                    continue
-                val_rows.append({"test": "year_to_year", "season": s, "model": model, "fit_seasons": f"{label(prev)} vs {label(s)}",
-                                 "players": int(len(arr)), "corr": round(float(np.corrcoef(arr[:, 0], arr[:, 1])[0, 1]), 4)})
-    nx = {(r["season"], r["model"]): r["game_rmse"] for r in val_rows if r["test"] == "next_season"}
-    for s in seasons[1:]:
-        log(f"  next-season {label(s)}: " + ", ".join(f"{m} {nx[(s, m)]:.2f}" for m in ("rapm_tracker", "rapm_single", "rapm_prior", "rapm_multi", "bpm", "zero") if (s, m) in nx))
+    d = designs[s]
+    # held-out folds, the prior into the season fixed
+    pred = np.zeros(d.n)
+    for k in sorted(set(d.fold)):
+        test = d.fold == k
+        pred[test] = d.X[test] @ f.heldout_beta(s, k)
+    val_rows.append({"test": "held_out_games", "season": s, "model": "rapm_tracker", "fit_seasons": f"{label(s)} (other folds), earlier seasons",
+                     **R.score(d, np.ones(d.n, bool), pred)})
+    if s > seasons[0]:
+        prev = s - 1
+        o, de = f.ratings(prev)
+        models = {"rapm_tracker": (o, de, f"through {label(prev)}")}
+        for v in ("single", "prior", "multi"):
+            if (v, prev) in stored_rapm:
+                fs = label(prev) if v != "multi" else f"{label(prev - R.WINDOW + 1)} to {label(prev)}"
+                models[f"rapm_{v}"] = (*stored_rapm[(v, prev)], fs)
+        models["bpm"] = ({p: v[0] for (p, ss), v in bpm.items() if ss == prev}, {p: v[1] for (p, ss), v in bpm.items() if ss == prev}, label(prev))
+        models["zero"] = ({}, {}, label(prev))
+        for name, (mo, md, fs) in models.items():
+            val_rows.append(next_season_row(d, mo, md, name, s, fs))
+        # year-to-year among players qualified in both seasons
+        qa = {r["player_id"]: r for r in player_rows if r["kind"] == "filtered" and r["season"] == prev and r["qualified"]}
+        qb = {r["player_id"]: r for r in player_rows if r["kind"] == "filtered" and r["season"] == s and r["qualified"]}
+        both = sorted(set(qa) & set(qb))
+        sm = {(r["season"], r["player_id"]): r["rapm"] for r in player_rows if r["kind"] == "smoothed"}
+        series = {"rapm_tracker": [(qa[p]["rapm"], qb[p]["rapm"]) for p in both],
+                  "rapm_tracker_smoothed": [(sm[(prev, p)], sm[(s, p)]) for p in both],
+                  "bpm": [(bpm[(p, prev)][2], bpm[(p, s)][2]) for p in both if (p, prev) in bpm and (p, s) in bpm]}
+        for v in ("single", "prior"):
+            if (v, prev) in stored_rapm and (v, s) in stored_rapm:
+                a_, b_ = stored_rapm[(v, prev)], stored_rapm[(v, s)]
+                series[f"rapm_{v}"] = [(a_[0][p] + a_[1][p], b_[0][p] + b_[1][p]) for p in both if p in a_[0] and p in b_[0]]
+        for model, xy in series.items():
+            arr = np.array(xy, float)
+            if len(arr) < 20:
+                continue
+            val_rows.append({"test": "year_to_year", "season": s, "model": model, "fit_seasons": f"{label(prev)} vs {label(s)}",
+                             "players": int(len(arr)), "corr": round(float(np.corrcoef(arr[:, 0], arr[:, 1])[0, 1]), 4)})
+    return val_rows
 
-    fit_row = {
-        "version": VERSION, "seasons_from": seasons[0], "seasons_to": seasons[-1], "estimated_on": span(tune), "criterion": criterion,
-        **{k: float(par[k]) for k in T.PARAMS}, "tune_rmse": float(tune_rmse), "tune_games": int(tune_games),
-        "sigma2": float(sigma2), "neg2ll": float(neg2ll), "nuisance_var": T.NUISANCE_VAR,
-        "newcomer_sd": round(float(np.sqrt(sigma2 / par["lambda0"])), 3), "drift_sd": round(float(np.sqrt(sigma2 / par["lambda_q"])), 3),
-        "bpm_sd": round(float(np.sqrt(sigma2 / par["lambda_b"])), 3),
-        "evaluations": int(info["evaluations"]), "converged": bool(info["starts"][info["best_start"]]["converged"]), "quick": bool(quick),
-        "starts": json.dumps(info["starts"]), "ml_estimate": json.dumps(ml_estimate), "loo_pairs": json.dumps(loo),
-        "ridge_check": json.dumps({"season": cs, "lambda": cl, "prior_scale": ck, "max_abs_diff": ridge_diff}),
-        "seasons": json.dumps(season_info), "players": data.P, "qualified_poss": R.QUALIFIED_POSS, "runtime_s": round(time.time() - T0, 1),
-    }
-    write(conn, player_rows, fit_row, curve_rows, val_rows)
-    log(f"wrote {len(player_rows)} player rows, {len(curve_rows)} curve points, {len(val_rows)} validation rows")
-    print_checks(conn, names)
+
+# ── The --season mode ────────────────────────────────────────────────────────
+
+def load_fit(conn):
+    """The stored hyperparameters and sigma^2 (rating_tracker_fit); a --quick row or a missing one stops the run."""
+    cur = conn.cursor()
+    cur.execute("SELECT to_regclass('rating_tracker_fit')")
+    if cur.fetchone()[0] is None:
+        raise SystemExit("--season: rating_tracker_fit does not exist; run the full build first")
+    cur.execute(f"SELECT {', '.join(T.PARAMS)}, sigma2, quick, seasons_from, seasons_to, estimated_on FROM rating_tracker_fit WHERE version = %s", (VERSION,))
+    row = cur.fetchone()
+    if row is None:
+        raise SystemExit("--season: no stored fit row; run the full build first")
+    par = {k: float(v) for k, v in zip(T.PARAMS, row[:len(T.PARAMS)])}
+    sigma2, quick, s_from, s_to, on = row[len(T.PARAMS):]
+    if quick:
+        raise SystemExit("--season: the stored fit row is a --quick one; run the full build first")
+    return par, float(sigma2), int(s_from), int(s_to), on
+
+
+def fit_summary_row(season, seasons, data, par, info):
+    """Season N's summary as a rapm_fits row (version 'tracker'): what the full build keeps in the fit row's JSON."""
+    return {"version": VERSION, "season": season, "seasons_from": seasons[0], "seasons_to": season,
+            "games": info["games"], "stints": info["stints"], "rows": info["rows"], "players": info["players"], "poss": info["poss"],
+            "lambda": par["lambda0"], "prior_scale": par["prior_scale"], "lambda_rule": "tracker:frozen", "cv_folds": R.FOLDS,
+            "cv_rmse": None, "cv_rmse_zero": None, "cv_best_lambda": None, "cv_best_scale": None, "cv_best_rmse": None,
+            "intercepts": json.dumps({str(season): info["intercept"]}), "home_coef": info["home_coef"],
+            "home_edge_per_100": info["home_edge_per_100"], "bootstraps": None, "seed": None, "qualified_poss": R.QUALIFIED_POSS,
+            "qualified": info["qualified"], "players_with_prior": info["n_bpm"]}
+
+
+def write_season(conn, season, player_rows, val_rows, fit_summary):
+    cur = conn.cursor()
+    SM.require_tables(cur, ["player_rating_tracker", "rating_tracker_validation", "rapm_fits"], season)
+    n = SM.delete_season(cur, "player_rating_tracker", season) + SM.delete_season(cur, "rating_tracker_validation", season)
+    n += SM.delete_season(cur, "rapm_fits", season, "season = %s AND version = 'tracker'")
+    psycopg2.extras.execute_values(cur, f"INSERT INTO player_rating_tracker ({', '.join(PLAYER_COLS)}) VALUES %s",
+                                   [tuple(R.clean(r.get(c)) for c in PLAYER_COLS) for r in player_rows], page_size=2000)
+    psycopg2.extras.execute_values(cur, f"INSERT INTO rating_tracker_validation ({', '.join(VAL_COLS)}) VALUES %s",
+                                   [tuple(R.clean(r.get(c)) for c in VAL_COLS) for r in val_rows])
+    psycopg2.extras.execute_values(cur, f"INSERT INTO rapm_fits ({', '.join(R.FIT_COLS)}) VALUES %s",
+                                   [tuple(R.clean(fit_summary.get(c)) for c in R.FIT_COLS)])
+    conn.commit()
+    return n
+
+
+def main_season(season):
+    conn = psycopg2.connect(**DB_CONFIG)
+    par, sigma2, s_from, s_to, on = load_fit(conn)
+    log(f"--season {season}: hyperparameters from the stored fit ({T.fmt(par)}; chosen on {on}, held fixed), sigma2 {sigma2:,.1f}")
+    designs, bpm, names, seasons = load(conn, through=season)
+    if season not in seasons:
+        raise SystemExit(f"--season {season}: no tracked stint of that season in lineup_stints")
+    if seasons[0] != s_from:
+        raise SystemExit(f"--season {season}: the stints start in {seasons[0]} but the stored fit ran from {s_from}; run the full build")
+    stored_rapm = load_player_rapm(conn)
+    data = T.TrackerData(designs, bpm, folds=True)
+    f = T.Filter(data, par, keep=True)
+    ms, Ps = f.smooth()
+    player_rows, season_info = season_rows(f, ms, Ps, designs, data, bpm, par, sigma2, seasons)
+    val_rows = validation_rows(season, f, designs, data, bpm, stored_rapm, player_rows, seasons)
+    nx = {r["model"]: r["game_rmse"] for r in val_rows if r["test"] == "next_season"}
+    if nx:
+        log(f"  next-season {label(season)}: " + ", ".join(f"{m} {nx[m]:.2f}" for m in ("rapm_tracker", "rapm_single", "rapm_prior", "rapm_multi", "bpm", "zero") if m in nx))
+    mine = [r for r in player_rows if r["season"] == season]
+    summary = fit_summary_row(season, seasons, data, par, season_info[str(season)])
+    n_del = write_season(conn, season, mine, val_rows, summary)
+    log(f"--season {season}: replaced {n_del} rows with {len(mine)} player rows ({len(mine) // 2} players, both kinds), "
+        f"{len(val_rows)} validation rows and the season's summary (rapm_fits, version 'tracker'); the fit row, the curve and every "
+        f"other season untouched")
+    print_checks(conn, names, season)
     conn.close()
 
 
 if __name__ == "__main__":
-    main()
+    _season = SM.parse_season()
+    if _season is not None:
+        main_season(_season)
+    else:
+        main()

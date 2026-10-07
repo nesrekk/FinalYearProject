@@ -47,10 +47,25 @@ Tables written (dropped and rebuilt):
 
 Usage:
     cd scripts && python3 build_luck_schedule.py
+    cd scripts && python3 build_luck_schedule.py --season 2027      # the live season only (round 9 step 4)
+
+--season N (round 9 step 4, 2026-10-07; scripts/season_mode.py): season N's
+team rows and season row only. The three expected-win curves are refitted
+on the team-seasons up to the paper's test season
+(api/paper_freeze.MAX_PAPER_SEASON, 2025-26), must reproduce the stored
+luck_model_fit to 1e-9, and the chosen one is applied to N's points so far
+(round 9 issue R9-009); luck_model_fit and luck_schedule_validation (pooled
+over the paper's seasons) are never touched. A live season's row says how
+many games are scheduled (ESPN's schedule as the Forecast Ledger last read
+it, api/season_sim_live.py; the full build counts team_game_fatigue's games,
+which for a live season would be only the games played), so `complete` is
+false until every one is played, and its halfway date is the schedule's.
+The test proves `--season 2026` reproduces the stored 2025-26 rows.
 """
 
 import sys
 import time
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -61,11 +76,23 @@ from scipy.optimize import minimize_scalar
 from scipy.stats import norm
 
 from db_config import DB_CONFIG
+
+warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 from stats_lib import wls_cluster
+import season_mode as SM
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 from luck_lib import (CLOSE_MARGINS, FRANCHISE, GAMES_SQL, as_of, expected_win_pct,  # noqa: E402
                       prepare, schedule_strength, srs_fit, team_table)
+import season_sim_live as SL  # noqa: E402
+from paper_freeze import MAX_PAPER_SEASON  # noqa: E402
+
+FIT_THROUGH = MAX_PAPER_SEASON      # the --season mode's curves come from the team-seasons up to this one
+TEAM_COLS = ["season", "team_abbreviation", "franchise", "games", "wins", "losses", "win_pct", "pts_for", "pts_against",
+             "mov", "exp_win_pct", "exp_wins", "luck", "luck_per82", "luck_rank", "close3_w", "close3_l", "close5_w",
+             "close5_l", "ot_w", "ot_l", "srs", "sos", "srs_rank"]
+SEASON_COLS = ["season", "games", "scheduled", "complete", "hca", "sigma", "close3_share", "close5_share", "ot_share",
+               "first_date", "last_date", "halfway_date"]
 
 KAGGLE = Path(__file__).resolve().parent.parent / "nba_data" / "kaggle_1947_present" / "Team Summaries.csv"
 BREF_ABBR = {"PHO": "PHX", "BRK": "BKN", "CHO": "CHA"}
@@ -105,6 +132,94 @@ def fit_curves(ts):
     return fits
 
 
+def season_tables(games):
+    """Per team-season (ratings, SOS, records) and per season (home court, game SD, close-game shares, dates)."""
+    parts, season_rows = [], []
+    for season, sg in games.groupby("season"):
+        ratings, hca, sigma, _ = srs_fit(sg)
+        tbl = team_table(sg)
+        tbl["srs"] = pd.Series(ratings)
+        tbl = tbl.join(schedule_strength(sg, ratings)[["sos"]])
+        tbl["season"] = season
+        parts.append(tbl.reset_index())
+        n_games = sg.game_id.nunique()
+        close = {m: float((sg.drop_duplicates("game_id").margin.abs() <= m).mean()) for m in CLOSE_MARGINS}
+        season_rows.append({"season": season, "games": n_games, "hca": hca, "sigma": sigma,
+                            "close3_share": close[3], "close5_share": close[5],
+                            "ot_share": float((sg.drop_duplicates("game_id").periods > 4).mean()),
+                            "first_date": sg.game_date.min(), "last_date": sg.game_date.max()})
+    ts = pd.concat(parts, ignore_index=True)
+    ts["win_pct"] = ts.wins / ts.games
+    return ts, season_rows
+
+
+def luck_columns(ts, best):
+    """Expected wins, luck and the ranks (within season) from the chosen curve, in place."""
+    ts["exp_win_pct"] = expected_win_pct(best.method, best.param, ts.pts_for, ts.pts_against, ts.games)
+    ts["exp_wins"] = ts.exp_win_pct * ts.games
+    ts["luck"] = ts.wins - ts.exp_wins
+    ts["luck_per82"] = ts.luck / ts.games * FULL_SEASON
+    ts["srs_rank"] = ts.groupby("season").srs.rank(ascending=False, method="min").astype(int)
+    ts["luck_rank"] = ts.groupby("season").luck.rank(ascending=False, method="min").astype(int)
+    ts["franchise"] = ts.team_abbreviation.map(lambda t: FRANCHISE.get(t, t))
+
+
+def halfway_date(sg):
+    """The date of the season's middle game (the full build's mid-season cutoff)."""
+    per_game = sg.drop_duplicates("game_id").sort_values("game_date")
+    return per_game.game_date.iloc[len(per_game) // 2]
+
+
+def main_season(season):
+    """The --season mode (docstring)."""
+    t0 = time.time()
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    SM.require_tables(cur, ["team_luck_schedule", "luck_schedule_seasons", "luck_model_fit"], season)
+    games = prepare(pd.read_sql(GAMES_SQL.format(where=f"WHERE season <= {int(max(FIT_THROUGH, season))}"), conn))
+    sg = games[games.season == season]
+    if sg.empty:
+        print(f"--season {season}: no game of that season in game_scores yet; nothing to build")
+        return
+    ts, season_rows = season_tables(games)
+    fits = fit_curves(ts[ts.season <= FIT_THROUGH].reset_index(drop=True))
+    stored = pd.read_sql("SELECT method, param, loso_rmse_wins, loso_mae_wins, r2, n, chosen FROM luck_model_fit", conn).set_index("method")
+    for r in fits.itertuples():
+        st = stored.loc[r.method]
+        if any(abs(float(getattr(r, k)) - float(st[k])) > 1e-9 for k in ("param", "loso_rmse_wins", "loso_mae_wins", "r2")) \
+                or int(r.n) != int(st.n) or bool(r.chosen) != bool(st.chosen):
+            raise SystemExit(f"--season {season}: the {r.method} curve fitted on seasons <= {FIT_THROUGH} doesn't reproduce the stored "
+                             f"luck_model_fit; run the full build")
+    best = fits[fits.chosen].iloc[0]
+    print(f"--season {season}: {sg.game_id.nunique():,} games played; curves from the {int(best.n)} team-seasons <= {FIT_THROUGH} reproduce "
+          f"luck_model_fit ({best.method}, {best.param:.4f})")
+    luck_columns(ts, best)
+    mine = ts[ts.season == season].reset_index(drop=True)
+    srow = next(r for r in season_rows if r["season"] == season)
+    cur.execute("SELECT COUNT(DISTINCT game_id) FROM team_game_fatigue WHERE season = %s", (season,))
+    played_sched = int(cur.fetchone()[0])
+    if season > FIT_THROUGH:
+        sched = SL.schedule(cur, season)
+        srow["scheduled"] = len(sched) if not sched.empty else played_sched
+        srow["halfway_date"] = SL.checkpoint_dates(sched)["halfway"] if not sched.empty else halfway_date(sg)
+    else:
+        srow["scheduled"] = played_sched
+        srow["halfway_date"] = halfway_date(sg)
+    srow["complete"] = srow["games"] == srow["scheduled"]
+    n = SM.delete_season(cur, "team_luck_schedule", season) + SM.delete_season(cur, "luck_schedule_seasons", season)
+    execute_values(cur, f"INSERT INTO team_luck_schedule ({', '.join(TEAM_COLS)}) VALUES %s",
+                   [tuple(v.item() if hasattr(v, "item") else v for v in row) for row in mine[TEAM_COLS].itertuples(index=False, name=None)])
+    execute_values(cur, f"INSERT INTO luck_schedule_seasons ({', '.join(SEASON_COLS)}) VALUES %s",
+                   [tuple(v.item() if hasattr(v, "item") else v for v in (srow[c] for c in SEASON_COLS))])
+    conn.commit()
+    top = mine.nsmallest(3, "srs_rank")
+    print("  " + ", ".join(f"{r.team_abbreviation} {r.wins}-{r.losses} SRS {r.srs:+.2f} luck {r.luck:+.1f}" for r in top.itertuples()))
+    print(f"--season {season}: replaced {n} rows with {len(mine)} team rows and 1 season row ({srow['games']} of {srow['scheduled']} games, "
+          f"{'complete' if srow['complete'] else 'in progress'}); luck_model_fit, luck_schedule_validation and every other season untouched "
+          f"({time.time() - t0:.0f}s)")
+    conn.close()
+
+
 def corr_ci(x, y):
     x, y = np.asarray(x, float), np.asarray(y, float)
     n = len(x)
@@ -121,36 +236,15 @@ def main():
           f"{games.season.min()}-{games.season.max()}")
 
     # --- per season: ratings, home court, records ---------------------------
-    parts, season_rows = [], []
-    fatigue = pd.read_sql("SELECT season, COUNT(DISTINCT game_id) AS n FROM team_game_fatigue GROUP BY 1", conn)
-    for season, sg in games.groupby("season"):
-        ratings, hca, sigma, _ = srs_fit(sg)
-        tbl = team_table(sg)
-        tbl["srs"] = pd.Series(ratings)
-        tbl = tbl.join(schedule_strength(sg, ratings)[["sos"]])
-        tbl["season"] = season
-        parts.append(tbl.reset_index())
-        n_games = sg.game_id.nunique()
-        close = {m: float((sg.drop_duplicates("game_id").margin.abs() <= m).mean()) for m in CLOSE_MARGINS}
-        season_rows.append({"season": season, "games": n_games, "hca": hca, "sigma": sigma,
-                            "close3_share": close[3], "close5_share": close[5],
-                            "ot_share": float((sg.drop_duplicates("game_id").periods > 4).mean()),
-                            "first_date": sg.game_date.min(), "last_date": sg.game_date.max()})
-    ts = pd.concat(parts, ignore_index=True)
-    ts["win_pct"] = ts.wins / ts.games
+    ts, season_rows = season_tables(games)
 
     # --- expected wins ------------------------------------------------------
     fits = fit_curves(ts)
     print(fits.to_string(index=False))
     best = fits[fits.chosen].iloc[0]
-    ts["exp_win_pct"] = expected_win_pct(best.method, best.param, ts.pts_for, ts.pts_against, ts.games)
-    ts["exp_wins"] = ts.exp_win_pct * ts.games
-    ts["luck"] = ts.wins - ts.exp_wins
-    ts["luck_per82"] = ts.luck / ts.games * FULL_SEASON
-    ts["srs_rank"] = ts.groupby("season").srs.rank(ascending=False, method="min").astype(int)
-    ts["luck_rank"] = ts.groupby("season").luck.rank(ascending=False, method="min").astype(int)
-    ts["franchise"] = ts.team_abbreviation.map(lambda t: FRANCHISE.get(t, t))
+    luck_columns(ts, best)
 
+    fatigue = pd.read_sql("SELECT season, COUNT(DISTINCT game_id) AS n FROM team_game_fatigue GROUP BY 1", conn)
     seasons = pd.DataFrame(season_rows)
     seasons = seasons.merge(fatigue.rename(columns={"n": "scheduled"}), on="season")
     seasons["complete"] = seasons.games == seasons.scheduled
@@ -256,9 +350,7 @@ def main():
 
     # --- write --------------------------------------------------------------
     cur = conn.cursor()
-    cols = ["season", "team_abbreviation", "franchise", "games", "wins", "losses", "win_pct", "pts_for", "pts_against",
-            "mov", "exp_win_pct", "exp_wins", "luck", "luck_per82", "luck_rank", "close3_w", "close3_l", "close5_w",
-            "close5_l", "ot_w", "ot_l", "srs", "sos", "srs_rank"]
+    cols = TEAM_COLS
     cur.execute("DROP TABLE IF EXISTS team_luck_schedule")
     cur.execute("""CREATE TABLE team_luck_schedule (
         season INTEGER, team_abbreviation TEXT, franchise TEXT, games INTEGER, wins INTEGER, losses INTEGER,
@@ -276,8 +368,7 @@ def main():
         season INTEGER PRIMARY KEY, games INTEGER, scheduled INTEGER, complete BOOLEAN, hca DOUBLE PRECISION,
         sigma DOUBLE PRECISION, close3_share DOUBLE PRECISION, close5_share DOUBLE PRECISION,
         ot_share DOUBLE PRECISION, first_date DATE, last_date DATE, halfway_date DATE)""")
-    scols = ["season", "games", "scheduled", "complete", "hca", "sigma", "close3_share", "close5_share", "ot_share",
-             "first_date", "last_date", "halfway_date"]
+    scols = SEASON_COLS
     execute_values(cur, f"INSERT INTO luck_schedule_seasons ({', '.join(scols)}) VALUES %s",
                    [tuple(v.item() if hasattr(v, "item") else v for v in row)
                     for row in seasons[scols].itertuples(index=False, name=None)])
@@ -302,4 +393,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    _season = SM.parse_season()
+    if _season is not None:
+        main_season(_season)
+    else:
+        main()

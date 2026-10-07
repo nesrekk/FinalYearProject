@@ -83,3 +83,5 @@
 @media (max-width: 640px) {
   .rp-ci { display: none; }
 }
+/* round 9 step 4: the live season's note (hyperparameters frozen, intervals wide) */
+.rp-live-note { border-left: 3px solid var(--brand); padding-left: var(--space-3); color: var(--text-2); }

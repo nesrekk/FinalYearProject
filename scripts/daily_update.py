@@ -19,6 +19,8 @@ Ledger's hour (docs/LEDGER_RUNBOOK.md; the ledger's own ledger_update.py is a se
              --refresh-shots (re-fetch every chart even if nothing is missing)  --force-shots (allow a large shot deletion)
              --no-rebuild (fetch only)  --rebuild (rebuild the season's tables even when nothing new was fetched)
              --rebuild-only (no fetch: just the season rebuild, e.g. after a build script changed)
+             --no-models (skip the season-to-date models after the rebuild)  --models (run them even when the rebuild
+             was skipped)  --models-only (no fetch, no rebuild: just the models)
 
 What a run does, in order (each step in its own transaction; a step that fails is logged and the rest still run):
   1. ESPN scoreboard, one request per US date from --from-date to today: which games are final, by season type
@@ -56,7 +58,13 @@ What a run does, in order (each step in its own transaction; a step that fails i
      to live_data/<season>/rebuild/<date>_<script>.log; the run row keeps every step's status and seconds. Only the
      regular season is rebuilt (never the preseason runs of the tests). The update restarts nothing itself: it prints
      "restart impact_api" (the API caches these tables per process).
- 10. One row in daily_update_runs (listed in paper_manifest.LIVE: outside the paper's digest) and one summary line.
+ 10. The season-to-date models (round 9 step 4), after a rebuild that ran clean (or --models): the eight model builds of
+     rebuild_all.sh's derived stage that take `--season N` (MODEL_STEPS, in its order: luck, the league zone mix, RAPM,
+     Shot Value, the Rating Tracker, the team zone mix, the scouting splits, the simulator and pre-game odds), the same
+     way as the rebuild (own process, own log, stop at the first failure; the run row's rebuild_steps lists them with
+     phase 'models'). Every one of them reads its pooled fit from the stored fit row and applies it to the season
+     (round 9 issue R9-009): nothing is tuned on the live season.
+ 11. One row in daily_update_runs (listed in paper_manifest.LIVE: outside the paper's digest) and one summary line.
 
 Idempotent: a second run on the same day writes nothing new (stored games are skipped, upserts repeat their values,
 the chart pairs every shot). Resumable: every answer is cached under live_data/<season>/ (gitignored; delete it to
@@ -125,6 +133,9 @@ STEPS = ("scoreboard", "nba_games", "game_scores", "postseason", "season_stats",
 # Round 9 step 3: the season-level builds the update runs for the live season after the fetch, in rebuild_all.sh
 # order, each as `python3 <script> --season N` (scripts/season_mode.py; the rebuild phase itself is still to be wired
 # in: the list is the order api/tests/test_season_rebuild.py proves against rebuild_all.sh).
+# Round 9 step 4: the season-to-date models, run after a clean rebuild, in rebuild_all.sh order (each takes --season N).
+MODEL_STEPS = ["build_luck_schedule.py", "build_league_zone_mix.py", "build_rapm.py", "build_shot_value.py",
+               "build_rating_tracker.py", "build_team_zone_mix.py", "build_scouting_reports.py", "build_season_sim.py"]
 REBUILD_STEPS = ["build_event_clock.py", "build_player_game_lines.py", "build_team_game_totals.py", "build_lineup_stints.py",
                  "build_player_game_onfloor.py", "build_player_on_off.py", "build_possessions.py", "build_situational_splits.py",
                  "build_rotations.py", "build_rim_deterrence.py", "build_assist_network.py", "build_play_finder.py",
@@ -666,9 +677,13 @@ class Run:
             log(f"   rebuild skipped: {why}")
             return {"ran": False, "why": why}
         log(f"   rebuilding season {self.season}'s tables ({why}): {len(REBUILD_STEPS)} builds, logs in {self.cache / 'rebuild'}")
+        return self.run_builds(REBUILD_STEPS, "rebuild", why)
+
+    def run_builds(self, scripts, phase, why):
+        """`python3 <script> --season N` for each script in order, own process and log, stopping at the first failure."""
         env = {**os.environ, "OMP_NUM_THREADS": os.environ.get("OMP_NUM_THREADS", "4")}   # PGOPTIONS inherited, like the fetch
         steps = []
-        for script in REBUILD_STEPS:
+        for script in scripts:
             path = self.cache / "rebuild" / f"{self.today}_{script[:-3]}.log"
             path.parent.mkdir(parents=True, exist_ok=True)
             t0 = time.time()
@@ -677,22 +692,53 @@ class Run:
                                    stdout=f, stderr=subprocess.STDOUT)
             secs = round(time.time() - t0, 1)
             ok = r.returncode == 0
-            steps.append({"script": script, "status": "ok" if ok else "failed", "seconds": secs})
+            steps.append({"script": script, "status": "ok" if ok else "failed", "seconds": secs, "phase": phase})
             log(f"   {script}: {'ok' if ok else f'FAILED (exit {r.returncode})'} ({secs:.0f}s)")
             if not ok:
                 tail = " ".join(open(path).read().strip().splitlines()[-3:])[-400:]
-                self.errors["rebuild"] = f"{script} exited {r.returncode} after {secs:.0f}s ({path}): {tail}"
-                steps += [{"script": s, "status": "not run", "seconds": 0.0} for s in REBUILD_STEPS[len(steps):]]
+                self.errors[phase] = f"{script} exited {r.returncode} after {secs:.0f}s ({path}): {tail}"
+                steps += [{"script": s, "status": "not run", "seconds": 0.0, "phase": phase} for s in scripts[len(steps):]]
                 break
         return {"ran": True, "why": why, "steps": steps, "seconds": round(sum(s["seconds"] for s in steps), 1),
                 "ok": sum(s["status"] == "ok" for s in steps)}
+
+    # ── 10. the season-to-date models ────────────────────────────────────────
+
+    def models_wanted(self):
+        """(run them?, why): --models / --models-only always, --no-models / --dry-run never, else after a rebuild that ran
+        clean (the models read the rebuilt tables)."""
+        a = self.args
+        if a.no_models:
+            return False, "--no-models"
+        if a.dry_run:
+            return False, "dry run"
+        if self.box_kind != "regular":
+            return False, "only the regular season"
+        if a.models or a.models_only:
+            return True, "--models"
+        if a.rebuild_only:
+            return False, "--rebuild-only (add --models to run them)"
+        rb = self.counts.get("rebuild", {})
+        if "rebuild" in self.errors:
+            return False, "the rebuild failed"
+        if not rb.get("ran"):
+            return False, f"no rebuild ({rb.get('why', 'skipped')})"
+        return True, "after the rebuild"
+
+    def step_models(self):
+        wanted, why = self.models_wanted()
+        if not wanted:
+            log(f"   models skipped: {why}")
+            return {"ran": False, "why": why}
+        log(f"   season-to-date models for {self.season} ({why}): {len(MODEL_STEPS)} builds, nothing tuned on the season")
+        return self.run_builds(MODEL_STEPS, "models", why)
 
     # ── 10. run log + summary ─────────────────────────────────────────────────
 
     def summary_line(self):
         c, e = self.counts, self.errors
         sb, pb, gs, ng, of, sh, ss = (c.get(k, {}) for k in ("scoreboard", "pbp", "game_scores", "nba_games", "officials", "shots", "season_stats"))
-        rb = c.get("rebuild", {})
+        rb, md = c.get("rebuild", {}), c.get("models", {})
         parts = [f"daily_update {self.today} ({self.mode}, {','.join(self.kinds)}):"]
         if sb:
             parts.append(f"{sb['dates']} dates {sb['from']}..{self.today} (complete through {sb['through']}), {sb['finals']} finals;")
@@ -712,6 +758,9 @@ class Run:
         if rb:
             parts.append(f"rebuild {rb['ok']} of {len(REBUILD_STEPS)} builds in {rb['seconds']:.0f}s;" if rb.get("ran")
                          else f"rebuild skipped ({rb['why']});")
+        if md:
+            parts.append(f"models {md['ok']} of {len(MODEL_STEPS)} in {md['seconds']:.0f}s;" if md.get("ran")
+                         else f"models skipped ({md['why']});")
         parts.append(f"{time.time() - self.t0:.0f}s")
         if e:
             parts.append("FAILED: " + "; ".join(f"{k} ({v})" for k, v in e.items()))
@@ -720,7 +769,9 @@ class Run:
     def write_run_log(self, status, summary):
         c = self.counts
         sb, pb, gs, ng, of, sh, ss = (c.get(k, {}) for k in ("scoreboard", "pbp", "game_scores", "nba_games", "officials", "shots", "season_stats"))
-        rb = c.get("rebuild", {})
+        rb, md = c.get("rebuild", {}), c.get("models", {})
+        steps = (rb.get("steps") or []) + (md.get("steps") or [])
+        secs = (rb.get("seconds") or 0) + (md.get("seconds") or 0)
         self.cur.execute("""INSERT INTO daily_update_runs (season, run_id, started_at, finished_at, today_et, mode, season_types,
             from_date, through_date, dates_checked, events, finals, pbp_games_new, pbp_events_new, pbp_pending, pbp_unmatched_events,
             pbp_unmatched_names, game_scores_rows, fatigue_rows, box_rows, officials_games, shots_inserted, shots_deleted, shot_kinds,
@@ -734,7 +785,7 @@ class Run:
                           ng.get("box_rows"), of.get("games"), sh.get("inserted"), sh.get("deleted"),
                           ",".join(sh.get("fetched_kinds", [])) if sh else None, ss.get("players"),
                           ", ".join(self.errors) or None, status, summary, git_commit(),
-                          rb.get("seconds") if rb.get("ran") else None, json.dumps(rb.get("steps")) if rb.get("ran") else None))
+                          secs if steps else None, json.dumps(steps) if steps else None))
         self.conn.commit()
 
 
@@ -752,21 +803,26 @@ def main():
     ap.add_argument("--no-rebuild", action="store_true", help="fetch only: don't rebuild the season's derived tables")
     ap.add_argument("--rebuild", action="store_true", help="rebuild the season's derived tables even if nothing new was fetched")
     ap.add_argument("--rebuild-only", action="store_true", help="no fetch: only the season rebuild")
+    ap.add_argument("--no-models", action="store_true", help="skip the season-to-date models after the rebuild")
+    ap.add_argument("--models", action="store_true", help="run the season-to-date models even when the rebuild was skipped")
+    ap.add_argument("--models-only", action="store_true", help="no fetch, no rebuild: only the season-to-date models")
     args = ap.parse_args()
     run = Run(args)
-    if args.rebuild_only:
-        run.mode = "rebuild"
+    if args.rebuild_only or args.models_only:
+        run.mode = "rebuild" if args.rebuild_only else "models"
     log(f"run {run.run_id}: season {run.season} {run.kinds}, today {run.today} ({run.mode}), cache {run.cache}")
     run.cur.execute(RUN_LOG_DDL)
     run.cur.execute(RUN_LOG_ALTER)
     if not args.dry_run:
         run.conn.commit()
-    for name in STEPS if not args.rebuild_only else ():
+    for name in STEPS if not (args.rebuild_only or args.models_only) else ():
         run.step(name, getattr(run, f"step_{name}"))
         if name == "scoreboard" and name in run.errors:
             break
-    if args.rebuild_only or "scoreboard" not in run.errors:
+    if args.rebuild_only or (not args.models_only and "scoreboard" not in run.errors):
         run.step("rebuild", run.step_rebuild)
+    if args.models_only or "scoreboard" not in run.errors:
+        run.step("models", run.step_models)
     status = "ok" if not run.errors else "failed"
     summary = run.summary_line()
     if args.dry_run:
@@ -776,8 +832,8 @@ def main():
         run.write_run_log(status, summary)
     run.conn.close()
     print(summary, flush=True)
-    if run.counts.get("rebuild", {}).get("ran"):
-        print("restart impact_api: it caches these tables per process", flush=True)
+    if run.counts.get("rebuild", {}).get("ran") or run.counts.get("models", {}).get("ran"):
+        print("restart impact_api (and mvp_api after the models): they cache these tables per process", flush=True)
     return 0 if status == "ok" else 1
 
 

@@ -99,3 +99,5 @@
 @media (max-width: 640px) {
   .ss-sd, .ss-range { display: block; margin-left: 0; }
 }
+/* round 9 step 4: the live season (the app's model, not the locked ledger) */
+.ss-note--live { border-left: 3px solid var(--brand); padding-left: var(--space-3); color: var(--text-2); font-size: 0.85rem; }

@@ -255,6 +255,14 @@ export default function Projections() {
                 )}
 
                 <h3 className="pj-h3">{seasonLabel(data.season)}: {info.label.toLowerCase()}, {data.players} players</h3>
+                {data.actual_summary && (
+                    <p className="pj-small pj-actual" role="status">
+                        <strong>Projected vs actual, through {data.actual_summary.through}:</strong> {data.actual_summary.players} of {data.players} players have
+                        played; median gap {fmtDiff(fmt, data.actual_summary.median_gap)} (actual minus projection), typical miss {fmtVal(fmt, data.actual_summary.median_abs_gap)},
+                        {' '}{Math.round((data.actual_summary.share_in_range ?? 0) * 100)}% inside their 80% range so far. The projections were made before the
+                        season and are never refit; early lines are noisy, so the share should settle toward 80% as the season fills in.
+                    </p>
+                )}
                 <p className="pj-small">
                     Sorted by projection. &ldquo;Own weight&rdquo; is the share of the projection that comes from the player&apos;s
                     own numbers (the rest is the league average); rows under {data.low_weight} are greyed: {lowCount} of{' '}
@@ -272,6 +280,7 @@ export default function Projections() {
                                 <th className="lb-num">Age</th>
                                 <th className="lb-num">{seasonLabel(data.latest_season)}</th>
                                 <th className="lb-num lb-stat">{seasonLabel(data.season)}</th>
+                                {data.actual_summary && <th className="lb-num" title={`${seasonLabel(data.season)} so far, through ${data.actual_summary.through}; the gap is actual minus projection`}>So far (gap)</th>}
                                 <th className="lb-num">80% range</th>
                                 <th className="lb-num">Change</th>
                                 <th className="lb-num">Age step</th>
@@ -292,6 +301,12 @@ export default function Projections() {
                                         {r.last_season !== data.latest_season && <span className="pj-range"> ({seasonLabel(r.last_season)})</span>}
                                     </td>
                                     <td className="lb-num lb-stat pj-proj">{fmtVal(fmt, r.projection)}</td>
+                                    {data.actual_summary && (
+                                        <td className={`lb-num ${r.in_range === false ? 'pj-outside' : ''}`}
+                                            title={r.actual == null ? 'No games this season yet' : `${r.actual_sample != null ? Math.round(r.actual_sample).toLocaleString() : '?'} ${info.sample_label} so far${r.in_range === false ? '; outside the 80% range' : ''}`}>
+                                            {r.actual == null ? '—' : <>{fmtVal(fmt, r.actual)} <span className="pj-range">({fmtDiff(fmt, r.gap)})</span></>}
+                                        </td>
+                                    )}
                                     <td className="lb-num"><span className="pj-range">{fmtVal(fmt, r.lo)} to {fmtVal(fmt, r.hi)}</span></td>
                                     <td className="lb-num">{fmtDiff(fmt, r.change)}</td>
                                     <td className="lb-num">{r.age_known ? fmtDiff(fmt, r.age_adjustment) : '—'}</td>

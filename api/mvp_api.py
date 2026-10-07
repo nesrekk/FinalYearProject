@@ -763,6 +763,52 @@ def get_recent_win_streak(cursor, award: str, player_id: int, season: int) -> in
     return streak
 
 
+def season_progress(cursor, season):
+    """How far a season is: in_season (its regular season isn't complete: luck_schedule_seasons' `complete`, else every
+    season past the paper's test season), the most games any player has played, the last game date. The award models
+    were trained on full-season lines; in a live season they read the season-to-date line (per game) as it stands, with
+    the games floor of the candidate pools scaled to the games played so far (round 9 step 4)."""
+    cursor.execute("SELECT to_regclass('luck_schedule_seasons')")
+    complete = None
+    if cursor.fetchone()[0] is not None:
+        cursor.execute("SELECT complete FROM luck_schedule_seasons WHERE season = %s", (season,))
+        r = cursor.fetchone()
+        complete = None if r is None else bool(r[0])
+    cursor.execute("SELECT COALESCE(MAX(gp), 0) FROM player_season_stats WHERE season = %s", (season,))
+    max_gp = int(cursor.fetchone()[0] or 0)
+    through = None
+    cursor.execute("SELECT to_regclass('game_scores')")
+    if cursor.fetchone()[0] is not None:
+        cursor.execute("SELECT MAX(game_date) FROM game_scores WHERE season = %s", (season,))
+        d = cursor.fetchone()[0]
+        through = d.isoformat() if d else None
+    if complete is None:
+        from paper_freeze import MAX_PAPER_SEASON
+        in_season = season > MAX_PAPER_SEASON
+    else:
+        in_season = not complete
+    return {"in_season": bool(in_season), "games_played_max": max_gp, "through": through}
+
+
+def scaled_games_floor(progress, floor, full=82):
+    """The pool's games floor scaled to the season so far: ceil(floor x games played so far / 82), at least 1."""
+    if not progress["in_season"]:
+        return floor
+    return max(1, int(np.ceil(floor * progress["games_played_max"] / full)))
+
+
+def in_season_fields(progress, rule=None):
+    """Response fields every award route adds: in_season, through, games_played_max and the label the page shows."""
+    out = dict(progress)
+    out["in_season_note"] = (
+        (f"Season to date through {progress['through']}: " if progress["through"] else "Season to date: ")
+        + "the calibrated award models applied to each player's per-game line so far, not a forecast of the final "
+          "result; the models were trained on full seasons, so with few games played the chances are noisy"
+        + (f" ({rule})" if rule else "") + "."
+    ) if progress["in_season"] else None
+    return out
+
+
 @app.get("/mvp/predict/{season}")
 def predict_mvp(season: int, top_n: int = 15):
     """
@@ -809,6 +855,7 @@ def predict_mvp(season: int, top_n: int = 15):
             int(pid): get_recent_win_streak(cursor, "MVP", int(pid), season)
             for pid in df["player_id"].unique()
         }
+        progress = season_progress(cursor, season)
 
     # Drop rows with NULLs in features
     df = df.dropna(subset=FEATURES).reset_index(drop=True)
@@ -832,6 +879,7 @@ def predict_mvp(season: int, top_n: int = 15):
     return {
         "season": season,
         "total_players": count,
+        **in_season_fields(progress),
         "results": [
             {
                 "rank": i + 1,
@@ -865,13 +913,15 @@ def predict_dpoy(season: int, top_n: int = 15):
         cursor.execute("SELECT MIN(season), MAX(season) FROM player_season_stats;")
         season_min, season_max = cursor.fetchone()
 
+        progress = season_progress(cursor, season)
+        dpoy_games = scaled_games_floor(progress, DPOY_MIN_GAMES)
         cols = ", ".join(["player_id", "player_name", f"{season_team_sql(cursor)} AS team_abbreviation"] + DPOY_FEATURES + ["gp"])
         cursor.execute(
             f"""
             SELECT {cols} FROM player_season_stats
             WHERE season = %s AND min >= %s AND gp >= %s;
             """,
-            (season, DPOY_MIN_MINUTES, DPOY_MIN_GAMES),
+            (season, DPOY_MIN_MINUTES, dpoy_games),
         )
         rows = cursor.fetchall()
         win_streaks = {
@@ -888,7 +938,7 @@ def predict_dpoy(season: int, top_n: int = 15):
         raise HTTPException(
             status_code=404,
             detail=f"No DPOY-eligible players (min>={DPOY_MIN_MINUTES}, "
-                   f"gp>={DPOY_MIN_GAMES}) for season {season}. "
+                   f"gp>={dpoy_games}) for season {season}. "
                    f"Available range: {available_range}.",
         )
 
@@ -907,10 +957,13 @@ def predict_dpoy(season: int, top_n: int = 15):
     df["dpoy_chance"] = chances if chances is not None else np.nan
     df = df.sort_values("dpoy_probability", ascending=False).head(top_n)
 
+    dpoy_rule = f"min>={DPOY_MIN_MINUTES}, gp>={dpoy_games}" + (
+        f" ({DPOY_MIN_GAMES} scaled to the {progress['games_played_max']} games played so far)" if progress["in_season"] else "")
     return {
         "season": season,
         "candidate_pool_size": len(rows),
-        "candidate_pool_rule": f"min>={DPOY_MIN_MINUTES}, gp>={DPOY_MIN_GAMES}",
+        "candidate_pool_rule": dpoy_rule,
+        **in_season_fields(progress, dpoy_rule),
         "results": [
             {
                 "rank": i + 1,
@@ -956,15 +1009,19 @@ def predict_roy(season: int, top_n: int = 15):
 
         cols = ", ".join(season_team_sql(cursor, "p.") + " AS team_abbreviation" if c == "team_abbreviation" else f"p.{c}"
                          for c in ["player_id", "player_name", "team_abbreviation"] + ROY_FEATURES)
+        # Rookies = first NBA season per player_first_season; a live season's rookies aren't in it yet (it is rebuilt
+        # at the season's end, round 9 issue R9-003), so a player with no earlier season on file counts as one.
         cursor.execute(
             f"""
             SELECT {cols} FROM player_season_stats p
-            JOIN player_first_season f ON f.player_id = p.player_id
-            WHERE p.season = %s AND f.first_season = p.season;
+            LEFT JOIN player_first_season f ON f.player_id = p.player_id
+            WHERE p.season = %s AND COALESCE(f.first_season, (SELECT MIN(q.season) FROM player_season_stats q
+                                                              WHERE q.player_id = p.player_id)) = p.season;
             """,
             (season,),
         )
         rows = cursor.fetchall()
+        progress = season_progress(cursor, season)
 
     if not rows:
         available_range = (
@@ -993,10 +1050,13 @@ def predict_roy(season: int, top_n: int = 15):
     df["roy_chance"] = chances if chances is not None else np.nan
     df = df.sort_values("roy_probability", ascending=False).head(top_n)
 
+    roy_rule = ("rookie season only (first NBA season, per Basketball-Reference)" if not progress["in_season"]
+                else "rookie season only (no earlier season on file; Basketball-Reference's first-season check comes at the season's end)")
     return {
         "season": season,
         "candidate_pool_size": len(rows),
-        "candidate_pool_rule": "rookie season only (first NBA season, per Basketball-Reference)",
+        "candidate_pool_rule": roy_rule,
+        **in_season_fields(progress, roy_rule),
         "results": [
             {
                 "rank": i + 1,
@@ -1031,13 +1091,15 @@ def predict_all_nba(season: int):
         cursor.execute("SELECT MIN(season), MAX(season) FROM player_season_stats;")
         season_min, season_max = cursor.fetchone()
 
+        progress = season_progress(cursor, season)
+        allnba_games = scaled_games_floor(progress, ALLNBA_MIN_GAMES)
         cols = ", ".join(["player_id", "player_name", f"{season_team_sql(cursor)} AS team_abbreviation"] + ALLNBA_FEATURES)
         cursor.execute(
             f"""
             SELECT {cols} FROM player_season_stats
             WHERE season = %s AND min >= %s AND gp >= %s;
             """,
-            (season, ALLNBA_MIN_MINUTES, ALLNBA_MIN_GAMES),
+            (season, ALLNBA_MIN_MINUTES, allnba_games),
         )
         rows = cursor.fetchall()
 
@@ -1050,7 +1112,7 @@ def predict_all_nba(season: int):
         raise HTTPException(
             status_code=404,
             detail=f"No All-NBA-eligible players (min>={ALLNBA_MIN_MINUTES}, "
-                   f"gp>={ALLNBA_MIN_GAMES}) for season {season}. "
+                   f"gp>={allnba_games}) for season {season}. "
                    f"Available range: {available_range}.",
         )
 
@@ -1076,10 +1138,13 @@ def predict_all_nba(season: int):
             return "Second Team"
         return "Third Team"
 
+    allnba_rule = f"min>={ALLNBA_MIN_MINUTES}, gp>={allnba_games}" + (
+        f" ({ALLNBA_MIN_GAMES} scaled to the {progress['games_played_max']} games played so far)" if progress["in_season"] else "")
     return {
         "season": season,
         "candidate_pool_size": len(rows),
-        "candidate_pool_rule": f"min>={ALLNBA_MIN_MINUTES}, gp>={ALLNBA_MIN_GAMES}",
+        "candidate_pool_rule": allnba_rule,
+        **in_season_fields(progress, allnba_rule),
         "tier_method": "rank cutoff (1-5 First, 6-10 Second, 11-15 Third) — approximate, not modeled per tier",
         "results": [
             {

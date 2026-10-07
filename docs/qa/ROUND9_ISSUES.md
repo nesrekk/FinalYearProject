@@ -25,6 +25,11 @@ building the `--season` mode found: three builds draw every season's intervals f
 pooled constants, the sequential ids, the day's cost, the run log's two new columns). Open for later steps: R9-002, R9-009,
 R9-011, R9-012.
 
+**Round 9 step 4 (2026-10-07): 28 entries in all; step 4 decided R9-002 and R9-009 and logged R9-021 to R9-028** (what the
+season-to-date models' `--season` mode found: a build whose stored rows aren't bit-reproducible on this machine, the
+tracker's season summary, Shot Value's year-to-year rows and folds, shot-making left for the season's end, the award
+models' in-season pool, the models' cost, and a scratch-schema accident). Open for later steps: R9-011, R9-012, R9-024.
+
 ## Step 1: design and guards (2026-10-06)
 
 ### R9-001 · Four paper-stage files still read every season
@@ -34,7 +39,7 @@ R9-011, R9-012.
 - **Found by:** step 1's audit of every paper-stage read. The other nine paper-stage scripts were capped in step 1's commit; these four were open in the round 8.5 step C chat (its heave measurements and chart claims) at the time, so editing them would have collided. **Fix:** the same mechanical `F()` wrapping plus `\pnLgAsOf` = the lock date (or the date of the last run before the freeze), then drop the `PENDING` markers in the test.
 
 ### R9-002 · Pooled app tables without a season dimension can't take 2026-27 rows
-- **Severity:** design · **Step:** 3 / 4 · **Status:** open
+- **Severity:** design · **Step:** 3 / 4 · **Status:** decided (step 4, 2026-10-07): these pages stay "through 2025-26" for round 9. Clutch WPA, the referee tables, Hot Streak persistence and Stat Stability's M are pooled measures the paper reads whole (the manifest hashes every row), so adding 2026-27 to them would move `paper-inputs`; giving them a season column is a schema change for the next deliberate paper rebuild (season end, owner's call). Stat Stability's constants are applied to the live season's samples as they are (the `stability` Methodology card says so)
 - **Where:** `player_wpa_totals` and `wpa_clutch_league` (Clutch WPA: career totals 2020-21 to 2025-26, `compute_wpa.py`), `referee_tendencies` and `referee_crew_tendencies` (`build_referee_tendencies.py`, pooled over every season), `hot_streak_persistence`, `stat_stability*` (measured constants). The paper reads all of them (`paper_beliefs.py` recomputes clutch WPA and the referee numbers and stops on any difference; `paper_xrapm.py` reads stat stability's M).
 - **Reproduce:** `scripts/live_season.py` classifies them frozen; `api/tests/test_live_season.py` fails if one is made daily or season-to-date without a season dimension.
 - **Found by:** step 1's classification. **Decision needed:** add a `season` (or `through`) column so the paper's rows (<= 2025-26) and the live season's can coexist, or keep these pages at "through 2025-26" for round 9. Clutch WPA and Referee Tendencies are the pages a live-season user would expect to update.
@@ -71,7 +76,7 @@ R9-011, R9-012.
 - **Found by:** step 1's classification. **Fix (9-3):** the `--season` mode leaves the meta tables as they are (or adds a `season` column and writes only its own season's row).
 
 ### R9-009 · Pooled fits must stay fitted on seasons <= 2025-26
-- **Severity:** design · **Step:** 4 · **Status:** open
+- **Severity:** design · **Step:** 4 · **Status:** decided (step 4, 2026-10-07): every season-to-date build's `--season N` mode reads its pooled fit from the stored row and applies it to N, and where the fit is cheap to recompute it is recomputed from the seasons up to `paper_freeze.MAX_PAPER_SEASON` and must reproduce the stored row before the season is priced (R9-017's rule): RAPM's lambda and prior scale = 2025-26's stored choices (`lambda_rule` 'frozen:2025-26'); the Rating Tracker's five hyperparameters and sigma^2 from `rating_tracker_fit`; the simulator's prior constants (checked against `season_sim_params` to 1e-9) and the four forms' coefficients (the leave-one-season-out fit on the paper's seasons, which for a live season is the stored all-season fit, checked to 1e-9); Luck & Schedule's three curves (checked against `luck_model_fit`); Shot Value's four classes' hyperparameters and league-level shrinkage from `shot_value_fit`, with five location models fitted on 1996-97 to 2025-26 (the full build's own rule for a priced season); the scouting splits' play-type fallback SD from the paper's seasons. The fit rows themselves are never written in `--season` mode. `api/tests/test_season_models.py` proves the mode reproduces the stored 2025-26 rows and leaves the twelve pooled tables untouched
 - **Where:** the shot-making cross-fit (`build_shot_making.py`: `shot_xfg`, hex, league rows), Shot Value's fit (`shot_value_fit`, 2010-11 to 2019-20) and running league level, the pre-game model and simulator constants (`pregame_model_fit`, `season_sim_params`), the luck fit (`luck_model_fit`), the Rating Tracker's hyperparameters (`rating_tracker_fit`), the WPA model, stat stability's M. Each is read by a paper script; refitting any of them with 2026-27 data changes the paper's numbers.
 - **Found by:** step 1. **Rule for 9-4:** every season-to-date build reads its fit from the stored row and applies it to 2026-27 (`--fit-through 2026` behaviour); `api/tests/test_paper_frozen.py`'s manifest test and `test_live_season.py` keep these tables frozen.
 
@@ -130,3 +135,43 @@ R9-011, R9-012.
 ### R9-020 · The run log gained two columns
 - **Severity:** design · **Step:** 3 · **Status:** decided (2026-10-06)
 - **Where:** `daily_update_runs.rebuild_seconds`, `rebuild_steps` (JSON: each build's status and seconds), added by `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` on every run. The table is in `paper_manifest.LIVE`: outside the digest and the staleness check, so `paper-inputs` is unchanged except the table's own schema line in `paper/manifest.json` (not a paper file; R9-010's two table-count macros don't move again).
+
+## Step 4: the season-to-date models (2026-10-07)
+
+### R9-021 · Luck & Schedule's stored rows aren't bit-reproducible on this machine
+- **Severity:** design · **Step:** 4 · **Status:** decided (recorded; the test compares numerically)
+- **Where:** `build_luck_schedule.py`'s SRS comes from `numpy.linalg.lstsq` (LAPACK through Accelerate): a full build run into a scratch schema on 2026-10-07 differed from the stored `team_luck_schedule` rows in 509 of 510 team-seasons at the 13th-14th digit (SRS up to 9e-14, home court 8e-15, expected wins 0), the same run-to-run noise `build_season_sim.py` and the tracker's fit were known to show (CLAUDE.md). The `--season` mode therefore cannot be proved byte for byte: `api/tests/test_season_models.py` compares its 2025-26 rows to the stored ones to 1e-9 (the seven other builds are compared by content hash).
+- **Found by:** step 4's equality check. The simulator's odds reproduce exactly once the mode uses the full build's own matrix slice for the prediction (`X[~tr] @ b`): a 1-ulp difference in 2 of 1,230 games came from a differently shaped product.
+
+### R9-022 · The Rating Tracker's per-season summary lives in the frozen fit row
+- **Severity:** design · **Step:** 4 · **Status:** decided (2026-10-07)
+- **Where:** the full build keeps each season's players / rows / games / stints / possessions / intercept / home term / BPM measurements / qualified count in `rating_tracker_fit.seasons` (JSON), one row without a season dimension that the paper hashes whole; the RAPM page's tracker tab reads it per season. A live season can't be added there.
+- **Decision:** `build_rating_tracker.py --season N` writes the season's summary as the row version 'tracker', season N of `rapm_fits` (the one per-season model table; `lambda` there is lambda_0, `prior_scale` is k, `lambda_rule` 'tracker:frozen'); `build_rapm.py --season N` deletes only the three RAPM versions' rows of the season; `routers/rapm.py` reads the JSON for the paper's seasons and the row for any other (`_tracker_season_rows()`), and leaves the row out of `/rapm/validation`'s fit list. Also decided: for the last season on file the smoother's estimate equals the filter's, so the live season's "with hindsight" rows equal its "as of then" rows, and the earlier seasons' with-hindsight rows (which a full build would revise with the new season's games) stay the paper's; the Methodology card says so.
+
+### R9-023 · Shot Value's year-to-year rows and folds in `--season` mode
+- **Severity:** design · **Step:** 4 · **Status:** decided (2026-10-07)
+- **Where:** (a) the validation's year-to-year correlations (class 'yty', N-1 -> N) need the earlier season's per-player parts, which the `--season` run reads from the stored `shot_value_added` (REAL columns), where the full build has them in float64: the correlations can differ in the sixth or seventh digit, so the test compares the season's own scope by hash and the yty rows numerically. (b) A player's fold must reproduce `shot_xfg`'s (the paper's shuffle over the players seen up to 2025-26); a player seen only in the live season takes the next fold in turn (`season_folds()`; 0 newer players when run for 2025-26, checked equal to the full build's). (c) A live season has no `p_xfg` validation row (`shot_xfg` is frozen) and `shot_value_fit`'s 'models' row keeps the paper seasons' iteration counts only.
+- **Found by:** step 4's equality check (the first run also deleted the pooled 'test' scope rows, whose `seasons` label equals the season's: the delete now names the scope).
+
+### R9-024 · Shot-making (expected FG%, the quality map, the hex grid) has no 2026-27 rows
+- **Severity:** looks wrong (the Shot Charts tabs say "not on file" for 2026-27) · **Step:** season end (or 9-8 if wanted) · **Status:** open
+- **Where:** `build_shot_making.py` cross-fits five by-player fold models over every season at once (`shot_xfg`, `player_shot_making`, `player_shot_hex`, `shot_hex_league`, `shot_making_league`): the paper reads `shot_xfg` and `shot_making_validation`, and the docs' classification allowed a `--season` mode that scores 2026-27 with the fold models refitted on <= 2025-26. Not built in step 4 (the step's scope was the six models the plan names; Shot Value already carries the live season's look-ahead-free prices). The pages read the tables that exist, so 2026-27 simply isn't offered.
+- **Fix:** a `--season N` mode on `build_shot_making.py` on the pattern of `build_shot_value.py`'s (five fold models on the paper's seasons, the paper's folds, the season's rows only), or the season-end full rebuild.
+
+### R9-025 · The award models in a live season
+- **Severity:** design · **Step:** 4 · **Status:** decided (2026-10-07; the `awards` Methodology card)
+- **Where:** `/mvp|dpoy|roy|allnba/predict/{season}` read `player_season_stats`' per-game line of the season (the live season's rows are refreshed daily). The DPOY and All-NBA pools required 40 games, so nobody qualified until December; ROY read `player_first_season`, which has no 2026-27 rookie until the season-end rebuild (R9-003).
+- **Decision:** `mvp_api.season_progress()` (in-season = `luck_schedule_seasons.complete` is false, else a season past the paper's) scales the games floor to the games played so far (ceil of 40 x most games played / 82, at least 1), ROY counts a player with no earlier season on file as a rookie until the first-season table is rebuilt, and every response carries `in_season`, `through`, `games_played_max` and an `in_season_note` the Awards Race page shows ("season to date, not a final forecast"). Nothing is retrained.
+
+### R9-026 · What a day's model builds cost
+- **Severity:** design · **Step:** 4 · **Status:** decided (recorded; 9-7 re-measures on game days)
+- **Where:** `daily_update.py` runs the eight model builds after a clean rebuild (`--no-models` skips them, `--models` forces them, `--models-only` runs nothing else). Measured on a whole 1,230-game season (`--season 2026`, the worst case) and on the eight-game preseason trial: see `docs/LIVE_SEASON.md` section 7. Shot Value's five fold fits (about two minutes) are most of it whatever the season's size; RAPM's three fits and the simulator's feature pass are the rest.
+
+### R9-027 · A full build run through a scratch schema's search_path drops public tables it didn't find there
+- **Severity:** broken (two public tables dropped for a few minutes) · **Step:** 4 · **Status:** fixed (restored from the 2026-10-06 dump the same hour; content hashes equal to the paper manifest's)
+- **Where:** to see whether a full `build_luck_schedule.py` reproduces the stored rows, it was run with `PGOPTIONS=-c search_path=zz_m_luck,public` into a schema holding copies of the two tables the `--season` mode writes, not the two the full build also drops and recreates (`luck_model_fit`, `luck_schedule_validation`): its `DROP TABLE IF EXISTS` resolved to `public` and the CREATE went into the scratch schema. `pg_restore -t` from `~/nba_backups/nba_analytics_pre85c_2026-10-06.dump` put them back (the primary keys re-added by hand: `-t` restores the table and its data, not its constraints), and `paper_manifest.content_hash` equals the manifest's for both.
+- **Rule (CLAUDE.md verification pitfalls):** a full build may only run through a search_path into a schema that holds a copy of **every** table it drops or creates; the `--season` modes are safe because they never drop (the scratch runner copies what they write). The `zz_` schemas of the step were dropped afterwards.
+
+### R9-028 · The LeagueGameFinder step isn't bounded by `--date`
+- **Severity:** looks wrong (a test's count) · **Step:** 7 (the runbook) · **Status:** open (the test relaxed)
+- **Where:** `daily_update.step_nba_games` fetches the season type's whole LeagueGameFinder table and rebuilds `team_game_fatigue` / `game_team_box` from every game it lists, while the scoreboard, game_scores and the play-by-play stop at `--date`. On 2026-10-07 the preseason run of `api/tests/test_daily_update.py` (`--date 2026-10-05`) stored 24 box rows (12 games) against the 16 (8 games) of 2026-10-06, because four more preseason games had been played by the run day. Harmless for a real daily run (today is the date) but it means a `--date` replay isn't a pure replay for those two tables. The test now asserts at least 16.

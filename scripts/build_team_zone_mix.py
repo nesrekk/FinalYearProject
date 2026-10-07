@@ -33,6 +33,14 @@ Takes about 15 seconds (~5.9M regular-season shots).
 
 Usage:
     cd scripts && python3 build_team_zone_mix.py
+    cd scripts && python3 build_team_zone_mix.py --season 2027      # one season's rows (round 9 step 4)
+
+--season N (round 9 step 4; scripts/season_mode.py): the same team
+assignment and aggregation over that season's shots only (a player's team in
+a game is decided within the season, so the rows are what the full build
+gives the season) and only its rows replaced, no DDL. The
+Basketball-Reference check is printed for the seasons it has (n/a for a live
+season).
 """
 
 import os
@@ -47,6 +55,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 
 from db_config import DB_CONFIG
+import season_mode as SM
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "api"))
 from shots_lib import ZONES, classify_zone  # noqa: E402
@@ -61,7 +70,7 @@ CREATE TEMP TABLE single AS
 CREATE INDEX ON single (season, player_id);
 CREATE TEMP TABLE pg AS
     SELECT DISTINCT LEFT(season, 4)::int + 1 AS s_int, game_id, player_id
-    FROM player_shots WHERE game_id LIKE '002%';
+    FROM player_shots WHERE game_id LIKE '002%'{only};
 -- A game's two teams: team_game_fatigue from 2009-10 on (exact); before that the
 -- two teams with the most single-team shooters, if they hold 80%+ of them.
 CREATE TEMP TABLE game_pair AS
@@ -116,9 +125,11 @@ def check_against_lines(cur, ok):
 
 def main():
     t0 = time.time()
+    season = SM.parse_season()
+    label = None if season is None else SM.season_label(season)
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
-    cur.execute(SETUP)
+    cur.execute(SETUP.format(only="" if label is None else f" AND season = '{label}'"))
     cur.execute("SELECT COUNT(DISTINCT game_id), (SELECT COUNT(*) FROM game_pair) FROM pg")
     games, pairs = cur.fetchone()
     print(f"{games:,} regular-season games with shots; {pairs:,} with two known teams ({time.time() - t0:.0f}s)")
@@ -131,7 +142,8 @@ def main():
         s.itersize = 200_000
         s.execute("""SELECT season, game_id, player_id, loc_x, loc_y, shot_distance, shot_type,
                             shot_zone_basic, shot_made_flag
-                     FROM player_shots WHERE game_id LIKE '002%%'""")
+                     FROM player_shots WHERE game_id LIKE '002%%'""" + ("" if label is None else " AND season = %s"),
+                  None if label is None else (label,))
         for season, game_id, player_id, x, y, dist, stype, zbasic, made in s:
             total += 1
             to = team_of.get((player_id, game_id))
@@ -147,15 +159,23 @@ def main():
                 cell[0] += made or 0
                 cell[1] += 1
     print(f"placed and classified: {placed:,} of {total:,} ({placed / total:.2%}); "
-          f"unclassifiable: {unclassified:,} ({time.time() - t0:.0f}s)")
+          f"unclassifiable: {unclassified:,} ({time.time() - t0:.0f}s)" if total else f"no regular-season shot of {label} on file yet")
 
     rows = [(s, t, side, z, fgm, fga) for (s, t, side, z), (fgm, fga) in sorted(agg.items())]
-    cur.execute("DROP TABLE IF EXISTS team_zone_mix")
-    cur.execute("""CREATE TABLE team_zone_mix (
-        season TEXT NOT NULL, team_abbreviation TEXT NOT NULL, side TEXT NOT NULL, zone TEXT NOT NULL,
-        fgm INTEGER NOT NULL, fga INTEGER NOT NULL, PRIMARY KEY (season, team_abbreviation, side, zone))""")
+    if label is None:
+        cur.execute("DROP TABLE IF EXISTS team_zone_mix")
+        cur.execute("""CREATE TABLE team_zone_mix (
+            season TEXT NOT NULL, team_abbreviation TEXT NOT NULL, side TEXT NOT NULL, zone TEXT NOT NULL,
+            fgm INTEGER NOT NULL, fga INTEGER NOT NULL, PRIMARY KEY (season, team_abbreviation, side, zone))""")
+    else:
+        SM.require_tables(cur, ["team_zone_mix"], season)
+        n_del = SM.delete_season(cur, "team_zone_mix", label)
+        print(f"--season {season}: {n_del} stored rows of {label} replaced with {len(rows)}; every other season untouched")
     execute_values(cur, "INSERT INTO team_zone_mix VALUES %s", rows)
     conn.commit()
+    if not rows:
+        conn.close()
+        return
 
     # Check: placed attempts against Basketball-Reference's team and opponent FGA.
     df = pd.DataFrame(rows, columns=["season", "team_abbreviation", "side", "zone", "fgm", "fga"])
@@ -169,7 +189,8 @@ def main():
     chk = tot.merge(codes.merge(br, on=["s_int", "bref"]), on=["s_int", "team_abbreviation"], how="left")
     chk["own_share"] = chk["team"] / chk["fga"]
     chk["opp_share"] = chk["opponent"] / chk["opp_fga"]
-    print(f"team-seasons: {len(chk)}, unmatched to Basketball-Reference: {chk.fga.isna().sum()}")
+    print(f"team-seasons: {len(chk)}, unmatched to Basketball-Reference: {chk.fga.isna().sum()}"
+          + (" (n/a: the export has no row for this season yet)" if chk.fga.isna().all() else ""))
     by = chk.groupby("s_int")[["own_share", "opp_share"]].agg(["min", "median"])
     print("share of Basketball-Reference FGA placed, by season (min / median):")
     print(by.round(3).to_string())

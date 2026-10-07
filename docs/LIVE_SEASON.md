@@ -509,6 +509,64 @@ and the referee tables are frozen pooled measures (R9-002); `build_projections.p
 `build_shot_value.py`, `build_rating_tracker.py`, `build_team_zone_mix.py` and `build_scouting_reports.py` are step
 9-4's season-to-date models; the paper stage never runs during the season.
 
+## 7. Step 4: the season-to-date models (2026-10-07)
+
+The six models the plan names, and two aggregates beside them, now take **`--season N`** too (`scripts/season_mode.py`),
+under one rule, R9-009's: **every pooled fit stays fitted on seasons up to the paper's test season and is only applied to
+the live season**; nothing is tuned on 2026-27. Where the fit is cheap to recompute, the build recomputes it from the
+paper's seasons and stops unless it reproduces the stored row (R9-017's pattern); where it isn't, the build reads the
+stored row. Per model (the decision is also on its Methodology card):
+
+| Model | `--season N` does | The pooled fit, where it comes from | What the live season gets |
+|---|---|---|---|
+| RAPM (`build_rapm.py`) | the three versions refit on the season's stints, only its rows replaced | lambda and the prior scale = 2025-26's stored choices (`rapm_fits`; `lambda_rule` 'frozen:2025-26'); the season's own cross-validation curve is still computed and shown | wide early-season intervals (the bootstrap stream is replayed past the earlier seasons' draws, so they are the intervals a full build would give it); the BPM-prior version shrinks toward zero until Basketball-Reference's BPM exists for the season; the page says "season to date, through <date>" |
+| Rating Tracker (`build_rating_tracker.py`) | the filter run through the season at the stored hyperparameters, only its rows replaced | the five hyperparameters and sigma^2 from `rating_tracker_fit` (chosen on 2020-21 to 2023-24, never re-tuned) | the "as of then" rating through today; "with hindsight" equals it until a next season exists; the earlier seasons' with-hindsight rows stay the paper's; the season's summary goes to `rapm_fits` as version 'tracker' (R9-022) |
+| Projections (`build_projections.py`, not rerun) | nothing: the 2026-27 projections were stored before the season | the M values and the aging curves | the Projections page shows each player's line so far next to his projection (gap, inside the 80% range?) with the date it runs through, and a summary; BPM has no in-season actual |
+| Season Simulator (`build_season_sim.py`) | the season's held-out pre-game odds, its per-form scores so far and its season row; the backtest and playoff facts at the season's end | the prior constants (recomputed from <= 2025-26, checked against `season_sim_params` to 1e-9) and the four forms' leave-one-season-out coefficients (for a live season the stored all-season fit, checked to 1e-9) | the simulator from any morning up to today, with the remaining games from ESPN's schedule as the Forecast Ledger last read it (`api/season_sim_live.py`; back-to-backs from the dates, equal to the locked schedule's); the page says it is the app's model, not the locked ledger |
+| Award chances (`mvp_api.py`, no build) | nothing: the calibrated models read the season-to-date per-game line | the models and their calibration | the DPOY / All-NBA games floor scaled to the games played so far, 2026-27 rookies = no earlier season on file, every response labelled "season to date" (R9-025) |
+| Stat Stability (no build) | nothing | the M constants (2020-21 to 2025-26) | reliability n / (n + M) with n the sample so far (the Leaderboard's rule); the warnings early in a season are the point |
+| Luck & Schedule (`build_luck_schedule.py`) | the season's team rows and season row | the three expected-win curves (recomputed from <= 2025-26, checked against `luck_model_fit`) | luck and SRS so far; `scheduled` counts ESPN's schedule, `complete` false until the last game |
+| Shot Value (`build_shot_value.py`) | the season priced: five fold models fitted on 1996-97 to N-1 (the full build's rule), the skill filter through N | the four classes' hyperparameters and shrinkage from `shot_value_fit`; the paper's player folds, newcomers in turn | SVA, states and the season's validation rows (no `p_xfg` row; R9-023) |
+| League / team zone mix, scouting splits | the season's rows | the scouting fallback SD from the paper's seasons | the shot-mix lines; scouting splits once players reach 1,500 minutes |
+
+Not in-season: shot-making (expected FG%, the quality map; R9-024), the shot-aware RAPM (the paper's), and the pooled
+pages of R9-002 (Clutch WPA, referees, hot streaks): "through 2025-26" for the round.
+
+**The proof** (`api/tests/test_season_models.py`): the eight builds run with `--season 2026` into copies of the tables they
+write in the schema `zz_season_models` and give the stored full build's 2025-26 rows back, byte for byte for seven of
+them and to 1e-9 for Luck & Schedule (its least-squares ratings differ run to run in the 14th digit on this machine:
+R9-021), with every other season's rows and the twelve pooled fit tables untouched and the public tables untouched. The
+chain's time on a whole 1,230-game season (the worst case; measured 2026-10-07 in the scratch runs, OMP_NUM_THREADS 4):
+
+| build | seconds | note |
+|---|---|---|
+| `build_luck_schedule.py` | 1 | |
+| `build_league_zone_mix.py` | 1 | |
+| `build_rapm.py` | 50 | single 9 s, the three-season window 26 s, the BPM prior 12 s (300 bootstraps each) |
+| `build_shot_value.py` | 116 | the five fold fits ~105 s (4.5M shots each); loading the chart 5 s |
+| `build_rating_tracker.py` | 6 | the filter over every season |
+| `build_team_zone_mix.py` | 1 | |
+| `build_scouting_reports.py` | 1 | |
+| `build_season_sim.py` | 10 | the features of every season, the backtest of the season |
+| **the eight** | **186** | after the fourteen daily builds' 246 s: a game day's whole chain about 7 minutes |
+
+**`daily_update.py` runs them** after a rebuild that ran clean (`--no-models` skips, `--models` forces, `--models-only`
+runs nothing else), each in its own process with its log under `live_data/<season>/rebuild/`, stopping at the first
+failure; the run row's `rebuild_steps` lists them with phase 'models'; the update prints "restart impact_api (and mvp_api
+after the models)". A `--season 2027` trial on the cached 2026-27 preseason (eight games in a scratch schema holding full copies of every
+table the fetch, the fourteen and the eight write, the step-3 pattern) ran the fourteen in 186 s and the eight in 44 s
+(RAPM 21 s: 235 players over 7 tracked games, none qualified, lambda frozen; the tracker 6 s; the simulator 9 s: 8 odds
+rows and a season row saying "8 of 1,200 games played, through 2026-10-05"; luck 16 team rows, `complete` false; the
+shot-based builds and the scouting splits had nothing to write, preseason games not being regular-season ones). Found
+and fixed on the way: a season without a published BPM (every live season until Basketball-Reference's arrive) made
+RAPM's held-out BPM baseline singular, so that row and the on/off row are skipped when nobody has one, and the page's
+note says the BPM-prior version shrinks toward zero until then.
+
+The routes: `/rapm` carries `fit.live` (games, through date, the frozen rule, whether BPM exists); `/season-sim/options`
+and `/season-sim` carry `live`, `today_date`, `played_through`, `schedule_source`, `live_note`; `/projections` and
+`/projections/player/{id}` carry `actual`, `gap`, `in_range` per row and `actual_summary` / `actual_through`; the award
+routes carry `in_season`, `through`, `games_played_max`, `in_season_note`. The pages show each note.
+
 ## For the guide
 
 - The paper is frozen on 2025-26 by code: one constant, every paper script reads through it, and the manifest hashes
@@ -524,3 +582,8 @@ and the referee tables are frozen pooled measures (R9-002); `build_projections.p
 - Step 3 (2026-10-06): the same command then rebuilds the season's fourteen derived tables for that season only, through
   the full builds' own code; a test proves the mode gives byte-identical rows for 2025-26, and a whole season takes 4
   minutes, so a game day is well inside the 10-minute target.
+- Step 4 (2026-10-07): the season-to-date models (RAPM, the Rating Tracker, projections vs actual, the Season Simulator,
+  award chances, Stat Stability's warnings, plus Luck & Schedule, Shot Value, the zone mixes and the scouting splits)
+  follow the live season under one rule: every pooled fit stays fitted on the paper's seasons and is only applied to
+  2026-27, checked against the stored fit rows before it is used; a test proves the mode reproduces 2025-26's stored
+  rows; the eight builds add about three minutes to a game day; every page says "season to date".

@@ -70,6 +70,7 @@ export default function AwardsRaceSection() {
     const [season, setSeason] = useState(2026);
     const [results, setResults] = useState(null);
     const [poolInfo, setPoolInfo] = useState(null);
+    const [inSeason, setInSeason] = useState(null);
     const [source, setSource] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -96,6 +97,7 @@ export default function AwardsRaceSection() {
             }));
             setResults(ranked);
             setSource(data._source ?? null);
+            setInSeason(data.in_season ? (data.in_season_note ?? 'Season to date.') : null);
             if (data.candidate_pool_rule) {
                 setPoolInfo(`${data.candidate_pool_size} eligible candidates (${data.candidate_pool_rule})`);
             }
@@ -110,6 +112,7 @@ export default function AwardsRaceSection() {
         setAward(id);
         setResults(null);
         setPoolInfo(null);
+        setInSeason(null);
         setSource(null);
         setError('');
     };
@@ -151,6 +154,11 @@ export default function AwardsRaceSection() {
 
             {loading && <Loader />}
             {error && <p className="error-message">{error}</p>}
+            {inSeason && !loading && !error && (
+                <p className="page-subtitle awards-live-note" role="status" style={{ marginTop: '0.5rem', marginBottom: '0.25rem' }}>
+                    <strong>Season to date, not a final forecast.</strong> {inSeason}
+                </p>
+            )}
             {poolInfo && !loading && !error && (
                 <p className="page-subtitle" style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
                     {poolInfo}

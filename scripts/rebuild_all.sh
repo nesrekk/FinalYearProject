@@ -166,7 +166,7 @@ step derived kaggle   build_first_nba_season.py
 step derived kaggle   build_contract_value.py
 step derived kaggle   build_league_averages.py
 step derived kaggle   build_team_seasons.py
-step derived kaggle   build_luck_schedule.py
+step derived kaggle   build_luck_schedule.py             # --season N rebuilds one season from the stored curve (round 9 step 4)
 step derived -        build_award_winners_table.py
 step derived -        train_mvp_model.py
 step derived -        build_dpoy_roy_models.py
@@ -190,7 +190,7 @@ step derived kaggle,torvik build_college_pipeline.py
 step derived -        build_ncaa_model.py
 step derived kaggle,net build_greats.py                  # checks NBA CDN headshots
 # ------------------------------------------------------------------ derived: shots
-step derived -        build_league_zone_mix.py
+step derived -        build_league_zone_mix.py           # --season N rebuilds one season (round 9 step 4)
 step derived -        build_player_roles.py
 step derived -        build_shot_making.py               # ~3 min; also shot_xfg
 # ------------------------------------------------------------------ derived: play-by-play (order from CLAUDE.md)
@@ -206,19 +206,19 @@ step derived -        build_stat_stability.py
 step derived -        build_hot_streak_persistence.py
 step derived -        build_situational_splits.py    # --season N rebuilds one season (round 9 step 3)
 step derived -        build_projections.py
-step derived -        build_rapm.py                      # ~5 min
-step derived -        build_shot_value.py                # ~20 min; 30 look-ahead-free shot fits; reads player_game_lines, shot_xfg (folds); imports build_rapm
-step derived -        build_rating_tracker.py            # ~8 min; reads player_rapm (validation); its fit row is read by paper_eval.py
+step derived -        build_rapm.py                      # ~5 min; --season N: one season, lambda and scale frozen (round 9 step 4)
+step derived -        build_shot_value.py                # ~20 min; 30 look-ahead-free shot fits; reads player_game_lines, shot_xfg (folds); imports build_rapm; --season N prices one season from the stored fit (round 9 step 4)
+step derived -        build_rating_tracker.py            # ~8 min; reads player_rapm (validation); its fit row is read by paper_eval.py; --season N: the filter through one season (round 9 step 4)
 step derived -        build_rotations.py             # --season N rebuilds one season (round 9 step 3)
 step derived -        build_rim_deterrence.py        # --season N rebuilds one season (round 9 step 3)
 step derived -        build_assist_network.py        # --season N rebuilds one season (round 9 step 3)
 step derived -        build_play_finder.py           # --season N rebuilds one season (round 9 step 3)
 step derived -        build_best_games.py            # --season N rebuilds one season (round 9 step 3)
-step derived kaggle   build_team_zone_mix.py
+step derived kaggle   build_team_zone_mix.py             # --season N rebuilds one season (round 9 step 4)
 step derived -        compute_wpa.py
 step derived -        build_leverage_splits.py       # --season N rebuilds one season (round 9 step 3)
-step derived -        build_scouting_reports.py          # reads player_leverage_splits
-step derived -        build_season_sim.py
+step derived -        build_scouting_reports.py          # reads player_leverage_splits; --season N rebuilds one season's splits (round 9 step 4)
+step derived -        build_season_sim.py                # --season N: one season's odds from the stored fits (round 9 step 4)
 step derived -        build_coaching_decisions.py        # ~4 min; reads possessions, pbp_event_clock, game_pregame_odds
 
 # ------------------------------------------------------------------ paper: the paper's own tables

@@ -33,6 +33,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 
 from impact_core import get_db
+from paper_freeze import MAX_PAPER_SEASON
 from source_badge import make_source
 
 router = APIRouter()
@@ -125,6 +126,40 @@ def _fits():
         return out
 
 
+def _rapm_fits():
+    """The three RAPM versions' fits (the tracker's live-season summary rows, version 'tracker', left out)."""
+    return {k: v for k, v in _fits().items() if k[0] != "tracker"}
+
+
+def _tracker_season_rows():
+    """{season: rapm_fits row} the --season build writes for a live season (build_rating_tracker.py's docstring)."""
+    return {k[1]: v for k, v in _fits().items() if k[0] == "tracker"}
+
+
+@lru_cache(maxsize=16)
+def _live_status(season):
+    """For a season past the paper's test season: the stint games on file and the last game date (the page says
+    'through <date>'); None for a paper season."""
+    if season <= MAX_PAPER_SEASON:
+        return None
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT count(*), max(game_date) FROM lineup_stint_games WHERE season = %s AND tracked_ok", (season,))
+        n, through = cur.fetchone()
+        cur.execute("SELECT count(*) FROM player_season_stats WHERE season = %s AND bpm IS NOT NULL", (season,))
+        n_bpm = cur.fetchone()[0]
+    return {"live": True, "games": int(n or 0), "through": through.isoformat() if through else None, "players_with_bpm": int(n_bpm or 0),
+            "frozen_from": f"{MAX_PAPER_SEASON - 1}-{str(MAX_PAPER_SEASON)[-2:]}",
+            "note": (f"Live season: {int(n or 0)} games with tracked stints"
+                     + (f" through {through.isoformat()}" if through else "")
+                     + f". Nothing is tuned on it: shrinkage and the prior scale are {MAX_PAPER_SEASON - 1}-{str(MAX_PAPER_SEASON)[-2:]}'s "
+                     "choices held fixed, so early in the season the intervals are wide, few players clear the possession "
+                     "floor and ranks move from day to day."
+                     + (" No published BPM exists for the season yet (Basketball-Reference's arrive at its end), so the BPM-prior "
+                        "version shrinks toward zero like the one-season version, the tracker reads no BPM measurement this "
+                        "season, and the BPM column is empty." if not n_bpm else ""))}
+
+
 @lru_cache(maxsize=1)
 def _validation():
     with get_db() as conn:
@@ -208,9 +243,10 @@ def _tracker_validation():
 def _seasons_by_version(fits):
     out = {v: [] for v in VERSIONS}
     for (version, season) in sorted(fits):
-        out[version].append(season)
+        if version in out and version != "tracker":
+            out[version].append(season)
     tf = _tracker_fit()
-    out["tracker"] = tf["season_list"] if tf else []
+    out["tracker"] = sorted(set(tf["season_list"] if tf else []) | set(_tracker_season_rows())) if tf else []
     out["shotaware"] = sorted({se for (v, se) in _sa_fits() if v == "sa_prior"})
     return out
 
@@ -235,7 +271,7 @@ def _round(d):
 
 
 def _pick(version, season, kind=None):
-    fits = _fits()
+    fits = _rapm_fits()
     if not fits:
         raise HTTPException(status_code=503, detail="No RAPM data: run scripts/build_rapm.py.")
     if version not in VERSIONS:
@@ -251,20 +287,34 @@ def _pick(version, season, kind=None):
             f"No {VERSIONS[version]['label']} RAPM for {season - 1}-{str(season)[-2:]}; "
             f"on file: {', '.join(f'{s - 1}-{str(s)[-2:]}' for s in seasons)}."))
     if version == "tracker":
-        return season, _tracker_fit_summary(season), seasons
-    if version == "shotaware":
-        return season, _sa_fit_summary(season, kind), seasons
-    return season, fits[(version, season)], seasons
+        fit = _tracker_fit_summary(season)
+    elif version == "shotaware":
+        fit = _sa_fit_summary(season, kind)
+    else:
+        fit = dict(fits[(version, season)])
+    fit["live"] = _live_status(season)
+    return season, fit, seasons
 
 
 def _tracker_fit_summary(season):
-    """A fit dict for one season in rapm_fits' shape (what the page reads for every version), plus the tracker's own fields."""
+    """A fit dict for one season in rapm_fits' shape (what the page reads for every version), plus the tracker's own fields.
+    A season the fit row's JSON doesn't cover (a live season, built with --season) reads its summary from the
+    rapm_fits row the tracker build wrote for it (version 'tracker')."""
     tf = _tracker_fit()
-    per = tf["seasons"][season]
+    if season in tf["seasons"]:
+        per = tf["seasons"][season]
+        rule = "tune_next_rmse"
+    else:
+        row = _tracker_season_rows()[season]
+        per = {"games": row["games"], "stints": row["stints"], "rows": row["rows"], "players": row["players"], "poss": row["poss"],
+               "intercept": row["intercepts"].get(str(season)), "home_coef": row["home_coef"],
+               "home_edge_per_100": row["home_edge_per_100"], "qualified": row["qualified"], "n_bpm": row["players_with_prior"],
+               "newcomers": None}
+        rule = row["lambda_rule"]
     return {
         "version": "tracker", "season": season, "seasons_from": tf["seasons_from"], "seasons_to": season,
         "games": per["games"], "stints": per["stints"], "rows": per["rows"], "players": per["players"], "poss": per["poss"],
-        "lambda": tf["lambda0"], "prior_scale": tf["prior_scale"], "lambda_rule": "tune_next_rmse", "cv_folds": None,
+        "lambda": tf["lambda0"], "prior_scale": tf["prior_scale"], "lambda_rule": rule, "cv_folds": None,
         "cv_rmse": None, "cv_rmse_zero": None, "cv_best_lambda": None, "cv_best_scale": None, "cv_best_rmse": None,
         "intercepts": {season: per["intercept"]}, "home_coef": per["home_coef"], "home_edge_per_100": per["home_edge_per_100"],
         "bootstraps": None, "qualified_poss": tf["qualified_poss"], "qualified": per["qualified"], "players_with_prior": per["n_bpm"],
@@ -392,7 +442,7 @@ def _validation_for(season, tracker=False):
 
 @router.get("/rapm/options")
 def rapm_options():
-    fits = _fits()
+    fits = _rapm_fits()
     if not fits:
         raise HTTPException(status_code=503, detail="No RAPM data: run scripts/build_rapm.py.")
     any_fit = next(iter(fits.values()))
@@ -561,7 +611,7 @@ def _all_qualified(version, season, floor, kind=""):
 
 @router.get("/rapm/validation")
 def rapm_validation():
-    fits = _fits()
+    fits = _rapm_fits()
     if not fits:
         raise HTTPException(status_code=503, detail="No RAPM data: run scripts/build_rapm.py.")
     return {

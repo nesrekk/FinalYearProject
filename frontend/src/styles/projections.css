@@ -61,3 +61,6 @@
 .pj-better { color: var(--positive); font-weight: 700; }
 .pj-worse { color: var(--negative); font-weight: 700; }
 .pj-notlist { margin: var(--space-2) 0 0; padding-left: 1.2em; font-size: 0.85rem; color: var(--text-2); line-height: 1.5; }
+/* round 9 step 4: projected vs actual (the live season's lines so far) */
+.pj-actual { margin: var(--space-2) 0 var(--space-3); }
+.pj-table td.pj-outside { color: var(--negative); }

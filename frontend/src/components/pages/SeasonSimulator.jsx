@@ -476,9 +476,10 @@ export default function SeasonSimulator({ onNavigate }) {
                 const info = o.seasons.find((x) => x.season === s);
                 const asof = parseParam.str(params, 'asof');
                 const ok = asof && /^\d{4}-\d{2}-\d{2}$/.test(asof) && asof >= info.first_date && asof <= info.last_date;
+                const start = info.live ? info.today_date : info.halfway_date;
                 setForm({
                     season: s,
-                    asof: ok ? asof : info.halfway_date,
+                    asof: ok ? asof : start,
                     team: parseParam.str(params, 'team')?.toUpperCase() ?? null,
                     sort: parseParam.oneOf(params, 'sort', COLS.map(([k]) => k)) ?? 'p_playoffs',
                     dir: parseParam.oneOf(params, 'dir', ['asc', 'desc']) ?? 'desc',
@@ -486,7 +487,7 @@ export default function SeasonSimulator({ onNavigate }) {
                     out: idList(params, 'out'),
                     add: idList(params, 'add'),
                 });
-                setDateDraft(ok ? asof : info.halfway_date);
+                setDateDraft(ok ? asof : start);
             })
             .catch(() => setOptionsError('The Season Simulator couldn\'t load. Is the impact API (port 8002) running, and has scripts/build_season_sim.py been run?'));
         fetchSeasonSimModel().then(setModel).catch(() => setModel({ error: true }));
@@ -538,11 +539,15 @@ export default function SeasonSimulator({ onNavigate }) {
         set({ season: u.season, asof: u.game_date, team: null, game: u.game_id, out: [], add: [] });
         setDateDraft(u.game_date);
     };
-    const checkpointOf = (s, d) => (['first_date', 'halfway_date', 'sixty_date', 'last_date'].find((k) => s[k] === d) ?? 'halfway_date');
+    const checkpointOf = (s, d) => (['first_date', 'halfway_date', 'sixty_date', 'last_date', 'today_date'].find((k) => s[k] === d)
+        ?? (s.live ? 'today_date' : 'halfway_date'));
     const onSort = (k) => set(form.sort === k ? { dir: form.dir === 'asc' ? 'desc' : 'asc' } : { sort: k, dir: k === 'team' || k === 'position_now' ? 'asc' : 'desc' });
     const allRows = data ? [...data.conferences.East, ...data.conferences.West] : [];
     const picked = allRows.find((r) => r.team === form.team) ?? null;
-    const buttons = [['first_date', 'Opening day'], ['halfway_date', 'Halfway'], ['sixty_date', '60 games in'], ['last_date', 'Final day']];
+    const buttons = info.live
+        ? [['first_date', 'Opening day'], ['halfway_date', 'Halfway'], ['sixty_date', '60 games in'], ['today_date', 'Today']]
+            .filter(([k]) => info[k] && (k === 'today_date' || info[k] <= info.today_date))
+        : [['first_date', 'Opening day'], ['halfway_date', 'Halfway'], ['sixty_date', '60 games in'], ['last_date', 'Final day']];
 
     return (
         <section className="dashboard-card lb-card oo-card">
@@ -556,8 +561,11 @@ export default function SeasonSimulator({ onNavigate }) {
             <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
                 Pick a season and a morning. Every game still to play is drawn {options.runs.toLocaleString()} times from a pre-game
                 model tested on every game since 2010-11, the standings are ranked with tiebreaks and the play-in is played out.
-                Every season on file is over, so the odds sit next to what actually happened. Past dates only: the schedule on file
-                ends {fmtDate(options.seasons[options.seasons.length - 1].last_date)}; a new season works once its schedule and games are loaded.
+                {options.seasons.some((x) => x.live)
+                    ? <> For a finished season the odds sit next to what actually happened; for the season in progress the games still
+                        to play are ESPN&apos;s schedule as the Forecast Ledger last read it, and &ldquo;Today&rdquo; is this morning (US Eastern).</>
+                    : <> Every season on file is over, so the odds sit next to what actually happened. Past dates only: the schedule on file
+                        ends {fmtDate(options.seasons[options.seasons.length - 1].last_date)}; a new season works once its schedule and games are loaded.</>}
             </p>
 
             <div className="lb-controls ss-controls">
@@ -566,7 +574,7 @@ export default function SeasonSimulator({ onNavigate }) {
                     <select className="input-field" value={form.season} onChange={(e) => {
                         const s = Number(e.target.value);
                         const next = options.seasons.find((x) => x.season === s);
-                        const d = next[checkpointOf(info, form.asof)];
+                        const d = next[checkpointOf(info, form.asof)] ?? (next.live ? next.today_date : next.halfway_date);
                         set({ season: s, asof: d, team: null, game: null, out: [], add: [] });
                         setDateDraft(d);
                     }}>
@@ -587,6 +595,13 @@ export default function SeasonSimulator({ onNavigate }) {
                 </div>
             </div>
             {info.note && <p className="ss-note">{seasonLabel(form.season)}: {info.note}</p>}
+            {info.live && (
+                <p className="ss-note ss-note--live" role="status">
+                    <strong>Live season{data?.info?.played_through ? `, results through ${fmtDate(data.info.played_through)}` : ''}.</strong>{' '}
+                    {data?.info?.live_note ?? 'The app\'s current model recomputed from the results so far; not the locked Forecast Ledger.'}{' '}
+                    <button type="button" className="pp-link rp-link" onClick={() => onNavigate('ledger')}>Open the Forecast Ledger (locked before opening night) →</button>
+                </p>
+            )}
 
             <div className={data ? 'lb-results' : 'lb-results lb-results--stale'} aria-busy={!data}>
                 {error && <p className="error-message">{error}</p>}

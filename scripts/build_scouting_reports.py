@@ -65,10 +65,25 @@ real league zone totals vs. the NBA's own (league_shot_zones).
 
 Usage:
     cd scripts && python3 build_scouting_reports.py
+    cd scripts && python3 build_scouting_reports.py --season 2027      # one season's splits (round 9 step 4)
+
+--season N (round 9 step 4, 2026-10-07; scripts/season_mode.py): the same
+tests over season N's qualified players only (1,500+ minutes: early in a
+season nobody qualifies and the run writes nothing but says so), replacing
+only scouting_splits' rows of N. The play-type fallback SD (a play type's
+mean across seasons, used when a season's own fit gives no positive
+variance) is taken from the seasons up to the paper's test season
+(api/paper_freeze.MAX_PAPER_SEASON), the pooled fits' rule (round 9 issue
+R9-009). scouting_validation (persistence, pooled) and
+zone_classifier_check are never touched. Play-type and shot-context splits
+need those seasons' nba_api dashboards fetched (fetch_playtypes.py,
+fetch_shot_context.py); without them the season has zone and leverage
+splits only.
 """
 
 import os
 import sys
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -78,8 +93,14 @@ from scipy.stats import norm
 
 from db_config import DB_CONFIG
 
+warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
+import season_mode as SM
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "api"))
 from shots_lib import ZONES, classify_zone  # noqa: E402
+from paper_freeze import MAX_PAPER_SEASON  # noqa: E402
+
+FIT_THROUGH = MAX_PAPER_SEASON      # the --season mode's pooled fallback comes from the seasons up to this one
 
 MIN_MINUTES = 1500
 MIN_ZONE_FGA = 50
@@ -117,11 +138,15 @@ def vector_zones(x, y, shot_type):
 
 
 def main():
+    only = SM.parse_season()
     conn = psycopg2.connect(**DB_CONFIG)
     cur = conn.cursor()
 
     cur.execute("SELECT MIN(season), MAX(season) FROM player_playtypes;")
     s_min, s_max = cur.fetchone()
+    if only is not None:
+        SM.require_tables(cur, ["scouting_splits"], only)
+        s_min = s_max = only
     seasons = list(range(s_min, s_max + 1))
     cur.execute(
         """SELECT season, player_id, player_name, min * gp FROM player_season_stats
@@ -177,7 +202,8 @@ def main():
 
     # ---- play types ----
     cur.execute("""SELECT season, player_id, play_type, poss, ppp FROM player_playtypes
-                   WHERE side = 'offensive' AND poss > 0 AND play_type <> 'Misc';""")
+                   WHERE side = 'offensive' AND poss > 0 AND play_type <> 'Misc'""" +
+                ("" if only is None else " AND (season <= %s OR season = %s)"), None if only is None else (FIT_THROUGH, only))
     pt = pd.DataFrame(cur.fetchall(), columns=["season", "player_id", "play_type", "poss", "ppp"])
     pt[["poss", "ppp"]] = pt[["poss", "ppp"]].astype(float)
     pt["pts"] = pt["poss"] * pt["ppp"]
@@ -188,10 +214,14 @@ def main():
         X = np.column_stack([np.ones(len(g)), 1 / g["poss"].values]) * w[:, None]
         coef = np.linalg.lstsq(X, ((g["ppp"] - mu) ** 2).values * w, rcond=None)[0]
         sig[(s, t)] = float(np.sqrt(coef[1])) if coef[1] > 0 else None
-    by_type = pd.Series({k: v for k, v in sig.items() if v}).groupby(level=1).mean()
+    pooled = {k: v for k, v in sig.items() if v and (only is None or k[0] <= FIT_THROUGH)}
+    by_type = pd.Series(pooled).groupby(level=1).mean() if pooled else pd.Series(dtype=float)
     n_fallback = sum(1 for v in sig.values() if v is None)
     sig = {k: (v if v else float(by_type[k[1]])) for k, v in sig.items()}
-    print(f"  play-type per-possession SD: {len(sig)} (season, type) fits, {n_fallback} fell back to the type's mean")
+    print(f"  play-type per-possession SD: {len(sig)} (season, type) fits, {n_fallback} fell back to the type's mean"
+          + (f" (pooled over seasons <= {FIT_THROUGH})" if only is not None else ""))
+    if only is not None:
+        pt = pt[pt.season == only]
 
     lg = pt.groupby(["season", "play_type"])[["pts", "poss"]].sum().rename(columns={"pts": "lg_pts", "poss": "lg_poss"})
     own = pt.groupby(["season", "player_id"])[["pts", "poss"]].sum()
@@ -208,7 +238,8 @@ def main():
     # ---- shot context (v2) ----
     cur.execute("SELECT to_regclass('public.player_shot_context');")
     if cur.fetchone()[0] is not None:
-        cur.execute("SELECT season, player_id, dimension, bucket, fg2m, fg2a, fg3m, fg3a FROM player_shot_context;")
+        cur.execute("SELECT season, player_id, dimension, bucket, fg2m, fg2a, fg3m, fg3a FROM player_shot_context"
+                    + ("" if only is None else " WHERE season = %s"), None if only is None else (only,))
         sc = pd.DataFrame(cur.fetchall(), columns=["season", "player_id", "dimension", "bucket", "fg2m", "fg2a", "fg3m", "fg3a"])
         long = sc[["season", "player_id", "dimension", "bucket"]].assign(shot="3PT", m=sc["fg3m"], a=sc["fg3a"])
         lgc = long.groupby(["season", "dimension", "bucket", "shot"])[["m", "a"]].sum().rename(columns={"m": "lg_m", "a": "lg_a"})
@@ -225,7 +256,8 @@ def main():
     # ---- leverage (Garbage-Time Deflator splits) ----
     cur.execute("SELECT to_regclass('public.player_leverage_splits');")
     if cur.fetchone()[0] is not None:
-        cur.execute("SELECT season, player_id, bucket, fgm, fga FROM player_leverage_splits;")
+        cur.execute("SELECT season, player_id, bucket, fgm, fga FROM player_leverage_splits"
+                    + ("" if only is None else " WHERE season = %s"), None if only is None else (only,))
         lv = pd.DataFrame(cur.fetchall(), columns=["season", "player_id", "bucket", "fgm", "fga"])
         hi = lv[lv["bucket"] == "high"].set_index(["season", "player_id"])[["fgm", "fga"]]
         other = lv[lv["bucket"] != "high"].groupby(["season", "player_id"])[["fgm", "fga"]].sum()
@@ -243,6 +275,19 @@ def main():
     t["significant"] = t["p"] < ALPHA
     t["direction"] = np.where(t["z"] > 0, "strength", "weakness")
     print(f"  {len(t):,} real splits tested, {int(t['significant'].sum()):,} significant at p < {ALPHA}")
+    if only is not None:
+        n_del = SM.delete_season(cur, "scouting_splits", only)
+        psycopg2.extras.execute_values(cur, "INSERT INTO scouting_splits VALUES %s", [
+            (int(r.season), int(r.player_id), r.category, r.split, float(r.value), float(r.baseline),
+             None if pd.isna(r.own_avg) else float(r.own_avg), int(r.n), r.n_unit, float(r.z), float(r.p),
+             bool(r.significant), r.direction)
+            for r in t.itertuples()
+        ])
+        conn.commit()
+        print(f"--season {only}: {n_del} stored splits of {season_label(only)} replaced with {len(t):,} "
+              f"({len(qual)} qualified players so far); scouting_validation, zone_classifier_check and every other season untouched")
+        conn.close()
+        return
 
     # ---- validation: persistence into the next season ----
     nxt = t[["season", "player_id", "category", "split", "z", "significant"]].copy()

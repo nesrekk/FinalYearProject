@@ -98,12 +98,41 @@ summary.
 
 Usage:
     cd scripts && python3 build_rapm.py
+    cd scripts && python3 build_rapm.py --season 2027      # the live season only (round 9 step 4)
 Rerun after build_lineup_stints.py or load_bref_bpm_vorp.py.
+
+--season N (round 9 step 4, 2026-10-07; scripts/season_mode.py): fits the three
+versions for season N only and replaces only that season's rows of the four
+tables (no DDL; the tables must exist). What differs from a full run, and why:
+  * hyperparameters: for a season past the paper's test season
+    (api/paper_freeze.MAX_PAPER_SEASON, 2025-26) nothing is chosen on the
+    season's own stints. lambda and the prior scale are the stored choices
+    of that last paper season (rapm_fits: single and multi lambda 3,000,
+    prior scale 1.0), `lambda_rule` = 'frozen:2025-26'; the cross-validation
+    curve is still computed and stored, so the page can show where the
+    season's own minimum would have been. For a season up to the paper's the
+    rule is the full build's (the test proves `--season 2026` reproduces the
+    stored 2025-26 rows byte for byte).
+  * the bootstrap: the full build draws every fit's resamples from one
+    seeded stream in season order, so a season's intervals depend on the
+    draws made for the fits before it (round 9 issue R9-016). The --season
+    run replays those draws (the stored fits' game counts, in the full
+    build's order, through the same call) before drawing the season's, so
+    its intervals are the ones a full build would give the season.
+  * validation: the season's held-out-games rows come from its own folds;
+    its next-season and year-to-year rows read the earlier season's stored
+    ratings (player_rapm) and recompute that season's on/off from its
+    stints, exactly the full build's inputs.
+An early-season fit (a few games) has wide intervals and few qualified
+players: the API says so (the fit row's `games` and `lambda_rule`).
 """
 
 import hashlib
 import json
+import os
+import sys
 import time
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -113,6 +142,14 @@ import scipy.sparse as sp
 
 from db_config import DB_CONFIG
 
+warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
+import season_mode as SM
+
+_API_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "api")
+if _API_DIR not in sys.path:
+    sys.path.append(_API_DIR)
+from paper_freeze import MAX_PAPER_SEASON  # noqa: E402
+
 LAMBDAS = [250, 500, 1000, 1500, 2000, 3000, 4000, 6000, 8000, 12000, 16000, 24000, 32000, 48000, 64000, 96000, 128000]
 PRIOR_SCALES = [0.5, 0.75, 1.0, 1.25, 1.5]
 FOLDS = 5
@@ -121,6 +158,8 @@ SEED = 20260929
 QUALIFIED_POSS = 1000    # offence/defence-averaged possessions; the API's default floor
 WINDOW = 3               # seasons in the multi-season version
 VERSIONS = ("single", "multi", "prior")
+TABLES = ("player_rapm", "rapm_fits", "rapm_lambda_cv", "rapm_validation")
+FROZEN_RULE = f"frozen:{MAX_PAPER_SEASON - 1}-{str(MAX_PAPER_SEASON)[-2:]}"   # the --season mode's rule for a live season
 
 
 # ── Data ─────────────────────────────────────────────────────────────────────
@@ -344,9 +383,11 @@ def on_off_from_rows(design, mask):
 
 # ── One fit ──────────────────────────────────────────────────────────────────
 
-def cross_validate(design, prior=None, fixed_lambda=None):
+def cross_validate(design, prior=None, fixed_lambda=None, fixed_scale=None, rule=None):
     """Held-out weighted RMSE per (lambda, scale). The choice is the cross-validation
-    minimum, or the best scale at `fixed_lambda`; out-of-fold predictions at the choice."""
+    minimum, or the best scale at `fixed_lambda`, or (the --season mode of a live season)
+    the point (`fixed_lambda`, `fixed_scale`) with `rule` naming where it came from;
+    out-of-fold predictions at the choice."""
     folds = sorted(set(design.fold))
     grams = {}
     for k in folds:
@@ -373,14 +414,16 @@ def cross_validate(design, prior=None, fixed_lambda=None):
             curve.append({"lambda": lam, "prior_scale": s, "cv_rmse": rmse})
             oofs[(lam, s)] = preds
     cv_min = min(curve, key=lambda c: c["cv_rmse"])
-    if fixed_lambda is None:
+    if rule is not None:
+        chosen = next(c for c in curve if c["lambda"] == fixed_lambda and c["prior_scale"] == fixed_scale)
+    elif fixed_lambda is None:
         chosen = cv_min
     else:
         chosen = min((c for c in curve if c["lambda"] == fixed_lambda), key=lambda c: c["cv_rmse"])
     best = {"lambda": chosen["lambda"], "prior_scale": chosen["prior_scale"], "cv_rmse": chosen["cv_rmse"],
             "oof": oofs[(chosen["lambda"], chosen["prior_scale"])],
             "cv_best_lambda": cv_min["lambda"], "cv_best_scale": cv_min["prior_scale"], "cv_best_rmse": cv_min["cv_rmse"],
-            "lambda_rule": "cv_min" if fixed_lambda is None else "single_lambda"}
+            "lambda_rule": rule if rule is not None else "cv_min" if fixed_lambda is None else "single_lambda"}
     # Zero model on the same folds.
     zero = np.zeros(design.n)
     for k in folds:
@@ -392,12 +435,17 @@ def cross_validate(design, prior=None, fixed_lambda=None):
     return curve, best, (G_all, b_all)
 
 
+def boot_draw(rng, n_games):
+    """One resample of a fit's games: the one call on the seeded stream per bootstrap (the --season mode replays it)."""
+    return rng.integers(0, n_games, n_games)
+
+
 def bootstrap(design, lam, prior, rng):
     n_games = len(design.games)
     O = np.zeros((BOOTSTRAPS, design.P))
     D = np.zeros((BOOTSTRAPS, design.P))
     for b in range(BOOTSTRAPS):
-        cnt = np.bincount(rng.integers(0, n_games, n_games), minlength=n_games)
+        cnt = np.bincount(boot_draw(rng, n_games), minlength=n_games)
         wb = design.w * cnt[design.game_idx]
         G, bb, _ = design.gram(weights=wb)
         beta = design.solve(G, bb, lam, prior)
@@ -432,9 +480,10 @@ def player_sizes(design):
     return out
 
 
-def run_fit(version, season, rows, bpm, rng, log, fixed_lambda=None):
+def run_fit(version, season, rows, bpm, rng, log, fixed_lambda=None, fixed_scale=None, rule=None):
     """Fit one version for one (end) season. Returns (design, beta, fit_row, curve, player_rows, oof, oof_zero).
-    `fixed_lambda` (the prior version) keeps that lambda; cross-validation then picks only the prior scale."""
+    `fixed_lambda` (the prior version) keeps that lambda; cross-validation then picks only the prior scale.
+    With `rule` (the --season mode of a live season) both are fixed and nothing is chosen on the season."""
     if version == "multi":
         seasons = list(range(season - WINDOW + 1, season + 1))
     else:
@@ -446,7 +495,7 @@ def run_fit(version, season, rows, bpm, rng, log, fixed_lambda=None):
         prior_od = {p: (bpm[(p, season)][0], bpm[(p, season)][1]) for p in design.players if (p, season) in bpm}
         prior = design.prior_vector(prior_od)
     t0 = time.time()
-    curve, best, (G, b) = cross_validate(design, prior, fixed_lambda)
+    curve, best, (G, b) = cross_validate(design, prior, fixed_lambda, fixed_scale, rule)
     lam, scale = best["lambda"], best["prior_scale"]
     pv = None if prior is None else prior * scale
     beta = design.solve(G, b, lam, pv)
@@ -500,7 +549,7 @@ def run_fit(version, season, rows, bpm, rng, log, fixed_lambda=None):
     for c in curve:
         c.update({"version": version, "season": season})
     cv_note = "" if best["lambda_rule"] == "cv_min" else \
-        f" (cv minimum {best['cv_best_rmse']:.4f} at lambda {best['cv_best_lambda']}, scale {best['cv_best_scale']})"
+        f" ({best['lambda_rule']}; cv minimum {best['cv_best_rmse']:.4f} at lambda {best['cv_best_lambda']}, scale {best['cv_best_scale']})"
     log(f"  {version} {season}: {design.n} rows, {design.P} players, lambda {lam}"
         f"{'' if scale is None else f', prior scale {scale}'}, cv {best['cv_rmse']:.4f} vs zero {best['cv_rmse_zero']:.4f}"
         f"{cv_note}, home edge {2 * home:+.2f}/100 ({time.time() - t0:.0f}s)")
@@ -536,27 +585,36 @@ def held_out_validation(season, fits, bpm, log):
         out.append({"test": "held_out_games", "season": season, "model": "rapm_multi", **score(md, mask, m["oof"][mask])})
     out.append({"test": "held_out_games", "season": season, "model": "zero", **score(design, all_rows, single["oof_zero"])})
     # BPM (full-season published values, one scale fitted per training fold) and on/off recomputed per fold.
+    # A season in progress has no published BPM yet (Basketball-Reference's arrive at the season's end): its BPM
+    # row is skipped (a scale on an all-zero rating is singular), as is on/off while no player has both sides.
     bpm_o = {p: bpm[(p, season)][0] for p in design.players if (p, season) in bpm}
     bpm_d = {p: bpm[(p, season)][1] for p in design.players if (p, season) in bpm}
     bpm_vec = design.rating_vector(bpm_o, bpm_d)
     pred_bpm = np.zeros(n)
     pred_oo = np.zeros(n)
     k_b, k_o = [], []
+    has_oo = True
     for k in sorted(set(design.fold)):
         test = design.fold == k
         train = ~test
-        beta, kb = fit_nuisance(design, train, bpm_vec, True)
-        pred_bpm[test] = design.X[test] @ beta
-        k_b.append(kb)
+        if bpm_o:
+            beta, kb = fit_nuisance(design, train, bpm_vec, True)
+            pred_bpm[test] = design.X[test] @ beta
+            k_b.append(kb)
         oo = on_off_from_rows(design, train)
+        if not oo:
+            has_oo = False
+            continue
         oo_vec = design.rating_vector({p: v / 2 for p, v in oo.items()}, {p: v / 2 for p, v in oo.items()})
         beta, ko = fit_nuisance(design, train, oo_vec, True)
         pred_oo[test] = design.X[test] @ beta
         k_o.append(ko)
-    out.append({"test": "held_out_games", "season": season, "model": "bpm", "scale_fit": round(float(np.mean(k_b)), 3),
-                **score(design, all_rows, pred_bpm)})
-    out.append({"test": "held_out_games", "season": season, "model": "onoff", "scale_fit": round(float(np.mean(k_o)), 3),
-                **score(design, all_rows, pred_oo)})
+    if bpm_o:
+        out.append({"test": "held_out_games", "season": season, "model": "bpm", "scale_fit": round(float(np.mean(k_b)), 3),
+                    **score(design, all_rows, pred_bpm)})
+    if has_oo:
+        out.append({"test": "held_out_games", "season": season, "model": "onoff", "scale_fit": round(float(np.mean(k_o)), 3),
+                    **score(design, all_rows, pred_oo)})
     for r in out:
         r["fit_seasons"] = f"{season - 1}-{str(season)[-2:]} (other folds)"
     log(f"  held-out {season}: " + ", ".join(f"{r['model']} {r['game_rmse']:.2f}" for r in out))
@@ -701,18 +759,41 @@ def write(conn, player_rows, fit_rows, curve_rows, val_rows):
     conn.commit()
 
 
+def write_season(conn, season, player_rows, fit_rows, curve_rows, val_rows):
+    """The --season mode's write: only `season`'s rows of the four tables are deleted and inserted (no DDL; the
+    tracker's own rapm_fits row for the season, version 'tracker', is build_rating_tracker.py's to replace)."""
+    cur = conn.cursor()
+    SM.require_tables(cur, TABLES, season)
+    n = 0
+    for t in ("rapm_validation", "rapm_lambda_cv", "player_rapm"):
+        n += SM.delete_season(cur, t, season)
+    n += SM.delete_season(cur, "rapm_fits", season, "season = %s AND version IN ('single', 'multi', 'prior')")
+    psycopg2.extras.execute_values(cur, f"INSERT INTO player_rapm ({', '.join(PLAYER_COLS)}) VALUES %s",
+                                   [tuple(clean(r.get(c)) for c in PLAYER_COLS) for r in player_rows], page_size=2000)
+    psycopg2.extras.execute_values(cur, f"INSERT INTO rapm_fits ({', '.join(FIT_COLS)}) VALUES %s",
+                                   [tuple(clean(r.get(c)) for c in FIT_COLS) for r in fit_rows])
+    psycopg2.extras.execute_values(cur, f"INSERT INTO rapm_lambda_cv ({', '.join(CURVE_COLS)}) VALUES %s",
+                                   [tuple(clean(r.get(c)) for c in CURVE_COLS) for r in curve_rows])
+    psycopg2.extras.execute_values(cur, f"INSERT INTO rapm_validation ({', '.join(VAL_COLS)}) VALUES %s",
+                                   [tuple(clean(r.get(c)) for c in VAL_COLS) for r in val_rows])
+    conn.commit()
+    return n
+
+
 # ── Checks ───────────────────────────────────────────────────────────────────
 
-def print_checks(conn, names):
+def print_checks(conn, names, season=None):
+    """The checks the README quotes; with `season` only that season's (the --season mode)."""
     cur = conn.cursor()
+    only = "" if season is None else f" AND season = {int(season)}"
     print("\nFits (rapm_fits):")
-    print(pd.read_sql_query("""SELECT version, season, games, rows, players, lambda, prior_scale, lambda_rule, cv_rmse,
+    print(pd.read_sql_query(f"""SELECT version, season, games, rows, players, lambda, prior_scale, lambda_rule, cv_rmse,
                                       cv_rmse_zero, cv_best_lambda, cv_best_scale, cv_best_rmse, home_edge_per_100, qualified
-                               FROM rapm_fits ORDER BY version, season""", conn).to_string(index=False))
+                               FROM rapm_fits WHERE version IN ('single', 'multi', 'prior'){only} ORDER BY version, season""", conn).to_string(index=False))
     for version in VERSIONS:
         df = pd.read_sql_query(
-            """SELECT season, player_id, teams, poss, orapm, drapm, rapm, rapm_se, bpm FROM player_rapm
-               WHERE version = %s AND qualified ORDER BY season, rapm DESC""", conn, params=(version,))
+            f"""SELECT season, player_id, teams, poss, orapm, drapm, rapm, rapm_se, bpm FROM player_rapm
+               WHERE version = %s AND qualified{only} ORDER BY season, rapm DESC""", conn, params=(version,))
         df["name"] = df.player_id.map(names)
         print(f"\n{version}: top 8 per season (qualified, {QUALIFIED_POSS}+ possessions)")
         for season, g in df.groupby("season"):
@@ -720,22 +801,123 @@ def print_checks(conn, names):
             jok = g.reset_index(drop=True)
             jrank = jok.index[jok.player_id == 203999]
             jr = f"Jokić #{jrank[0] + 1} of {len(jok)}" if len(jrank) else "Jokić not qualified"
-            r = g[["rapm", "bpm"]].dropna().corr().iloc[0, 1]
+            r = g[["rapm", "bpm"]].dropna().corr().iloc[0, 1] if g[["rapm", "bpm"]].dropna().shape[0] > 2 else float("nan")
             print(f"  {season - 1}-{str(season)[-2:]} ({jr}; r with BPM {r:.2f}, sd RAPM {g.rapm.std():.2f} vs BPM {g.bpm.std():.2f}): "
                   + "; ".join(f"{x.name} {x.rapm:+.1f}±{x.rapm_se:.1f}" for x in top.itertuples()))
+        if df.empty:
+            print(f"  (no qualified player: under {QUALIFIED_POSS} possessions each so far)")
     print("\nValidation (rapm_validation):")
-    v = pd.read_sql_query("""SELECT test, season, model, fit_seasons, games, coverage, coverage_all10, scale_fit, stint_rmse,
+    v = pd.read_sql_query(f"""SELECT test, season, model, fit_seasons, games, coverage, coverage_all10, scale_fit, stint_rmse,
                                     game_rmse, game_corr, corr, players
-                             FROM rapm_validation ORDER BY test, season, game_rmse NULLS LAST, model""", conn)
+                             FROM rapm_validation WHERE TRUE{only} ORDER BY test, season, game_rmse NULLS LAST, model""", conn)
     print(v.to_string(index=False))
-    for t in ("player_rapm", "rapm_fits", "rapm_lambda_cv", "rapm_validation"):
+    for t in TABLES:
         cur.execute(f"SELECT COUNT(*), pg_size_pretty(pg_total_relation_size('{t}')) FROM {t}")
         n, size = cur.fetchone()
         print(f"  {t}: {n:,} rows, {size}")
 
 
+def stored_rows(conn, version, season):
+    """The stored player_rapm rows of one fit, in the shape run_fit returns them (REAL columns rounded back to the
+    three decimals the build wrote): the --season mode's earlier-season ratings for the validation."""
+    df = pd.read_sql_query("""SELECT player_id, orapm, drapm, rapm, qualified FROM player_rapm
+                              WHERE version = %s AND season = %s ORDER BY player_id""", conn, params=(version, int(season)))
+    return [{"player_id": int(r.player_id), "orapm": round(float(r.orapm), 3), "drapm": round(float(r.drapm), 3),
+             "rapm": round(float(r.rapm), 3), "qualified": bool(r.qualified)} for r in df.itertuples()]
+
+
+def replay_draws(conn, rng, seasons_before, first_season, log):
+    """Advance the seeded stream past the bootstrap draws of every fit a full build makes before `season`: the
+    stored fits' game counts, in the full build's order (season by season, single / multi / prior). Stops if one
+    is missing or was drawn under another seed or count (then only a full build can give the season its intervals)."""
+    fits = pd.read_sql_query("""SELECT version, season, games, bootstraps, seed FROM rapm_fits
+                                WHERE version IN ('single', 'multi', 'prior') AND season < %s""", conn, params=(int(max(seasons_before) + 1) if seasons_before else 0,))
+    by = {(r.version, int(r.season)): r for r in fits.itertuples()}
+    n_draws = 0
+    for s in seasons_before:
+        for version in VERSIONS:
+            if version == "multi" and s - WINDOW + 1 < first_season:
+                continue
+            r = by.get((version, s))
+            if r is None:
+                raise SystemExit(f"--season: rapm_fits has no {version} fit for {s}; run the full build first")
+            if int(r.bootstraps) != BOOTSTRAPS or int(r.seed) != SEED:
+                raise SystemExit(f"--season: the stored {version} {s} fit used {r.bootstraps} bootstraps / seed {r.seed}, "
+                                 f"this build {BOOTSTRAPS} / {SEED}; run the full build")
+            for _ in range(BOOTSTRAPS):
+                boot_draw(rng, int(r.games))
+            n_draws += 1
+    log(f"  bootstrap stream replayed past {n_draws} earlier fits ({BOOTSTRAPS} draws each)")
+
+
+def frozen_choices(conn):
+    """{version: (lambda, prior_scale)} of the last paper season's stored fits: a live season's hyperparameters."""
+    df = pd.read_sql_query("SELECT version, lambda, prior_scale FROM rapm_fits WHERE season = %s", conn, params=(MAX_PAPER_SEASON,))
+    out = {r.version: (int(r.lambda_), None if r.prior_scale is None or pd.isna(r.prior_scale) else float(r.prior_scale))
+           for r in df.rename(columns={"lambda": "lambda_"}).itertuples()}
+    missing = [v for v in VERSIONS if v not in out]
+    if missing:
+        raise SystemExit(f"--season: rapm_fits has no {MAX_PAPER_SEASON} fit for {missing}; run the full build first")
+    return out
+
+
+def main_season(conn, season, rows, bpm, names, log):
+    """The --season mode (docstring): season N's fits, the stream replayed, the validation from stored ratings."""
+    seasons = sorted(int(s) for s in rows.season.unique())
+    if season not in seasons:
+        raise SystemExit(f"--season {season}: no tracked stint of that season in lineup_stints")
+    before = [s for s in seasons if s < season]
+    live = season > MAX_PAPER_SEASON
+    frozen = frozen_choices(conn) if live else None
+    rng = np.random.default_rng(SEED)
+    replay_draws(conn, rng, before, seasons[0], log)
+    n_games = rows[rows.season == season].game_id.nunique()
+    n_bpm = sum(1 for (p, s_) in bpm if s_ == season)
+    if live and n_bpm == 0:
+        log(f"--season {season}: no published BPM for the season yet (Basketball-Reference's arrive at its end): the BPM-prior "
+            f"version shrinks every player toward zero, like the one-season version, until then")
+    log(f"--season {season}: {n_games} games on file"
+        + (f"; hyperparameters frozen at {MAX_PAPER_SEASON - 1}-{str(MAX_PAPER_SEASON)[-2:]}'s: "
+           + ", ".join(f"{v} lambda {frozen[v][0]}" + (f" scale {frozen[v][1]}" if frozen[v][1] is not None else "") for v in VERSIONS)
+           if live else "; lambda and scale by cross-validation (a paper season)"))
+    fits, fit_rows, curve_rows, player_rows = {}, [], [], []
+    single_lambda = None
+    for version in VERSIONS:
+        if version == "multi" and season - WINDOW + 1 < seasons[0]:
+            continue
+        if live:
+            lam, scale = frozen[version]
+            out = run_fit(version, season, rows, bpm, rng, log, fixed_lambda=lam, fixed_scale=scale, rule=FROZEN_RULE)
+        else:
+            out = run_fit(version, season, rows, bpm, rng, log, single_lambda if version == "prior" else None)
+        design, beta, fit_row, curve, prow, oof, oof_zero = out
+        if version == "single":
+            single_lambda = fit_row["lambda"]
+        fits[(version, season)] = {"design": design, "beta": beta, "player_rows": prow, "oof": oof, "oof_zero": oof_zero}
+        fit_rows.append(fit_row)
+        curve_rows.extend(curve)
+        player_rows.extend(prow)
+    prev = season - 1
+    onoff_full = {season: on_off_from_rows(fits[("single", season)]["design"], np.ones(fits[("single", season)]["design"].n, bool))}
+    if prev in seasons:
+        for version in VERSIONS:
+            stored = stored_rows(conn, version, prev)
+            if stored:
+                fits[(version, prev)] = {"player_rows": stored}
+        d_prev = Design(rows[rows.season == prev])
+        onoff_full[prev] = on_off_from_rows(d_prev, np.ones(d_prev.n, bool))
+    val_rows = held_out_validation(season, fits, bpm, log)
+    val_rows += next_season_validation(season, fits, bpm, onoff_full, log)
+    val_rows += year_to_year(fits, bpm, onoff_full, [season], log)
+    n_del = write_season(conn, season, player_rows, fit_rows, curve_rows, val_rows)
+    log(f"--season {season}: replaced {n_del} rows with {len(player_rows)} player rows, {len(fit_rows)} fits, {len(curve_rows)} curve points, "
+        f"{len(val_rows)} validation rows; every other season's rows untouched")
+    print_checks(conn, names, season)
+
+
 def main():
     t0 = time.time()
+    season = SM.parse_season()
     conn = psycopg2.connect(**DB_CONFIG)
     log = lambda s: print(f"{s}  [{time.time() - t0:.0f}s]")
     rows, n_stints, dropped = load_rows(conn)
@@ -744,6 +926,10 @@ def main():
     seasons = sorted(rows.season.unique())
     log(f"{n_stints} tracked stints -> {len(rows)} side-rows ({dropped} sides with no possession dropped); "
         f"seasons {seasons[0]}-{seasons[-1]}; {len(bpm)} BPM rows")
+    if season is not None:
+        main_season(conn, season, rows, bpm, names, log)
+        conn.close()
+        return
     rng = np.random.default_rng(SEED)
 
     fits = {}

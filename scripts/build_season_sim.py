@@ -61,8 +61,36 @@ Tables written (dropped and rebuilt):
 
 Usage:
     cd scripts && python3 build_season_sim.py            (~2 min)
+    cd scripts && python3 build_season_sim.py --season 2027      # the live season only (round 9 step 4)
 Rerun after game_scores or team_game_fatigue change (a new season loaded) and
 after fetch_postseason_games.py (it needs that season's postseason on file).
+
+--season N (round 9 step 4, 2026-10-07; scripts/season_mode.py): the pre-game
+odds and the simulator's season row for season N only, with every pooled
+fit held where the paper left it (round 9 issue R9-009):
+  * the prior's three constants are recomputed from the seasons up to the
+    paper's test season (api/paper_freeze.MAX_PAPER_SEASON, 2025-26) and must
+    reproduce the stored season_sim_params to 1e-9, which are then applied to
+    N (the full build fits them on every season on file);
+  * the four forms' coefficients for N are fitted on every other season up
+    to the paper's, the full build's leave-one-season-out rule; for a live
+    season (N past the paper's) that is the all-season fit, and the result
+    must reproduce the stored pregame_model_fit coefficients to 1e-9. The
+    chosen form is the stored one. So N's odds are held out in the same
+    sense as every stored season's;
+  * written for N: its game_pregame_odds rows (the games played so far),
+    its pregame_model_seasons rows (each form's log loss on those games: the
+    season's score so far) and its season_sim_seasons row. For a complete
+    season (16 playoff teams in postseason_games) also its season_postseason
+    rows and its season_sim_backtest rows, as the full build makes them; for
+    a live season those two wait for the season's end, and the season row's
+    dates and checkpoints come from ESPN's schedule as the Forecast Ledger
+    last read it (api/season_sim_live.py), the games count being the games
+    played so far (the row's note says so). pregame_model_fit,
+    pregame_calibration, season_sim_params, season_sim_backtest_summary and
+    season_sim_calibration are pooled over the paper's seasons and never
+    touched. The test proves `--season 2026` reproduces the stored 2025-26
+    rows byte for byte.
 """
 
 import sys
@@ -77,9 +105,14 @@ import psycopg2
 from psycopg2.extras import execute_values
 
 from db_config import DB_CONFIG
+import season_mode as SM
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 import season_sim_lib as L  # noqa: E402
+import season_sim_live as SL  # noqa: E402
+from paper_freeze import MAX_PAPER_SEASON  # noqa: E402
+
+FIT_THROUGH = MAX_PAPER_SEASON      # the --season mode's pooled fits come from the seasons up to this one
 
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 
@@ -109,6 +142,10 @@ def py(v):
 def write(cur, table, ddl, cols, rows):
     cur.execute(f"DROP TABLE IF EXISTS {table}")
     cur.execute(f"CREATE TABLE {table} ({ddl})")
+    insert(cur, table, cols, rows)
+
+
+def insert(cur, table, cols, rows):
     execute_values(cur, f"INSERT INTO {table} ({', '.join(cols)}) VALUES %s",
                    [tuple(py(v) for v in row) for row in rows], page_size=2000)
 
@@ -215,10 +252,11 @@ def postseason_facts(conn, season_games):
                          "wins": int(st.wins[i]), "games": int(st.games[i]), "position": pos[t]})
     df = pd.DataFrame(rows)
     checked = sorted(s for s in season_games if s in shots_po)
+    br_checked = sorted(s for s in bref if len(bref[s]) == 16 and s in season_games)
     print(f"postseason facts: 16 playoff teams every season; cross-checked against player_shots for "
-          f"{checked[0]}-{checked[-1]} and Basketball-Reference for {min(s for s in bref if len(bref[s]) == 16)}-"
-          f"{max(s for s in bref if len(bref[s]) == 16 and s in season_games)}; play-in teams: "
-          f"{ {s: len(playin[s]) for s in sorted(playin)} }")
+          + (f"{checked[0]}-{checked[-1]}" if checked else "no season") + " and Basketball-Reference for "
+          + (f"{br_checked[0]}-{br_checked[-1]}" if br_checked else "no season (its flag lists 16 teams for none of these)")
+          + f"; play-in teams: { {s: len(playin[s]) for s in sorted(playin) if s in season_games} }")
     return df
 
 
@@ -304,6 +342,158 @@ def backtest(season_games, params, loso_betas, all_beta, chosen, facts):
     return bt, pd.DataFrame(summary), pd.DataFrame(cal)
 
 
+ODDS_COLS = ["game_id", "season", "game_date", "home", "away", "venue", "home_b2b", "away_b2b", "home_games",
+             "away_games", "r_home", "r_away", "hca", "exp_margin", "p_home", "p_baseline", "p_current", "p_prior",
+             "p_prior_rest", "home_won", "margin", "pts_home", "pts_away"]
+SEASON_COLS = ["season", "games", "teams", "first_date", "last_date", "halfway_date", "sixty_date", "play_in", "hca_prev",
+               "sigma_prev", "note"]
+PER_SEASON_COLS = ["form", "season", "n", "log_loss", "brier", "favourite_win_rate"]
+POST_COLS = ["season", "team_abbreviation", "conference", "play_in", "playoffs", "top6", "wins", "games", "position"]
+BT_COLS = ["season", "checkpoint", "checkpoint_date", "method", "team_abbreviation", "conference", "wins_now", "games_now",
+           "position_now", "mean_wins", "wins_p10", "wins_p90", "p_playoffs", "p_top6", "p_playin", "p_first",
+           "final_wins", "final_games", "final_position", "made_playoffs", "made_top6", "played_playin"]
+SEASON_TABLES = ["game_pregame_odds", "pregame_model_seasons", "season_sim_seasons", "season_postseason", "season_sim_backtest"]
+
+
+def odds_frame(R):
+    """The odds table's two derived columns, in place (shared by both write paths)."""
+    R["pts_home"], R["pts_away"] = R.pts_for, R.pts_against
+    R["home_b2b"], R["away_b2b"] = R.home_b2b.astype(bool), R.away_b2b.astype(bool)
+
+
+def season_row(season, sg, prior, cps, games=None, note=None):
+    """One season_sim_seasons row (the full build's; the --season mode passes a live season's checkpoints and note)."""
+    return {"season": season, "games": int(sg.game_id.nunique()) if games is None else games, "teams": int(sg.team_abbreviation.nunique()),
+            "first_date": cps.get("opening", sg.game_date.min()) if "opening" in cps else sg.game_date.min(),
+            "last_date": cps.get("last", sg.game_date.max()) if "last" in cps else sg.game_date.max(),
+            "halfway_date": cps["halfway"], "sixty_date": cps["sixty"], "play_in": season >= L.PLAY_IN_FROM,
+            "hca_prev": prior["hca"], "sigma_prev": prior["sigma"],
+            "note": {2013: "1,229 games: one Boston-Indiana game was cancelled.",
+                     2020: "Shortened season: 64-75 games a team; the schedule after a date is the one actually played, "
+                           "including the Orlando restart (no home court), and the 22-team format and the 8th-seed play-in "
+                           "are not modelled (top 8 by win%).",
+                     2021: "72-game season; first season with the play-in."}.get(season, "") if note is None else note}
+
+
+def season_complete(conn, season):
+    """The full build's condition for a season's facts: 16 playoff teams in postseason_games (and 8 play-in teams
+    from 2020-21)."""
+    cur = conn.cursor()
+    cur.execute("""SELECT count(DISTINCT t) FILTER (WHERE stage = 'playoffs'), count(DISTINCT t) FILTER (WHERE stage <> 'playoffs')
+                   FROM (SELECT stage, home AS t FROM postseason_games WHERE season = %s
+                         UNION ALL SELECT stage, away FROM postseason_games WHERE season = %s) x""", (season, season))
+    po, pi = cur.fetchone()
+    return po == 16 and (season < L.PLAY_IN_FROM or pi == 8)
+
+
+def check_frozen(conn, params, betas):
+    """The --season mode's pooled fits must reproduce the stored rows (R9-009): the prior constants and, for a live
+    season, every form's all-season coefficients."""
+    cur = conn.cursor()
+    cur.execute("SELECT name, value FROM season_sim_params")
+    stored = dict(cur.fetchall())
+    for k in ("carry", "tau2", "hca_n0", "pairs", "next_srs_r"):
+        if abs(float(params[k]) - float(stored[k])) > 1e-9:
+            raise SystemExit(f"--season: the prior constant {k} from seasons <= {FIT_THROUGH} ({params[k]!r}) doesn't reproduce "
+                             f"the stored season_sim_params ({stored[k]!r}); run the full build")
+    cur.execute("SELECT form, beta, chosen FROM pregame_model_fit")
+    rows = {f: (b, c) for f, b, c in cur.fetchall()}
+    chosen = next(f for f, (b, c) in rows.items() if c)
+    if betas is not None:
+        for form, beta in betas.items():
+            for k, v in beta.items():
+                if abs(float(v) - float(rows[form][0][k])) > 1e-9:
+                    raise SystemExit(f"--season: {form}'s coefficient {k} fitted on seasons <= {FIT_THROUGH} ({v!r}) doesn't reproduce "
+                                     f"the stored pregame_model_fit ({rows[form][0][k]!r}); run the full build")
+    return chosen, {f: b for f, (b, c) in rows.items()}
+
+
+def main_season(season):
+    """The --season mode (docstring)."""
+    t0 = time.time()
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    SM.require_tables(cur, SEASON_TABLES + ["pregame_model_fit", "season_sim_params"], season)
+    df = L.prepare_rest(pd.read_sql(L.GAMES_REST_SQL.format(where=f"WHERE g.season <= {int(max(FIT_THROUGH, season))}"), conn))
+    season_games = dict(tuple(df.groupby("season")))
+    if season - 1 not in season_games:
+        raise SystemExit(f"--season {season}: no games of {season - 1} on file (the prior needs them)")
+    sg = season_games.get(season, df.iloc[0:0])
+    fit_games = {s: g for s, g in season_games.items() if s <= FIT_THROUGH}
+    params = L.fit_params(fit_games)
+    live = season > FIT_THROUGH
+    print(f"--season {season}: {sg.game_id.nunique():,} games played ({'live' if live else 'a paper season'}); prior constants from "
+          f"seasons <= {FIT_THROUGH}: " + str({k: round(v, 4) if isinstance(v, float) else v for k, v in params.items()}))
+
+    # the forms, leave-one-season-out over the paper's seasons (a live season: the all-season fit)
+    use = {s: g for s, g in fit_games.items()}
+    use[season] = sg
+    R_all = build_features(use, params) if len(sg) else build_features(fit_games, params)
+    y = R_all.home_won.to_numpy(float)
+    tr = (R_all.season != season).to_numpy()
+    betas, preds_by_form = {}, {}
+    for form in L.FORMS:
+        if form == "baseline":
+            continue
+        cols = L.FEATURES[form]
+        X = R_all[cols].to_numpy(float)
+        b = L.logit_fit(X[tr], y[tr])
+        betas[form] = dict(zip(cols, b.tolist()))
+        preds_by_form[form] = L.sigmoid(X[~tr] @ b)       # the full build's own slice and product (fit_forms), bit for bit
+    chosen, stored_betas = check_frozen(conn, params, betas if live else None)
+    print(f"  coefficients for {season} fitted on {int(tr.sum()):,} games of the other seasons"
+          + (" = the stored all-season fit (checked to 1e-9)" if live else " (leave-one-season-out, as stored)")
+          + f"; chosen form {chosen}: " + ", ".join(f"{k} {v:+.4f}" for k, v in betas[chosen].items()))
+    R = R_all[R_all.season == season].copy()
+    per_season = []
+    if len(R):
+        yy = R.home_won.to_numpy(float)
+        for form in L.FORMS:
+            preds = R.p_baseline.to_numpy(float) if form == "baseline" else preds_by_form[form]
+            R[f"p_{form}"] = preds
+            per_season.append({"form": form, "season": season, "n": int(len(R)), "log_loss": L.log_loss(preds, yy), "brier": L.brier(preds, yy),
+                               "favourite_win_rate": float(np.where(preds >= 0.5, yy, 1 - yy).mean())})
+        R["p_home"] = R[f"p_{chosen}"]
+        odds_frame(R)
+        print("  log loss so far: " + ", ".join(f"{r['form']} {r['log_loss']:.4f}" for r in per_season) + f" over {len(R)} games")
+
+    prior = L.season_prior(season_games[season - 1])
+    complete = len(sg) > 0 and season_complete(conn, season)
+    facts = bt = None
+    if complete:
+        facts = postseason_facts(conn, {season: sg})
+        bt, _, _ = backtest({season - 1: season_games[season - 1], season: sg}, params, {chosen: {season: betas[chosen]}},
+                            stored_betas[chosen], chosen, facts)
+        srow = season_row(season, sg, prior, L.checkpoint_dates(sg))
+    else:
+        sched = SL.schedule(cur, season)
+        if sched.empty:
+            raise SystemExit(f"--season {season}: the season is not complete and no schedule is on file (ledger_results / ledger_schedule)")
+        cps = SL.checkpoint_dates(sched)
+        through = sg.game_date.max() if len(sg) else None
+        note = (f"Live season: {sg.game_id.nunique():,} of {len(sched):,} games played"
+                + (f", through {through.isoformat()}" if through is not None else "")
+                + f"; the remaining games are ESPN's schedule as the Forecast Ledger last read it ({sched.source.iloc[0]}); "
+                f"playoff facts and the backtest come at the season's end.")
+        srow = season_row(season, sg if len(sg) else sched.assign(game_id=sched.espn_id, team_abbreviation=sched.home), prior, cps,
+                          games=int(sg.game_id.nunique()), note=note)
+        print(f"  {note}")
+
+    n = sum(SM.delete_season(cur, t, season) for t in SEASON_TABLES)
+    if len(R):
+        insert(cur, "game_pregame_odds", ODDS_COLS, R[ODDS_COLS].itertuples(index=False, name=None))
+        insert(cur, "pregame_model_seasons", PER_SEASON_COLS, [tuple(r[c] for c in PER_SEASON_COLS) for r in per_season])
+    insert(cur, "season_sim_seasons", SEASON_COLS, [tuple(srow[c] for c in SEASON_COLS)])
+    if complete:
+        insert(cur, "season_postseason", POST_COLS, facts[POST_COLS].itertuples(index=False, name=None))
+        insert(cur, "season_sim_backtest", BT_COLS, bt[BT_COLS].itertuples(index=False, name=None))
+    conn.commit()
+    print(f"--season {season}: replaced {n} rows with {len(R):,} game odds, {len(per_season)} per-form scores, 1 season row"
+          + (f", {len(facts)} postseason rows, {len(bt):,} backtest rows" if complete else " (postseason and backtest: at the season's end)")
+          + f"; the pooled tables and every other season untouched ({time.time() - t0:.0f}s)")
+    conn.close()
+
+
 def main():
     t0 = time.time()
     conn = psycopg2.connect(**DB_CONFIG)
@@ -357,24 +547,12 @@ def main():
             continue
         sg = season_games[season]
         prior = L.season_prior(season_games[season - 1])
-        cps = L.checkpoint_dates(sg)
-        srows.append({"season": season, "games": int(sg.game_id.nunique()), "teams": int(sg.team_abbreviation.nunique()),
-                      "first_date": sg.game_date.min(), "last_date": sg.game_date.max(),
-                      "halfway_date": cps["halfway"], "sixty_date": cps["sixty"], "play_in": season >= L.PLAY_IN_FROM,
-                      "hca_prev": prior["hca"], "sigma_prev": prior["sigma"],
-                      "note": {2013: "1,229 games: one Boston-Indiana game was cancelled.",
-                               2020: "Shortened season: 64-75 games a team; the schedule after a date is the one actually played, "
-                                     "including the Orlando restart (no home court), and the 22-team format and the 8th-seed play-in "
-                                     "are not modelled (top 8 by win%).",
-                               2021: "72-game season; first season with the play-in."}.get(season, "")})
+        srows.append(season_row(season, sg, prior, L.checkpoint_dates(sg)))
 
     # --- write --------------------------------------------------------------
     cur = conn.cursor()
-    odds_cols = ["game_id", "season", "game_date", "home", "away", "venue", "home_b2b", "away_b2b", "home_games",
-                 "away_games", "r_home", "r_away", "hca", "exp_margin", "p_home", "p_baseline", "p_current", "p_prior",
-                 "p_prior_rest", "home_won", "margin", "pts_home", "pts_away"]
-    R["pts_home"], R["pts_away"] = R.pts_for, R.pts_against
-    R["home_b2b"], R["away_b2b"] = R.home_b2b.astype(bool), R.away_b2b.astype(bool)
+    odds_cols = ODDS_COLS
+    odds_frame(R)
     write(cur, "game_pregame_odds", """game_id TEXT PRIMARY KEY, season INTEGER, game_date DATE, home TEXT, away TEXT,
         venue SMALLINT, home_b2b BOOLEAN, away_b2b BOOLEAN, home_games SMALLINT, away_games SMALLINT,
         r_home DOUBLE PRECISION, r_away DOUBLE PRECISION, hca DOUBLE PRECISION, exp_margin DOUBLE PRECISION,
@@ -403,9 +581,7 @@ def main():
     write(cur, "season_sim_seasons", """season INTEGER PRIMARY KEY, games INTEGER, teams INTEGER, first_date DATE,
         last_date DATE, halfway_date DATE, sixty_date DATE, play_in BOOLEAN, hca_prev DOUBLE PRECISION,
         sigma_prev DOUBLE PRECISION, note TEXT""",
-          ["season", "games", "teams", "first_date", "last_date", "halfway_date", "sixty_date", "play_in", "hca_prev",
-           "sigma_prev", "note"], [tuple(r[c] for c in ["season", "games", "teams", "first_date", "last_date", "halfway_date",
-                                                        "sixty_date", "play_in", "hca_prev", "sigma_prev", "note"]) for r in srows])
+          SEASON_COLS, [tuple(r[c] for c in SEASON_COLS) for r in srows])
     prow = [("carry", params["carry"], "Slope of a season's SRS on the previous season's (through the origin), all franchise pairs"),
             ("tau2", params["tau2"], "Residual variance of that regression: the prior's variance (points per game, squared)"),
             ("hca_n0", params["hca_n0"], "Games' worth of prior for last season's home court (game variance / variance of year-to-year changes)"),
@@ -415,9 +591,7 @@ def main():
             ("min_games_for_srs", float(L.MIN_GAMES_FOR_SRS), "Games before SRS replaces raw venue-adjusted margins")]
     write(cur, "season_sim_params", "name TEXT PRIMARY KEY, value DOUBLE PRECISION, note TEXT", ["name", "value", "note"], prow)
     cur.execute("INSERT INTO season_sim_params VALUES ('chosen_form', NULL, %s)", (chosen,))
-    bt_cols = ["season", "checkpoint", "checkpoint_date", "method", "team_abbreviation", "conference", "wins_now", "games_now",
-               "position_now", "mean_wins", "wins_p10", "wins_p90", "p_playoffs", "p_top6", "p_playin", "p_first",
-               "final_wins", "final_games", "final_position", "made_playoffs", "made_top6", "played_playin"]
+    bt_cols = BT_COLS
     write(cur, "season_sim_backtest", """season INTEGER, checkpoint TEXT, checkpoint_date DATE, method TEXT,
         team_abbreviation TEXT, conference TEXT, wins_now INTEGER, games_now INTEGER, position_now SMALLINT,
         mean_wins DOUBLE PRECISION, wins_p10 DOUBLE PRECISION, wins_p90 DOUBLE PRECISION, p_playoffs DOUBLE PRECISION,
@@ -441,4 +615,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    _season = SM.parse_season()
+    if _season is not None:
+        main_season(_season)
+    else:
+        main()

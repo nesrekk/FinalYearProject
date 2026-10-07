@@ -249,15 +249,17 @@ def test_preseason_run_stores_every_feed(preseason_run):
     (n_sc, n_ok, n_espn), = q(f"""SELECT count(*), count(*) FILTER (WHERE (s.pts_for > s.pts_against) = f.win), count(s.espn_id)
                                    FROM {SCHEMA}.game_scores s JOIN {SCHEMA}.team_game_fatigue f USING (game_id, team_abbreviation)""")
     assert n_sc == n_ok == n_espn == 16
-    assert q(f"SELECT count(*) FROM {SCHEMA}.game_team_box")[0][0] == 16
+    # LeagueGameFinder's preseason table lists every game played by the run day, not only through --date (16 rows on
+    # 2026-10-06, 24 on 2026-10-07; round 9 issue R9-028): at least the eight finals' sixteen
+    assert q(f"SELECT count(*) FROM {SCHEMA}.game_team_box")[0][0] >= 16
     assert q(f"SELECT count(*) FROM {SCHEMA}.team_game_fatigue WHERE rest_days IS NULL")[0][0] >= 16 - 8
     assert q(f"SELECT count(*) FROM {SCHEMA}.postseason_games")[0][0] == 0
     (logged, with_officials, unnamed), = q(f"""SELECT (SELECT count(*) FROM {SCHEMA}.game_officials_fetch_log),
         (SELECT count(DISTINCT game_id) FROM {SCHEMA}.game_officials), (SELECT count(*) FROM {SCHEMA}.game_officials WHERE official_name = '')""")
-    assert logged == 8 and with_officials >= 7 and unnamed == 0
+    assert logged >= 8 and with_officials >= 7 and unnamed == 0   # every preseason game played by the run day (R9-028)
     # the chart against the box score: equal in all but at most one game (0012600067's chart is short of the box by 17)
     rows = q(f"""SELECT b.game_id, sum(b.fga), (SELECT count(*) FROM {SCHEMA}.player_shots s WHERE s.game_id = b.game_id)
-                 FROM {SCHEMA}.game_team_box b GROUP BY 1""")
+                 FROM {SCHEMA}.game_team_box b WHERE b.game_id IN (SELECT game_id FROM {SCHEMA}.game_scores) GROUP BY 1""")
     assert len(rows) == 8 and sum(1 for _, box, chart in rows if box == chart) >= 7 and all(chart <= box for _, box, chart in rows), rows
     assert q(f"SELECT count(*) FROM {SCHEMA}.player_shots WHERE season <> '2026-27' OR shot_zone_basic IS NOT NULL")[0][0] == 0
     (n_ps, n_z, n_age, n_pf), = q(f"""SELECT count(*), count(impact_score), count(age), count(pf) FROM {SCHEMA}.player_season_stats
