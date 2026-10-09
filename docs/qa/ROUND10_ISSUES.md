@@ -19,6 +19,10 @@ live spike and the harness found, each open or decided and saying which step tak
 test failing on the day's NBA.com data, for 9-7); **step 6, run beside it in another chat, logged R10-009 to R10-011**
 (decided, in `api/ask_sentences.json`).
 
+**Round 10 step 7 (2026-10-10): 21 entries in all; step 7 logged R10-016 to R10-021** (the intent engine's held-out
+score cut short by Google's daily quota and how it is completed, the retry that made it worse (fixed), the misses kept
+for later, and three design decisions the box in step 10-8 must respect).
+
 ## Step 1: the live spike and the replay-as-live harness (2026-10-09)
 
 ### R10-001 · The harness cannot cut the box score
@@ -187,3 +191,77 @@ beside step 1 in another chat; both steps' entries are in this file.
   (notes, set blocks, more tables or charts on the same sets) are not penalised. Pages score exactly in every key
   except `a` / `b` beside ids on `compare`, the name beside `pid` on `shotcharts`, and paging. The file states this,
   so the measured score means one defined thing.
+
+**Round 10 step 7 (2026-10-10): 21 entries in all; step 7 logged R10-016 to R10-021.** The engine is `api/ask_lib.py`
++ `api/ask_pages.py` + `api/routers/ask.py`; the score is `api/ask_eval.json` (`scripts/ask_eval.py`); the card is
+Methodology `ask`. Dev tuning reached 60 of 60; the held-out test is in R10-016.
+
+## Step 7: the intent engine (2026-10-10)
+
+### R10-016 · The held-out score was cut short by Google's daily free quota: 108 of 270 sentence-runs unanswered
+- **Severity:** wrong number (the stored score is partial, and says so) · **Found by:** step 7 · **Step:** 10-7 (the
+  resume: any chat, or the owner, once the quota is back) · **Status:** open until `scripts/ask_eval.py --resume` has
+  answered the 108 sentence-runs; then the card's and README's numbers are rewritten from the file
+- **Where:** `api/ask_eval.json`. The protocol is `--split test --runs 3 --write` once, with the prompt frozen after
+  dev tuning. Run 1 answered all 90 held-out sentences (84 right). The day had also carried five dev runs of 60 and the
+  Finder's second calls, and at sentence 73 of run 2 Google answered 429 "the free quota for today is used up": run 2
+  ended with 72 answered (68 right), run 3 got no answer at all. **Decided:** an unanswered sentence-run is recorded as
+  `failed` with its error, never as wrong (`failed_by_run` = [0, 18, 90]); `GET /ask/status` reports `answered`,
+  `failed_by_run` and `complete` beside `right_by_run`; and `ask_eval.py --resume` asks only the unanswered sentence-runs,
+  refusing when the prompt (hashed as it was on the evaluation day), `ask_lib.py` / `ask_pages.py` (hash), the model or
+  the seasons changed, so a resume can complete the evaluation but never retune it; every resume is listed in the file's
+  `resumed`. Google resets the quota at midnight Pacific (12:30 IST while the US is on daylight time). The engine's
+  code is therefore frozen until the resume has run: a fix to `ask_lib.py` before it would force a full re-score.
+- **Numbers so far:** 152 of the 162 answered sentence-runs right; run 1 by action: open_page 58/62, build_board 5/5,
+  run_finder 7/7, open_live_game 4/4, ask 2/2, refuse 8/10; median answer 1.65 s.
+
+### R10-017 · The per-minute retry turned a dead daily quota into six hours of waiting
+- **Severity:** broken (the eval, not the app) · **Found by:** step 7 · **Step:** 10-7 · **Status:** fixed in the
+  step-7 commit (2026-10-10)
+- **Where:** `scripts/ask_eval.py run_once()` retried every 429 three times with 65 s waits, which is right for the
+  per-minute limit and wrong for the daily one: 108 unanswered sentences × 195 s. **Fixed:** a 429 whose message says
+  the day's quota is used up (`workbench_parse_lib._quota_message`) ends the run at once, marks the remaining sentences
+  unanswered without a call, and the later runs are recorded unanswered too; the file then says what `--resume` is for.
+  The app's own box is unaffected: `POST /ask` answers that 429 with the same message and the pages work by hand.
+
+### R10-018 · Held-out misses, kept for later and not tuned on
+- **Severity:** looks wrong · **Found by:** step 7 · **Step:** 10-8 / 10-9 (new, dated dev sentences first; the test set
+  is scored once) · **Status:** open
+- **Where:** `api/ask_eval.json`, runs 1-2. t19 "Giannis Antetokumpo" (misspelt) → refused as `unknown_player`: the model
+  kept the misspelling and the server's search is exact (folded) on the name; t23 the bare "Cooper Flagg" → Projections
+  (DAL) once, `no_data` once, expected his profile (a 2025-26 rookie the model doesn't know); t62 "what if the Suns traded
+  Devin Booker to the Rockets" → Trade Impact (`tradeimpact`), expected the Trade Analyzer (`trade`): the two pages'
+  descriptions need a sharper line; t74 "LeBron's game log in 2012-13" → his profile, expected `no_data` (game logs
+  start 2020-21; the profile has no season input, so the edge is lost on the way); t81 "turn on dark mode" →
+  `would_change_data`, expected `off_topic`; t84 "guess the player game" → Games `g=guessgame` (Guess the Game),
+  expected `g=guess` (Guess the Player); t06 "chart Lebron's points per game season by season" → his profile once (a
+  board with a line chart in run 1). A fix means new dated dev sentences for each case in `api/ask_sentences.json`
+  (never an edit of these), a prompt change, dev to 60 of 60 again, then a new `--write`.
+
+### R10-019 · A Finder sentence costs two Gemini calls, and the two boxes' per-minute caps are separate
+- **Severity:** design · **Found by:** step 7 · **Step:** 10-8 · **Status:** decided
+- **Where:** `api/ask_lib.py _finder_action()` sends the sentence to the Finder box's own `workbench_parse_lib.parse()`
+  so a Finder answer is exactly what the Finder box would fill (one parser, one scoring); a `run_finder` answer or a
+  Finder block in a board therefore costs two calls, counted as two in `/ask`'s `CallBudget` (10 a minute). The Finder
+  box's own `/workbench/parse` keeps its own 10 a minute. **For 10-8:** one shared daily quota per Google project, so the
+  box should show the same "used up" message as the Finder box and never retry on its own.
+
+### R10-020 · The engine never writes a page's default input, and never moves a season into the data
+- **Severity:** design · **Found by:** step 7 · **Step:** 10-8 · **Status:** decided
+- **Where:** `api/ask_pages.py` marks each enum's page default (Builder order `high`, Game Finder mode `games`, Ledger
+  tab `live`, …) and `ask_lib._read_value` drops a value equal to it silently, so a link carries only what the sentence
+  asked for and a page's own default can change without the engine disagreeing. A season before a data set's first
+  (`first_season` per page; shots 1996-97, play-by-play tools 2020-21, Player Comparison 2009-10, salaries through
+  2024-25) or after the current one is a `no_data` refusal with the span named, never the nearest season. Careers and
+  "several seasons" of one player are a board, not Player Comparison. **For 10-8:** replay `href` exactly
+  (`openFullUrl()`), show `notes` (what was left out) and `not_understood` with the preview, and treat `refuse` as an
+  answer, not an error.
+
+### R10-021 · The model lists "guesses" that aren't; the server filters them
+- **Severity:** looks wrong · **Found by:** step 7 · **Step:** 10-7 · **Status:** decided (filtered in
+  `ask_lib._real_guesses`)
+- **Where:** asked to list what it guessed, `gemini-3.5-flash-lite` names the page choice itself, "this season", the
+  default order or the player's team as guesses in most answers. `_real_guesses()` drops items matching `_NOT_A_GUESS`
+  (the page, the season when the sentence named none and the page has a default, the entity names it resolved) and keeps
+  the rest (a stat it picked for "scoring", a year it inferred). **For 10-8:** show `guessed` only when non-empty, as
+  "I took … to mean …".

@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from routers import (
     aging,
+    ask,
     best_games,
     blurred_player,
     clutch_wpa,
@@ -156,6 +157,7 @@ for _router_module in (
     workbench,
     workbench_finder,
     workbench_parse,
+    ask,
     season_status,
 ):
     app.include_router(_router_module.router)

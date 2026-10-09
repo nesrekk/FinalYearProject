@@ -1,0 +1,7238 @@
+{
+ "about": "Accuracy of 'ask in English everywhere' on the test sentences of api/ask_sentences.json (scripts/ask_eval.py; the rules it scores by are in that file's 'actions' section). A sentence-run marked failed got no answer (Google's daily free quota); --resume asks only those, under the same prompt.",
+ "evaluated": "2026-10-09",
+ "split": "test",
+ "model": "gemini-3.5-flash-lite",
+ "prompt_version": "51c04ee2f945",
+ "seasons": [
+  2026,
+  2026
+ ],
+ "lib_sha256": "08c3ce49093d",
+ "sentences_written": "2026-10-09",
+ "runs": 3,
+ "right_by_run": [
+  84,
+  68,
+  0
+ ],
+ "failed_by_run": [
+  0,
+  18,
+  90
+ ],
+ "n": 90,
+ "resumed": [],
+ "runs_detail": [
+  {
+   "summary": {
+    "n": 90,
+    "right": 84,
+    "by_action": {
+     "open_page": {
+      "n": 62,
+      "right": 58,
+      "wrong": 3,
+      "refused": 1,
+      "failed": 0
+     },
+     "build_board": {
+      "n": 5,
+      "right": 5,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 0
+     },
+     "run_finder": {
+      "n": 7,
+      "right": 7,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 0
+     },
+     "open_live_game": {
+      "n": 4,
+      "right": 4,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 0
+     },
+     "ask": {
+      "n": 2,
+      "right": 2,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 0
+     },
+     "refuse": {
+      "n": 10,
+      "right": 8,
+      "wrong": 2,
+      "refused": 0,
+      "failed": 0
+     }
+    },
+    "false_refusals": 1,
+    "missed_refusals": 1,
+    "failed": 0,
+    "median_seconds": 1.65
+   },
+   "results": [
+    {
+     "id": "t01",
+     "text": "Luka vs Shai 2024-25",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "compare",
+      "hash": null,
+      "params": {
+       "aid": 1629029,
+       "bid": 1628983,
+       "season": 2025
+      },
+      "label": "Player Comparison",
+      "preview": "Open Player Comparison · Luka Dončić · Shai Gilgeous-Alexander · 2024-25"
+     },
+     "preview": "Open Player Comparison · Luka Dončić · Shai Gilgeous-Alexander · 2024-25",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.94
+    },
+    {
+     "id": "t02",
+     "text": "how does tatum stack up against jaylen brown",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "compare",
+      "hash": null,
+      "params": {
+       "aid": 1628369,
+       "bid": 1627759
+      },
+      "label": "Player Comparison",
+      "preview": "Open Player Comparison · Jayson Tatum · Jaylen Brown"
+     },
+     "preview": "Open Player Comparison · Jayson Tatum · Jaylen Brown",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.5
+    },
+    {
+     "id": "t03",
+     "text": "put Wemby, Chet Holmgren and Paolo Banchero side by side for 2025-26",
+     "expected": "build_board",
+     "produced": "build_board",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "build_board"
+     },
+     "error": null,
+     "action": {
+      "action": "build_board",
+      "sets": [
+       {
+        "kind": "player",
+        "ids": [
+         1641705,
+         1631096,
+         1631094
+        ]
+       }
+      ],
+      "blocks": [
+       {
+        "type": "table",
+        "dataset": "player_season",
+        "columns": [
+         "gp",
+         "min",
+         "pts",
+         "reb",
+         "ast",
+         "ts_pct",
+         "bpm"
+        ],
+        "seasonFrom": 2026,
+        "seasonTo": 2026,
+        "chart": null,
+        "x": null,
+        "y": null,
+        "tool": null,
+        "member": null,
+        "spec": null
+       }
+      ],
+      "preview": "New board: Victor Wembanyama vs Chet Holmgren vs Paolo Banchero · 2025-26 · table (Games, Minutes, Points, Rebounds, Assists, True shooting %, …) 2025-26"
+     },
+     "preview": "New board: Victor Wembanyama vs Chet Holmgren vs Paolo Banchero · 2025-26 · table (Games, Minutes, Points, Rebounds, Assists, True shooting %, …) 2025-26",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.14
+    },
+    {
+     "id": "t04",
+     "text": "compare the Thunder and the Nuggets in 2024-25",
+     "expected": "build_board",
+     "produced": "build_board",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "build_board"
+     },
+     "error": null,
+     "action": {
+      "action": "build_board",
+      "sets": [
+       {
+        "kind": "team",
+        "codes": [
+         "OKC",
+         "DEN"
+        ]
+       }
+      ],
+      "blocks": [
+       {
+        "type": "table",
+        "dataset": "team_season",
+        "columns": [
+         "w",
+         "l",
+         "w_pct",
+         "mov",
+         "o_rtg",
+         "d_rtg",
+         "n_rtg",
+         "pace"
+        ],
+        "seasonFrom": 2025,
+        "seasonTo": 2025,
+        "chart": null,
+        "x": null,
+        "y": null,
+        "tool": null,
+        "member": null,
+        "spec": null
+       }
+      ],
+      "preview": "New board: Oklahoma City Thunder vs Denver Nuggets · 2024-25 · table (Wins, Losses, Win %, Point margin, Offensive rating, Defensive rating, …) 2024-25"
+     },
+     "preview": "New board: Oklahoma City Thunder vs Denver Nuggets · 2024-25 · table (Wins, Losses, Win %, Point margin, Offensive rating, Defensive rating, …) 2024-25",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.85
+    },
+    {
+     "id": "t05",
+     "text": "Jokic or Embiid, who had the better 2022-23?",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "compare",
+      "hash": null,
+      "params": {
+       "aid": 203999,
+       "bid": 203954,
+       "season": 2023
+      },
+      "label": "Player Comparison",
+      "preview": "Open Player Comparison · Nikola Jokić · Joel Embiid · 2022-23"
+     },
+     "preview": "Open Player Comparison · Nikola Jokić · Joel Embiid · 2022-23",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.6
+    },
+    {
+     "id": "t06",
+     "text": "chart Lebron's points per game season by season",
+     "expected": "build_board",
+     "produced": "build_board",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "build_board"
+     },
+     "error": null,
+     "action": {
+      "action": "build_board",
+      "sets": [
+       {
+        "kind": "player",
+        "ids": [
+         2544
+        ]
+       }
+      ],
+      "blocks": [
+       {
+        "type": "chart",
+        "dataset": "player_season",
+        "chart": "line",
+        "x": null,
+        "y": "pts",
+        "seasonFrom": null,
+        "seasonTo": null,
+        "columns": null,
+        "tool": null,
+        "member": null,
+        "spec": null
+       }
+      ],
+      "preview": "New board: LeBron James · line chart of Points"
+     },
+     "preview": "New board: LeBron James · line chart of Points",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.78
+    },
+    {
+     "id": "t07",
+     "text": "Giannis vs Embiid vs Jokic 2023-24 bpm and vorp",
+     "expected": "build_board",
+     "produced": "build_board",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "build_board"
+     },
+     "error": null,
+     "action": {
+      "action": "build_board",
+      "sets": [
+       {
+        "kind": "player",
+        "ids": [
+         203507,
+         203954,
+         203999
+        ]
+       }
+      ],
+      "blocks": [
+       {
+        "type": "table",
+        "dataset": "player_season",
+        "columns": [
+         "bpm",
+         "vorp"
+        ],
+        "seasonFrom": 2024,
+        "seasonTo": 2024,
+        "chart": null,
+        "x": null,
+        "y": null,
+        "tool": null,
+        "member": null,
+        "spec": null
+       }
+      ],
+      "preview": "New board: Giannis Antetokounmpo vs Joel Embiid vs Nikola Jokić · 2023-24 · table (BPM, VORP) 2023-24"
+     },
+     "preview": "New board: Giannis Antetokounmpo vs Joel Embiid vs Nikola Jokić · 2023-24 · table (BPM, VORP) 2023-24",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.81
+    },
+    {
+     "id": "t08",
+     "text": "compare the Knicks, Celtics and Cavs net rating this season",
+     "expected": "build_board",
+     "produced": "build_board",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "build_board"
+     },
+     "error": null,
+     "action": {
+      "action": "build_board",
+      "sets": [
+       {
+        "kind": "team",
+        "codes": [
+         "NYK",
+         "BOS",
+         "CLE"
+        ]
+       }
+      ],
+      "blocks": [
+       {
+        "type": "table",
+        "dataset": "team_season",
+        "columns": [
+         "w",
+         "l",
+         "w_pct",
+         "mov",
+         "o_rtg",
+         "d_rtg",
+         "n_rtg",
+         "pace"
+        ],
+        "seasonFrom": 2026,
+        "seasonTo": 2026,
+        "chart": null,
+        "x": null,
+        "y": null,
+        "tool": null,
+        "member": null,
+        "spec": null
+       }
+      ],
+      "preview": "New board: New York Knicks vs Boston Celtics vs Cleveland Cavaliers · 2025-26 · table (Wins, Losses, Win %, Point margin, Offensive rating, Defensive rating, …) 2025-26"
+     },
+     "preview": "New board: New York Knicks vs Boston Celtics vs Cleveland Cavaliers · 2025-26 · table (Wins, Losses, Win %, Point margin, Offensive rating, Defensive rating, …) 2025-26",
+     "notes": [
+      "Table block: 'net_rating' isn't a stat of team seasons; left out."
+     ],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.67
+    },
+    {
+     "id": "t09",
+     "text": "top scorers 2024-25",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "pts",
+       "from": 2025,
+       "to": 2025
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 2024-25 · points"
+     },
+     "preview": "Open Leaderboard Builder · 2024-25 · points",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.49
+    },
+    {
+     "id": "t10",
+     "text": "who has the highest true shooting percentage ever",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "ts_pct",
+       "from": 1950,
+       "to": 2026
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 1949-50 to 2025-26 · true shooting %"
+     },
+     "preview": "Open Leaderboard Builder · 1949-50 to 2025-26 · true shooting %",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.77
+    },
+    {
+     "id": "t11",
+     "text": "who had the best BPM between 2015-16 and 2019-20",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "bpm",
+       "from": 2016,
+       "to": 2020
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 2015-16 to 2019-20 · BPM (box plus-minus)"
+     },
+     "preview": "Open Leaderboard Builder · 2015-16 to 2019-20 · BPM (box plus-minus)",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.42
+    },
+    {
+     "id": "t12",
+     "text": "steals leaders 2022-23, top 10",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "stl",
+       "from": 2023,
+       "to": 2023,
+       "n": "10"
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 2022-23 · steals · 10"
+     },
+     "preview": "Open Leaderboard Builder · 2022-23 · steals · 10",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.55
+    },
+    {
+     "id": "t13",
+     "text": "highest usage rate seasons of all time",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "usg_pct",
+       "from": 1950,
+       "to": 2026
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 1949-50 to 2025-26 · usage %"
+     },
+     "preview": "Open Leaderboard Builder · 1949-50 to 2025-26 · usage %",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.8
+    },
+    {
+     "id": "t14",
+     "text": "who leads the lakers in scoring this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "pts",
+       "team": "LAL",
+       "from": 2026,
+       "to": 2026
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 2025-26 · points · Los Angeles Lakers"
+     },
+     "preview": "Open Leaderboard Builder · 2025-26 · points · Los Angeles Lakers",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.72
+    },
+    {
+     "id": "t15",
+     "text": "best VORP season ever",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "vorp",
+       "from": 1950,
+       "to": 2026
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 1949-50 to 2025-26 · VORP"
+     },
+     "preview": "Open Leaderboard Builder · 1949-50 to 2025-26 · VORP",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.62
+    },
+    {
+     "id": "t16",
+     "text": "show me kobe's shot chart from 2005-06",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "shotcharts",
+      "hash": null,
+      "params": {
+       "pid": 977,
+       "season": "2005-06"
+      },
+      "label": "Shot Charts",
+      "preview": "Open Shot Charts · Kobe Bryant · 2005-06 · regular season"
+     },
+     "preview": "Open Shot Charts · Kobe Bryant · 2005-06 · regular season",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.46
+    },
+    {
+     "id": "t17",
+     "text": "Jokic heatmap this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "shotcharts",
+      "hash": null,
+      "params": {
+       "pid": 203999,
+       "season": "2025-26",
+       "view": "heatmap"
+      },
+      "label": "Shot Charts",
+      "preview": "Open Shot Charts · Nikola Jokić · 2025-26 · heat map · regular season"
+     },
+     "preview": "Open Shot Charts · Nikola Jokić · 2025-26 · heat map · regular season",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.86
+    },
+    {
+     "id": "t18",
+     "text": "Jayson Tatum's playoff shot chart 2023-24",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "shotcharts",
+      "hash": null,
+      "params": {
+       "pid": 1628369,
+       "season": "2023-24",
+       "games": "playoffs"
+      },
+      "label": "Shot Charts",
+      "preview": "Open Shot Charts · Jayson Tatum · 2023-24 · playoffs and play-in"
+     },
+     "preview": "Open Shot Charts · Jayson Tatum · 2023-24 · playoffs and play-in",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.98
+    },
+    {
+     "id": "t19",
+     "text": "Giannis Antetokumpo",
+     "expected": "open_page",
+     "produced": "refuse",
+     "outcome": "refused",
+     "right": false,
+     "detail": {
+      "got": "refuse"
+     },
+     "error": null,
+     "action": {
+      "action": "refuse",
+      "reason": "unknown_player",
+      "preview": "Nobody of that name is on file."
+     },
+     "preview": "Nobody of that name is on file.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.78
+    },
+    {
+     "id": "t20",
+     "text": "Luka Doncic's game log this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "player",
+      "hash": null,
+      "params": {
+       "id": 1629029
+      },
+      "label": "Player Profile",
+      "preview": "Open Player Profile · Luka Dončić"
+     },
+     "preview": "Open Player Profile · Luka Dončić",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.87
+    },
+    {
+     "id": "t21",
+     "text": "what's Anthony Edwards projected to do next season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "player",
+      "hash": null,
+      "params": {
+       "id": 1630162
+      },
+      "label": "Player Profile",
+      "preview": "Open Player Profile · Anthony Edwards"
+     },
+     "preview": "Open Player Profile · Anthony Edwards",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.66
+    },
+    {
+     "id": "t22",
+     "text": "who is projected to score the most next year",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "projections",
+      "hash": null,
+      "params": {
+       "stat": "pts"
+      },
+      "label": "Projections",
+      "preview": "Open Projections · points"
+     },
+     "preview": "Open Projections · points",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.39
+    },
+    {
+     "id": "t23",
+     "text": "Cooper Flagg",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "wrong",
+     "right": false,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "projections",
+      "hash": null,
+      "params": {
+       "team": "DAL"
+      },
+      "label": "Projections",
+      "preview": "Open Projections · Dallas Mavericks"
+     },
+     "preview": "Open Projections · Dallas Mavericks",
+     "notes": [],
+     "guessed": [
+      "Cooper Flagg is an incoming rookie"
+     ],
+     "not_understood": [],
+     "seconds": 1.59
+    },
+    {
+     "id": "t24",
+     "text": "LeBron's shot chart as a rookie",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "shotcharts",
+      "hash": null,
+      "params": {
+       "pid": 2544,
+       "season": "2003-04"
+      },
+      "label": "Shot Charts",
+      "preview": "Open Shot Charts · LeBron James · 2003-04 · regular season"
+     },
+     "preview": "Open Shot Charts · LeBron James · 2003-04 · regular season",
+     "notes": [],
+     "guessed": [
+      "LeBron James rookie season is 2003-04 (end year 2004)"
+     ],
+     "not_understood": [],
+     "seconds": 1.68
+    },
+    {
+     "id": "t25",
+     "text": "show Victor Wembanyama's shot quality map",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "shotcharts",
+      "hash": null,
+      "params": {
+       "pid": 1641705,
+       "view": "quality"
+      },
+      "label": "Shot Charts",
+      "preview": "Open Shot Charts · Victor Wembanyama · shot quality map (hexagons) · regular season"
+     },
+     "preview": "Open Shot Charts · Victor Wembanyama · shot quality map (hexagons) · regular season",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.77
+    },
+    {
+     "id": "t26",
+     "text": "KD shot chart 2013-14",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "shotcharts",
+      "hash": null,
+      "params": {
+       "pid": 201142,
+       "season": "2013-14"
+      },
+      "label": "Shot Charts",
+      "preview": "Open Shot Charts · Kevin Durant · 2013-14 · regular season"
+     },
+     "preview": "Open Shot Charts · Kevin Durant · 2013-14 · regular season",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.62
+    },
+    {
+     "id": "t27",
+     "text": "Celtics 2007-08",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "team",
+      "hash": null,
+      "params": {
+       "abbr": "BOS",
+       "season": 2008
+      },
+      "label": "Team Profile",
+      "preview": "Open Team Profile · Boston Celtics · 2007-08"
+     },
+     "preview": "Open Team Profile · Boston Celtics · 2007-08",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.66
+    },
+    {
+     "id": "t28",
+     "text": "Thunder team page",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "team",
+      "hash": null,
+      "params": {
+       "abbr": "OKC"
+      },
+      "label": "Team Profile",
+      "preview": "Open Team Profile · Oklahoma City Thunder"
+     },
+     "preview": "Open Team Profile · Oklahoma City Thunder",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.32
+    },
+    {
+     "id": "t29",
+     "text": "show me the standings",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "standings",
+      "hash": null,
+      "params": {},
+      "label": "Standings",
+      "preview": "Open Standings"
+     },
+     "preview": "Open Standings",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.41
+    },
+    {
+     "id": "t30",
+     "text": "what did the Bulls do in 1995-96",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "team",
+      "hash": null,
+      "params": {
+       "abbr": "CHI",
+       "season": 1996
+      },
+      "label": "Team Profile",
+      "preview": "Open Team Profile · Chicago Bulls · 1995-96"
+     },
+     "preview": "Open Team Profile · Chicago Bulls · 1995-96",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.33
+    },
+    {
+     "id": "t31",
+     "text": "the Warriors assist network in 2024-25",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "assists",
+      "hash": null,
+      "params": {
+       "team": "GSW",
+       "season": 2025
+      },
+      "label": "Assist Network",
+      "preview": "Open Assist Network · Golden State Warriors · 2024-25"
+     },
+     "preview": "Open Assist Network · Golden State Warriors · 2024-25",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.37
+    },
+    {
+     "id": "t32",
+     "text": "who has averaged a triple double",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_season",
+       "scope": "season",
+       "season_from": null,
+       "season_to": null,
+       "filters": [],
+       "min_games": 40,
+       "conditions": [
+        {
+         "type": "value",
+         "stat": "pts",
+         "op": "gte",
+         "value": 10,
+         "per": "game"
+        },
+        {
+         "type": "value",
+         "stat": "reb",
+         "op": "gte",
+         "value": 10,
+         "per": "game"
+        },
+        {
+         "type": "value",
+         "stat": "ast",
+         "op": "gte",
+         "value": 10,
+         "per": "game"
+        }
+       ]
+      },
+      "sentence": "Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, averaged at least 10 points per game; and averaged at least 10 rebounds per game; and averaged at least 10 assists per game (all over the same seasons).",
+      "flag": false,
+      "finder_dropped": [],
+      "finder_not_understood": [],
+      "preview": "Find players: Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, averaged at least 10 points per game; and averaged at least 10 rebounds per game; and averaged at least 10 assists per game (all over the same seasons)."
+     },
+     "preview": "Find players: Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, averaged at least 10 points per game; and averaged at least 10 rebounds per game; and averaged at least 10 assists per game (all over the same seasons).",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 3.39
+    },
+    {
+     "id": "t33",
+     "text": "who scored 30+ in 10 straight games",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_game",
+       "scope": "span",
+       "season_from": null,
+       "season_to": null,
+       "filters": [],
+       "min_games": null,
+       "conditions": [
+        {
+         "type": "streak",
+         "tests": [
+          {
+           "stat": "pts",
+           "op": "gte",
+           "value": 30
+          }
+         ],
+         "count": 10
+        }
+       ]
+      },
+      "sentence": "Players who, over all their games from 2020-21 to 2025-26 combined, in at least 10 straight games he played had at least 30 points.",
+      "flag": false,
+      "finder_dropped": [],
+      "finder_not_understood": [],
+      "preview": "Find players: Players who, over all their games from 2020-21 to 2025-26 combined, in at least 10 straight games he played had at least 30 points."
+     },
+     "preview": "Find players: Players who, over all their games from 2020-21 to 2025-26 combined, in at least 10 straight games he played had at least 30 points.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.98
+    },
+    {
+     "id": "t34",
+     "text": "Curry's 50 point games",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "gamefinder",
+      "hash": null,
+      "params": {
+       "player": 201939,
+       "f": "pts:gte:50"
+      },
+      "label": "Game Finder",
+      "preview": "Open Game Finder · Stephen Curry · points ≥ 50"
+     },
+     "preview": "Open Game Finder · Stephen Curry · points ≥ 50",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.69
+    },
+    {
+     "id": "t35",
+     "text": "all 60 point games since 2020-21",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "gamefinder",
+      "hash": null,
+      "params": {
+       "f": "pts:gte:60",
+       "from": 2021
+      },
+      "label": "Game Finder",
+      "preview": "Open Game Finder · 2020-21 · points ≥ 60"
+     },
+     "preview": "Open Game Finder · 2020-21 · points ≥ 60",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.57
+    },
+    {
+     "id": "t36",
+     "text": "longest streak of 25 point games",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "gamefinder",
+      "hash": null,
+      "params": {
+       "f": "pts:gte:25",
+       "mode": "streaks"
+      },
+      "label": "Game Finder",
+      "preview": "Open Game Finder · points ≥ 25 · streaks"
+     },
+     "preview": "Open Game Finder · points ≥ 25 · streaks",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.83
+    },
+    {
+     "id": "t37",
+     "text": "which players shot 45% from three on at least 400 attempts in a season",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_season",
+       "scope": "season",
+       "season_from": null,
+       "season_to": null,
+       "filters": [],
+       "min_games": 40,
+       "conditions": [
+        {
+         "type": "value",
+         "stat": "fg3_pct",
+         "op": "gte",
+         "value": 0.45,
+         "per": "game",
+         "min_n": 400
+        }
+       ]
+      },
+      "sentence": "Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, had a 3-point % of at least 45% (on at least 400 3-point attempts).",
+      "flag": false,
+      "finder_dropped": [],
+      "finder_not_understood": [],
+      "preview": "Find players: Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, had a 3-point % of at least 45% (on at least 400 3-point attempts)."
+     },
+     "preview": "Find players: Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, had a 3-point % of at least 45% (on at least 400 3-point attempts).",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 4.96
+    },
+    {
+     "id": "t38",
+     "text": "seasons like 27 points 7 rebounds 7 assists",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "statline",
+      "hash": null,
+      "params": {
+       "line": "pts:27,reb:7,ast:7"
+      },
+      "label": "Stat Line Finder",
+      "preview": "Open Stat Line Finder · points 27, rebounds 7, assists 7"
+     },
+     "preview": "Open Stat Line Finder · points 27, rebounds 7, assists 7",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.6
+    },
+    {
+     "id": "t39",
+     "text": "who averaged at least 8 assists and under 2 turnovers a game last season",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_season",
+       "scope": "season",
+       "season_from": 2026,
+       "season_to": null,
+       "filters": [],
+       "min_games": 40,
+       "conditions": [
+        {
+         "type": "value",
+         "stat": "ast",
+         "op": "gte",
+         "value": 8,
+         "per": "game"
+        },
+        {
+         "type": "value",
+         "stat": "tov",
+         "op": "lt",
+         "value": 2,
+         "per": "game"
+        }
+       ]
+      },
+      "sentence": "Players who, in 2025-26, over at least 40 games, averaged at least 8 assists per game; and averaged less than 2 turnovers per game (all over the same seasons).",
+      "flag": false,
+      "finder_dropped": [],
+      "finder_not_understood": [],
+      "preview": "Find players: Players who, in 2025-26, over at least 40 games, averaged at least 8 assists per game; and averaged less than 2 turnovers per game (all over the same seasons)."
+     },
+     "preview": "Find players: Players who, in 2025-26, over at least 40 games, averaged at least 8 assists per game; and averaged less than 2 turnovers per game (all over the same seasons).",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 3.59
+    },
+    {
+     "id": "t40",
+     "text": "players with 5 straight 30 point games this season",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_game",
+       "scope": "season",
+       "season_from": 2026,
+       "season_to": null,
+       "filters": [],
+       "min_games": null,
+       "conditions": [
+        {
+         "type": "streak",
+         "tests": [
+          {
+           "stat": "pts",
+           "op": "gte",
+           "value": 30
+          }
+         ],
+         "count": 5
+        }
+       ]
+      },
+      "sentence": "Players who, in 2025-26, in at least 5 straight games he played had at least 30 points.",
+      "flag": false,
+      "finder_dropped": [],
+      "finder_not_understood": [],
+      "preview": "Find players: Players who, in 2025-26, in at least 5 straight games he played had at least 30 points."
+     },
+     "preview": "Find players: Players who, in 2025-26, in at least 5 straight games he played had at least 30 points.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.89
+    },
+    {
+     "id": "t41",
+     "text": "centers who average 3 blocks",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_season",
+       "scope": "season",
+       "season_from": null,
+       "season_to": null,
+       "filters": [],
+       "min_games": 40,
+       "conditions": [
+        {
+         "type": "value",
+         "stat": "blk",
+         "op": "gte",
+         "value": 3,
+         "per": "game"
+        }
+       ]
+      },
+      "sentence": "Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, averaged at least 3 blocks per game.",
+      "flag": true,
+      "finder_dropped": [],
+      "finder_not_understood": [
+       "centers"
+      ],
+      "preview": "Find players: Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, averaged at least 3 blocks per game."
+     },
+     "preview": "Find players: Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, averaged at least 3 blocks per game.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.77
+    },
+    {
+     "id": "t42",
+     "text": "games with 12 or more threes",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "gamefinder",
+      "hash": null,
+      "params": {
+       "f": "fg3m:gte:12"
+      },
+      "label": "Game Finder",
+      "preview": "Open Game Finder · 3-pointers made ≥ 12"
+     },
+     "preview": "Open Game Finder · 3-pointers made ≥ 12",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.46
+    },
+    {
+     "id": "t43",
+     "text": "players who had 40 points and 10 assists in the same game at least 5 times since 2021-22",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_game",
+       "scope": "span",
+       "season_from": 2022,
+       "season_to": null,
+       "filters": [],
+       "min_games": null,
+       "conditions": [
+        {
+         "type": "count",
+         "tests": [
+          {
+           "stat": "pts",
+           "op": "gte",
+           "value": 40
+          },
+          {
+           "stat": "ast",
+           "op": "gte",
+           "value": 10
+          }
+         ],
+         "count": 5,
+         "count_op": "gte"
+        }
+       ]
+      },
+      "sentence": "Players who, over all their games from 2021-22 to 2025-26 combined, in at least 5 games had at least 40 points and at least 10 assists in the same game.",
+      "flag": false,
+      "finder_dropped": [],
+      "finder_not_understood": [],
+      "preview": "Find players: Players who, over all their games from 2021-22 to 2025-26 combined, in at least 5 games had at least 40 points and at least 10 assists in the same game."
+     },
+     "preview": "Find players: Players who, over all their games from 2021-22 to 2025-26 combined, in at least 5 games had at least 40 points and at least 10 assists in the same game.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 3.16
+    },
+    {
+     "id": "t44",
+     "text": "40 point games on the road this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "gamefinder",
+      "hash": null,
+      "params": {
+       "f": "pts:gte:40",
+       "home": "away",
+       "from": 2026,
+       "to": 2026
+      },
+      "label": "Game Finder",
+      "preview": "Open Game Finder · 2025-26 · points ≥ 40 · on the road"
+     },
+     "preview": "Open Game Finder · 2025-26 · points ≥ 40 · on the road",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.81
+    },
+    {
+     "id": "t45",
+     "text": "how does LeBron's BPM compare to the typical aging curve",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "aging",
+      "hash": null,
+      "params": {
+       "stat": "bpm",
+       "player": 2544
+      },
+      "label": "Aging Curves",
+      "preview": "Open Aging Curves · BPM (box plus-minus) · LeBron James"
+     },
+     "preview": "Open Aging Curves · BPM (box plus-minus) · LeBron James",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.79
+    },
+    {
+     "id": "t46",
+     "text": "aging curves for assists in the modern era",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "aging",
+      "hash": null,
+      "params": {
+       "stat": "ast",
+       "era": "modern"
+      },
+      "label": "Aging Curves",
+      "preview": "Open Aging Curves · assists · 2009-10 on"
+     },
+     "preview": "Open Aging Curves · assists · 2009-10 on",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.19
+    },
+    {
+     "id": "t47",
+     "text": "what would Magic Johnson's 1986-87 look like in 2024-25",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "era",
+      "hash": null,
+      "params": {
+       "player": 77142,
+       "season": 1987,
+       "to": 2025
+      },
+      "label": "Era Translator",
+      "preview": "Open Era Translator · Magic Johnson · 1986-87 · 2024-25"
+     },
+     "preview": "Open Era Translator · Magic Johnson · 1986-87 · 2024-25",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.63
+    },
+    {
+     "id": "t48",
+     "text": "on off numbers for the Celtics 2023-24",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "analytics",
+      "hash": "onoff",
+      "params": {
+       "team": "BOS",
+       "season": 2024
+      },
+      "label": "Analytics › On/Off",
+      "preview": "Open Analytics › On/Off · Boston Celtics · 2023-24"
+     },
+     "preview": "Open Analytics › On/Off · Boston Celtics · 2023-24",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.78
+    },
+    {
+     "id": "t49",
+     "text": "Jokić on/off",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "player",
+      "hash": null,
+      "params": {
+       "id": 203999
+      },
+      "label": "Player Profile",
+      "preview": "Open Player Profile · Nikola Jokić"
+     },
+     "preview": "Open Player Profile · Nikola Jokić",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.63
+    },
+    {
+     "id": "t50",
+     "text": "three season RAPM this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "rapm",
+      "hash": null,
+      "params": {
+       "version": "multi",
+       "season": 2026
+      },
+      "label": "RAPM",
+      "preview": "Open RAPM · three-season RAPM · 2025-26"
+     },
+     "preview": "Open RAPM · three-season RAPM · 2025-26",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.37
+    },
+    {
+     "id": "t51",
+     "text": "who's hot right now",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "hotstreaks",
+      "hash": null,
+      "params": {},
+      "label": "Hot Streak Checker",
+      "preview": "Open Hot Streak Checker"
+     },
+     "preview": "Open Hot Streak Checker",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.5
+    },
+    {
+     "id": "t52",
+     "text": "home away splits for points this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "splits",
+      "hash": null,
+      "params": {
+       "split": "home",
+       "stat": "pts",
+       "season": 2026
+      },
+      "label": "Situational Splits",
+      "preview": "Open Situational Splits · home / away · points · 2025-26"
+     },
+     "preview": "Open Situational Splits · home / away · points · 2025-26",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.61
+    },
+    {
+     "id": "t53",
+     "text": "who plays better on back to backs",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "splits",
+      "hash": null,
+      "params": {
+       "split": "rest"
+      },
+      "label": "Situational Splits",
+      "preview": "Open Situational Splits · rest days (back-to-backs)"
+     },
+     "preview": "Open Situational Splits · rest days (back-to-backs)",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.38
+    },
+    {
+     "id": "t54",
+     "text": "Wembanyama blocks in the 4th quarter this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "plays",
+      "hash": null,
+      "params": {
+       "player": 1641705,
+       "cat": "blk",
+       "per": "4",
+       "from": 2026,
+       "to": 2026
+      },
+      "label": "Play Finder",
+      "preview": "Open Play Finder · 2025-26 · Victor Wembanyama · blocks · 4"
+     },
+     "preview": "Open Play Finder · 2025-26 · Victor Wembanyama · blocks · 4",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.65
+    },
+    {
+     "id": "t55",
+     "text": "pair chemistry for the Knicks this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "analytics",
+      "hash": "pairs",
+      "params": {
+       "team": "NYK",
+       "season": 2026
+      },
+      "label": "Analytics › Pair Chemistry",
+      "preview": "Open Analytics › Pair Chemistry · New York Knicks · 2025-26"
+     },
+     "preview": "Open Analytics › Pair Chemistry · New York Knicks · 2025-26",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.74
+    },
+    {
+     "id": "t56",
+     "text": "clutch WPA leaders",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "analytics",
+      "hash": "wpa",
+      "params": {},
+      "label": "Analytics › Clutch WPA",
+      "preview": "Open Analytics › Clutch WPA"
+     },
+     "preview": "Open Analytics › Clutch WPA",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 3.18
+    },
+    {
+     "id": "t57",
+     "text": "who's winning the MVP race",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "analytics",
+      "hash": "mvp",
+      "params": {},
+      "label": "Analytics › Awards Race",
+      "preview": "Open Analytics › Awards Race"
+     },
+     "preview": "Open Analytics › Awards Race",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.45
+    },
+    {
+     "id": "t58",
+     "text": "season simulator for 2022-23",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "simulator",
+      "hash": null,
+      "params": {
+       "season": 2023
+      },
+      "label": "Season Simulator",
+      "preview": "Open Season Simulator · 2022-23"
+     },
+     "preview": "Open Season Simulator · 2022-23",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.02
+    },
+    {
+     "id": "t59",
+     "text": "biggest upsets this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "bestgames",
+      "hash": null,
+      "params": {
+       "v": "upsets",
+       "season": 2026
+      },
+      "label": "Best Games & Upsets",
+      "preview": "Open Best Games & Upsets · upsets · 2025-26"
+     },
+     "preview": "Open Best Games & Upsets · upsets · 2025-26",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.43
+    },
+    {
+     "id": "t60",
+     "text": "coaching decisions, timeouts, Heat 2024-25",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "coaching",
+      "hash": null,
+      "params": {
+       "v": "timeout",
+       "team": "MIA",
+       "season": 2025
+      },
+      "label": "Coaching Decisions",
+      "preview": "Open Coaching Decisions · timeouts · Miami Heat · 2024-25"
+     },
+     "preview": "Open Coaching Decisions · timeouts · Miami Heat · 2024-25",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.64
+    },
+    {
+     "id": "t61",
+     "text": "trade analyzer: Lakers and Mavericks",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "trade",
+      "hash": null,
+      "params": {
+       "ta": "LAL",
+       "tb": "DAL"
+      },
+      "label": "Trade Analyzer",
+      "preview": "Open Trade Analyzer · Los Angeles Lakers · Dallas Mavericks"
+     },
+     "preview": "Open Trade Analyzer · Los Angeles Lakers · Dallas Mavericks",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.64
+    },
+    {
+     "id": "t62",
+     "text": "what if the Suns traded Devin Booker to the Rockets",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "wrong",
+     "right": false,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "tradeimpact",
+      "hash": null,
+      "params": {
+       "ta": "PHX",
+       "pa": 1626164,
+       "tb": "HOU"
+      },
+      "label": "Trade Impact",
+      "preview": "Open Trade Impact · Phoenix Suns · Devin Booker · Houston Rockets"
+     },
+     "preview": "Open Trade Impact · Phoenix Suns · Devin Booker · Houston Rockets",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.86
+    },
+    {
+     "id": "t63",
+     "text": "is there a game on now",
+     "expected": "open_live_game",
+     "produced": "open_live_game",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_live_game"
+     },
+     "error": null,
+     "action": {
+      "action": "open_live_game",
+      "team": null,
+      "preview": "Today's live games"
+     },
+     "preview": "Today's live games",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.62
+    },
+    {
+     "id": "t64",
+     "text": "what's the score of the Knicks game",
+     "expected": "open_live_game",
+     "produced": "open_live_game",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_live_game"
+     },
+     "error": null,
+     "action": {
+      "action": "open_live_game",
+      "team": "NYK",
+      "preview": "Live: New York Knicks today"
+     },
+     "preview": "Live: New York Knicks today",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.65
+    },
+    {
+     "id": "t65",
+     "text": "are the warriors playing tonight",
+     "expected": "open_live_game",
+     "produced": "open_live_game",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_live_game"
+     },
+     "error": null,
+     "action": {
+      "action": "open_live_game",
+      "team": "GSW",
+      "preview": "Live: Golden State Warriors today"
+     },
+     "preview": "Live: Golden State Warriors today",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.63
+    },
+    {
+     "id": "t66",
+     "text": "OKC game live",
+     "expected": "open_live_game",
+     "produced": "open_live_game",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_live_game"
+     },
+     "error": null,
+     "action": {
+      "action": "open_live_game",
+      "team": "OKC",
+      "preview": "Live: Oklahoma City Thunder today"
+     },
+     "preview": "Live: Oklahoma City Thunder today",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.39
+    },
+    {
+     "id": "t67",
+     "text": "yesterday's scores",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "scores",
+      "hash": null,
+      "params": {
+       "date": "2026-10-08"
+      },
+      "label": "Live Scores",
+      "preview": "Open Live Scores · 2026-10-08"
+     },
+     "preview": "Open Live Scores · 2026-10-08",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.29
+    },
+    {
+     "id": "t68",
+     "text": "what happened on christmas day 2025",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "scores",
+      "hash": null,
+      "params": {
+       "date": "2025-12-25"
+      },
+      "label": "Live Scores",
+      "preview": "Open Live Scores · 2025-12-25"
+     },
+     "preview": "Open Live Scores · 2025-12-25",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.53
+    },
+    {
+     "id": "t69",
+     "text": "who won the Bucks game last night",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "scores",
+      "hash": null,
+      "params": {
+       "date": "2026-10-08"
+      },
+      "label": "Live Scores",
+      "preview": "Open Live Scores · 2026-10-08"
+     },
+     "preview": "Open Live Scores · 2026-10-08",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.64
+    },
+    {
+     "id": "t70",
+     "text": "Brandon Williams shot chart",
+     "expected": "ask",
+     "produced": "ask",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "ask"
+     },
+     "error": null,
+     "action": {
+      "action": "ask",
+      "about": "player",
+      "name": "Brandon Williams",
+      "options": [
+       1630314,
+       1585
+      ],
+      "then": {
+       "action": "open_page",
+       "page": "shotcharts",
+       "hash": null,
+       "params": {
+        "pid": "<chosen>"
+       },
+       "label": "Shot Charts",
+       "preview": "Open Shot Charts · which player? · regular season"
+      },
+      "preview": "Which Brandon Williams? 2 players on file have that name."
+     },
+     "preview": "Which Brandon Williams? 2 players on file have that name.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.93
+    },
+    {
+     "id": "t71",
+     "text": "compare Reggie Williams and Reggie Miller",
+     "expected": "ask",
+     "produced": "ask",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "ask"
+     },
+     "error": null,
+     "action": {
+      "action": "ask",
+      "about": "player",
+      "name": "Reggie Williams",
+      "options": [
+       202130,
+       199
+      ],
+      "then": {
+       "action": "open_page",
+       "page": "compare",
+       "hash": null,
+       "params": {
+        "aid": "<chosen>",
+        "bid": 397
+       },
+       "label": "Player Comparison",
+       "preview": "Open Player Comparison · which player? · Reggie Miller"
+      },
+      "preview": "Which Reggie Williams? 2 players on file have that name."
+     },
+     "preview": "Which Reggie Williams? 2 players on file have that name.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.07
+    },
+    {
+     "id": "t72",
+     "text": "who is the GOAT",
+     "expected": "refuse",
+     "produced": "refuse",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "refuse",
+      "reason": "opinion"
+     },
+     "error": null,
+     "action": {
+      "action": "refuse",
+      "reason": "opinion",
+      "preview": "That's a judgement with no stat behind it; the app shows numbers, it doesn't rank greatness."
+     },
+     "preview": "That's a judgement with no stat behind it; the app shows numbers, it doesn't rank greatness.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.05
+    },
+    {
+     "id": "t73",
+     "text": "WNBA scoring leaders 2025",
+     "expected": "refuse",
+     "produced": "refuse",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "refuse",
+      "reason": "other_league"
+     },
+     "error": null,
+     "action": {
+      "action": "refuse",
+      "reason": "other_league",
+      "preview": "Only the NBA is on file (no WNBA, EuroLeague, G League or international play)."
+     },
+     "preview": "Only the NBA is on file (no WNBA, EuroLeague, G League or international play).",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.52
+    },
+    {
+     "id": "t74",
+     "text": "LeBron's game log in 2012-13",
+     "expected": "refuse",
+     "produced": "open_page",
+     "outcome": "wrong",
+     "right": false,
+     "detail": {
+      "got": "open_page",
+      "reason": null
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "player",
+      "hash": null,
+      "params": {
+       "id": 2544
+      },
+      "label": "Player Profile",
+      "preview": "Open Player Profile · LeBron James"
+     },
+     "preview": "Open Player Profile · LeBron James",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.02
+    },
+    {
+     "id": "t75",
+     "text": "Warriors assist network in 2016-17",
+     "expected": "refuse",
+     "produced": "refuse",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "refuse",
+      "reason": "no_data"
+     },
+     "error": null,
+     "action": {
+      "action": "refuse",
+      "reason": "no_data",
+      "preview": "The app has that kind of thing, but not for that season, player or span."
+     },
+     "preview": "The app has that kind of thing, but not for that season, player or span.",
+     "notes": [
+      "Assist Network has data from 2020-21; 2016-17 was asked for."
+     ],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.55
+    },
+    {
+     "id": "t76",
+     "text": "should I bet on the Lakers tonight",
+     "expected": "refuse",
+     "produced": "refuse",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "refuse",
+      "reason": "betting_advice"
+     },
+     "error": null,
+     "action": {
+      "action": "refuse",
+      "reason": "betting_advice",
+      "preview": "The app shows markets against its own model; it never gives betting advice."
+     },
+     "preview": "The app shows markets against its own model; it never gives betting advice.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.53
+    },
+    {
+     "id": "t77",
+     "text": "what's the average age of MVP winners",
+     "expected": "refuse",
+     "produced": "refuse",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "refuse",
+      "reason": "needs_a_computed_answer"
+     },
+     "error": null,
+     "action": {
+      "action": "refuse",
+      "reason": "needs_a_computed_answer",
+      "preview": "That answer is a number no page shows; this box only opens what the app has."
+     },
+     "preview": "That answer is a number no page shows; this box only opens what the app has.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.36
+    },
+    {
+     "id": "t78",
+     "text": "Troy Bolton's stats",
+     "expected": "refuse",
+     "produced": "refuse",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "refuse",
+      "reason": "unknown_player"
+     },
+     "error": null,
+     "action": {
+      "action": "refuse",
+      "reason": "unknown_player",
+      "preview": "Nobody of that name is on file."
+     },
+     "preview": "Nobody of that name is on file.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.51
+    },
+    {
+     "id": "t79",
+     "text": "write me a poem about Jokić",
+     "expected": "refuse",
+     "produced": "refuse",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "refuse",
+      "reason": "off_topic"
+     },
+     "error": null,
+     "action": {
+      "action": "refuse",
+      "reason": "off_topic",
+      "preview": "That isn't a question about basketball data in this app."
+     },
+     "preview": "That isn't a question about basketball data in this app.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.52
+    },
+    {
+     "id": "t80",
+     "text": "Jokić's salary next year",
+     "expected": "refuse",
+     "produced": "refuse",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "refuse",
+      "reason": "no_data"
+     },
+     "error": null,
+     "action": {
+      "action": "refuse",
+      "reason": "no_data",
+      "preview": "The app has that kind of thing, but not for that season, player or span."
+     },
+     "preview": "The app has that kind of thing, but not for that season, player or span.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.72
+    },
+    {
+     "id": "t81",
+     "text": "turn on dark mode",
+     "expected": "refuse",
+     "produced": "refuse",
+     "outcome": "wrong",
+     "right": false,
+     "detail": {
+      "got": "refuse",
+      "reason": "would_change_data"
+     },
+     "error": null,
+     "action": {
+      "action": "refuse",
+      "reason": "would_change_data",
+      "preview": "This box only reads; it can't add, change or delete anything."
+     },
+     "preview": "This box only reads; it can't add, change or delete anything.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [
+      "turn on dark mode"
+     ],
+     "seconds": 1.58
+    },
+    {
+     "id": "t82",
+     "text": "draft value by pick",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "draft",
+      "hash": null,
+      "params": {},
+      "label": "Draft Value Guide",
+      "preview": "Open Draft Value Guide"
+     },
+     "preview": "Open Draft Value Guide",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.44
+    },
+    {
+     "id": "t83",
+     "text": "rookie class",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "rookies",
+      "hash": null,
+      "params": {},
+      "label": "Rookie Class Tracker",
+      "preview": "Open Rookie Class Tracker"
+     },
+     "preview": "Open Rookie Class Tracker",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.51
+    },
+    {
+     "id": "t84",
+     "text": "guess the player game",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "wrong",
+     "right": false,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "games",
+      "hash": null,
+      "params": {
+       "g": "guessgame"
+      },
+      "label": "Games",
+      "preview": "Open Games · Guess the Game"
+     },
+     "preview": "Open Games · Guess the Game",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.64
+    },
+    {
+     "id": "t85",
+     "text": "how is RAPM calculated",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "methodology",
+      "hash": null,
+      "params": {
+       "card": "rapm"
+      },
+      "label": "Methodology",
+      "preview": "Open Methodology · RAPM"
+     },
+     "preview": "Open Methodology · RAPM",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.44
+    },
+    {
+     "id": "t86",
+     "text": "my watchlist",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "watchlist",
+      "hash": null,
+      "params": {},
+      "label": "Watchlist",
+      "preview": "Open Watchlist"
+     },
+     "preview": "Open Watchlist",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.49
+    },
+    {
+     "id": "t87",
+     "text": "latest news",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "news",
+      "hash": null,
+      "params": {},
+      "label": "News",
+      "preview": "Open News"
+     },
+     "preview": "Open News",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.48
+    },
+    {
+     "id": "t88",
+     "text": "breakouts in 2024-25",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "breakouts",
+      "hash": null,
+      "params": {
+       "season": 2025
+      },
+      "label": "Breakout Detector",
+      "preview": "Open Breakout Detector · 2024-25"
+     },
+     "preview": "Open Breakout Detector · 2024-25",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.08
+    },
+    {
+     "id": "t89",
+     "text": "stat stability for steals",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "stability",
+      "hash": null,
+      "params": {
+       "stat": "stl"
+      },
+      "label": "Stat Stability",
+      "preview": "Open Stat Stability · steals"
+     },
+     "preview": "Open Stat Stability · steals",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.39
+    },
+    {
+     "id": "t90",
+     "text": "find me a 3 and D role player",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "rolefinder",
+      "hash": null,
+      "params": {
+       "p": "three_and_d"
+      },
+      "label": "Role Player Finder",
+      "preview": "Open Role Player Finder · 3-and-D wing"
+     },
+     "preview": "Open Role Player Finder · 3-and-D wing",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.63
+    }
+   ]
+  },
+  {
+   "summary": {
+    "n": 90,
+    "right": 68,
+    "by_action": {
+     "open_page": {
+      "n": 62,
+      "right": 50,
+      "wrong": 1,
+      "refused": 2,
+      "failed": 9
+     },
+     "build_board": {
+      "n": 5,
+      "right": 4,
+      "wrong": 1,
+      "refused": 0,
+      "failed": 0
+     },
+     "run_finder": {
+      "n": 7,
+      "right": 7,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 0
+     },
+     "open_live_game": {
+      "n": 4,
+      "right": 4,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 0
+     },
+     "ask": {
+      "n": 2,
+      "right": 2,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 0
+     },
+     "refuse": {
+      "n": 10,
+      "right": 1,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 9
+     }
+    },
+    "false_refusals": 2,
+    "missed_refusals": 0,
+    "failed": 18,
+    "median_seconds": 1.62
+   },
+   "results": [
+    {
+     "id": "t01",
+     "text": "Luka vs Shai 2024-25",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "compare",
+      "hash": null,
+      "params": {
+       "aid": 1629029,
+       "bid": 1628983,
+       "season": 2025
+      },
+      "label": "Player Comparison",
+      "preview": "Open Player Comparison · Luka Dončić · Shai Gilgeous-Alexander · 2024-25"
+     },
+     "preview": "Open Player Comparison · Luka Dončić · Shai Gilgeous-Alexander · 2024-25",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.78
+    },
+    {
+     "id": "t02",
+     "text": "how does tatum stack up against jaylen brown",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "compare",
+      "hash": null,
+      "params": {
+       "aid": 1628369,
+       "bid": 1627759
+      },
+      "label": "Player Comparison",
+      "preview": "Open Player Comparison · Jayson Tatum · Jaylen Brown"
+     },
+     "preview": "Open Player Comparison · Jayson Tatum · Jaylen Brown",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.71
+    },
+    {
+     "id": "t03",
+     "text": "put Wemby, Chet Holmgren and Paolo Banchero side by side for 2025-26",
+     "expected": "build_board",
+     "produced": "build_board",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "build_board"
+     },
+     "error": null,
+     "action": {
+      "action": "build_board",
+      "sets": [
+       {
+        "kind": "player",
+        "ids": [
+         1641705,
+         1631096,
+         1631094
+        ]
+       }
+      ],
+      "blocks": [
+       {
+        "type": "table",
+        "dataset": "player_season",
+        "columns": [
+         "gp",
+         "min",
+         "pts",
+         "reb",
+         "ast",
+         "ts_pct",
+         "bpm"
+        ],
+        "seasonFrom": 2026,
+        "seasonTo": 2026,
+        "chart": null,
+        "x": null,
+        "y": null,
+        "tool": null,
+        "member": null,
+        "spec": null
+       }
+      ],
+      "preview": "New board: Victor Wembanyama vs Chet Holmgren vs Paolo Banchero · 2025-26 · table (Games, Minutes, Points, Rebounds, Assists, True shooting %, …) 2025-26"
+     },
+     "preview": "New board: Victor Wembanyama vs Chet Holmgren vs Paolo Banchero · 2025-26 · table (Games, Minutes, Points, Rebounds, Assists, True shooting %, …) 2025-26",
+     "notes": [],
+     "guessed": [
+      "Wemby as Victor Wembanyama"
+     ],
+     "not_understood": [],
+     "seconds": 1.94
+    },
+    {
+     "id": "t04",
+     "text": "compare the Thunder and the Nuggets in 2024-25",
+     "expected": "build_board",
+     "produced": "build_board",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "build_board"
+     },
+     "error": null,
+     "action": {
+      "action": "build_board",
+      "sets": [
+       {
+        "kind": "team",
+        "codes": [
+         "OKC",
+         "DEN"
+        ]
+       }
+      ],
+      "blocks": [
+       {
+        "type": "table",
+        "dataset": "team_season",
+        "columns": [
+         "w",
+         "l",
+         "w_pct",
+         "mov",
+         "o_rtg",
+         "d_rtg",
+         "n_rtg",
+         "pace"
+        ],
+        "seasonFrom": 2025,
+        "seasonTo": 2025,
+        "chart": null,
+        "x": null,
+        "y": null,
+        "tool": null,
+        "member": null,
+        "spec": null
+       }
+      ],
+      "preview": "New board: Oklahoma City Thunder vs Denver Nuggets · 2024-25 · table (Wins, Losses, Win %, Point margin, Offensive rating, Defensive rating, …) 2024-25"
+     },
+     "preview": "New board: Oklahoma City Thunder vs Denver Nuggets · 2024-25 · table (Wins, Losses, Win %, Point margin, Offensive rating, Defensive rating, …) 2024-25",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.6
+    },
+    {
+     "id": "t05",
+     "text": "Jokic or Embiid, who had the better 2022-23?",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "compare",
+      "hash": null,
+      "params": {
+       "aid": 203999,
+       "bid": 203954,
+       "season": 2023
+      },
+      "label": "Player Comparison",
+      "preview": "Open Player Comparison · Nikola Jokić · Joel Embiid · 2022-23"
+     },
+     "preview": "Open Player Comparison · Nikola Jokić · Joel Embiid · 2022-23",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.9
+    },
+    {
+     "id": "t06",
+     "text": "chart Lebron's points per game season by season",
+     "expected": "build_board",
+     "produced": "open_page",
+     "outcome": "wrong",
+     "right": false,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "player",
+      "hash": null,
+      "params": {
+       "id": 2544
+      },
+      "label": "Player Profile",
+      "preview": "Open Player Profile · LeBron James"
+     },
+     "preview": "Open Player Profile · LeBron James",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.82
+    },
+    {
+     "id": "t07",
+     "text": "Giannis vs Embiid vs Jokic 2023-24 bpm and vorp",
+     "expected": "build_board",
+     "produced": "build_board",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "build_board"
+     },
+     "error": null,
+     "action": {
+      "action": "build_board",
+      "sets": [
+       {
+        "kind": "player",
+        "ids": [
+         203507,
+         203954,
+         203999
+        ]
+       }
+      ],
+      "blocks": [
+       {
+        "type": "table",
+        "dataset": "player_season",
+        "columns": [
+         "bpm",
+         "vorp"
+        ],
+        "seasonFrom": 2024,
+        "seasonTo": 2024,
+        "chart": null,
+        "x": null,
+        "y": null,
+        "tool": null,
+        "member": null,
+        "spec": null
+       }
+      ],
+      "preview": "New board: Giannis Antetokounmpo vs Joel Embiid vs Nikola Jokić · 2023-24 · table (BPM, VORP) 2023-24"
+     },
+     "preview": "New board: Giannis Antetokounmpo vs Joel Embiid vs Nikola Jokić · 2023-24 · table (BPM, VORP) 2023-24",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 3.04
+    },
+    {
+     "id": "t08",
+     "text": "compare the Knicks, Celtics and Cavs net rating this season",
+     "expected": "build_board",
+     "produced": "build_board",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "build_board"
+     },
+     "error": null,
+     "action": {
+      "action": "build_board",
+      "sets": [
+       {
+        "kind": "team",
+        "codes": [
+         "NYK",
+         "BOS",
+         "CLE"
+        ]
+       }
+      ],
+      "blocks": [
+       {
+        "type": "table",
+        "dataset": "team_season",
+        "columns": [
+         "w",
+         "l",
+         "w_pct",
+         "mov",
+         "o_rtg",
+         "d_rtg",
+         "n_rtg",
+         "pace"
+        ],
+        "seasonFrom": 2026,
+        "seasonTo": 2026,
+        "chart": null,
+        "x": null,
+        "y": null,
+        "tool": null,
+        "member": null,
+        "spec": null
+       }
+      ],
+      "preview": "New board: New York Knicks vs Boston Celtics vs Cleveland Cavaliers · 2025-26 · table (Wins, Losses, Win %, Point margin, Offensive rating, Defensive rating, …) 2025-26"
+     },
+     "preview": "New board: New York Knicks vs Boston Celtics vs Cleveland Cavaliers · 2025-26 · table (Wins, Losses, Win %, Point margin, Offensive rating, Defensive rating, …) 2025-26",
+     "notes": [
+      "Table block: 'net_rating' isn't a stat of team seasons; left out."
+     ],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.84
+    },
+    {
+     "id": "t09",
+     "text": "top scorers 2024-25",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "pts",
+       "from": 2025,
+       "to": 2025
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 2024-25 · points"
+     },
+     "preview": "Open Leaderboard Builder · 2024-25 · points",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.6
+    },
+    {
+     "id": "t10",
+     "text": "who has the highest true shooting percentage ever",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "ts_pct",
+       "from": 1950,
+       "to": 2026
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 1949-50 to 2025-26 · true shooting %"
+     },
+     "preview": "Open Leaderboard Builder · 1949-50 to 2025-26 · true shooting %",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.6
+    },
+    {
+     "id": "t11",
+     "text": "who had the best BPM between 2015-16 and 2019-20",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "bpm",
+       "from": 2016,
+       "to": 2020
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 2015-16 to 2019-20 · BPM (box plus-minus)"
+     },
+     "preview": "Open Leaderboard Builder · 2015-16 to 2019-20 · BPM (box plus-minus)",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.01
+    },
+    {
+     "id": "t12",
+     "text": "steals leaders 2022-23, top 10",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "stl",
+       "from": 2023,
+       "to": 2023,
+       "n": "10"
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 2022-23 · steals · 10"
+     },
+     "preview": "Open Leaderboard Builder · 2022-23 · steals · 10",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.63
+    },
+    {
+     "id": "t13",
+     "text": "highest usage rate seasons of all time",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "usg_pct",
+       "from": 1950,
+       "to": 2026
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 1949-50 to 2025-26 · usage %"
+     },
+     "preview": "Open Leaderboard Builder · 1949-50 to 2025-26 · usage %",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.72
+    },
+    {
+     "id": "t14",
+     "text": "who leads the lakers in scoring this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "pts",
+       "team": "LAL",
+       "from": 2026,
+       "to": 2026
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 2025-26 · points · Los Angeles Lakers"
+     },
+     "preview": "Open Leaderboard Builder · 2025-26 · points · Los Angeles Lakers",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.36
+    },
+    {
+     "id": "t15",
+     "text": "best VORP season ever",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "builder",
+      "hash": null,
+      "params": {
+       "stat": "vorp",
+       "from": 1950,
+       "to": 2026
+      },
+      "label": "Leaderboard Builder",
+      "preview": "Open Leaderboard Builder · 1949-50 to 2025-26 · VORP"
+     },
+     "preview": "Open Leaderboard Builder · 1949-50 to 2025-26 · VORP",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.75
+    },
+    {
+     "id": "t16",
+     "text": "show me kobe's shot chart from 2005-06",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "shotcharts",
+      "hash": null,
+      "params": {
+       "pid": 977,
+       "season": "2005-06"
+      },
+      "label": "Shot Charts",
+      "preview": "Open Shot Charts · Kobe Bryant · 2005-06 · regular season"
+     },
+     "preview": "Open Shot Charts · Kobe Bryant · 2005-06 · regular season",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.87
+    },
+    {
+     "id": "t17",
+     "text": "Jokic heatmap this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "shotcharts",
+      "hash": null,
+      "params": {
+       "pid": 203999,
+       "season": "2025-26",
+       "view": "heatmap"
+      },
+      "label": "Shot Charts",
+      "preview": "Open Shot Charts · Nikola Jokić · 2025-26 · heat map · regular season"
+     },
+     "preview": "Open Shot Charts · Nikola Jokić · 2025-26 · heat map · regular season",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.6
+    },
+    {
+     "id": "t18",
+     "text": "Jayson Tatum's playoff shot chart 2023-24",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "shotcharts",
+      "hash": null,
+      "params": {
+       "pid": 1628369,
+       "season": "2023-24",
+       "games": "playoffs"
+      },
+      "label": "Shot Charts",
+      "preview": "Open Shot Charts · Jayson Tatum · 2023-24 · playoffs and play-in"
+     },
+     "preview": "Open Shot Charts · Jayson Tatum · 2023-24 · playoffs and play-in",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.59
+    },
+    {
+     "id": "t19",
+     "text": "Giannis Antetokumpo",
+     "expected": "open_page",
+     "produced": "refuse",
+     "outcome": "refused",
+     "right": false,
+     "detail": {
+      "got": "refuse"
+     },
+     "error": null,
+     "action": {
+      "action": "refuse",
+      "reason": "unknown_player",
+      "preview": "Nobody of that name is on file."
+     },
+     "preview": "Nobody of that name is on file.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.38
+    },
+    {
+     "id": "t20",
+     "text": "Luka Doncic's game log this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "player",
+      "hash": null,
+      "params": {
+       "id": 1629029
+      },
+      "label": "Player Profile",
+      "preview": "Open Player Profile · Luka Dončić"
+     },
+     "preview": "Open Player Profile · Luka Dončić",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.55
+    },
+    {
+     "id": "t21",
+     "text": "what's Anthony Edwards projected to do next season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "player",
+      "hash": null,
+      "params": {
+       "id": 1630162
+      },
+      "label": "Player Profile",
+      "preview": "Open Player Profile · Anthony Edwards"
+     },
+     "preview": "Open Player Profile · Anthony Edwards",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.59
+    },
+    {
+     "id": "t22",
+     "text": "who is projected to score the most next year",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "projections",
+      "hash": null,
+      "params": {
+       "stat": "pts"
+      },
+      "label": "Projections",
+      "preview": "Open Projections · points"
+     },
+     "preview": "Open Projections · points",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.48
+    },
+    {
+     "id": "t23",
+     "text": "Cooper Flagg",
+     "expected": "open_page",
+     "produced": "refuse",
+     "outcome": "refused",
+     "right": false,
+     "detail": {
+      "got": "refuse"
+     },
+     "error": null,
+     "action": {
+      "action": "refuse",
+      "reason": "no_data",
+      "preview": "The app has that kind of thing, but not for that season, player or span."
+     },
+     "preview": "The app has that kind of thing, but not for that season, player or span.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.65
+    },
+    {
+     "id": "t24",
+     "text": "LeBron's shot chart as a rookie",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "shotcharts",
+      "hash": null,
+      "params": {
+       "pid": 2544,
+       "season": "2003-04"
+      },
+      "label": "Shot Charts",
+      "preview": "Open Shot Charts · LeBron James · 2003-04 · regular season"
+     },
+     "preview": "Open Shot Charts · LeBron James · 2003-04 · regular season",
+     "notes": [],
+     "guessed": [
+      "LeBron's rookie season is 2003-04 (end year 2004)"
+     ],
+     "not_understood": [],
+     "seconds": 1.67
+    },
+    {
+     "id": "t25",
+     "text": "show Victor Wembanyama's shot quality map",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "shotcharts",
+      "hash": null,
+      "params": {
+       "pid": 1641705,
+       "view": "quality"
+      },
+      "label": "Shot Charts",
+      "preview": "Open Shot Charts · Victor Wembanyama · shot quality map (hexagons) · regular season"
+     },
+     "preview": "Open Shot Charts · Victor Wembanyama · shot quality map (hexagons) · regular season",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.61
+    },
+    {
+     "id": "t26",
+     "text": "KD shot chart 2013-14",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "shotcharts",
+      "hash": null,
+      "params": {
+       "pid": 201142,
+       "season": "2013-14"
+      },
+      "label": "Shot Charts",
+      "preview": "Open Shot Charts · Kevin Durant · 2013-14 · regular season"
+     },
+     "preview": "Open Shot Charts · Kevin Durant · 2013-14 · regular season",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.13
+    },
+    {
+     "id": "t27",
+     "text": "Celtics 2007-08",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "team",
+      "hash": null,
+      "params": {
+       "abbr": "BOS",
+       "season": 2008
+      },
+      "label": "Team Profile",
+      "preview": "Open Team Profile · Boston Celtics · 2007-08"
+     },
+     "preview": "Open Team Profile · Boston Celtics · 2007-08",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.4
+    },
+    {
+     "id": "t28",
+     "text": "Thunder team page",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "team",
+      "hash": null,
+      "params": {
+       "abbr": "OKC"
+      },
+      "label": "Team Profile",
+      "preview": "Open Team Profile · Oklahoma City Thunder"
+     },
+     "preview": "Open Team Profile · Oklahoma City Thunder",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.35
+    },
+    {
+     "id": "t29",
+     "text": "show me the standings",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "standings",
+      "hash": null,
+      "params": {},
+      "label": "Standings",
+      "preview": "Open Standings"
+     },
+     "preview": "Open Standings",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.44
+    },
+    {
+     "id": "t30",
+     "text": "what did the Bulls do in 1995-96",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "team",
+      "hash": null,
+      "params": {
+       "abbr": "CHI",
+       "season": 1996
+      },
+      "label": "Team Profile",
+      "preview": "Open Team Profile · Chicago Bulls · 1995-96"
+     },
+     "preview": "Open Team Profile · Chicago Bulls · 1995-96",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.46
+    },
+    {
+     "id": "t31",
+     "text": "the Warriors assist network in 2024-25",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "assists",
+      "hash": null,
+      "params": {
+       "team": "GSW",
+       "season": 2025
+      },
+      "label": "Assist Network",
+      "preview": "Open Assist Network · Golden State Warriors · 2024-25"
+     },
+     "preview": "Open Assist Network · Golden State Warriors · 2024-25",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.62
+    },
+    {
+     "id": "t32",
+     "text": "who has averaged a triple double",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_season",
+       "scope": "season",
+       "season_from": null,
+       "season_to": null,
+       "filters": [],
+       "min_games": 40,
+       "conditions": [
+        {
+         "type": "value",
+         "stat": "pts",
+         "op": "gte",
+         "value": 10,
+         "per": "game"
+        },
+        {
+         "type": "value",
+         "stat": "reb",
+         "op": "gte",
+         "value": 10,
+         "per": "game"
+        },
+        {
+         "type": "value",
+         "stat": "ast",
+         "op": "gte",
+         "value": 10,
+         "per": "game"
+        }
+       ]
+      },
+      "sentence": "Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, averaged at least 10 points per game; and averaged at least 10 rebounds per game; and averaged at least 10 assists per game (all over the same seasons).",
+      "flag": false,
+      "finder_dropped": [],
+      "finder_not_understood": [],
+      "preview": "Find players: Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, averaged at least 10 points per game; and averaged at least 10 rebounds per game; and averaged at least 10 assists per game (all over the same seasons)."
+     },
+     "preview": "Find players: Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, averaged at least 10 points per game; and averaged at least 10 rebounds per game; and averaged at least 10 assists per game (all over the same seasons).",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 3.55
+    },
+    {
+     "id": "t33",
+     "text": "who scored 30+ in 10 straight games",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_game",
+       "scope": "span",
+       "season_from": null,
+       "season_to": null,
+       "filters": [],
+       "min_games": null,
+       "conditions": [
+        {
+         "type": "streak",
+         "tests": [
+          {
+           "stat": "pts",
+           "op": "gte",
+           "value": 30
+          }
+         ],
+         "count": 10
+        }
+       ]
+      },
+      "sentence": "Players who, over all their games from 2020-21 to 2025-26 combined, in at least 10 straight games he played had at least 30 points.",
+      "flag": false,
+      "finder_dropped": [],
+      "finder_not_understood": [],
+      "preview": "Find players: Players who, over all their games from 2020-21 to 2025-26 combined, in at least 10 straight games he played had at least 30 points."
+     },
+     "preview": "Find players: Players who, over all their games from 2020-21 to 2025-26 combined, in at least 10 straight games he played had at least 30 points.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 3.85
+    },
+    {
+     "id": "t34",
+     "text": "Curry's 50 point games",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "gamefinder",
+      "hash": null,
+      "params": {
+       "player": 201939,
+       "f": "pts:gte:50"
+      },
+      "label": "Game Finder",
+      "preview": "Open Game Finder · Stephen Curry · points ≥ 50"
+     },
+     "preview": "Open Game Finder · Stephen Curry · points ≥ 50",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.91
+    },
+    {
+     "id": "t35",
+     "text": "all 60 point games since 2020-21",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "gamefinder",
+      "hash": null,
+      "params": {
+       "f": "pts:gte:60",
+       "from": 2021
+      },
+      "label": "Game Finder",
+      "preview": "Open Game Finder · 2020-21 · points ≥ 60"
+     },
+     "preview": "Open Game Finder · 2020-21 · points ≥ 60",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.48
+    },
+    {
+     "id": "t36",
+     "text": "longest streak of 25 point games",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "gamefinder",
+      "hash": null,
+      "params": {
+       "f": "pts:gte:25",
+       "mode": "streaks"
+      },
+      "label": "Game Finder",
+      "preview": "Open Game Finder · points ≥ 25 · streaks"
+     },
+     "preview": "Open Game Finder · points ≥ 25 · streaks",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.52
+    },
+    {
+     "id": "t37",
+     "text": "which players shot 45% from three on at least 400 attempts in a season",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_season",
+       "scope": "season",
+       "season_from": null,
+       "season_to": null,
+       "filters": [],
+       "min_games": 40,
+       "conditions": [
+        {
+         "type": "value",
+         "stat": "fg3_pct",
+         "op": "gte",
+         "value": 0.45,
+         "per": "game",
+         "min_n": 400
+        }
+       ]
+      },
+      "sentence": "Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, had a 3-point % of at least 45% (on at least 400 3-point attempts).",
+      "flag": false,
+      "finder_dropped": [],
+      "finder_not_understood": [],
+      "preview": "Find players: Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, had a 3-point % of at least 45% (on at least 400 3-point attempts)."
+     },
+     "preview": "Find players: Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, had a 3-point % of at least 45% (on at least 400 3-point attempts).",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 3.49
+    },
+    {
+     "id": "t38",
+     "text": "seasons like 27 points 7 rebounds 7 assists",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "statline",
+      "hash": null,
+      "params": {
+       "line": "pts:27,reb:7,ast:7"
+      },
+      "label": "Stat Line Finder",
+      "preview": "Open Stat Line Finder · points 27, rebounds 7, assists 7"
+     },
+     "preview": "Open Stat Line Finder · points 27, rebounds 7, assists 7",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.87
+    },
+    {
+     "id": "t39",
+     "text": "who averaged at least 8 assists and under 2 turnovers a game last season",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_season",
+       "scope": "season",
+       "season_from": 2026,
+       "season_to": null,
+       "filters": [],
+       "min_games": 40,
+       "conditions": [
+        {
+         "type": "value",
+         "stat": "ast",
+         "op": "gte",
+         "value": 8,
+         "per": "game"
+        },
+        {
+         "type": "value",
+         "stat": "tov",
+         "op": "lt",
+         "value": 2,
+         "per": "game"
+        }
+       ]
+      },
+      "sentence": "Players who, in 2025-26, over at least 40 games, averaged at least 8 assists per game; and averaged less than 2 turnovers per game (all over the same seasons).",
+      "flag": false,
+      "finder_dropped": [],
+      "finder_not_understood": [],
+      "preview": "Find players: Players who, in 2025-26, over at least 40 games, averaged at least 8 assists per game; and averaged less than 2 turnovers per game (all over the same seasons)."
+     },
+     "preview": "Find players: Players who, in 2025-26, over at least 40 games, averaged at least 8 assists per game; and averaged less than 2 turnovers per game (all over the same seasons).",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 3.05
+    },
+    {
+     "id": "t40",
+     "text": "players with 5 straight 30 point games this season",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_game",
+       "scope": "season",
+       "season_from": 2026,
+       "season_to": null,
+       "filters": [],
+       "min_games": null,
+       "conditions": [
+        {
+         "type": "streak",
+         "tests": [
+          {
+           "stat": "pts",
+           "op": "gte",
+           "value": 30
+          }
+         ],
+         "count": 5
+        }
+       ]
+      },
+      "sentence": "Players who, in 2025-26, in at least 5 straight games he played had at least 30 points.",
+      "flag": false,
+      "finder_dropped": [],
+      "finder_not_understood": [],
+      "preview": "Find players: Players who, in 2025-26, in at least 5 straight games he played had at least 30 points."
+     },
+     "preview": "Find players: Players who, in 2025-26, in at least 5 straight games he played had at least 30 points.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 3.38
+    },
+    {
+     "id": "t41",
+     "text": "centers who average 3 blocks",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_season",
+       "scope": "season",
+       "season_from": null,
+       "season_to": null,
+       "filters": [],
+       "min_games": 40,
+       "conditions": [
+        {
+         "type": "value",
+         "stat": "blk",
+         "op": "gte",
+         "value": 3,
+         "per": "game"
+        }
+       ]
+      },
+      "sentence": "Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, averaged at least 3 blocks per game.",
+      "flag": true,
+      "finder_dropped": [],
+      "finder_not_understood": [
+       "centers"
+      ],
+      "preview": "Find players: Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, averaged at least 3 blocks per game."
+     },
+     "preview": "Find players: Players who, in a single season from 1949-50 to 2025-26, over at least 40 games, averaged at least 3 blocks per game.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.97
+    },
+    {
+     "id": "t42",
+     "text": "games with 12 or more threes",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "gamefinder",
+      "hash": null,
+      "params": {
+       "f": "fg3m:gte:12"
+      },
+      "label": "Game Finder",
+      "preview": "Open Game Finder · 3-pointers made ≥ 12"
+     },
+     "preview": "Open Game Finder · 3-pointers made ≥ 12",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.53
+    },
+    {
+     "id": "t43",
+     "text": "players who had 40 points and 10 assists in the same game at least 5 times since 2021-22",
+     "expected": "run_finder",
+     "produced": "run_finder",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "run_finder",
+      "boxes": {
+       "dataset": true,
+       "scope": true,
+       "seasons": true,
+       "min_games": true,
+       "filters": true,
+       "conditions": true,
+       "flag": true
+      }
+     },
+     "error": null,
+     "action": {
+      "action": "run_finder",
+      "spec": {
+       "dataset": "player_game",
+       "scope": "span",
+       "season_from": 2022,
+       "season_to": null,
+       "filters": [],
+       "min_games": null,
+       "conditions": [
+        {
+         "type": "count",
+         "tests": [
+          {
+           "stat": "pts",
+           "op": "gte",
+           "value": 40
+          },
+          {
+           "stat": "ast",
+           "op": "gte",
+           "value": 10
+          }
+         ],
+         "count": 5,
+         "count_op": "gte"
+        }
+       ]
+      },
+      "sentence": "Players who, over all their games from 2021-22 to 2025-26 combined, in at least 5 games had at least 40 points and at least 10 assists in the same game.",
+      "flag": false,
+      "finder_dropped": [],
+      "finder_not_understood": [],
+      "preview": "Find players: Players who, over all their games from 2021-22 to 2025-26 combined, in at least 5 games had at least 40 points and at least 10 assists in the same game."
+     },
+     "preview": "Find players: Players who, over all their games from 2021-22 to 2025-26 combined, in at least 5 games had at least 40 points and at least 10 assists in the same game.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.78
+    },
+    {
+     "id": "t44",
+     "text": "40 point games on the road this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "gamefinder",
+      "hash": null,
+      "params": {
+       "f": "pts:gte:40",
+       "home": "away",
+       "from": 2026,
+       "to": 2026
+      },
+      "label": "Game Finder",
+      "preview": "Open Game Finder · 2025-26 · points ≥ 40 · on the road"
+     },
+     "preview": "Open Game Finder · 2025-26 · points ≥ 40 · on the road",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.68
+    },
+    {
+     "id": "t45",
+     "text": "how does LeBron's BPM compare to the typical aging curve",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "aging",
+      "hash": null,
+      "params": {
+       "stat": "bpm",
+       "player": 2544
+      },
+      "label": "Aging Curves",
+      "preview": "Open Aging Curves · BPM (box plus-minus) · LeBron James"
+     },
+     "preview": "Open Aging Curves · BPM (box plus-minus) · LeBron James",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.59
+    },
+    {
+     "id": "t46",
+     "text": "aging curves for assists in the modern era",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "aging",
+      "hash": null,
+      "params": {
+       "stat": "ast",
+       "era": "modern"
+      },
+      "label": "Aging Curves",
+      "preview": "Open Aging Curves · assists · 2009-10 on"
+     },
+     "preview": "Open Aging Curves · assists · 2009-10 on",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.55
+    },
+    {
+     "id": "t47",
+     "text": "what would Magic Johnson's 1986-87 look like in 2024-25",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "era",
+      "hash": null,
+      "params": {
+       "player": 77142,
+       "season": 1987,
+       "to": 2025
+      },
+      "label": "Era Translator",
+      "preview": "Open Era Translator · Magic Johnson · 1986-87 · 2024-25"
+     },
+     "preview": "Open Era Translator · Magic Johnson · 1986-87 · 2024-25",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.02
+    },
+    {
+     "id": "t48",
+     "text": "on off numbers for the Celtics 2023-24",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "analytics",
+      "hash": "onoff",
+      "params": {
+       "team": "BOS",
+       "season": 2024
+      },
+      "label": "Analytics › On/Off",
+      "preview": "Open Analytics › On/Off · Boston Celtics · 2023-24"
+     },
+     "preview": "Open Analytics › On/Off · Boston Celtics · 2023-24",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.6
+    },
+    {
+     "id": "t49",
+     "text": "Jokić on/off",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "player",
+      "hash": null,
+      "params": {
+       "id": 203999
+      },
+      "label": "Player Profile",
+      "preview": "Open Player Profile · Nikola Jokić"
+     },
+     "preview": "Open Player Profile · Nikola Jokić",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.75
+    },
+    {
+     "id": "t50",
+     "text": "three season RAPM this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "rapm",
+      "hash": null,
+      "params": {
+       "version": "multi",
+       "season": 2026
+      },
+      "label": "RAPM",
+      "preview": "Open RAPM · three-season RAPM · 2025-26"
+     },
+     "preview": "Open RAPM · three-season RAPM · 2025-26",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.71
+    },
+    {
+     "id": "t51",
+     "text": "who's hot right now",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "hotstreaks",
+      "hash": null,
+      "params": {},
+      "label": "Hot Streak Checker",
+      "preview": "Open Hot Streak Checker"
+     },
+     "preview": "Open Hot Streak Checker",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.51
+    },
+    {
+     "id": "t52",
+     "text": "home away splits for points this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "splits",
+      "hash": null,
+      "params": {
+       "split": "home",
+       "stat": "pts",
+       "season": 2026
+      },
+      "label": "Situational Splits",
+      "preview": "Open Situational Splits · home / away · points · 2025-26"
+     },
+     "preview": "Open Situational Splits · home / away · points · 2025-26",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.79
+    },
+    {
+     "id": "t53",
+     "text": "who plays better on back to backs",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "splits",
+      "hash": null,
+      "params": {
+       "split": "rest"
+      },
+      "label": "Situational Splits",
+      "preview": "Open Situational Splits · rest days (back-to-backs)"
+     },
+     "preview": "Open Situational Splits · rest days (back-to-backs)",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.42
+    },
+    {
+     "id": "t54",
+     "text": "Wembanyama blocks in the 4th quarter this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "plays",
+      "hash": null,
+      "params": {
+       "player": 1641705,
+       "cat": "blk",
+       "per": "4",
+       "from": 2026,
+       "to": 2026
+      },
+      "label": "Play Finder",
+      "preview": "Open Play Finder · 2025-26 · Victor Wembanyama · blocks · 4"
+     },
+     "preview": "Open Play Finder · 2025-26 · Victor Wembanyama · blocks · 4",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.87
+    },
+    {
+     "id": "t55",
+     "text": "pair chemistry for the Knicks this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "analytics",
+      "hash": "pairs",
+      "params": {
+       "team": "NYK",
+       "season": 2026
+      },
+      "label": "Analytics › Pair Chemistry",
+      "preview": "Open Analytics › Pair Chemistry · New York Knicks · 2025-26"
+     },
+     "preview": "Open Analytics › Pair Chemistry · New York Knicks · 2025-26",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.59
+    },
+    {
+     "id": "t56",
+     "text": "clutch WPA leaders",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "analytics",
+      "hash": "wpa",
+      "params": {},
+      "label": "Analytics › Clutch WPA",
+      "preview": "Open Analytics › Clutch WPA"
+     },
+     "preview": "Open Analytics › Clutch WPA",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.63
+    },
+    {
+     "id": "t57",
+     "text": "who's winning the MVP race",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "analytics",
+      "hash": "mvp",
+      "params": {},
+      "label": "Analytics › Awards Race",
+      "preview": "Open Analytics › Awards Race"
+     },
+     "preview": "Open Analytics › Awards Race",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.48
+    },
+    {
+     "id": "t58",
+     "text": "season simulator for 2022-23",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "simulator",
+      "hash": null,
+      "params": {
+       "season": 2023
+      },
+      "label": "Season Simulator",
+      "preview": "Open Season Simulator · 2022-23"
+     },
+     "preview": "Open Season Simulator · 2022-23",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.58
+    },
+    {
+     "id": "t59",
+     "text": "biggest upsets this season",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "bestgames",
+      "hash": null,
+      "params": {
+       "v": "upsets",
+       "season": 2026
+      },
+      "label": "Best Games & Upsets",
+      "preview": "Open Best Games & Upsets · upsets · 2025-26"
+     },
+     "preview": "Open Best Games & Upsets · upsets · 2025-26",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.58
+    },
+    {
+     "id": "t60",
+     "text": "coaching decisions, timeouts, Heat 2024-25",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "coaching",
+      "hash": null,
+      "params": {
+       "v": "timeout",
+       "team": "MIA",
+       "season": 2025
+      },
+      "label": "Coaching Decisions",
+      "preview": "Open Coaching Decisions · timeouts · Miami Heat · 2024-25"
+     },
+     "preview": "Open Coaching Decisions · timeouts · Miami Heat · 2024-25",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.62
+    },
+    {
+     "id": "t61",
+     "text": "trade analyzer: Lakers and Mavericks",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "trade",
+      "hash": null,
+      "params": {
+       "ta": "LAL",
+       "tb": "DAL"
+      },
+      "label": "Trade Analyzer",
+      "preview": "Open Trade Analyzer · Los Angeles Lakers · Dallas Mavericks"
+     },
+     "preview": "Open Trade Analyzer · Los Angeles Lakers · Dallas Mavericks",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.72
+    },
+    {
+     "id": "t62",
+     "text": "what if the Suns traded Devin Booker to the Rockets",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "wrong",
+     "right": false,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "tradeimpact",
+      "hash": null,
+      "params": {
+       "ta": "PHX",
+       "pa": 1626164,
+       "tb": "HOU"
+      },
+      "label": "Trade Impact",
+      "preview": "Open Trade Impact · Phoenix Suns · Devin Booker · Houston Rockets"
+     },
+     "preview": "Open Trade Impact · Phoenix Suns · Devin Booker · Houston Rockets",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 2.87
+    },
+    {
+     "id": "t63",
+     "text": "is there a game on now",
+     "expected": "open_live_game",
+     "produced": "open_live_game",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_live_game"
+     },
+     "error": null,
+     "action": {
+      "action": "open_live_game",
+      "team": null,
+      "preview": "Today's live games"
+     },
+     "preview": "Today's live games",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.36
+    },
+    {
+     "id": "t64",
+     "text": "what's the score of the Knicks game",
+     "expected": "open_live_game",
+     "produced": "open_live_game",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_live_game"
+     },
+     "error": null,
+     "action": {
+      "action": "open_live_game",
+      "team": "NYK",
+      "preview": "Live: New York Knicks today"
+     },
+     "preview": "Live: New York Knicks today",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.44
+    },
+    {
+     "id": "t65",
+     "text": "are the warriors playing tonight",
+     "expected": "open_live_game",
+     "produced": "open_live_game",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_live_game"
+     },
+     "error": null,
+     "action": {
+      "action": "open_live_game",
+      "team": "GSW",
+      "preview": "Live: Golden State Warriors today"
+     },
+     "preview": "Live: Golden State Warriors today",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.36
+    },
+    {
+     "id": "t66",
+     "text": "OKC game live",
+     "expected": "open_live_game",
+     "produced": "open_live_game",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_live_game"
+     },
+     "error": null,
+     "action": {
+      "action": "open_live_game",
+      "team": "OKC",
+      "preview": "Live: Oklahoma City Thunder today"
+     },
+     "preview": "Live: Oklahoma City Thunder today",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.45
+    },
+    {
+     "id": "t67",
+     "text": "yesterday's scores",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "scores",
+      "hash": null,
+      "params": {
+       "date": "2026-10-08"
+      },
+      "label": "Live Scores",
+      "preview": "Open Live Scores · 2026-10-08"
+     },
+     "preview": "Open Live Scores · 2026-10-08",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.51
+    },
+    {
+     "id": "t68",
+     "text": "what happened on christmas day 2025",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "scores",
+      "hash": null,
+      "params": {
+       "date": "2025-12-25"
+      },
+      "label": "Live Scores",
+      "preview": "Open Live Scores · 2025-12-25"
+     },
+     "preview": "Open Live Scores · 2025-12-25",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.5
+    },
+    {
+     "id": "t69",
+     "text": "who won the Bucks game last night",
+     "expected": "open_page",
+     "produced": "open_page",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "open_page"
+     },
+     "error": null,
+     "action": {
+      "action": "open_page",
+      "page": "scores",
+      "hash": null,
+      "params": {
+       "date": "2026-10-08"
+      },
+      "label": "Live Scores",
+      "preview": "Open Live Scores · 2026-10-08"
+     },
+     "preview": "Open Live Scores · 2026-10-08",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.37
+    },
+    {
+     "id": "t70",
+     "text": "Brandon Williams shot chart",
+     "expected": "ask",
+     "produced": "ask",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "ask"
+     },
+     "error": null,
+     "action": {
+      "action": "ask",
+      "about": "player",
+      "name": "Brandon Williams",
+      "options": [
+       1630314,
+       1585
+      ],
+      "then": {
+       "action": "open_page",
+       "page": "shotcharts",
+       "hash": null,
+       "params": {
+        "pid": "<chosen>"
+       },
+       "label": "Shot Charts",
+       "preview": "Open Shot Charts · which player? · regular season"
+      },
+      "preview": "Which Brandon Williams? 2 players on file have that name."
+     },
+     "preview": "Which Brandon Williams? 2 players on file have that name.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.88
+    },
+    {
+     "id": "t71",
+     "text": "compare Reggie Williams and Reggie Miller",
+     "expected": "ask",
+     "produced": "ask",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "ask"
+     },
+     "error": null,
+     "action": {
+      "action": "ask",
+      "about": "player",
+      "name": "Reggie Williams",
+      "options": [
+       202130,
+       199
+      ],
+      "then": {
+       "action": "build_board",
+       "sets": [
+        {
+         "kind": "player",
+         "ids": [
+          "<chosen>",
+          397
+         ]
+        }
+       ],
+       "blocks": [
+        {
+         "type": "table",
+         "dataset": "player_season",
+         "columns": [
+          "gp",
+          "min",
+          "pts",
+          "reb",
+          "ast",
+          "ts_pct",
+          "bpm"
+         ],
+         "seasonFrom": null,
+         "seasonTo": null,
+         "chart": null,
+         "x": null,
+         "y": null,
+         "tool": null,
+         "member": null,
+         "spec": null
+        }
+       ],
+       "preview": "New board: Reggie Williams vs Reggie Miller · table (Games, Minutes, Points, Rebounds, Assists, True shooting %, …)"
+      },
+      "preview": "Which Reggie Williams? 2 players on file have that name."
+     },
+     "preview": "Which Reggie Williams? 2 players on file have that name.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.98
+    },
+    {
+     "id": "t72",
+     "text": "who is the GOAT",
+     "expected": "refuse",
+     "produced": "refuse",
+     "outcome": "right",
+     "right": true,
+     "detail": {
+      "got": "refuse",
+      "reason": "opinion"
+     },
+     "error": null,
+     "action": {
+      "action": "refuse",
+      "reason": "opinion",
+      "preview": "That's a judgement with no stat behind it; the app shows numbers, it doesn't rank greatness."
+     },
+     "preview": "That's a judgement with no stat behind it; the app shows numbers, it doesn't rank greatness.",
+     "notes": [],
+     "guessed": [],
+     "not_understood": [],
+     "seconds": 1.36
+    },
+    {
+     "id": "t73",
+     "text": "WNBA scoring leaders 2025",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t74",
+     "text": "LeBron's game log in 2012-13",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t75",
+     "text": "Warriors assist network in 2016-17",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t76",
+     "text": "should I bet on the Lakers tonight",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t77",
+     "text": "what's the average age of MVP winners",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t78",
+     "text": "Troy Bolton's stats",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t79",
+     "text": "write me a poem about Jokić",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t80",
+     "text": "Jokić's salary next year",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t81",
+     "text": "turn on dark mode",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t82",
+     "text": "draft value by pick",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t83",
+     "text": "rookie class",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t84",
+     "text": "guess the player game",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t85",
+     "text": "how is RAPM calculated",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t86",
+     "text": "my watchlist",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t87",
+     "text": "latest news",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t88",
+     "text": "breakouts in 2024-25",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t89",
+     "text": "stat stability for steals",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t90",
+     "text": "find me a 3 and D role player",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    }
+   ]
+  },
+  {
+   "summary": {
+    "n": 90,
+    "right": 0,
+    "by_action": {
+     "open_page": {
+      "n": 62,
+      "right": 0,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 62
+     },
+     "build_board": {
+      "n": 5,
+      "right": 0,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 5
+     },
+     "run_finder": {
+      "n": 7,
+      "right": 0,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 7
+     },
+     "open_live_game": {
+      "n": 4,
+      "right": 0,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 4
+     },
+     "ask": {
+      "n": 2,
+      "right": 0,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 2
+     },
+     "refuse": {
+      "n": 10,
+      "right": 0,
+      "wrong": 0,
+      "refused": 0,
+      "failed": 10
+     }
+    },
+    "false_refusals": 0,
+    "missed_refusals": 0,
+    "failed": 90,
+    "median_seconds": null
+   },
+   "results": [
+    {
+     "id": "t01",
+     "text": "Luka vs Shai 2024-25",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t02",
+     "text": "how does tatum stack up against jaylen brown",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t03",
+     "text": "put Wemby, Chet Holmgren and Paolo Banchero side by side for 2025-26",
+     "expected": "build_board",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t04",
+     "text": "compare the Thunder and the Nuggets in 2024-25",
+     "expected": "build_board",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t05",
+     "text": "Jokic or Embiid, who had the better 2022-23?",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t06",
+     "text": "chart Lebron's points per game season by season",
+     "expected": "build_board",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t07",
+     "text": "Giannis vs Embiid vs Jokic 2023-24 bpm and vorp",
+     "expected": "build_board",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t08",
+     "text": "compare the Knicks, Celtics and Cavs net rating this season",
+     "expected": "build_board",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t09",
+     "text": "top scorers 2024-25",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t10",
+     "text": "who has the highest true shooting percentage ever",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t11",
+     "text": "who had the best BPM between 2015-16 and 2019-20",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t12",
+     "text": "steals leaders 2022-23, top 10",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t13",
+     "text": "highest usage rate seasons of all time",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t14",
+     "text": "who leads the lakers in scoring this season",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t15",
+     "text": "best VORP season ever",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t16",
+     "text": "show me kobe's shot chart from 2005-06",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t17",
+     "text": "Jokic heatmap this season",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t18",
+     "text": "Jayson Tatum's playoff shot chart 2023-24",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t19",
+     "text": "Giannis Antetokumpo",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t20",
+     "text": "Luka Doncic's game log this season",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t21",
+     "text": "what's Anthony Edwards projected to do next season",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t22",
+     "text": "who is projected to score the most next year",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t23",
+     "text": "Cooper Flagg",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t24",
+     "text": "LeBron's shot chart as a rookie",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t25",
+     "text": "show Victor Wembanyama's shot quality map",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t26",
+     "text": "KD shot chart 2013-14",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t27",
+     "text": "Celtics 2007-08",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t28",
+     "text": "Thunder team page",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t29",
+     "text": "show me the standings",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t30",
+     "text": "what did the Bulls do in 1995-96",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t31",
+     "text": "the Warriors assist network in 2024-25",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t32",
+     "text": "who has averaged a triple double",
+     "expected": "run_finder",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t33",
+     "text": "who scored 30+ in 10 straight games",
+     "expected": "run_finder",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t34",
+     "text": "Curry's 50 point games",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t35",
+     "text": "all 60 point games since 2020-21",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t36",
+     "text": "longest streak of 25 point games",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t37",
+     "text": "which players shot 45% from three on at least 400 attempts in a season",
+     "expected": "run_finder",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t38",
+     "text": "seasons like 27 points 7 rebounds 7 assists",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t39",
+     "text": "who averaged at least 8 assists and under 2 turnovers a game last season",
+     "expected": "run_finder",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t40",
+     "text": "players with 5 straight 30 point games this season",
+     "expected": "run_finder",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t41",
+     "text": "centers who average 3 blocks",
+     "expected": "run_finder",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t42",
+     "text": "games with 12 or more threes",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t43",
+     "text": "players who had 40 points and 10 assists in the same game at least 5 times since 2021-22",
+     "expected": "run_finder",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t44",
+     "text": "40 point games on the road this season",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t45",
+     "text": "how does LeBron's BPM compare to the typical aging curve",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t46",
+     "text": "aging curves for assists in the modern era",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t47",
+     "text": "what would Magic Johnson's 1986-87 look like in 2024-25",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t48",
+     "text": "on off numbers for the Celtics 2023-24",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t49",
+     "text": "Jokić on/off",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t50",
+     "text": "three season RAPM this season",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t51",
+     "text": "who's hot right now",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t52",
+     "text": "home away splits for points this season",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t53",
+     "text": "who plays better on back to backs",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t54",
+     "text": "Wembanyama blocks in the 4th quarter this season",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t55",
+     "text": "pair chemistry for the Knicks this season",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t56",
+     "text": "clutch WPA leaders",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t57",
+     "text": "who's winning the MVP race",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t58",
+     "text": "season simulator for 2022-23",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t59",
+     "text": "biggest upsets this season",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t60",
+     "text": "coaching decisions, timeouts, Heat 2024-25",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t61",
+     "text": "trade analyzer: Lakers and Mavericks",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t62",
+     "text": "what if the Suns traded Devin Booker to the Rockets",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t63",
+     "text": "is there a game on now",
+     "expected": "open_live_game",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t64",
+     "text": "what's the score of the Knicks game",
+     "expected": "open_live_game",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t65",
+     "text": "are the warriors playing tonight",
+     "expected": "open_live_game",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t66",
+     "text": "OKC game live",
+     "expected": "open_live_game",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t67",
+     "text": "yesterday's scores",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t68",
+     "text": "what happened on christmas day 2025",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t69",
+     "text": "who won the Bucks game last night",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t70",
+     "text": "Brandon Williams shot chart",
+     "expected": "ask",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t71",
+     "text": "compare Reggie Williams and Reggie Miller",
+     "expected": "ask",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t72",
+     "text": "who is the GOAT",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t73",
+     "text": "WNBA scoring leaders 2025",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t74",
+     "text": "LeBron's game log in 2012-13",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t75",
+     "text": "Warriors assist network in 2016-17",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t76",
+     "text": "should I bet on the Lakers tonight",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t77",
+     "text": "what's the average age of MVP winners",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t78",
+     "text": "Troy Bolton's stats",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t79",
+     "text": "write me a poem about Jokić",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t80",
+     "text": "Jokić's salary next year",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t81",
+     "text": "turn on dark mode",
+     "expected": "refuse",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t82",
+     "text": "draft value by pick",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t83",
+     "text": "rookie class",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t84",
+     "text": "guess the player game",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t85",
+     "text": "how is RAPM calculated",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t86",
+     "text": "my watchlist",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t87",
+     "text": "latest news",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t88",
+     "text": "breakouts in 2024-25",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t89",
+     "text": "stat stability for steals",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    },
+    {
+     "id": "t90",
+     "text": "find me a 3 and D role player",
+     "expected": "open_page",
+     "produced": null,
+     "outcome": "failed",
+     "right": false,
+     "detail": {
+      "failed": true
+     },
+     "error": "429: The free Gemini quota for today is used up (Google resets it at midnight Pacific time); use the boxes until then.",
+     "action": null,
+     "preview": null,
+     "notes": [],
+     "guessed": null,
+     "not_understood": [],
+     "seconds": null
+    }
+   ]
+  }
+ ]
+}

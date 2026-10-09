@@ -28,8 +28,8 @@ call at a time, 20 s cap (`timeout`).
     python3 scripts/qa_route_crawl.py --out docs/qa/crawl_2026-10-05.tsv --md $TMPDIR/crawl.md
 
 Calls two quota-limited outside services once each (the Odds API behind
-/odds/championship, cached 6 h by the server; Gemini behind /workbench/parse,
-cached for the day): `--skip-quota` leaves them out.
+/odds/championship, cached 6 h by the server; Gemini behind /workbench/parse
+and /ask, cached for the day): `--skip-quota` leaves them out.
 """
 
 import argparse
@@ -51,7 +51,7 @@ from db_config import DB_CONFIG  # noqa: E402  (reads api/.env only)
 
 SERVICES = {"mvp": "http://127.0.0.1:8000", "similarity": "http://127.0.0.1:8001", "impact": "http://127.0.0.1:8002"}
 TIMEOUT = 20.0
-QUOTA_ROUTES = {("impact", "/odds/championship"), ("impact", "/workbench/parse")}
+QUOTA_ROUTES = {("impact", "/odds/championship"), ("impact", "/workbench/parse"), ("impact", "/ask")}
 COLUMNS = ["service", "method", "path", "url", "status", "seconds", "bytes", "rows", "empty",
            "source", "source_live", "upstream", "odd_text", "note"]
 
@@ -155,6 +155,7 @@ def post_bodies(s):
         "/workbench/finder": {"dataset": "player_season", "season_from": 2023, "season_to": 2023, "min_games": 58,
                               "conditions": [{"type": "value", "stat": "pts", "op": "gte", "value": 30}]},
         "/workbench/parse": {"text": "players who averaged 30 points in 2022-23"},
+        "/ask": {"text": "Curry's shot chart in 2015-16"},
     }
 
 
