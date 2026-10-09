@@ -1,0 +1,2623 @@
+{
+ "about": "Test sentences for 'ask in English everywhere' (round 10, part B; step 10-6) and the exact action each should turn into. Written 2026-10-09, before any prompt, schema or engine existed, and never edited to suit a model's answer (new sentences may be added later, marked with their date). 'dev' sentences may be used to tune the prompt; 'test' sentences are scored once at the end, three runs, with the prompt chosen on 'dev' (step 10-7 writes the result to api/ask_eval.json). They are written the way strangers type: nicknames, typos, 'this season', bare names. The engine's job is to turn a sentence into something the app already does: open a page with its inputs, build a Workbench board, run the Player Finder, open a live game, ask which namesake, or refuse with a reason. It never writes SQL or a URL of its own.",
+ "written": "2026-10-09",
+ "counts": {
+  "sentences": 150,
+  "dev": 60,
+  "test": 90,
+  "by_action": {
+   "ask": 4,
+   "build_board": 10,
+   "open_live_game": 7,
+   "open_page": 103,
+   "refuse": 15,
+   "run_finder": 11
+  },
+  "by_split_and_action": {
+   "dev:ask": 2,
+   "dev:build_board": 5,
+   "dev:open_live_game": 3,
+   "dev:open_page": 41,
+   "dev:refuse": 5,
+   "dev:run_finder": 4,
+   "test:ask": 2,
+   "test:build_board": 5,
+   "test:open_live_game": 4,
+   "test:open_page": 62,
+   "test:refuse": 10,
+   "test:run_finder": 7
+  }
+ },
+ "actions": {
+  "open_page": {
+   "shape": {
+    "action": "open_page",
+    "page": "<an id in App.jsx PAGES>",
+    "hash": "<an Analytics tab id, else null>",
+    "params": {
+     "<a URL key the page reads>": "<value>"
+    }
+   },
+   "scored": "page and hash equal; params equal as a whole after normalisation (below); a key the sentence didn't ask for is wrong, except the free keys: compare's a and b (names beside aid/bid), shotcharts' player (a name beside pid), and pg (paging) on any page. No params = {} (the page's own defaults apply)."
+  },
+  "build_board": {
+   "shape": {
+    "action": "build_board",
+    "sets": [
+     {
+      "kind": "player",
+      "ids": [
+       "<NBA ids>"
+      ]
+     },
+     {
+      "kind": "team",
+      "codes": [
+       "<today's codes>"
+      ]
+     }
+    ],
+    "blocks": [
+     {
+      "type": "table|chart|tool|finder",
+      "dataset": "<catalogue dataset>",
+      "columns": [
+       "<stats>"
+      ],
+      "chart": "<scatter|line|bar|histogram|box|heatmap>",
+      "x": "<stat>",
+      "y": "<stat>",
+      "seasonFrom": "<season>",
+      "seasonTo": "<season>",
+      "tool": "<utils/workbenchTools.js key>",
+      "member": "<id or code>",
+      "spec": "<a finder spec>"
+     }
+    ]
+   },
+   "scored": "the sets equal (kinds, and ids/codes as sets); every expected block is matched by one produced block of the same type whose every named key is equal (expected columns must all be among the produced columns; a finder block's spec is compared as run_finder is). Blocks the expected doesn't name (notes, set blocks, extra tables, charts or tools on the same sets) are not penalised. A key the expected block doesn't name (the season range, the columns) is free."
+  },
+  "run_finder": {
+   "shape": {
+    "action": "run_finder",
+    "flag": "<true when something in the sentence can't go in the boxes and must be said>",
+    "spec": "<the Player Finder spec of api/workbench_parse_sentences.json: dataset, scope, season_from, season_to, min_games, filters, conditions>"
+   },
+   "scored": "exactly as the Finder's English box is scored (scripts/workbench_parse_eval.py): data set, scope, seasons, games floor, filters, conditions as a set, and the flag, both sides after workbench_parse_lib.finalize()."
+  },
+  "open_live_game": {
+   "shape": {
+    "action": "open_live_game",
+    "team": "<today's code, or null for the list of today's games>"
+   },
+   "scored": "team equal (null = none). What the live page shows when the team has no game today is the page's business."
+  },
+  "ask": {
+   "shape": {
+    "action": "ask",
+    "about": "player",
+    "name": "<the typed name>",
+    "options": [
+     "<the NBA ids it belongs to>"
+    ],
+    "then": "<the action to run once one is chosen (documentation only)>"
+   },
+   "scored": "about and the set of options equal: a name that belongs to two players on file is asked about, never guessed."
+  },
+  "refuse": {
+   "shape": {
+    "action": "refuse",
+    "reason": "<a key of refusal_reasons>"
+   },
+   "scored": "the reason equal."
+  }
+ },
+ "normalisation": [
+  "Numbers compare as numbers (a URL's '10' = 10); other strings trimmed, case- and accent-insensitive; team codes upper-case.",
+  "List-valued keys (gamefinder f, statline line, breakouts stats, plays per, builder w) compare as sets of their comma-separated items; a Game Finder condition is stat:op:value, a stat line item stat:value (percentages as shares, 0.65 = 65%).",
+  "Season tokens: 'current' = api/current_season.status()['current'] on the day the evaluation runs (2025-26 until the first 2026-27 final is stored, then 2026-27); 'last' = status()['latest_complete'] (2025-26 either way this autumn); 'current-N' = current minus N. Seasons are end years (2022-23 = 2023). On the shotcharts page a season is its label ('2015-16'): a token is resolved, then written as a label.",
+  "Date tokens: 'yesterday' = the NBA date before today's (US Eastern, utils/date.js nbaDateIso()). Dates are YYYY-MM-DD.",
+  "Player ids are NBA ids as player_season_stats has them (the app's own search, GET /workbench/entities, resolves names, accents ignored). The 'players' field on a sentence documents the ids and is not scored."
+ ],
+ "rules": [
+  "Seasons: end years; a bare year Y is the season ending in Y ('in 2010' = 2009-10); 'this season' / 'this year' = current; 'last season' = last; 'next season' / 'next year' on a projection = the projections page (it has one target season); 'ever' / 'of all time' on a leaderboard = 1950 (the data's first season) to current; a decade ('the 1990s') = the seasons ending in its years (1990 to 1999); 'as a rookie' = the player's first season on file; 'since 2015-16' = from 2016 with no upper bound.",
+  "Players: resolved by NBA id. Nicknames and misspellings go to the one player they commonly mean (Steph, Klay, Bron/LeBron, KD, Luka, Giannis, Wemby, Shai/SGA, Dame, Shaq, MJ, Dirk, Kobe, Magic, Wilt, Ant, Book, Joker). A name that belongs to two players on file ('Mike James', 'Brandon Williams', 'Reggie Williams', 'Eddie Johnson' and 15 more) is asked about, never guessed.",
+  "Teams: today's NBA codes, from nicknames, cities and short forms (Dubs = GSW, Sixers = PHI, Blazers = POR, Wolves = MIN, Cavs = CLE, Mavs = DAL, OKC, Philly). A franchise's past season uses today's code (the team page and the catalogue map old codes).",
+  "Which action: one player, one team or one tool with inputs = open_page with only what the sentence gives (the page's defaults fill the rest). Two players compared = the Player Comparison page. Three or more players, two or more teams, a named chart, or named stats to lay side by side = build_board (a set plus a table, or a chart). A list of players meeting conditions = run_finder. A list of single games (one player's N-point games, all 60-point games, a streak of games) = the Game Finder page (f = stat:op:value). 'Seasons like 27/7/7' = the Stat Line Finder. A stat's leaders in a season or range, with an optional team = the Leaderboard Builder (Stat Leaders has no URL inputs). A score 'right now' / 'tonight' / 'live' = open_live_game. A past date's games = Live Scores with the date; 'today' needs no date.",
+  "Per-player blocks (game log, next-season projection, on/off, RAPM, clutch, contract, shot zones) live on the Player Profile: a player's X with no page named opens his profile. A team's on/off, pairs and lineups are Analytics tabs (?page=analytics#onoff etc.) with the team and season filled; a team's rotation, assist network, possessions and coaching decisions have their own pages with a team key.",
+  "Shot Charts: the player by pid, the season as a label, games = 'playoffs' or 'all' only when said (regular season is the default), view = heatmap / shotmaking / quality / value only when said.",
+  "The Finder's rules hold for run_finder (api/workbench_parse_sentences.json 'rules'): game logs when single games are needed, else season stats; one result per player-season when a season is named or implied, combined over seasons for 'since', 'straight', 'ever'; 'averaged 20' = at least 20; a triple-double = 10+ points, rebounds and assists; positions, rookies, awards and 'or' can't go in the boxes and are reported with the rest filled (flag). A team filter on a season average ('for the Knicks') goes to the Leaderboard Builder's team box instead.",
+  "The data's edges are known: game logs and every play-by-play tool (Game Finder, Play Finder, rotations, assist networks, on/off, RAPM, lineups, pairs, possessions, coaching, replay, clutch, hot streaks, splits, best games) start in 2020-21; shot locations in 1996-97; player seasons in 1949-50; team seasons in 1946-47; salaries end with 2024-25. An ask outside an edge is refused with no_data, never answered with the nearest season the data has.",
+  "Nothing is filled that the sentence doesn't say: no view, sort, floor, limit or extra condition the person didn't ask for.",
+  "Refusals are plain and carry one of the reasons below; the normal search still works. Comparing two players is not an opinion (it opens the comparison); 'who is the GOAT' is."
+ ],
+ "refusal_reasons": {
+  "off_topic": "not a question about basketball data in this app (weather, poems, app settings)",
+  "opinion": "a judgement with no stat behind it ('who is the GOAT'); the app shows numbers, it doesn't rank greatness",
+  "other_league": "WNBA, EuroLeague, G League, international play: not on file",
+  "no_data": "the kind of thing the app has, but not for that season, player or span (see the data's edges in the rules)",
+  "unknown_player": "nobody of that name on file (after the app's own search, accents ignored)",
+  "needs_a_computed_answer": "the answer is a number no page shows ('the average age of MVP winners'): the parked 'Ask the Database' (B5), not this box",
+  "would_change_data": "asks to add, edit or delete data; the box only reads",
+  "betting_advice": "asks what to bet; the app shows markets against its model, never advice (owner's decision, 2026-10-03)"
+ },
+ "sentences": [
+  {
+   "id": "d01",
+   "split": "dev",
+   "text": "compare Jokić and Embiid this season",
+   "expect": {
+    "action": "open_page",
+    "page": "compare",
+    "hash": null,
+    "params": {
+     "aid": 203999,
+     "bid": 203954,
+     "season": "current"
+    }
+   },
+   "players": {
+    "203999": "Nikola Jokić",
+    "203954": "Joel Embiid"
+   },
+   "note": "Two players compared = the Player Comparison page; 'this season' = the current token."
+  },
+  {
+   "id": "d02",
+   "split": "dev",
+   "text": "steph vs klay",
+   "expect": {
+    "action": "open_page",
+    "page": "compare",
+    "hash": null,
+    "params": {
+     "aid": 201939,
+     "bid": 202691
+    }
+   },
+   "players": {
+    "201939": "Stephen Curry",
+    "202691": "Klay Thompson"
+   },
+   "note": "Nicknames; no season said, so none filled (the page picks its default)."
+  },
+  {
+   "id": "d03",
+   "split": "dev",
+   "text": "compare LeBron, Durant and Giannis this season on points, rebounds and assists",
+   "expect": {
+    "action": "build_board",
+    "sets": [
+     {
+      "kind": "player",
+      "ids": [
+       2544,
+       201142,
+       203507
+      ]
+     }
+    ],
+    "blocks": [
+     {
+      "type": "table",
+      "dataset": "player_season",
+      "columns": [
+       "pts",
+       "reb",
+       "ast"
+      ],
+      "seasonFrom": "current",
+      "seasonTo": "current"
+     }
+    ]
+   },
+   "players": {
+    "2544": "LeBron James",
+    "201142": "Kevin Durant",
+    "203507": "Giannis Antetokounmpo"
+   },
+   "note": "Three players and named stats = a board: one player set and a table with at least those columns."
+  },
+  {
+   "id": "d04",
+   "split": "dev",
+   "text": "Celtics vs Lakers this season",
+   "expect": {
+    "action": "build_board",
+    "sets": [
+     {
+      "kind": "team",
+      "codes": [
+       "BOS",
+       "LAL"
+      ]
+     }
+    ],
+    "blocks": [
+     {
+      "type": "table",
+      "dataset": "team_season",
+      "seasonFrom": "current",
+      "seasonTo": "current"
+     }
+    ]
+   },
+   "note": "Two teams compared = a board (Team Comparison has no URL inputs): a team set and a team-season table."
+  },
+  {
+   "id": "d05",
+   "split": "dev",
+   "text": "scatter usage against true shooting for Curry, Harden and Dame since 2015-16",
+   "expect": {
+    "action": "build_board",
+    "sets": [
+     {
+      "kind": "player",
+      "ids": [
+       201939,
+       201935,
+       203081
+      ]
+     }
+    ],
+    "blocks": [
+     {
+      "type": "chart",
+      "dataset": "player_season",
+      "chart": "scatter",
+      "x": "usg_pct",
+      "y": "ts_pct",
+      "seasonFrom": 2016,
+      "seasonTo": "current"
+     }
+    ]
+   },
+   "players": {
+    "201939": "Stephen Curry",
+    "201935": "James Harden",
+    "203081": "Damian Lillard"
+   }
+  },
+  {
+   "id": "d06",
+   "split": "dev",
+   "text": "compare Jordan and Kobe's careers",
+   "expect": {
+    "action": "build_board",
+    "sets": [
+     {
+      "kind": "player",
+      "ids": [
+       893,
+       977
+      ]
+     }
+    ],
+    "blocks": [
+     {
+      "type": "table",
+      "dataset": "player_season"
+     }
+    ]
+   },
+   "players": {
+    "893": "Michael Jordan",
+    "977": "Kobe Bryant"
+   },
+   "note": "Careers: no season range filled (the whole career). A table with any sensible columns is right."
+  },
+  {
+   "id": "d07",
+   "split": "dev",
+   "text": "line chart of threes made per game for Curry and Klay from 2012-13 to 2018-19",
+   "expect": {
+    "action": "build_board",
+    "sets": [
+     {
+      "kind": "player",
+      "ids": [
+       201939,
+       202691
+      ]
+     }
+    ],
+    "blocks": [
+     {
+      "type": "chart",
+      "dataset": "player_season",
+      "chart": "line",
+      "y": "fg3m",
+      "seasonFrom": 2013,
+      "seasonTo": 2019
+     }
+    ]
+   },
+   "players": {
+    "201939": "Stephen Curry",
+    "202691": "Klay Thompson"
+   }
+  },
+  {
+   "id": "d08",
+   "split": "dev",
+   "text": "who led the league in assists in 2010",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "ast",
+     "from": 2010,
+     "to": 2010
+    }
+   },
+   "note": "A bare year is the season ending in it (2009-10). Stat Leaders has no URL inputs; the Leaderboard Builder does."
+  },
+  {
+   "id": "d09",
+   "split": "dev",
+   "text": "best 3 point shooters this season",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "fg3_pct",
+     "from": "current",
+     "to": "current"
+    }
+   }
+  },
+  {
+   "id": "d10",
+   "split": "dev",
+   "text": "most blocks per game last season",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "blk",
+     "from": "last",
+     "to": "last"
+    }
+   }
+  },
+  {
+   "id": "d11",
+   "split": "dev",
+   "text": "lowest turnover percentage this season",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "tov_pct",
+     "from": "current",
+     "to": "current",
+     "order": "low"
+    }
+   }
+  },
+  {
+   "id": "d12",
+   "split": "dev",
+   "text": "league leaders in free throw percentage 2020-21",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "ft_pct",
+     "from": 2021,
+     "to": 2021
+    }
+   }
+  },
+  {
+   "id": "d13",
+   "split": "dev",
+   "text": "rebounding leaders in the 1990s",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "reb",
+     "from": 1990,
+     "to": 1999
+    }
+   },
+   "note": "A decade is the seasons ending in its years: 1989-90 to 1998-99."
+  },
+  {
+   "id": "d14",
+   "split": "dev",
+   "text": "Curry's shot chart in 2015-16",
+   "expect": {
+    "action": "open_page",
+    "page": "shotcharts",
+    "hash": null,
+    "params": {
+     "pid": 201939,
+     "season": "2015-16"
+    }
+   },
+   "players": {
+    "201939": "Stephen Curry"
+   },
+   "note": "Shot Charts takes the player by id (pid) and the season as its label."
+  },
+  {
+   "id": "d15",
+   "split": "dev",
+   "text": "lebron shot chart",
+   "expect": {
+    "action": "open_page",
+    "page": "shotcharts",
+    "hash": null,
+    "params": {
+     "pid": 2544
+    }
+   },
+   "players": {
+    "2544": "LeBron James"
+   }
+  },
+  {
+   "id": "d16",
+   "split": "dev",
+   "text": "open Nikola Jokić's profile",
+   "expect": {
+    "action": "open_page",
+    "page": "player",
+    "hash": null,
+    "params": {
+     "id": 203999
+    }
+   },
+   "players": {
+    "203999": "Nikola Jokić"
+   }
+  },
+  {
+   "id": "d17",
+   "split": "dev",
+   "text": "shai gilgeous alexander game log",
+   "expect": {
+    "action": "open_page",
+    "page": "player",
+    "hash": null,
+    "params": {
+     "id": 1628983
+    }
+   },
+   "players": {
+    "1628983": "Shai Gilgeous-Alexander"
+   },
+   "note": "The game log is a block on the Player Profile."
+  },
+  {
+   "id": "d18",
+   "split": "dev",
+   "text": "projections for next season sorted by assists",
+   "expect": {
+    "action": "open_page",
+    "page": "projections",
+    "hash": null,
+    "params": {
+     "stat": "ast"
+    }
+   }
+  },
+  {
+   "id": "d19",
+   "split": "dev",
+   "text": "tell me about Hakeem Olajuwon",
+   "expect": {
+    "action": "open_page",
+    "page": "player",
+    "hash": null,
+    "params": {
+     "id": 165
+    }
+   },
+   "players": {
+    "165": "Hakeem Olajuwon"
+   }
+  },
+  {
+   "id": "d20",
+   "split": "dev",
+   "text": "jayson tatum profile",
+   "expect": {
+    "action": "open_page",
+    "page": "player",
+    "hash": null,
+    "params": {
+     "id": 1628369
+    }
+   },
+   "players": {
+    "1628369": "Jayson Tatum"
+   }
+  },
+  {
+   "id": "d21",
+   "split": "dev",
+   "text": "Steph's shot chart from his unanimous MVP year",
+   "expect": {
+    "action": "open_page",
+    "page": "shotcharts",
+    "hash": null,
+    "params": {
+     "pid": 201939,
+     "season": "2015-16"
+    }
+   },
+   "players": {
+    "201939": "Stephen Curry"
+   },
+   "note": "Basketball knowledge the model may have (2015-16); a guess that must be shown as one."
+  },
+  {
+   "id": "d22",
+   "split": "dev",
+   "text": "how are the Lakers doing this season",
+   "expect": {
+    "action": "open_page",
+    "page": "team",
+    "hash": null,
+    "params": {
+     "abbr": "LAL",
+     "season": "current"
+    }
+   },
+   "note": "'this season' = the team page; 'right now' would be the live game."
+  },
+  {
+   "id": "d23",
+   "split": "dev",
+   "text": "the 2015-16 Warriors",
+   "expect": {
+    "action": "open_page",
+    "page": "team",
+    "hash": null,
+    "params": {
+     "abbr": "GSW",
+     "season": 2016
+    }
+   }
+  },
+  {
+   "id": "d24",
+   "split": "dev",
+   "text": "knicks roster this season",
+   "expect": {
+    "action": "open_page",
+    "page": "team",
+    "hash": null,
+    "params": {
+     "abbr": "NYK",
+     "season": "current"
+    }
+   }
+  },
+  {
+   "id": "d25",
+   "split": "dev",
+   "text": "Pacers rotation chart this season",
+   "expect": {
+    "action": "open_page",
+    "page": "rotations",
+    "hash": null,
+    "params": {
+     "team": "IND",
+     "season": "current"
+    }
+   }
+  },
+  {
+   "id": "d26",
+   "split": "dev",
+   "text": "players who averaged 25 points and 10 rebounds in a season since 2010",
+   "expect": {
+    "action": "run_finder",
+    "flag": false,
+    "spec": {
+     "dataset": "player_season",
+     "scope": "season",
+     "season_from": 2010,
+     "season_to": null,
+     "min_games": null,
+     "filters": [],
+     "conditions": [
+      {
+       "type": "value",
+       "stat": "pts",
+       "op": "gte",
+       "value": 25
+      },
+      {
+       "type": "value",
+       "stat": "reb",
+       "op": "gte",
+       "value": 10
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "d27",
+   "split": "dev",
+   "text": "players with 10 or more 40 point games in a season",
+   "expect": {
+    "action": "run_finder",
+    "flag": false,
+    "spec": {
+     "dataset": "player_game",
+     "scope": "season",
+     "season_from": null,
+     "season_to": null,
+     "min_games": null,
+     "filters": [],
+     "conditions": [
+      {
+       "type": "count",
+       "tests": [
+        {
+         "stat": "pts",
+         "op": "gte",
+         "value": 40
+        }
+       ],
+       "count_op": "gte",
+       "count": 10
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "d28",
+   "split": "dev",
+   "text": "Luka's triple doubles this season",
+   "expect": {
+    "action": "open_page",
+    "page": "gamefinder",
+    "hash": null,
+    "params": {
+     "player": 1629029,
+     "f": "pts:gte:10,reb:gte:10,ast:gte:10",
+     "from": "current",
+     "to": "current"
+    }
+   },
+   "players": {
+    "1629029": "Luka Dončić"
+   },
+   "note": "One player's games meeting conditions = the Game Finder page (f = stat:op:value, comma-separated)."
+  },
+  {
+   "id": "d29",
+   "split": "dev",
+   "text": "games with 20 assists in 2024-25",
+   "expect": {
+    "action": "open_page",
+    "page": "gamefinder",
+    "hash": null,
+    "params": {
+     "f": "ast:gte:20",
+     "from": 2025,
+     "to": 2025
+    }
+   }
+  },
+  {
+   "id": "d30",
+   "split": "dev",
+   "text": "players who averaged 20 points for the Knicks in 2023-24",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "pts",
+     "from": 2024,
+     "to": 2024,
+     "team": "NYK"
+    }
+   },
+   "note": "A team filter on a season average: the Leaderboard Builder has a team box, the Finder doesn't."
+  },
+  {
+   "id": "d31",
+   "split": "dev",
+   "text": "find seasons similar to 30 points on 65% true shooting",
+   "expect": {
+    "action": "open_page",
+    "page": "statline",
+    "hash": null,
+    "params": {
+     "line": "pts:30,ts_pct:0.65"
+    }
+   },
+   "note": "Stat Line Finder; percentages travel as shares in the link."
+  },
+  {
+   "id": "d32",
+   "split": "dev",
+   "text": "rookies who averaged 15 points",
+   "expect": {
+    "action": "run_finder",
+    "flag": true,
+    "spec": {
+     "dataset": "player_season",
+     "scope": "season",
+     "season_from": null,
+     "season_to": null,
+     "min_games": null,
+     "filters": [],
+     "conditions": [
+      {
+       "type": "value",
+       "stat": "pts",
+       "op": "gte",
+       "value": 15
+      }
+     ]
+    }
+   },
+   "note": "Rookies can't go in the boxes: fill the rest and say so (the Finder's rule)."
+  },
+  {
+   "id": "d33",
+   "split": "dev",
+   "text": "Jokić 30 point triple doubles since 2020-21",
+   "expect": {
+    "action": "open_page",
+    "page": "gamefinder",
+    "hash": null,
+    "params": {
+     "player": 203999,
+     "f": "pts:gte:30,reb:gte:10,ast:gte:10",
+     "from": 2021
+    }
+   },
+   "players": {
+    "203999": "Nikola Jokić"
+   }
+  },
+  {
+   "id": "d34",
+   "split": "dev",
+   "text": "who averaged 30 a game in a season since 2019-20 with at least 60 games",
+   "expect": {
+    "action": "run_finder",
+    "flag": false,
+    "spec": {
+     "dataset": "player_season",
+     "scope": "season",
+     "season_from": 2020,
+     "season_to": null,
+     "min_games": 60,
+     "filters": [],
+     "conditions": [
+      {
+       "type": "value",
+       "stat": "pts",
+       "op": "gte",
+       "value": 30
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "d35",
+   "split": "dev",
+   "text": "aging curve for three point percentage",
+   "expect": {
+    "action": "open_page",
+    "page": "aging",
+    "hash": null,
+    "params": {
+     "stat": "fg3_pct"
+    }
+   }
+  },
+  {
+   "id": "d36",
+   "split": "dev",
+   "text": "translate Wilt's 1961-62 season to today",
+   "expect": {
+    "action": "open_page",
+    "page": "era",
+    "hash": null,
+    "params": {
+     "player": 76375,
+     "season": 1962,
+     "to": "current"
+    }
+   },
+   "players": {
+    "76375": "Wilt Chamberlain"
+   }
+  },
+  {
+   "id": "d37",
+   "split": "dev",
+   "text": "Nuggets on/off this season",
+   "expect": {
+    "action": "open_page",
+    "page": "analytics",
+    "hash": "onoff",
+    "params": {
+     "team": "DEN",
+     "season": "current"
+    }
+   },
+   "note": "A team's on/off = the Analytics On/Off tab (?page=analytics#onoff) with the team and season."
+  },
+  {
+   "id": "d38",
+   "split": "dev",
+   "text": "RAPM leaders 2024-25",
+   "expect": {
+    "action": "open_page",
+    "page": "rapm",
+    "hash": null,
+    "params": {
+     "season": 2025
+    }
+   }
+  },
+  {
+   "id": "d39",
+   "split": "dev",
+   "text": "who's gone cold from three over the last 10 games",
+   "expect": {
+    "action": "open_page",
+    "page": "hotstreaks",
+    "hash": null,
+    "params": {
+     "dir": "cold",
+     "stat": "fg3_pct",
+     "window": 10
+    }
+   }
+  },
+  {
+   "id": "d40",
+   "split": "dev",
+   "text": "Curry's clutch threes in 2025-26",
+   "expect": {
+    "action": "open_page",
+    "page": "plays",
+    "hash": null,
+    "params": {
+     "player": 201939,
+     "cat": "made3",
+     "clutch": "1",
+     "from": 2026,
+     "to": 2026
+    }
+   },
+   "players": {
+    "201939": "Stephen Curry"
+   }
+  },
+  {
+   "id": "d41",
+   "split": "dev",
+   "text": "open game replay",
+   "expect": {
+    "action": "open_page",
+    "page": "analytics",
+    "hash": "replay",
+    "params": {}
+   }
+  },
+  {
+   "id": "d42",
+   "split": "dev",
+   "text": "lineup chemistry 2024-25",
+   "expect": {
+    "action": "open_page",
+    "page": "analytics",
+    "hash": "lineups",
+    "params": {
+     "season": 2025
+    }
+   }
+  },
+  {
+   "id": "d43",
+   "split": "dev",
+   "text": "simulate the rest of the season",
+   "expect": {
+    "action": "open_page",
+    "page": "simulator",
+    "hash": null,
+    "params": {}
+   }
+  },
+  {
+   "id": "d44",
+   "split": "dev",
+   "text": "best games of 2023-24",
+   "expect": {
+    "action": "open_page",
+    "page": "bestgames",
+    "hash": null,
+    "params": {
+     "season": 2024
+    }
+   }
+  },
+  {
+   "id": "d45",
+   "split": "dev",
+   "text": "possession explorer for the Pistons",
+   "expect": {
+    "action": "open_page",
+    "page": "possessions",
+    "hash": null,
+    "params": {
+     "team": "DET"
+    }
+   }
+  },
+  {
+   "id": "d46",
+   "split": "dev",
+   "text": "how are the Celtics doing right now",
+   "expect": {
+    "action": "open_live_game",
+    "team": "BOS"
+   },
+   "note": "'right now' = today's game for the team (the live page)."
+  },
+  {
+   "id": "d47",
+   "split": "dev",
+   "text": "Lakers score",
+   "expect": {
+    "action": "open_live_game",
+    "team": "LAL"
+   }
+  },
+  {
+   "id": "d48",
+   "split": "dev",
+   "text": "live games",
+   "expect": {
+    "action": "open_live_game",
+    "team": null
+   },
+   "note": "No team = the list of today's games."
+  },
+  {
+   "id": "d49",
+   "split": "dev",
+   "text": "scores from 2026-03-15",
+   "expect": {
+    "action": "open_page",
+    "page": "scores",
+    "hash": null,
+    "params": {
+     "date": "2026-03-15"
+    }
+   }
+  },
+  {
+   "id": "d50",
+   "split": "dev",
+   "text": "nba scores today",
+   "expect": {
+    "action": "open_page",
+    "page": "scores",
+    "hash": null,
+    "params": {}
+   },
+   "note": "Today is Live Scores' default: no date filled."
+  },
+  {
+   "id": "d51",
+   "split": "dev",
+   "text": "Mike James profile",
+   "expect": {
+    "action": "ask",
+    "about": "player",
+    "name": "Mike James",
+    "options": [
+     2229,
+     1628455
+    ],
+    "then": {
+     "action": "open_page",
+     "page": "player",
+     "hash": null,
+     "params": {
+      "id": "<chosen>"
+     }
+    }
+   },
+   "note": "Two Mike James on file; the engine must ask which."
+  },
+  {
+   "id": "d52",
+   "split": "dev",
+   "text": "Eddie Johnson's career",
+   "expect": {
+    "action": "ask",
+    "about": "player",
+    "name": "Eddie Johnson",
+    "options": [
+     698,
+     77144
+    ],
+    "then": {
+     "action": "open_page",
+     "page": "player",
+     "hash": null,
+     "params": {
+      "id": "<chosen>"
+     }
+    }
+   }
+  },
+  {
+   "id": "d53",
+   "split": "dev",
+   "text": "what's the weather in Boston",
+   "expect": {
+    "action": "refuse",
+    "reason": "off_topic"
+   }
+  },
+  {
+   "id": "d54",
+   "split": "dev",
+   "text": "Michael Jordan's shot chart from 1990-91",
+   "expect": {
+    "action": "refuse",
+    "reason": "no_data"
+   },
+   "players": {
+    "893": "Michael Jordan"
+   },
+   "note": "Shot locations start in 1996-97: refused, not answered with the nearest season."
+  },
+  {
+   "id": "d55",
+   "split": "dev",
+   "text": "delete the Lakers' loss from yesterday",
+   "expect": {
+    "action": "refuse",
+    "reason": "would_change_data"
+   }
+  },
+  {
+   "id": "d56",
+   "split": "dev",
+   "text": "how many players have scored 70 in a game",
+   "expect": {
+    "action": "refuse",
+    "reason": "no_data"
+   },
+   "note": "Game logs start in 2020-21, so an all-time count can't be given in full."
+  },
+  {
+   "id": "d57",
+   "split": "dev",
+   "text": "euroleague standings",
+   "expect": {
+    "action": "refuse",
+    "reason": "other_league"
+   }
+  },
+  {
+   "id": "d58",
+   "split": "dev",
+   "text": "hall of fame",
+   "expect": {
+    "action": "open_page",
+    "page": "hof",
+    "hash": null,
+    "params": {}
+   }
+  },
+  {
+   "id": "d59",
+   "split": "dev",
+   "text": "play trivia",
+   "expect": {
+    "action": "open_page",
+    "page": "games",
+    "hash": null,
+    "params": {
+     "g": "trivia"
+    }
+   }
+  },
+  {
+   "id": "d60",
+   "split": "dev",
+   "text": "methodology for the win probability model",
+   "expect": {
+    "action": "open_page",
+    "page": "methodology",
+    "hash": null,
+    "params": {
+     "card": "wp"
+    }
+   }
+  },
+  {
+   "id": "t01",
+   "split": "test",
+   "text": "Luka vs Shai 2024-25",
+   "expect": {
+    "action": "open_page",
+    "page": "compare",
+    "hash": null,
+    "params": {
+     "aid": 1629029,
+     "bid": 1628983,
+     "season": 2025
+    }
+   },
+   "players": {
+    "1629029": "Luka Dončić",
+    "1628983": "Shai Gilgeous-Alexander"
+   }
+  },
+  {
+   "id": "t02",
+   "split": "test",
+   "text": "how does tatum stack up against jaylen brown",
+   "expect": {
+    "action": "open_page",
+    "page": "compare",
+    "hash": null,
+    "params": {
+     "aid": 1628369,
+     "bid": 1627759
+    }
+   },
+   "players": {
+    "1628369": "Jayson Tatum",
+    "1627759": "Jaylen Brown"
+   }
+  },
+  {
+   "id": "t03",
+   "split": "test",
+   "text": "put Wemby, Chet Holmgren and Paolo Banchero side by side for 2025-26",
+   "expect": {
+    "action": "build_board",
+    "sets": [
+     {
+      "kind": "player",
+      "ids": [
+       1641705,
+       1631096,
+       1631094
+      ]
+     }
+    ],
+    "blocks": [
+     {
+      "type": "table",
+      "dataset": "player_season",
+      "seasonFrom": 2026,
+      "seasonTo": 2026
+     }
+    ]
+   },
+   "players": {
+    "1641705": "Victor Wembanyama",
+    "1631096": "Chet Holmgren",
+    "1631094": "Paolo Banchero"
+   }
+  },
+  {
+   "id": "t04",
+   "split": "test",
+   "text": "compare the Thunder and the Nuggets in 2024-25",
+   "expect": {
+    "action": "build_board",
+    "sets": [
+     {
+      "kind": "team",
+      "codes": [
+       "OKC",
+       "DEN"
+      ]
+     }
+    ],
+    "blocks": [
+     {
+      "type": "table",
+      "dataset": "team_season",
+      "seasonFrom": 2025,
+      "seasonTo": 2025
+     }
+    ]
+   }
+  },
+  {
+   "id": "t05",
+   "split": "test",
+   "text": "Jokic or Embiid, who had the better 2022-23?",
+   "expect": {
+    "action": "open_page",
+    "page": "compare",
+    "hash": null,
+    "params": {
+     "aid": 203999,
+     "bid": 203954,
+     "season": 2023
+    }
+   },
+   "players": {
+    "203999": "Nikola Jokić",
+    "203954": "Joel Embiid"
+   }
+  },
+  {
+   "id": "t06",
+   "split": "test",
+   "text": "chart Lebron's points per game season by season",
+   "expect": {
+    "action": "build_board",
+    "sets": [
+     {
+      "kind": "player",
+      "ids": [
+       2544
+      ]
+     }
+    ],
+    "blocks": [
+     {
+      "type": "chart",
+      "dataset": "player_season",
+      "chart": "line",
+      "y": "pts"
+     }
+    ]
+   },
+   "players": {
+    "2544": "LeBron James"
+   }
+  },
+  {
+   "id": "t07",
+   "split": "test",
+   "text": "Giannis vs Embiid vs Jokic 2023-24 bpm and vorp",
+   "expect": {
+    "action": "build_board",
+    "sets": [
+     {
+      "kind": "player",
+      "ids": [
+       203507,
+       203954,
+       203999
+      ]
+     }
+    ],
+    "blocks": [
+     {
+      "type": "table",
+      "dataset": "player_season",
+      "columns": [
+       "bpm",
+       "vorp"
+      ],
+      "seasonFrom": 2024,
+      "seasonTo": 2024
+     }
+    ]
+   },
+   "players": {
+    "203507": "Giannis Antetokounmpo",
+    "203954": "Joel Embiid",
+    "203999": "Nikola Jokić"
+   }
+  },
+  {
+   "id": "t08",
+   "split": "test",
+   "text": "compare the Knicks, Celtics and Cavs net rating this season",
+   "expect": {
+    "action": "build_board",
+    "sets": [
+     {
+      "kind": "team",
+      "codes": [
+       "NYK",
+       "BOS",
+       "CLE"
+      ]
+     }
+    ],
+    "blocks": [
+     {
+      "type": "table",
+      "dataset": "team_season",
+      "columns": [
+       "n_rtg"
+      ],
+      "seasonFrom": "current",
+      "seasonTo": "current"
+     }
+    ]
+   }
+  },
+  {
+   "id": "t09",
+   "split": "test",
+   "text": "top scorers 2024-25",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "pts",
+     "from": 2025,
+     "to": 2025
+    }
+   }
+  },
+  {
+   "id": "t10",
+   "split": "test",
+   "text": "who has the highest true shooting percentage ever",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "ts_pct",
+     "from": 1950,
+     "to": "current"
+    }
+   },
+   "note": "'ever' = the data's first season (1949-50) to the current one; the page clamps to the stat's first season."
+  },
+  {
+   "id": "t11",
+   "split": "test",
+   "text": "who had the best BPM between 2015-16 and 2019-20",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "bpm",
+     "from": 2016,
+     "to": 2020
+    }
+   }
+  },
+  {
+   "id": "t12",
+   "split": "test",
+   "text": "steals leaders 2022-23, top 10",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "stl",
+     "from": 2023,
+     "to": 2023,
+     "n": 10
+    }
+   }
+  },
+  {
+   "id": "t13",
+   "split": "test",
+   "text": "highest usage rate seasons of all time",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "usg_pct",
+     "from": 1950,
+     "to": "current"
+    }
+   }
+  },
+  {
+   "id": "t14",
+   "split": "test",
+   "text": "who leads the lakers in scoring this season",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "pts",
+     "from": "current",
+     "to": "current",
+     "team": "LAL"
+    }
+   }
+  },
+  {
+   "id": "t15",
+   "split": "test",
+   "text": "best VORP season ever",
+   "expect": {
+    "action": "open_page",
+    "page": "builder",
+    "hash": null,
+    "params": {
+     "stat": "vorp",
+     "from": 1950,
+     "to": "current"
+    }
+   }
+  },
+  {
+   "id": "t16",
+   "split": "test",
+   "text": "show me kobe's shot chart from 2005-06",
+   "expect": {
+    "action": "open_page",
+    "page": "shotcharts",
+    "hash": null,
+    "params": {
+     "pid": 977,
+     "season": "2005-06"
+    }
+   },
+   "players": {
+    "977": "Kobe Bryant"
+   }
+  },
+  {
+   "id": "t17",
+   "split": "test",
+   "text": "Jokic heatmap this season",
+   "expect": {
+    "action": "open_page",
+    "page": "shotcharts",
+    "hash": null,
+    "params": {
+     "pid": 203999,
+     "season": "current",
+     "view": "heatmap"
+    }
+   },
+   "players": {
+    "203999": "Nikola Jokić"
+   },
+   "note": "The current token is written as a label on this page."
+  },
+  {
+   "id": "t18",
+   "split": "test",
+   "text": "Jayson Tatum's playoff shot chart 2023-24",
+   "expect": {
+    "action": "open_page",
+    "page": "shotcharts",
+    "hash": null,
+    "params": {
+     "pid": 1628369,
+     "season": "2023-24",
+     "games": "playoffs"
+    }
+   },
+   "players": {
+    "1628369": "Jayson Tatum"
+   }
+  },
+  {
+   "id": "t19",
+   "split": "test",
+   "text": "Giannis Antetokumpo",
+   "expect": {
+    "action": "open_page",
+    "page": "player",
+    "hash": null,
+    "params": {
+     "id": 203507
+    }
+   },
+   "players": {
+    "203507": "Giannis Antetokounmpo"
+   },
+   "note": "A misspelt bare name opens the profile."
+  },
+  {
+   "id": "t20",
+   "split": "test",
+   "text": "Luka Doncic's game log this season",
+   "expect": {
+    "action": "open_page",
+    "page": "player",
+    "hash": null,
+    "params": {
+     "id": 1629029
+    }
+   },
+   "players": {
+    "1629029": "Luka Dončić"
+   }
+  },
+  {
+   "id": "t21",
+   "split": "test",
+   "text": "what's Anthony Edwards projected to do next season",
+   "expect": {
+    "action": "open_page",
+    "page": "player",
+    "hash": null,
+    "params": {
+     "id": 1630162
+    }
+   },
+   "players": {
+    "1630162": "Anthony Edwards"
+   },
+   "note": "One player's projection is the profile's 'Next season' block."
+  },
+  {
+   "id": "t22",
+   "split": "test",
+   "text": "who is projected to score the most next year",
+   "expect": {
+    "action": "open_page",
+    "page": "projections",
+    "hash": null,
+    "params": {
+     "stat": "pts"
+    }
+   }
+  },
+  {
+   "id": "t23",
+   "split": "test",
+   "text": "Cooper Flagg",
+   "expect": {
+    "action": "open_page",
+    "page": "player",
+    "hash": null,
+    "params": {
+     "id": 1642843
+    }
+   },
+   "players": {
+    "1642843": "Cooper Flagg"
+   },
+   "note": "A 2025-26 rookie: on file since the season load."
+  },
+  {
+   "id": "t24",
+   "split": "test",
+   "text": "LeBron's shot chart as a rookie",
+   "expect": {
+    "action": "open_page",
+    "page": "shotcharts",
+    "hash": null,
+    "params": {
+     "pid": 2544,
+     "season": "2003-04"
+    }
+   },
+   "players": {
+    "2544": "LeBron James"
+   },
+   "note": "'as a rookie' = his first season on file."
+  },
+  {
+   "id": "t25",
+   "split": "test",
+   "text": "show Victor Wembanyama's shot quality map",
+   "expect": {
+    "action": "open_page",
+    "page": "shotcharts",
+    "hash": null,
+    "params": {
+     "pid": 1641705,
+     "view": "quality"
+    }
+   },
+   "players": {
+    "1641705": "Victor Wembanyama"
+   }
+  },
+  {
+   "id": "t26",
+   "split": "test",
+   "text": "KD shot chart 2013-14",
+   "expect": {
+    "action": "open_page",
+    "page": "shotcharts",
+    "hash": null,
+    "params": {
+     "pid": 201142,
+     "season": "2013-14"
+    }
+   },
+   "players": {
+    "201142": "Kevin Durant"
+   }
+  },
+  {
+   "id": "t27",
+   "split": "test",
+   "text": "Celtics 2007-08",
+   "expect": {
+    "action": "open_page",
+    "page": "team",
+    "hash": null,
+    "params": {
+     "abbr": "BOS",
+     "season": 2008
+    }
+   }
+  },
+  {
+   "id": "t28",
+   "split": "test",
+   "text": "Thunder team page",
+   "expect": {
+    "action": "open_page",
+    "page": "team",
+    "hash": null,
+    "params": {
+     "abbr": "OKC"
+    }
+   }
+  },
+  {
+   "id": "t29",
+   "split": "test",
+   "text": "show me the standings",
+   "expect": {
+    "action": "open_page",
+    "page": "standings",
+    "hash": null,
+    "params": {}
+   }
+  },
+  {
+   "id": "t30",
+   "split": "test",
+   "text": "what did the Bulls do in 1995-96",
+   "expect": {
+    "action": "open_page",
+    "page": "team",
+    "hash": null,
+    "params": {
+     "abbr": "CHI",
+     "season": 1996
+    }
+   }
+  },
+  {
+   "id": "t31",
+   "split": "test",
+   "text": "the Warriors assist network in 2024-25",
+   "expect": {
+    "action": "open_page",
+    "page": "assists",
+    "hash": null,
+    "params": {
+     "team": "GSW",
+     "season": 2025
+    }
+   }
+  },
+  {
+   "id": "t32",
+   "split": "test",
+   "text": "who has averaged a triple double",
+   "expect": {
+    "action": "run_finder",
+    "flag": false,
+    "spec": {
+     "dataset": "player_season",
+     "scope": "season",
+     "season_from": null,
+     "season_to": null,
+     "min_games": null,
+     "filters": [],
+     "conditions": [
+      {
+       "type": "value",
+       "stat": "pts",
+       "op": "gte",
+       "value": 10
+      },
+      {
+       "type": "value",
+       "stat": "reb",
+       "op": "gte",
+       "value": 10
+      },
+      {
+       "type": "value",
+       "stat": "ast",
+       "op": "gte",
+       "value": 10
+      }
+     ]
+    }
+   },
+   "note": "No time words and value conditions: one result per player-season."
+  },
+  {
+   "id": "t33",
+   "split": "test",
+   "text": "who scored 30+ in 10 straight games",
+   "expect": {
+    "action": "run_finder",
+    "flag": false,
+    "spec": {
+     "dataset": "player_game",
+     "scope": "span",
+     "season_from": null,
+     "season_to": null,
+     "min_games": null,
+     "filters": [],
+     "conditions": [
+      {
+       "type": "streak",
+       "tests": [
+        {
+         "stat": "pts",
+         "op": "gte",
+         "value": 30
+        }
+       ],
+       "count": 10
+      }
+     ]
+    }
+   },
+   "note": "No time words and only a run: over the seasons combined."
+  },
+  {
+   "id": "t34",
+   "split": "test",
+   "text": "Curry's 50 point games",
+   "expect": {
+    "action": "open_page",
+    "page": "gamefinder",
+    "hash": null,
+    "params": {
+     "player": 201939,
+     "f": "pts:gte:50"
+    }
+   },
+   "players": {
+    "201939": "Stephen Curry"
+   }
+  },
+  {
+   "id": "t35",
+   "split": "test",
+   "text": "all 60 point games since 2020-21",
+   "expect": {
+    "action": "open_page",
+    "page": "gamefinder",
+    "hash": null,
+    "params": {
+     "f": "pts:gte:60",
+     "from": 2021
+    }
+   }
+  },
+  {
+   "id": "t36",
+   "split": "test",
+   "text": "longest streak of 25 point games",
+   "expect": {
+    "action": "open_page",
+    "page": "gamefinder",
+    "hash": null,
+    "params": {
+     "mode": "streaks",
+     "f": "pts:gte:25"
+    }
+   }
+  },
+  {
+   "id": "t37",
+   "split": "test",
+   "text": "which players shot 45% from three on at least 400 attempts in a season",
+   "expect": {
+    "action": "run_finder",
+    "flag": false,
+    "spec": {
+     "dataset": "player_season",
+     "scope": "season",
+     "season_from": null,
+     "season_to": null,
+     "min_games": null,
+     "filters": [],
+     "conditions": [
+      {
+       "type": "value",
+       "stat": "fg3_pct",
+       "op": "gte",
+       "value": 0.45,
+       "min_n": 400
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "t38",
+   "split": "test",
+   "text": "seasons like 27 points 7 rebounds 7 assists",
+   "expect": {
+    "action": "open_page",
+    "page": "statline",
+    "hash": null,
+    "params": {
+     "line": "pts:27,reb:7,ast:7"
+    }
+   }
+  },
+  {
+   "id": "t39",
+   "split": "test",
+   "text": "who averaged at least 8 assists and under 2 turnovers a game last season",
+   "expect": {
+    "action": "run_finder",
+    "flag": false,
+    "spec": {
+     "dataset": "player_season",
+     "scope": "season",
+     "season_from": "last",
+     "season_to": "last",
+     "min_games": null,
+     "filters": [],
+     "conditions": [
+      {
+       "type": "value",
+       "stat": "ast",
+       "op": "gte",
+       "value": 8
+      },
+      {
+       "type": "value",
+       "stat": "tov",
+       "op": "lt",
+       "value": 2
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "t40",
+   "split": "test",
+   "text": "players with 5 straight 30 point games this season",
+   "expect": {
+    "action": "run_finder",
+    "flag": false,
+    "spec": {
+     "dataset": "player_game",
+     "scope": "season",
+     "season_from": "current",
+     "season_to": "current",
+     "min_games": null,
+     "filters": [],
+     "conditions": [
+      {
+       "type": "streak",
+       "tests": [
+        {
+         "stat": "pts",
+         "op": "gte",
+         "value": 30
+        }
+       ],
+       "count": 5
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "t41",
+   "split": "test",
+   "text": "centers who average 3 blocks",
+   "expect": {
+    "action": "run_finder",
+    "flag": true,
+    "spec": {
+     "dataset": "player_season",
+     "scope": "season",
+     "season_from": null,
+     "season_to": null,
+     "min_games": null,
+     "filters": [],
+     "conditions": [
+      {
+       "type": "value",
+       "stat": "blk",
+       "op": "gte",
+       "value": 3
+      }
+     ]
+    }
+   },
+   "note": "Positions can't go in the boxes."
+  },
+  {
+   "id": "t42",
+   "split": "test",
+   "text": "games with 12 or more threes",
+   "expect": {
+    "action": "open_page",
+    "page": "gamefinder",
+    "hash": null,
+    "params": {
+     "f": "fg3m:gte:12"
+    }
+   }
+  },
+  {
+   "id": "t43",
+   "split": "test",
+   "text": "players who had 40 points and 10 assists in the same game at least 5 times since 2021-22",
+   "expect": {
+    "action": "run_finder",
+    "flag": false,
+    "spec": {
+     "dataset": "player_game",
+     "scope": "span",
+     "season_from": 2022,
+     "season_to": null,
+     "min_games": null,
+     "filters": [],
+     "conditions": [
+      {
+       "type": "count",
+       "tests": [
+        {
+         "stat": "pts",
+         "op": "gte",
+         "value": 40
+        },
+        {
+         "stat": "ast",
+         "op": "gte",
+         "value": 10
+        }
+       ],
+       "count_op": "gte",
+       "count": 5
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "t44",
+   "split": "test",
+   "text": "40 point games on the road this season",
+   "expect": {
+    "action": "open_page",
+    "page": "gamefinder",
+    "hash": null,
+    "params": {
+     "f": "pts:gte:40",
+     "home": "away",
+     "from": "current",
+     "to": "current"
+    }
+   }
+  },
+  {
+   "id": "t45",
+   "split": "test",
+   "text": "how does LeBron's BPM compare to the typical aging curve",
+   "expect": {
+    "action": "open_page",
+    "page": "aging",
+    "hash": null,
+    "params": {
+     "stat": "bpm",
+     "player": 2544
+    }
+   },
+   "players": {
+    "2544": "LeBron James"
+   }
+  },
+  {
+   "id": "t46",
+   "split": "test",
+   "text": "aging curves for assists in the modern era",
+   "expect": {
+    "action": "open_page",
+    "page": "aging",
+    "hash": null,
+    "params": {
+     "stat": "ast",
+     "era": "modern"
+    }
+   }
+  },
+  {
+   "id": "t47",
+   "split": "test",
+   "text": "what would Magic Johnson's 1986-87 look like in 2024-25",
+   "expect": {
+    "action": "open_page",
+    "page": "era",
+    "hash": null,
+    "params": {
+     "player": 77142,
+     "season": 1987,
+     "to": 2025
+    }
+   },
+   "players": {
+    "77142": "Magic Johnson"
+   }
+  },
+  {
+   "id": "t48",
+   "split": "test",
+   "text": "on off numbers for the Celtics 2023-24",
+   "expect": {
+    "action": "open_page",
+    "page": "analytics",
+    "hash": "onoff",
+    "params": {
+     "team": "BOS",
+     "season": 2024
+    }
+   }
+  },
+  {
+   "id": "t49",
+   "split": "test",
+   "text": "Jokić on/off",
+   "expect": {
+    "action": "open_page",
+    "page": "player",
+    "hash": null,
+    "params": {
+     "id": 203999
+    }
+   },
+   "players": {
+    "203999": "Nikola Jokić"
+   },
+   "note": "One player's on/off is a block on his profile."
+  },
+  {
+   "id": "t50",
+   "split": "test",
+   "text": "three season RAPM this season",
+   "expect": {
+    "action": "open_page",
+    "page": "rapm",
+    "hash": null,
+    "params": {
+     "version": "multi",
+     "season": "current"
+    }
+   }
+  },
+  {
+   "id": "t51",
+   "split": "test",
+   "text": "who's hot right now",
+   "expect": {
+    "action": "open_page",
+    "page": "hotstreaks",
+    "hash": null,
+    "params": {}
+   }
+  },
+  {
+   "id": "t52",
+   "split": "test",
+   "text": "home away splits for points this season",
+   "expect": {
+    "action": "open_page",
+    "page": "splits",
+    "hash": null,
+    "params": {
+     "split": "home",
+     "stat": "pts",
+     "season": "current"
+    }
+   }
+  },
+  {
+   "id": "t53",
+   "split": "test",
+   "text": "who plays better on back to backs",
+   "expect": {
+    "action": "open_page",
+    "page": "splits",
+    "hash": null,
+    "params": {
+     "split": "rest"
+    }
+   }
+  },
+  {
+   "id": "t54",
+   "split": "test",
+   "text": "Wembanyama blocks in the 4th quarter this season",
+   "expect": {
+    "action": "open_page",
+    "page": "plays",
+    "hash": null,
+    "params": {
+     "player": 1641705,
+     "cat": "blk",
+     "per": "4",
+     "from": "current",
+     "to": "current"
+    }
+   },
+   "players": {
+    "1641705": "Victor Wembanyama"
+   }
+  },
+  {
+   "id": "t55",
+   "split": "test",
+   "text": "pair chemistry for the Knicks this season",
+   "expect": {
+    "action": "open_page",
+    "page": "analytics",
+    "hash": "pairs",
+    "params": {
+     "team": "NYK",
+     "season": "current"
+    }
+   }
+  },
+  {
+   "id": "t56",
+   "split": "test",
+   "text": "clutch WPA leaders",
+   "expect": {
+    "action": "open_page",
+    "page": "analytics",
+    "hash": "wpa",
+    "params": {}
+   }
+  },
+  {
+   "id": "t57",
+   "split": "test",
+   "text": "who's winning the MVP race",
+   "expect": {
+    "action": "open_page",
+    "page": "analytics",
+    "hash": "mvp",
+    "params": {}
+   }
+  },
+  {
+   "id": "t58",
+   "split": "test",
+   "text": "season simulator for 2022-23",
+   "expect": {
+    "action": "open_page",
+    "page": "simulator",
+    "hash": null,
+    "params": {
+     "season": 2023
+    }
+   }
+  },
+  {
+   "id": "t59",
+   "split": "test",
+   "text": "biggest upsets this season",
+   "expect": {
+    "action": "open_page",
+    "page": "bestgames",
+    "hash": null,
+    "params": {
+     "v": "upsets",
+     "season": "current"
+    }
+   }
+  },
+  {
+   "id": "t60",
+   "split": "test",
+   "text": "coaching decisions, timeouts, Heat 2024-25",
+   "expect": {
+    "action": "open_page",
+    "page": "coaching",
+    "hash": null,
+    "params": {
+     "v": "timeout",
+     "team": "MIA",
+     "season": 2025
+    }
+   }
+  },
+  {
+   "id": "t61",
+   "split": "test",
+   "text": "trade analyzer: Lakers and Mavericks",
+   "expect": {
+    "action": "open_page",
+    "page": "trade",
+    "hash": null,
+    "params": {
+     "ta": "LAL",
+     "tb": "DAL"
+    }
+   }
+  },
+  {
+   "id": "t62",
+   "split": "test",
+   "text": "what if the Suns traded Devin Booker to the Rockets",
+   "expect": {
+    "action": "open_page",
+    "page": "trade",
+    "hash": null,
+    "params": {
+     "ta": "PHX",
+     "pa": 1626164,
+     "tb": "HOU"
+    }
+   },
+   "players": {
+    "1626164": "Devin Booker"
+   }
+  },
+  {
+   "id": "t63",
+   "split": "test",
+   "text": "is there a game on now",
+   "expect": {
+    "action": "open_live_game",
+    "team": null
+   }
+  },
+  {
+   "id": "t64",
+   "split": "test",
+   "text": "what's the score of the Knicks game",
+   "expect": {
+    "action": "open_live_game",
+    "team": "NYK"
+   }
+  },
+  {
+   "id": "t65",
+   "split": "test",
+   "text": "are the warriors playing tonight",
+   "expect": {
+    "action": "open_live_game",
+    "team": "GSW"
+   }
+  },
+  {
+   "id": "t66",
+   "split": "test",
+   "text": "OKC game live",
+   "expect": {
+    "action": "open_live_game",
+    "team": "OKC"
+   }
+  },
+  {
+   "id": "t67",
+   "split": "test",
+   "text": "yesterday's scores",
+   "expect": {
+    "action": "open_page",
+    "page": "scores",
+    "hash": null,
+    "params": {
+     "date": "yesterday"
+    }
+   }
+  },
+  {
+   "id": "t68",
+   "split": "test",
+   "text": "what happened on christmas day 2025",
+   "expect": {
+    "action": "open_page",
+    "page": "scores",
+    "hash": null,
+    "params": {
+     "date": "2025-12-25"
+    }
+   }
+  },
+  {
+   "id": "t69",
+   "split": "test",
+   "text": "who won the Bucks game last night",
+   "expect": {
+    "action": "open_page",
+    "page": "scores",
+    "hash": null,
+    "params": {
+     "date": "yesterday"
+    }
+   },
+   "note": "A finished game: yesterday's scoreboard (the live page is for today's games)."
+  },
+  {
+   "id": "t70",
+   "split": "test",
+   "text": "Brandon Williams shot chart",
+   "expect": {
+    "action": "ask",
+    "about": "player",
+    "name": "Brandon Williams",
+    "options": [
+     1585,
+     1630314
+    ],
+    "then": {
+     "action": "open_page",
+     "page": "shotcharts",
+     "hash": null,
+     "params": {
+      "pid": "<chosen>"
+     }
+    }
+   }
+  },
+  {
+   "id": "t71",
+   "split": "test",
+   "text": "compare Reggie Williams and Reggie Miller",
+   "expect": {
+    "action": "ask",
+    "about": "player",
+    "name": "Reggie Williams",
+    "options": [
+     199,
+     202130
+    ],
+    "then": {
+     "action": "open_page",
+     "page": "compare",
+     "hash": null,
+     "params": {
+      "aid": "<chosen>",
+      "bid": 397
+     }
+    }
+   },
+   "players": {
+    "397": "Reggie Miller"
+   }
+  },
+  {
+   "id": "t72",
+   "split": "test",
+   "text": "who is the GOAT",
+   "expect": {
+    "action": "refuse",
+    "reason": "opinion"
+   }
+  },
+  {
+   "id": "t73",
+   "split": "test",
+   "text": "WNBA scoring leaders 2025",
+   "expect": {
+    "action": "refuse",
+    "reason": "other_league"
+   }
+  },
+  {
+   "id": "t74",
+   "split": "test",
+   "text": "LeBron's game log in 2012-13",
+   "expect": {
+    "action": "refuse",
+    "reason": "no_data"
+   },
+   "players": {
+    "2544": "LeBron James"
+   },
+   "note": "Game logs start in 2020-21."
+  },
+  {
+   "id": "t75",
+   "split": "test",
+   "text": "Warriors assist network in 2016-17",
+   "expect": {
+    "action": "refuse",
+    "reason": "no_data"
+   },
+   "note": "Play-by-play tools start in 2020-21."
+  },
+  {
+   "id": "t76",
+   "split": "test",
+   "text": "should I bet on the Lakers tonight",
+   "expect": {
+    "action": "refuse",
+    "reason": "betting_advice"
+   }
+  },
+  {
+   "id": "t77",
+   "split": "test",
+   "text": "what's the average age of MVP winners",
+   "expect": {
+    "action": "refuse",
+    "reason": "needs_a_computed_answer"
+   },
+   "note": "A number the app has no page for (the parked 'Ask the Database')."
+  },
+  {
+   "id": "t78",
+   "split": "test",
+   "text": "Troy Bolton's stats",
+   "expect": {
+    "action": "refuse",
+    "reason": "unknown_player"
+   }
+  },
+  {
+   "id": "t79",
+   "split": "test",
+   "text": "write me a poem about Jokić",
+   "expect": {
+    "action": "refuse",
+    "reason": "off_topic"
+   }
+  },
+  {
+   "id": "t80",
+   "split": "test",
+   "text": "Jokić's salary next year",
+   "expect": {
+    "action": "refuse",
+    "reason": "no_data"
+   },
+   "players": {
+    "203999": "Nikola Jokić"
+   },
+   "note": "Salary data ends with 2024-25."
+  },
+  {
+   "id": "t81",
+   "split": "test",
+   "text": "turn on dark mode",
+   "expect": {
+    "action": "refuse",
+    "reason": "off_topic"
+   }
+  },
+  {
+   "id": "t82",
+   "split": "test",
+   "text": "draft value by pick",
+   "expect": {
+    "action": "open_page",
+    "page": "draft",
+    "hash": null,
+    "params": {}
+   }
+  },
+  {
+   "id": "t83",
+   "split": "test",
+   "text": "rookie class",
+   "expect": {
+    "action": "open_page",
+    "page": "rookies",
+    "hash": null,
+    "params": {}
+   }
+  },
+  {
+   "id": "t84",
+   "split": "test",
+   "text": "guess the player game",
+   "expect": {
+    "action": "open_page",
+    "page": "games",
+    "hash": null,
+    "params": {
+     "g": "guess"
+    }
+   }
+  },
+  {
+   "id": "t85",
+   "split": "test",
+   "text": "how is RAPM calculated",
+   "expect": {
+    "action": "open_page",
+    "page": "methodology",
+    "hash": null,
+    "params": {
+     "card": "rapm"
+    }
+   }
+  },
+  {
+   "id": "t86",
+   "split": "test",
+   "text": "my watchlist",
+   "expect": {
+    "action": "open_page",
+    "page": "watchlist",
+    "hash": null,
+    "params": {}
+   }
+  },
+  {
+   "id": "t87",
+   "split": "test",
+   "text": "latest news",
+   "expect": {
+    "action": "open_page",
+    "page": "news",
+    "hash": null,
+    "params": {}
+   }
+  },
+  {
+   "id": "t88",
+   "split": "test",
+   "text": "breakouts in 2024-25",
+   "expect": {
+    "action": "open_page",
+    "page": "breakouts",
+    "hash": null,
+    "params": {
+     "season": 2025
+    }
+   }
+  },
+  {
+   "id": "t89",
+   "split": "test",
+   "text": "stat stability for steals",
+   "expect": {
+    "action": "open_page",
+    "page": "stability",
+    "hash": null,
+    "params": {
+     "stat": "stl"
+    }
+   }
+  },
+  {
+   "id": "t90",
+   "split": "test",
+   "text": "find me a 3 and D role player",
+   "expect": {
+    "action": "open_page",
+    "page": "rolefinder",
+    "hash": null,
+    "params": {
+     "p": "three_and_d"
+    }
+   }
+  }
+ ]
+}
