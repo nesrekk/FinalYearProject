@@ -22,7 +22,13 @@
   90
  ],
  "n": 90,
- "resumed": [],
+ "resumed": [
+  {
+   "day": "2026-10-10",
+   "asked": 18,
+   "unanswered_after": 108
+  }
+ ],
  "runs_detail": [
   {
    "summary": {

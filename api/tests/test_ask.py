@@ -519,8 +519,10 @@ def test_stored_evaluation_is_of_these_sentences(A):
                 assert r["action"] is None and r["error"] and not r["right"]
     assert ev["right_by_run"] == [r["summary"]["right"] for r in ev["runs_detail"]]
     assert ev["failed_by_run"] == [r["summary"]["failed"] for r in ev["runs_detail"]]
-    for res in ev["resumed"]:                         # a resume only fills in unanswered sentence-runs
-        assert ev["evaluated"] <= res["day"] and res["asked"] >= res["unanswered_after"]
+    for res in ev["resumed"]:                         # a resume only fills in unanswered sentence-runs (and may itself
+        assert ev["evaluated"] <= res["day"]          # be cut short by the quota, so it can ask fewer than remain)
+        assert 0 <= res["asked"] <= ev["n"] * ev["runs"] and res["unanswered_after"] >= sum(ev["failed_by_run"])
+    assert not ev["resumed"] or ev["resumed"][-1]["unanswered_after"] == sum(ev["failed_by_run"])
 
 
 def test_status_reports_unanswered_runs(router):
